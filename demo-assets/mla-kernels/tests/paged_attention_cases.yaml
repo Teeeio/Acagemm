@@ -1,0 +1,5 @@
+suite: paged_attention
+platforms: [C500, CUDA]
+correctness_cases: 24
+shape: [1, 4, 128, 1024]
+assert: max_abs_error <= 1e-3

@@ -1,0 +1,5 @@
+benchmark: mla_paged_attention
+warmup: 50
+repeats: 200
+metric: latency_p50
+environment_snapshot: fixed

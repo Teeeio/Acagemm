@@ -1,0 +1,24 @@
+{
+  "name": "operator-studio-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/dev.mjs",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:api": "node server/mock-server.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server/mock-server.mjs",
+    "demo:reset": "node server/reset-data.mjs",
+    "test:smoke": "node server/smoke-test.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "lucide-react": "0.468.0",
+    "vite": "5.4.14",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {}
+}
