@@ -489,6 +489,76 @@ function MissionView({ stage, setView, onAdvance, onOpenModal, paused }) {
   );
 }
 
+function AgentWorkbenchView({ stage, agentState, onStartAgent, onAdvance, setView, onOpenModal, paused }) {
+  const [goal, setGoal] = useState(agentState.goal || '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟');
+  const isRunning = agentState.status === 'running' || agentState.status === 'executing';
+  const isAwaitingApproval = agentState.status === 'awaiting_approval';
+  const statusLabel = agentState.status === 'executing' ? '工具执行中' : isRunning ? 'Agent 执行中' : isAwaitingApproval ? '等待你的决策' : agentState.status === 'completed' ? 'Mission 已完成' : 'Mission 就绪';
+  const actionDestination = { 'candidate.plan': 'code', 'test.plan': 'experiments', 'adoption.decision': 'decision', 'knowledge.publish': 'curation' }[agentState.currentAction?.type] || 'iterations';
+  const actionLabel = { 'candidate.plan': '审阅 Candidate Plan', 'test.plan': '打开测试矩阵', 'adoption.decision': '进入效果决策', 'knowledge.publish': '审阅知识草稿' }[agentState.currentAction?.type] || '查看 Action';
+  const phaseIcon = { context: FolderGit2, research: BookOpen, diagnosis: Gauge, candidate: Code2, approval: ShieldCheck, Mission: CircleDot };
+  useEffect(() => {
+    if (agentState.goal && agentState.goal !== goal && !isRunning) setGoal(agentState.goal);
+  }, [agentState.goal, isRunning]);
+  return (
+    <main className="page agent-workbench-page">
+      <section className="agent-command-header">
+        <div className="agent-command-copy">
+          <span className="detail-overline">MISSION WORKSPACE / MIS_01JH7R</span>
+          <div className="agent-command-title"><h1>让 Agent 负责迭代，你负责决策。</h1><span className={`mission-status-chip ${agentState.status}`}>{statusLabel}</span></div>
+          <p>持续工作的算子优化 Mission，所有计划、代码、实验和证据都在同一条工作链上。</p>
+        </div>
+        <div className="agent-command-meta"><span><Mark tone="green" pulse={isRunning} /> C500 connected</span><span><GitBranch size={14} /> Matrix Lab</span></div>
+      </section>
+
+      <section className="mission-intent-bar">
+        <div className="intent-label"><CircleDot size={15} /><span>MISSION INTENT</span></div>
+        <form className="intent-form" onSubmit={(event) => { event.preventDefault(); onStartAgent(goal); }}>
+          <input value={goal} onChange={(event) => setGoal(event.target.value)} aria-label="优化目标" placeholder="输入一个优化目标" disabled={isRunning || paused} />
+          <button className="primary-action" type="submit" disabled={isRunning || paused || !goal.trim()}>{isRunning ? <><Activity size={15} /> Agent 执行中</> : <><ArrowRight size={15} /> {agentState.status === 'idle' ? '启动 Agent' : '重新运行'}</>}</button>
+        </form>
+        <div className="intent-facts"><span>C500</span><span>paged_attention</span><span>latency p50</span></div>
+      </section>
+
+      <section className="agent-workbench-grid">
+        <article className="agent-stream-panel panel-surface">
+          <div className="workbench-panel-head"><div><span className="eyebrow">AGENT RUN</span><strong>{agentState.runId || '等待新的 Run'}</strong></div><span className={`run-status ${agentState.status}`}>{statusLabel}</span></div>
+          <div className="agent-progress-track"><i style={{ width: `${agentState.progress || 0}%` }} /></div>
+          <div className="agent-phase-row"><span>当前阶段</span><strong>{agentState.phase || '待启动'}</strong><em>{agentState.progress || 0}%</em></div>
+          <div className="agent-timeline">
+            {(agentState.messages || []).map((message) => { const Icon = phaseIcon[message.phase] || Activity; return <div className={`agent-timeline-item ${message.status}`} key={message.id}><span className="timeline-icon"><Icon size={15} /></span><div><strong>{message.title}</strong><p>{message.detail}</p><small>{message.time}</small></div><Mark tone={message.status === 'waiting' ? 'ochre' : 'green'} pulse={message.status === 'waiting'} /></div>; })}
+            {!agentState.messages?.length && <div className="agent-empty"><Activity size={22} /><strong>等待 Agent 接管 Mission</strong><span>启动后，这里会出现可追溯的 Agent Action。</span></div>}
+          </div>
+        </article>
+
+        <article className="agent-action-panel panel-surface">
+          <div className="workbench-panel-head"><div><span className="eyebrow">CURRENT ACTION</span><strong>{agentState.currentAction ? agentState.currentAction.type : 'orchestrator.idle'}</strong></div><ShieldCheck size={17} className="action-shield" /></div>
+          {agentState.currentAction ? <>
+            <div className="action-card-title"><span className="action-number">01</span><h2>{agentState.currentAction.title}</h2></div>
+            <dl className="action-facts"><div><dt>为什么现在</dt><dd>{agentState.currentAction.reason}</dd></div><div><dt>预期产物</dt><dd>{agentState.currentAction.expectedOutput}</dd></div><div><dt>风险等级</dt><dd><span className="risk-pill">{agentState.currentAction.risk}</span></dd></div></dl>
+            <div className="action-approval"><ShieldCheck size={16} /><div><strong>需要你的审批</strong><span>批准后才会写入候选工作区。</span></div></div>
+            <button className="primary-action action-continue" onClick={() => setView(actionDestination)}><Code2 size={15} /> {actionLabel} <ArrowRight size={14} /></button>
+          </> : <div className="action-empty"><div className="action-empty-mark"><CircleDot size={22} /></div><strong>Agent 尚未提出动作</strong><p>Mission 启动后，计划、工具调用和审批请求会在这里聚合。</p></div>}
+        </article>
+
+        <aside className="agent-context-panel panel-surface">
+          <div className="workbench-panel-head"><div><span className="eyebrow">MISSION CONTEXT</span><strong>任务上下文</strong></div><button className="icon-inline-button" aria-label="任务审计" onClick={() => onOpenModal('events')}><History size={15} /></button></div>
+          <div className="context-goal"><span>目标</span><strong>{agentState.goal || goal}</strong></div>
+          <div className="context-section"><span className="eyebrow">ARTIFACTS</span>{(agentState.artifacts || []).map((artifact) => <button className="artifact-row" key={artifact.id} onClick={() => artifact.kind.includes('Candidate') ? setView('code') : onOpenModal('events')}><span className={`artifact-dot ${artifact.status}`} /><div><strong>{artifact.title}</strong><small>{artifact.kind} · {artifact.meta}</small></div><ChevronRight size={14} /></button>)}</div>
+          <div className="context-section context-gates"><span className="eyebrow">GATES</span><div><CheckCircle2 size={14} /><span>Correctness 24 / 24</span><em>ready</em></div><div><ShieldCheck size={14} /><span>Human approval</span><em>{isAwaitingApproval ? 'required' : 'policy'}</em></div></div>
+          <button className="ghost-action context-advance" onClick={() => onAdvance()} disabled={isRunning || paused}><Activity size={14} /> 查看当前阶段</button>
+        </aside>
+      </section>
+
+      <section className="agent-output-strip">
+        <button onClick={() => setView('iterations')}><History size={17} /><div><span>ITERATION HISTORY</span><strong>4 次候选迭代</strong><small>查看假设、Diff、结果和采用决策</small></div><ArrowRight size={15} /></button>
+        <button onClick={() => setView('experiments')}><TestTube2 size={17} /><div><span>VALIDATION</span><strong>24 / 24 correctness</strong><small>C500 + CUDA 固定环境矩阵</small></div><ArrowRight size={15} /></button>
+        <button onClick={() => setView('knowledge')}><BookOpen size={17} /><div><span>KNOWLEDGE</span><strong>3 条已引用资产</strong><small>Experience、Skill 和 Tool 证据</small></div><ArrowRight size={15} /></button>
+      </section>
+    </main>
+  );
+}
+
 function IterationTrendChart() {
   const width = 760;
   const height = 224;
@@ -1050,6 +1120,7 @@ export default function App() {
   const [unreadCount, setUnreadCount] = useState(2);
   const [missionPaused, setMissionPaused] = useState(false);
   const [patchApplied, setPatchApplied] = useState(false);
+  const [agentState, setAgentState] = useState({ status: 'idle', phase: '待启动', progress: 0, goal: '', messages: [], artifacts: [], currentAction: null });
   const [benchmarkStatus, setBenchmarkStatus] = useState('idle');
   const [benchmarkProgress, setBenchmarkProgress] = useState(0);
   const [benchmarkLogs, setBenchmarkLogs] = useState([]);
@@ -1073,6 +1144,7 @@ export default function App() {
     if (!state) return;
     if (state.stage) setStage(state.stage);
     if (typeof state.patchApplied === 'boolean') setPatchApplied(state.patchApplied);
+    if (state.agent) setAgentState(state.agent);
     if (state.benchmark) {
       setBenchmarkStatus(state.benchmark.status);
       setBenchmarkProgress(state.benchmark.progress || 0);
@@ -1116,6 +1188,14 @@ export default function App() {
   const navigateGlobal = (target) => {
     if (target === 'knowledge') { setMissionContext(false); setView('knowledge'); return; }
     setMissionContext(true); setView('mission');
+  };
+  const startAgentMission = async (goal) => {
+    if (missionPaused || !goal?.trim()) return;
+    const result = await requestBackend('/api/missions', { method: 'POST', body: JSON.stringify({ goal: goal.trim() }) });
+    if (!result) return;
+    setMissionContext(true);
+    setView('mission');
+    notify('Agent Run 已启动，正在建立任务上下文。');
   };
   const handleMissionAction = () => {
     if (stage === 'diagnosis') navigateMission('iterations');
@@ -1196,10 +1276,10 @@ export default function App() {
     return () => { mounted = false; };
   }, []);
   useEffect(() => {
-    if (benchmarkStatus !== 'running') return undefined;
+    if (benchmarkStatus !== 'running' && agentState.status !== 'running') return undefined;
     const timer = window.setInterval(() => requestBackend('/api/state', {}, true), 420);
     return () => window.clearInterval(timer);
-  }, [benchmarkStatus]);
+  }, [benchmarkStatus, agentState.status]);
   useEffect(() => {
     if (benchmarkStatus === 'complete' && stage === 'evidence' && view === 'experiments') {
       navigateMission('decision');
@@ -1225,7 +1305,7 @@ export default function App() {
   else if (view === 'decision') content = <DecisionView stage={stage} onAdopt={adoptCandidate} onReject={rejectCandidate} onOpenModal={openModal} paused={missionPaused} />;
   else if (view === 'curation') content = <CurationView stage={stage} drafts={knowledgeDraftsState} publishedAssets={publishedAssets} onUpdateDraft={updateKnowledgeDraft} onPublish={publishKnowledge} onPublishAll={publishAllKnowledge} onViewLibrary={() => navigateGlobal('knowledge')} onOpenModal={openModal} paused={missionPaused} />;
   else if (view === 'knowledge') content = <KnowledgeView catalog={effectiveCatalog} setView={navigateMission} onOpenModal={openModal} missionContext={missionContext} />;
-  else content = <MissionView stage={stage} onAdvance={handleMissionAction} setView={navigateMission} onOpenModal={openModal} paused={missionPaused} />;
+  else content = <AgentWorkbenchView stage={stage} agentState={agentState} onStartAgent={startAgentMission} onAdvance={handleMissionAction} setView={navigateMission} onOpenModal={openModal} paused={missionPaused} />;
 
   return (
     <>

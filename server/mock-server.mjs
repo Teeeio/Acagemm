@@ -9,6 +9,7 @@ import {
   loadState,
   resetDemoData,
   saveState,
+  startAgentRun,
   workspaceFiles,
 } from './state-store.mjs';
 
@@ -75,12 +76,30 @@ async function handleApi(request, response, url) {
     json(response, 200, { patchApplied: state.patchApplied, workspace: 'runtime/mla-kernels', files: workspaceFiles });
     return;
   }
+  if (request.method === 'POST' && url.pathname === '/api/missions') {
+    const state = await loadState();
+    guardMutation(state);
+    const body = await readJson(request);
+    if (!body.goal?.trim()) {
+      json(response, 400, { error: '请输入一个可执行的优化目标。' });
+      return;
+    }
+    json(response, 202, { state: await saveState(startAgentRun(state, body.goal)) });
+    return;
+  }
   if (request.method === 'POST' && url.pathname === '/api/actions/apply-patch') {
     const state = await loadState();
     guardMutation(state);
     const workspace = await applyCandidatePatch();
     state.patchApplied = true;
     state.stage = 'validation';
+    state.agent = {
+      ...state.agent,
+      status: 'awaiting_approval',
+      phase: '异构验证',
+      currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '运行 C500 + CUDA 测试矩阵', reason: '候选补丁已写入隔离工作区，需要先验证正确性和完整性能。', expectedOutput: '24 / 24 Correctness · 2 个 Full Benchmark Run', risk: 'medium', approvalRequired: true },
+      messages: [...(state.agent?.messages || []), { id: `patch-${Date.now()}`, phase: 'approval', status: 'completed', title: 'Candidate Patch 已获批准', detail: '补丁已写入隔离工作区，等待提交测试矩阵。', time: '刚刚' }],
+    };
     addAuditEvent(state, 'Patch 审批通过并写入隔离工作区', `${workspace.workspace} · Candidate 02`, 'green', 'ShieldCheck');
     json(response, 200, { state: await saveState(state), workspace });
     return;
@@ -95,6 +114,7 @@ async function handleApi(request, response, url) {
     const runId = `run_${Date.now().toString(36).toUpperCase()}`;
     state.stage = 'validation';
     state.benchmark = { status: 'running', progress: 0, runId, startedAt: new Date().toISOString(), completedAt: null, durationMs: 2600, logs: [{ sequence: 1, progress: 0, message: '调度器已锁定 2 个环境快照' }] };
+    state.agent = { ...state.agent, status: 'executing', phase: '异构验证', currentAction: null, messages: [...(state.agent?.messages || []), { id: `test-${runId}`, phase: 'validation', status: 'running', title: 'Validation Agent 已提交测试矩阵', detail: `${runId} 正在两个固定环境中执行。`, time: '刚刚' }] };
     addAuditEvent(state, 'Full Benchmark 已提交', `${runId} · ${state.testMatrix.environments.length} environments`, 'blue', 'TestTube2');
     json(response, 202, { state: await saveState(state) });
     return;
@@ -108,6 +128,7 @@ async function handleApi(request, response, url) {
     }
     const body = await readJson(request);
     state.stage = 'curation';
+    state.agent = { ...state.agent, status: 'awaiting_approval', phase: '知识沉淀', currentAction: { id: 'action.knowledge-publish', type: 'knowledge.publish', title: '审阅并发布本次优化经验', reason: '候选已经采用，需要把适用范围、约束和证据固化为可检索资产。', expectedOutput: '3 条 Experience Draft · fixed evidence', risk: 'low', approvalRequired: true } };
     addAuditEvent(state, 'Candidate 02 已采用', `Level 3 · ${body.note || 'approved'}`, 'green', 'CheckCircle2');
     json(response, 200, { state: await saveState(state) });
     return;
@@ -155,6 +176,7 @@ async function handleApi(request, response, url) {
     drafts.forEach(validateKnowledgeDraft);
     state.publishedAssets = drafts.map(toKnowledgeAsset);
     state.stage = 'published';
+    state.agent = { ...state.agent, status: 'completed', phase: 'Mission 完成', currentAction: null };
     addAuditEvent(state, '任务知识资产集已发布', `${state.publishedAssets.length} Experiences · fixed versions`, 'green', 'BookOpen');
     json(response, 200, { state: await saveState(state), assets: state.publishedAssets });
     return;

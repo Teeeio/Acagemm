@@ -37,6 +37,16 @@ const waitForServer = async () => {
 try {
   await waitForServer();
   await request('/api/reset', { method: 'POST' });
+  const mission = await request('/api/missions', { method: 'POST', body: JSON.stringify({ goal: '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟' }) });
+  assert.equal(mission.state.agent.status, 'running');
+  let agentState;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    agentState = (await request('/api/state')).state;
+    if (agentState.agent.status === 'awaiting_approval') break;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  assert.equal(agentState.agent.status, 'awaiting_approval');
+  assert.equal(agentState.agent.currentAction.type, 'candidate.plan');
   const applied = await request('/api/actions/apply-patch', { method: 'POST', body: JSON.stringify({ candidate: 'candidate-02' }) });
   assert.equal(applied.state.patchApplied, true);
   assert.equal(applied.state.stage, 'validation');

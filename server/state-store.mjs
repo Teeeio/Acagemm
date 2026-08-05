@@ -21,6 +21,24 @@ export const createSeedState = () => ({
   updatedAt: new Date().toISOString(),
   stage: 'candidate',
   patchApplied: false,
+  agent: {
+    status: 'idle',
+    phase: '待启动',
+    progress: 0,
+    missionId: 'MIS_01JH7R',
+    runId: null,
+    goal: '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟',
+    startedAt: null,
+    durationMs: 7200,
+    currentAction: null,
+    messages: [
+      { id: 'agent-ready', phase: 'Mission', status: 'ready', title: 'Mission 已准备就绪', detail: '目标、仓库和 C500 / CUDA 验证边界已固定。', time: '刚刚' },
+    ],
+    artifacts: [
+      { id: 'artifact-context', kind: 'Context Snapshot', title: 'MLA Paged KV Cache / context', status: 'ready', meta: 'repository · constraints · baseline' },
+      { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: '3 条相关 Experience', status: 'ready', meta: 'C500 · paged_attention · validated' },
+    ],
+  },
   benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] },
   testMatrix: { environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] },
   knowledgeDrafts: structuredClone(knowledgeDrafts),
@@ -48,8 +66,12 @@ export async function ensureStorage() {
 
 export async function loadState() {
   await ensureStorage();
-  const state = JSON.parse(await readFile(statePath, 'utf8'));
-  return refreshBenchmark(state);
+  let state = JSON.parse(await readFile(statePath, 'utf8'));
+  const benchmarkBefore = JSON.stringify(state.benchmark);
+  state = refreshBenchmark(state);
+  const refreshedAgent = refreshAgent(state);
+  if (refreshedAgent.changed || benchmarkBefore !== JSON.stringify(state.benchmark)) return saveState(refreshedAgent.state);
+  return state;
 }
 
 export async function saveState(state) {
@@ -74,7 +96,7 @@ export function addAuditEvent(state, title, detail, tone = 'blue', icon = 'Activ
   return event;
 }
 
-async function refreshBenchmark(state) {
+function refreshBenchmark(state) {
   if (state.benchmark?.status !== 'running' || !state.benchmark.startedAt) return state;
   const elapsed = Date.now() - new Date(state.benchmark.startedAt).getTime();
   const progress = Math.min(100, Math.max(0, Math.floor((elapsed / state.benchmark.durationMs) * 100 / 10) * 10));
@@ -83,12 +105,90 @@ async function refreshBenchmark(state) {
   if (progress >= 100) {
     state.benchmark.status = 'complete';
     state.stage = 'evidence';
+    state.agent = {
+      ...state.agent,
+      status: 'awaiting_approval',
+      phase: '效果决策',
+      currentAction: { id: 'action.adoption-decision', type: 'adoption.decision', title: '决定是否采用 Candidate 02', reason: 'Correctness 和两个固定环境的 Full Benchmark 已满足 Level 3 证据门禁。', expectedOutput: 'Adoption Decision · current best update', risk: 'high', approvalRequired: true },
+    };
     if (!state.benchmark.completedAt) {
       state.benchmark.completedAt = new Date().toISOString();
       addAuditEvent(state, 'Full Benchmark 已完成', 'C500 41.8μs · CUDA 36.1μs · 24/24', 'green', 'CheckCircle2');
     }
   }
-  return saveState(state);
+  return state;
+}
+
+function refreshAgent(state) {
+  const agent = state.agent;
+  if (!agent || agent.status !== 'running' || !agent.startedAt) return { state, changed: false };
+  const elapsed = Date.now() - new Date(agent.startedAt).getTime();
+  const progress = Math.min(100, Math.max(0, Math.floor((elapsed / agent.durationMs) * 100 / 10) * 10));
+  const phases = [
+    [0, '上下文读取', 'Context Agent 正在读取仓库、Git 状态和当前最佳。', 'context'],
+    [20, '知识检索', 'Research Agent 已找到 3 条适用于 C500 的 Experience。', 'research'],
+    [40, '瓶颈分析', 'Bottleneck Agent 正在对齐 plan、workspace 和 host mirror 的时间线。', 'diagnosis'],
+    [60, '候选规划', 'Candidate Agent 正在生成有界变更和验证约束。', 'candidate'],
+    [80, '补丁准备', 'Candidate Plan 已生成，等待写入受控工作区。', 'approval'],
+    [100, '等待审批', 'Candidate 02 已准备好，下一步需要用户审阅 Diff。', 'approval'],
+  ];
+  const current = phases.reduce((selected, item) => (progress >= item[0] ? item : selected), phases[0]);
+  const messages = phases.filter(([threshold]) => progress >= threshold).map(([threshold, title, detail, phase], index) => ({
+    id: `agent-${threshold}`,
+    phase,
+    status: threshold === 100 ? 'waiting' : 'completed',
+    title,
+    detail,
+    time: threshold === 0 ? '刚刚' : `${Math.max(1, Math.floor((elapsed - (threshold / 100) * agent.durationMs) / 1000))}s 前`,
+  }));
+  const artifacts = [
+    { id: 'artifact-context', kind: 'Context Snapshot', title: progress >= 20 ? 'MLA Paged KV Cache / context' : '正在读取仓库上下文', status: progress >= 20 ? 'ready' : 'running', meta: 'repository · constraints · baseline' },
+    { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: progress >= 40 ? '3 条 C500 相关 Experience' : '等待知识检索', status: progress >= 40 ? 'ready' : progress >= 20 ? 'running' : 'queued', meta: 'C500 · paged_attention · validated' },
+  ];
+  const next = { ...agent, progress, phase: current[1], messages, artifacts };
+  if (progress >= 100) {
+    next.status = 'awaiting_approval';
+    next.currentAction = {
+      id: 'action.candidate-02',
+      type: 'candidate.plan',
+      title: '审阅 Candidate 02 · Async plan descriptor cache',
+      reason: '固定开销已成为短序列延迟的主要来源。',
+      expectedOutput: '2 个文件 · 受控 Patch · Correctness Matrix',
+      risk: 'medium',
+      approvalRequired: true,
+    };
+    next.artifacts = [
+      ...artifacts,
+      { id: 'artifact-candidate', kind: 'Candidate Plan', title: 'Candidate 02 · Async plan descriptor cache', status: 'awaiting_approval', meta: '2 files · +37 −18 · digest recorded' },
+    ];
+    if (state.stage === 'diagnosis') state.stage = 'candidate';
+    if (!state.auditEvents?.some((event) => event.detail === 'agent run completed')) addAuditEvent(state, 'Candidate Agent 已完成计划', 'agent run completed · Candidate 02 awaiting approval', 'blue', 'Code2');
+  }
+  return { state: { ...state, agent: next }, changed: JSON.stringify(agent) !== JSON.stringify(next) };
+}
+
+export function startAgentRun(state, goal) {
+  const runId = `agent_${Date.now().toString(36).toUpperCase()}`;
+  state.stage = 'diagnosis';
+  state.patchApplied = false;
+  state.agent = {
+    status: 'running',
+    phase: '上下文读取',
+    progress: 0,
+    missionId: state.agent?.missionId || 'MIS_01JH7R',
+    runId,
+    goal: goal.trim(),
+    startedAt: new Date().toISOString(),
+    durationMs: 7200,
+    currentAction: null,
+    messages: [{ id: `agent-start-${runId}`, phase: 'Mission', status: 'running', title: 'Orchestrator 已接管 Mission', detail: `Run ${runId} 已启动，正在建立 Context Snapshot。`, time: '刚刚' }],
+    artifacts: [
+      { id: 'artifact-context', kind: 'Context Snapshot', title: '正在读取仓库上下文', status: 'running', meta: 'repository · constraints · baseline' },
+      { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: '等待知识检索', status: 'queued', meta: 'C500 · paged_attention · validated' },
+    ],
+  };
+  addAuditEvent(state, 'Orchestrator 已启动 Agent Run', `${runId} · ${goal.trim()}`, 'blue', 'Activity');
+  return state;
 }
 
 export function buildBenchmarkLogs(progress) {
