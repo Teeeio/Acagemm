@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -12,12 +12,15 @@ import {
   saveState,
   selectMission,
   startAgentRun,
+  runtimeDir,
   workspaceFiles,
 } from './state-store.mjs';
+import { agentRuntime, appendRuntimeEvent } from './agent-runtime.mjs';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(serverDir, '..');
 const distDir = path.join(rootDir, 'dist');
+const serverPidPath = path.join(runtimeDir, 'operator-studio.pid');
 const port = Number(process.env.API_PORT || process.env.PORT || 4173);
 const serveWeb = process.env.SERVE_WEB !== 'false';
 
@@ -45,6 +48,12 @@ const guardMutation = (state) => {
   }
 };
 
+const loadRuntimeState = async () => {
+  const state = await loadState();
+  const projection = await agentRuntime.projectState(state);
+  return projection.changed ? saveState(projection.state) : projection.state;
+};
+
 const toKnowledgeAsset = (draft) => {
   const hardwareKeys = draft.hardware.map((item) => ({ C500: 'c500', CUDA: 'nvidia', 'ROCm MI300': 'amd' }[item])).filter(Boolean);
   return { id: draft.id, kind: 'Experience', version: 'v1.0', title: draft.title, description: draft.conclusion, tags: [draft.category, ...draft.hardware, 'Level 3'], tone: 'ochre', icon: 'Lightbulb', hardwareKeys, scope: draft.scope, permissions: 'organization:read', evidence: draft.evidence, updated: new Date().toISOString().slice(0, 10) };
@@ -66,25 +75,29 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === 'GET' && url.pathname === '/api/health') {
-    json(response, 200, { status: 'ok', service: 'operator-studio-mock', persistence: 'disk', time: new Date().toISOString() });
+    json(response, 200, { status: 'ok', service: 'operator-studio', persistence: 'disk', runtime: await agentRuntime.describe(), time: new Date().toISOString() });
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/api/runtime') {
+    json(response, 200, { runtime: await agentRuntime.describe() });
     return;
   }
   if (request.method === 'GET' && url.pathname === '/api/state') {
-    json(response, 200, { state: await loadState() });
+    json(response, 200, { state: await loadRuntimeState() });
     return;
   }
   if (request.method === 'GET' && url.pathname === '/api/workspace') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     json(response, 200, { patchApplied: state.patchApplied, workspace: 'runtime/mla-kernels', files: workspaceFiles });
     return;
   }
   if (request.method === 'GET' && url.pathname === '/api/missions') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     json(response, 200, { missions: state.missions, activeMissionId: state.activeMissionId });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/missions') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     const body = await readJson(request);
     if (!body.goal?.trim()) {
@@ -96,24 +109,39 @@ async function handleApi(request, response, url) {
   }
   const missionRunMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/runs$/);
   if (request.method === 'POST' && missionRunMatch) {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     const missionId = decodeURIComponent(missionRunMatch[1]);
     if (state.activeMissionId !== missionId) selectMission(state, missionId);
     const body = await readJson(request);
     const mission = state.missions.find((item) => item.id === missionId);
-    json(response, 202, { state: await saveState(startAgentRun(state, body.goal?.trim() || mission.goal)) });
+    const goal = body.goal?.trim() || mission.goal;
+    const runtimeRun = await agentRuntime.startRun({ state, mission, goal });
+    if (!runtimeRun.handled) {
+      startAgentRun(state, goal);
+      appendRuntimeEvent(state, 'mission.run_started', { runId: state.agent.runId, goal }, { kind: 'adapter', mode: 'demo' });
+    }
+    json(response, 202, { state: await saveState(runtimeRun.state || state) });
     return;
   }
   const missionSelectMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/select$/);
   if (request.method === 'POST' && missionSelectMatch) {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     const missionId = decodeURIComponent(missionSelectMatch[1]);
     json(response, 200, { state: await saveState(selectMission(state, missionId)) });
     return;
   }
+  const missionEventsMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/events$/);
+  if (request.method === 'GET' && missionEventsMatch) {
+    const state = await loadRuntimeState();
+    const missionId = decodeURIComponent(missionEventsMatch[1]);
+    const after = Number(url.searchParams.get('after') || 0);
+    const events = (state.runtimeEvents || []).filter((event) => event.missionId === missionId && event.sequence > after);
+    json(response, 200, { missionId, events, nextSequence: events.at(-1)?.sequence || after });
+    return;
+  }
   if (request.method === 'POST' && url.pathname === '/api/actions/apply-patch') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     const workspace = await applyCandidatePatch();
     state.patchApplied = true;
@@ -125,12 +153,13 @@ async function handleApi(request, response, url) {
       currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '运行 C500 + CUDA 测试矩阵', reason: '候选补丁已写入隔离工作区，需要先验证正确性和完整性能。', expectedOutput: '24 / 24 Correctness · 2 个 Full Benchmark Run', risk: 'medium', approvalRequired: true },
       messages: [...(state.agent?.messages || []), { id: `patch-${Date.now()}`, phase: 'approval', status: 'completed', title: 'Candidate Patch 已获批准', detail: '补丁已写入隔离工作区，等待提交测试矩阵。', time: '刚刚' }],
     };
+    appendRuntimeEvent(state, 'patch.applied', { workspace: workspace.workspace, files: workspace.files.map((file) => file.path) }, { kind: 'workspace', mode: 'demo' });
     addAuditEvent(state, 'Patch 审批通过并写入隔离工作区', `${workspace.workspace} · Candidate 02`, 'green', 'ShieldCheck');
     json(response, 200, { state: await saveState(state), workspace });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/start-benchmark') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     if (!state.patchApplied) {
       json(response, 409, { error: '请先应用候选补丁。' });
@@ -140,12 +169,13 @@ async function handleApi(request, response, url) {
     state.stage = 'validation';
     state.benchmark = { status: 'running', progress: 0, runId, startedAt: new Date().toISOString(), completedAt: null, durationMs: 2600, logs: [{ sequence: 1, progress: 0, message: '调度器已锁定 2 个环境快照' }] };
     state.agent = { ...state.agent, status: 'executing', phase: '异构验证', currentAction: null, messages: [...(state.agent?.messages || []), { id: `test-${runId}`, phase: 'validation', status: 'running', title: 'Validation Agent 已提交测试矩阵', detail: `${runId} 正在两个固定环境中执行。`, time: '刚刚' }] };
+    appendRuntimeEvent(state, 'test_task.started', { runId, environments: state.testMatrix.environments, stages: state.testMatrix.stages }, { kind: 'queue', mode: 'demo' });
     addAuditEvent(state, 'Full Benchmark 已提交', `${runId} · ${state.testMatrix.environments.length} environments`, 'blue', 'TestTube2');
     json(response, 202, { state: await saveState(state) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/adopt') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     if (state.benchmark.status !== 'complete') {
       json(response, 409, { error: 'Full Benchmark 尚未完成。' });
@@ -154,12 +184,13 @@ async function handleApi(request, response, url) {
     const body = await readJson(request);
     state.stage = 'curation';
     state.agent = { ...state.agent, status: 'awaiting_approval', phase: '知识沉淀', currentAction: { id: 'action.knowledge-publish', type: 'knowledge.publish', title: '审阅并发布本次优化经验', reason: '候选已经采用，需要把适用范围、约束和证据固化为可检索资产。', expectedOutput: '3 条 Experience Draft · fixed evidence', risk: 'low', approvalRequired: true } };
+    appendRuntimeEvent(state, 'decision.adopted', { candidate: 'candidate-02', note: body.note || 'approved' }, { kind: 'policy', mode: 'demo' });
     addAuditEvent(state, 'Candidate 02 已采用', `Level 3 · ${body.note || 'approved'}`, 'green', 'CheckCircle2');
     json(response, 200, { state: await saveState(state) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/reject') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     state.stage = 'validation';
     state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
@@ -168,7 +199,7 @@ async function handleApi(request, response, url) {
     return;
   }
   if (request.method === 'PATCH' && url.pathname.startsWith('/api/knowledge/drafts/')) {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     const draftId = decodeURIComponent(url.pathname.slice('/api/knowledge/drafts/'.length));
     const body = await readJson(request);
@@ -182,7 +213,7 @@ async function handleApi(request, response, url) {
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/knowledge/publish') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     const draft = await readJson(request);
     validateKnowledgeDraft(draft);
@@ -194,7 +225,7 @@ async function handleApi(request, response, url) {
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/knowledge/publish-all') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     guardMutation(state);
     const body = await readJson(request);
     const drafts = Array.isArray(body.drafts) ? body.drafts : state.knowledgeDrafts;
@@ -202,12 +233,13 @@ async function handleApi(request, response, url) {
     state.publishedAssets = drafts.map(toKnowledgeAsset);
     state.stage = 'published';
     state.agent = { ...state.agent, status: 'completed', phase: 'Mission 完成', currentAction: null };
+    appendRuntimeEvent(state, 'knowledge.published', { assetCount: state.publishedAssets.length, assetIds: state.publishedAssets.map((asset) => asset.id) }, { kind: 'knowledge', mode: 'demo' });
     addAuditEvent(state, '任务知识资产集已发布', `${state.publishedAssets.length} Experiences · fixed versions`, 'green', 'BookOpen');
     json(response, 200, { state: await saveState(state), assets: state.publishedAssets });
     return;
   }
   if (request.method === 'PATCH' && url.pathname === '/api/state') {
-    const state = await loadState();
+    const state = await loadRuntimeState();
     const body = await readJson(request);
     if (body.testMatrix && (!Array.isArray(body.testMatrix.environments) || !body.testMatrix.environments.length || !Array.isArray(body.testMatrix.stages) || !body.testMatrix.stages.length)) {
       json(response, 400, { error: '测试矩阵至少需要一个环境和一个验证阶段。' });
@@ -250,6 +282,8 @@ async function serveStatic(response, url) {
 }
 
 await ensureStorage();
+await mkdir(path.dirname(serverPidPath), { recursive: true });
+await writeFile(serverPidPath, `${process.pid}\n`, 'ascii');
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || '127.0.0.1'}`);
   try {

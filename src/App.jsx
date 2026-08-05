@@ -226,7 +226,7 @@ function MissionFlowBar({ view, stage, mission, onSelect }) {
   );
 }
 
-function AppShell({ view, stage, missionContext, activeMission, workspace, unreadCount, mobileNavOpen, missionPaused, backendStatus, backendError, onToggleMobileNav, onGlobalNavigate, onMissionStep, onOpenModal, children }) {
+function AppShell({ view, stage, missionContext, activeMission, workspace, unreadCount, mobileNavOpen, missionPaused, backendStatus, backendError, runtimeInfo, onToggleMobileNav, onGlobalNavigate, onMissionStep, onOpenModal, children }) {
   const currentStep = missionFlow.find((item) => item.id === (view === 'mission' ? 'overview' : view));
   const areaLabel = view === 'knowledge' ? '知识资产' : view === 'capabilities' ? 'Agent 能力' : '优化任务';
   const selectGlobal = (item) => {
@@ -269,7 +269,7 @@ function AppShell({ view, stage, missionContext, activeMission, workspace, unrea
           </div>
           <div className="header-actions">
             <button className="header-search" aria-label="搜索" onClick={() => onOpenModal('search')}><Search size={16} /><span>搜索任务、资产或成员</span><kbd>⌘K</kbd></button>
-            <div className={`cloud-state ${backendStatus}`}><Mark tone={backendStatus === 'offline' ? 'ochre' : 'green'} pulse={backendStatus === 'connecting'} />{backendStatus === 'online' ? 'Service synced' : backendStatus === 'offline' ? 'Service offline' : 'Connecting'}</div>
+            <div className={`cloud-state ${backendStatus} ${runtimeInfo?.mode || 'demo'}`} title={runtimeInfo?.hint || runtimeInfo?.transport || ''}><Mark tone={backendStatus === 'offline' || runtimeInfo?.status === 'degraded' ? 'ochre' : 'green'} pulse={backendStatus === 'connecting'} />{backendStatus === 'online' ? (runtimeInfo?.label || '本地参考 Runtime') : backendStatus === 'offline' ? '服务离线' : '正在连接'}</div>
             <button className="header-icon" aria-label="通知" onClick={() => onOpenModal('notifications')}><Bell size={17} />{unreadCount > 0 && <i>{unreadCount}</i>}</button>
           </div>
         </header>
@@ -1199,6 +1199,7 @@ export default function App() {
   const [workspaceFilesState, setWorkspaceFilesState] = useState([]);
   const [backendStatus, setBackendStatus] = useState('connecting');
   const [backendError, setBackendError] = useState('');
+  const [runtimeInfo, setRuntimeInfo] = useState({ mode: 'demo', label: '本地参考 Runtime', status: 'ready' });
   const draftSaveTimers = useRef({});
   const knowledgeDraftsRef = useRef(defaultKnowledgeDrafts);
 
@@ -1217,6 +1218,7 @@ export default function App() {
     if (state.activeMissionId) setActiveMissionId(state.activeMissionId);
     if (Array.isArray(state.agentProfiles)) setAgentProfiles(state.agentProfiles);
     if (state.capabilityRegistry) setCapabilityRegistry(state.capabilityRegistry);
+    if (state.runtime) setRuntimeInfo(state.runtime);
     if (state.benchmark) {
       setBenchmarkStatus(state.benchmark.status);
       setBenchmarkProgress(state.benchmark.progress || 0);
@@ -1400,7 +1402,7 @@ export default function App() {
 
   return (
     <>
-      <AppShell view={view} stage={stage} missionContext={missionContext} activeMission={missionsState.find((mission) => mission.id === activeMissionId)} workspace={workspace} unreadCount={unreadCount} mobileNavOpen={mobileNavOpen} missionPaused={missionPaused} backendStatus={backendStatus} backendError={backendError} onToggleMobileNav={setMobileNavOpen} onGlobalNavigate={navigateGlobal} onMissionStep={openMissionStep} onOpenModal={openModal}>
+      <AppShell view={view} stage={stage} missionContext={missionContext} activeMission={missionsState.find((mission) => mission.id === activeMissionId)} workspace={workspace} unreadCount={unreadCount} mobileNavOpen={mobileNavOpen} missionPaused={missionPaused} backendStatus={backendStatus} backendError={backendError} runtimeInfo={runtimeInfo} onToggleMobileNav={setMobileNavOpen} onGlobalNavigate={navigateGlobal} onMissionStep={openMissionStep} onOpenModal={openModal}>
         {content}
       </AppShell>
       <ModalLayer modal={modal} closeModal={closeModal} setView={navigateAny} notify={notify} testMatrix={testMatrix} onSaveMatrix={updateMatrix} unreadCount={unreadCount} onMarkNotifications={markNotificationsRead} workspace={workspace} onWorkspaceChange={changeWorkspace} missionPaused={missionPaused} onTogglePause={togglePause} auditEvents={auditEvents} />

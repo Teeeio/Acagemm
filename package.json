@@ -11,7 +11,10 @@
     "preview": "vite preview",
     "start": "node server/mock-server.mjs",
     "demo:reset": "node server/reset-data.mjs",
-    "test:smoke": "node server/smoke-test.mjs"
+    "test:runtime": "node server/runtime-test.mjs",
+    "test:smoke": "node server/smoke-test.mjs",
+    "demo:diagnose": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/diagnose-exhibition.ps1",
+    "demo:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-exhibition-package.ps1"
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",

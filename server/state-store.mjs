@@ -1,11 +1,12 @@
 import { cp, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { appendRuntimeEvent } from './agent-runtime.mjs';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(serverDir, '..');
 const dataDir = process.env.OPERATOR_DATA_DIR ? path.resolve(process.env.OPERATOR_DATA_DIR) : path.join(rootDir, 'data');
-const runtimeDir = process.env.OPERATOR_RUNTIME_DIR ? path.resolve(process.env.OPERATOR_RUNTIME_DIR) : path.join(rootDir, 'runtime');
+export const runtimeDir = process.env.OPERATOR_RUNTIME_DIR ? path.resolve(process.env.OPERATOR_RUNTIME_DIR) : path.join(rootDir, 'runtime');
 const statePath = path.join(dataDir, 'mock-db.json');
 const workspaceTemplate = path.join(rootDir, 'demo-assets', 'mla-kernels');
 export const workspaceDir = path.join(runtimeDir, 'mla-kernels');
@@ -100,6 +101,7 @@ export const createSeedState = () => {
   missions,
   agentProfiles: structuredClone(agentProfiles),
   capabilityRegistry: structuredClone(capabilityRegistry),
+  runtimeEvents: [],
   benchmark: structuredClone(activeMission.benchmark),
   testMatrix: { environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] },
   knowledgeDrafts: structuredClone(knowledgeDrafts),
@@ -135,6 +137,7 @@ function ensureDomainState(state) {
   if (!state.activeMissionId || !state.missions.some((mission) => mission.id === state.activeMissionId)) state.activeMissionId = state.missions[0].id;
   if (!Array.isArray(state.agentProfiles)) state.agentProfiles = structuredClone(agentProfiles);
   if (!state.capabilityRegistry) state.capabilityRegistry = structuredClone(capabilityRegistry);
+  if (!Array.isArray(state.runtimeEvents)) state.runtimeEvents = [];
   if (!Array.isArray(state.agent?.toolCalls)) state.agent = { ...state.agent, toolCalls: [] };
   return state;
 }
@@ -250,6 +253,7 @@ function refreshBenchmark(state) {
     if (!state.benchmark.completedAt) {
       state.benchmark.completedAt = new Date().toISOString();
       addAuditEvent(state, 'Full Benchmark 已完成', 'C500 41.8μs · CUDA 36.1μs · 24/24', 'green', 'CheckCircle2');
+      appendRuntimeEvent(state, 'test_task.completed', { runId: state.benchmark.runId, correctness: '24/24', evidenceLevel: 'Level 3' }, { kind: 'queue', mode: 'demo' });
     }
   }
   return state;
@@ -311,6 +315,9 @@ function refreshAgent(state) {
     ];
     if (state.stage === 'diagnosis') state.stage = 'candidate';
     if (!state.auditEvents?.some((event) => event.detail === 'agent run completed')) addAuditEvent(state, 'Candidate Agent 已完成计划', 'agent run completed · Candidate 02 awaiting approval', 'blue', 'Code2');
+    if (!state.runtimeEvents?.some((event) => event.type === 'candidate.plan_created' && event.payload?.runId === next.runId)) {
+      appendRuntimeEvent(state, 'candidate.plan_created', { runId: next.runId, candidate: 'candidate-02', artifactId: 'artifact-candidate' }, { kind: 'agent', mode: 'demo' });
+    }
   }
   return { state: { ...state, agent: next }, changed: JSON.stringify(agent) !== JSON.stringify(next) };
 }

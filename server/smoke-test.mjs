@@ -44,6 +44,9 @@ try {
   const startedMission = await request(`/api/missions/${missionId}/runs`, { method: 'POST', body: '{}' });
   assert.equal(startedMission.state.agent.status, 'running');
   assert.equal(startedMission.state.agent.artifacts[0].title, '正在读取仓库上下文');
+  assert.equal(startedMission.state.runtime.mode, 'demo');
+  const startedEvents = await request(`/api/missions/${missionId}/events`);
+  assert.deepEqual(startedEvents.events.map((event) => event.type), ['mission.run_started']);
   let agentState;
   for (let attempt = 0; attempt < 50; attempt += 1) {
     agentState = (await request('/api/state')).state;
@@ -54,6 +57,9 @@ try {
   assert.equal(agentState.agent.currentAction.type, 'candidate.plan');
   assert.match(agentState.agent.artifacts.find((artifact) => artifact.kind === 'Candidate Plan').title, /Smoke Mission/);
   assert.match(agentState.agent.toolCalls.find((call) => call.name === 'Experience Search').summary, /C500/);
+  const candidateEvents = await request(`/api/missions/${missionId}/events?after=${startedEvents.nextSequence}`);
+  assert.equal(candidateEvents.events[0].type, 'candidate.plan_created');
+  assert.ok(candidateEvents.events[0].sequence > startedEvents.nextSequence);
   const applied = await request('/api/actions/apply-patch', { method: 'POST', body: JSON.stringify({ candidate: 'candidate-02' }) });
   assert.equal(applied.state.patchApplied, true);
   assert.equal(applied.state.stage, 'validation');
@@ -70,6 +76,10 @@ try {
   assert.equal(state.benchmark.status, 'complete');
   assert.equal(state.stage, 'evidence');
   assert.equal(state.benchmark.logs.at(-1).progress, 100);
+  const workflowEvents = await request(`/api/missions/${missionId}/events`);
+  assert.deepEqual(workflowEvents.events.map((event) => event.sequence), workflowEvents.events.map((event) => event.sequence).toSorted((left, right) => left - right));
+  assert.ok(workflowEvents.events.some((event) => event.type === 'patch.applied'));
+  assert.ok(workflowEvents.events.some((event) => event.type === 'test_task.completed'));
 
   const adopted = await request('/api/actions/adopt', { method: 'POST', body: JSON.stringify({ note: 'smoke test approved' }) });
   assert.equal(adopted.state.stage, 'curation');
