@@ -16,30 +16,91 @@ export const knowledgeDrafts = [
   { id: 'exp.cross-platform-adoption-gate', code: 'EXP-03', category: '跨平台验证准则', title: 'C500 / CUDA 跨平台候选采用门禁', conclusion: '跨平台候选只有在 Correctness、目标平台性能和固定环境证据同时通过后，才能替换 current best。', scope: 'C500 / CUDA · operator candidate adoption · Full Benchmark', constraints: 'Probe 结果不得用于最终采用；每个平台必须绑定 Environment Snapshot。', hardware: ['C500', 'CUDA'], evidence: '24 / 24 · 2 个固定环境' },
 ];
 
-export const createSeedState = () => ({
+const agentProfiles = [
+  { id: 'profile.operator-orchestrator', name: 'Operator Orchestrator', version: 'v3.2.0', role: '目标拆解与路线调度', status: 'active', tools: 6, skills: 4 },
+  { id: 'profile.result-analyst', name: 'Result Analyst', version: 'v2.4.1', role: '证据审查与采用判断', status: 'available', tools: 4, skills: 3 },
+  { id: 'profile.experience-curator', name: 'Experience Curator', version: 'v1.8.0', role: '经验提炼与发布治理', status: 'available', tools: 3, skills: 2 },
+];
+
+const capabilityRegistry = {
+  skills: [
+    { id: 'skill.context-snapshot', name: '仓库上下文快照', version: 'v2.1.0', permission: 'repository:read' },
+    { id: 'skill.bottleneck-segmentation', name: '性能瓶颈分段分析', version: 'v2.3.1', permission: 'artifact:write' },
+    { id: 'skill.candidate-planning', name: '有界候选规划', version: 'v1.9.0', permission: 'candidate:create' },
+    { id: 'skill.experience-curation', name: '经验沉淀', version: 'v1.6.0', permission: 'knowledge:draft' },
+  ],
+  tools: [
+    { id: 'tool.repository-inspect', name: 'Repository Inspector', version: 'v1.5.0', permission: 'repository:read', risk: 'low' },
+    { id: 'tool.experience-search', name: 'Experience Search', version: 'v2.0.3', permission: 'knowledge:read', risk: 'low' },
+    { id: 'tool.profile-timeline', name: 'Profile Timeline', version: 'v1.8.0', permission: 'worker:execute', risk: 'medium' },
+    { id: 'tool.patch-workspace', name: 'Patch Workspace', version: 'v1.4.2', permission: 'repository:write', risk: 'medium' },
+    { id: 'tool.test-matrix', name: 'Test Matrix Runner', version: 'v2.2.0', permission: 'worker:execute', risk: 'medium' },
+    { id: 'tool.evidence-compare', name: 'Evidence Comparator', version: 'v1.7.1', permission: 'artifact:read', risk: 'low' },
+  ],
+};
+
+const createIdleAgent = (missionId = 'MIS_01JH7R', goal = '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟') => ({
+  status: 'idle', phase: '待启动', progress: 0, missionId, runId: null, profileId: 'profile.operator-orchestrator', goal, startedAt: null, durationMs: 7200, currentAction: null, toolCalls: [],
+  messages: [{ id: `agent-ready-${missionId}`, phase: 'Mission', status: 'ready', title: 'Mission 已准备就绪', detail: '目标、仓库和验证边界已固定。', time: '刚刚' }],
+  artifacts: [
+    { id: 'artifact-context', kind: 'Context Snapshot', title: 'Mission context', status: 'ready', meta: 'repository · constraints · baseline' },
+    { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: '3 条相关 Experience', status: 'ready', meta: 'C500 · paged_attention · validated' },
+  ],
+});
+
+const createAwaitingAgent = (missionId, goal, candidateName, hardware = 'C500') => ({
+  ...createIdleAgent(missionId, goal),
+  status: 'awaiting_approval',
+  phase: '等待审批',
+  progress: 100,
+  currentAction: {
+    id: 'action.candidate-02',
+    type: 'candidate.plan',
+    title: `审阅 Candidate 02 · ${candidateName}`,
+    reason: '已完成上下文、知识和性能证据对齐，候选变更限定在受控工作区。',
+    expectedOutput: '2 个文件 · 受控 Patch · Correctness Matrix',
+    risk: 'medium',
+    approvalRequired: true,
+  },
+  messages: [
+    { id: `agent-context-${missionId}`, phase: 'context', status: 'completed', title: '上下文读取完成', detail: '已固定仓库、基线和验证边界。', time: '7 分钟前' },
+    { id: `agent-research-${missionId}`, phase: 'research', status: 'completed', title: '知识检索完成', detail: `已引用 3 条 ${hardware} 相关 Experience。`, time: '6 分钟前' },
+    { id: `agent-diagnosis-${missionId}`, phase: 'diagnosis', status: 'completed', title: '瓶颈分析完成', detail: '已生成可审阅的候选变更范围。', time: '4 分钟前' },
+    { id: `agent-approval-${missionId}`, phase: 'approval', status: 'waiting', title: '等待人工审批', detail: '候选方案已经准备好，尚未写入工作区。', time: '刚刚' },
+  ],
+  artifacts: [
+    { id: 'artifact-context', kind: 'Context Snapshot', title: `${candidateName} / context`, status: 'ready', meta: 'repository · constraints · baseline' },
+    { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: `3 条 ${hardware} 相关 Experience`, status: 'ready', meta: `${hardware} · validated` },
+    { id: 'artifact-candidate', kind: 'Candidate Plan', title: `Candidate 02 · ${candidateName}`, status: 'awaiting_approval', meta: '2 files · +37 −18 · digest recorded' },
+  ],
+  toolCalls: [
+    { id: `tool.repository-inspect-${missionId}`, toolId: 'tool.repository-inspect', name: 'Repository Inspector', version: 'v1.5.0', skillId: 'skill.context-snapshot', status: 'completed', summary: '读取仓库、Git 状态和当前最佳', permission: 'repository:read' },
+    { id: `tool.experience-search-${missionId}`, toolId: 'tool.experience-search', name: 'Experience Search', version: 'v2.0.3', skillId: 'skill.context-snapshot', status: 'completed', summary: `检索到 3 条 ${hardware} 相关经验`, permission: 'knowledge:read' },
+    { id: `tool.profile-timeline-${missionId}`, toolId: 'tool.profile-timeline', name: 'Profile Timeline', version: 'v1.8.0', skillId: 'skill.bottleneck-segmentation', status: 'completed', summary: '定位固定开销和关键时间线', permission: 'worker:execute' },
+    { id: `tool.patch-workspace-${missionId}`, toolId: 'tool.patch-workspace', name: 'Patch Workspace', version: 'v1.4.2', skillId: 'skill.candidate-planning', status: 'completed', summary: '生成有界候选变更计划', permission: 'repository:write' },
+  ],
+});
+
+const createSeedMissions = () => [
+  { id: 'MIS_01JH7R', title: 'MLA Paged KV Cache', goal: '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟', repository: 'mla-kernels', hardware: ['C500', 'CUDA'], metric: 'latency p50', stage: 'candidate', status: 'awaiting_approval', updatedLabel: '刚刚', result: { value: '41.8 μs', improvement: '−22.3%' }, patchApplied: false, benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] }, agent: createAwaitingAgent('MIS_01JH7R', '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟', 'Async plan descriptor cache') },
+  { id: 'MIS_01JGA4', title: 'Paged Decode Shape Fast Path', goal: '降低 Paged Decode 在 C500 长尾 shape 下的 P95 延迟', repository: 'flashinfer-c500', hardware: ['C500'], metric: 'latency p95', stage: 'validation', status: 'awaiting_approval', updatedLabel: '18 分钟前', result: { value: '2.87 ms', improvement: '−8.6%' }, patchApplied: true, benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] }, agent: { ...createAwaitingAgent('MIS_01JGA4', '降低 Paged Decode 在 C500 长尾 shape 下的 P95 延迟', 'Decode shape fast path'), phase: '异构验证', currentAction: { id: 'action.decode-validation', type: 'test.plan', title: '运行 C500 Full Benchmark', reason: '30 / 30 Correctness 已通过，需要确认长尾收益。', expectedOutput: 'Full Benchmark · P50 / P95 compare', risk: 'medium', approvalRequired: true } } },
+  { id: 'MIS_01JDX9', title: 'Ragged Prefill Vector Layout', goal: '优化 Ragged Prefill 的向量化访存和片上复用', repository: 'flashinfer-c500', hardware: ['C500'], metric: 'throughput', stage: 'published', status: 'completed', updatedLabel: '昨天', result: { value: '1.42×', improvement: '+42.1%' }, patchApplied: true, benchmark: { status: 'complete', progress: 100, runId: 'run_ARCHIVED', startedAt: null, durationMs: 2600, logs: [] }, agent: { ...createAwaitingAgent('MIS_01JDX9', '优化 Ragged Prefill 的向量化访存和片上复用', 'Vector layout reuse'), status: 'completed', phase: 'Mission 完成', progress: 100, currentAction: null } },
+];
+
+export const createSeedState = () => {
+  const missions = createSeedMissions();
+  const activeMission = missions[0];
+  return {
   schemaVersion: 1,
   updatedAt: new Date().toISOString(),
-  stage: 'candidate',
-  patchApplied: false,
-  agent: {
-    status: 'idle',
-    phase: '待启动',
-    progress: 0,
-    missionId: 'MIS_01JH7R',
-    runId: null,
-    goal: '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟',
-    startedAt: null,
-    durationMs: 7200,
-    currentAction: null,
-    messages: [
-      { id: 'agent-ready', phase: 'Mission', status: 'ready', title: 'Mission 已准备就绪', detail: '目标、仓库和 C500 / CUDA 验证边界已固定。', time: '刚刚' },
-    ],
-    artifacts: [
-      { id: 'artifact-context', kind: 'Context Snapshot', title: 'MLA Paged KV Cache / context', status: 'ready', meta: 'repository · constraints · baseline' },
-      { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: '3 条相关 Experience', status: 'ready', meta: 'C500 · paged_attention · validated' },
-    ],
-  },
-  benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] },
+  stage: activeMission.stage,
+  patchApplied: activeMission.patchApplied,
+  agent: structuredClone(activeMission.agent),
+  activeMissionId: activeMission.id,
+  missions,
+  agentProfiles: structuredClone(agentProfiles),
+  capabilityRegistry: structuredClone(capabilityRegistry),
+  benchmark: structuredClone(activeMission.benchmark),
   testMatrix: { environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] },
   knowledgeDrafts: structuredClone(knowledgeDrafts),
   publishedAssets: [],
@@ -51,7 +112,8 @@ export const createSeedState = () => ({
     { time: '10:42:19', title: 'Candidate Agent 生成 Candidate 02', detail: '2 files · +37 −18 · digest recorded', tone: 'blue', icon: 'Code2' },
     { time: '10:42:11', title: 'Research Agent 引用固定开销 Experience', detail: 'exp.short-seq.fixed-overhead@1.2 · validated', tone: 'green', icon: 'Search' },
   ],
-});
+  };
+};
 
 const exists = async (target) => {
   try { await stat(target); return true; } catch { return false; }
@@ -64,19 +126,93 @@ export async function ensureStorage() {
   if (!(await exists(workspaceDir))) await cp(workspaceTemplate, workspaceDir, { recursive: true });
 }
 
+function ensureDomainState(state) {
+  if (!Array.isArray(state.missions) || !state.missions.length) {
+    const fallback = { id: state.agent?.missionId || 'MIS_01JH7R', title: 'MLA Paged KV Cache', goal: state.agent?.goal || '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟', repository: 'mla-kernels', hardware: ['C500', 'CUDA'], metric: 'latency p50', stage: state.stage || 'diagnosis', status: state.agent?.status || 'ready', updatedLabel: '刚刚', result: { value: '41.8 μs', improvement: '−22.3%' }, patchApplied: Boolean(state.patchApplied), benchmark: structuredClone(state.benchmark || {}), agent: structuredClone(state.agent || createIdleAgent()) };
+    state.missions = [fallback];
+    state.activeMissionId = fallback.id;
+  }
+  if (!state.activeMissionId || !state.missions.some((mission) => mission.id === state.activeMissionId)) state.activeMissionId = state.missions[0].id;
+  if (!Array.isArray(state.agentProfiles)) state.agentProfiles = structuredClone(agentProfiles);
+  if (!state.capabilityRegistry) state.capabilityRegistry = structuredClone(capabilityRegistry);
+  if (!Array.isArray(state.agent?.toolCalls)) state.agent = { ...state.agent, toolCalls: [] };
+  return state;
+}
+
+function projectActiveMission(state) {
+  if (!Array.isArray(state.missions)) return state;
+  const index = state.missions.findIndex((mission) => mission.id === state.activeMissionId);
+  if (index === -1) return state;
+  const statusMap = { idle: 'ready', running: 'running', executing: 'running', awaiting_approval: 'awaiting_approval', completed: 'completed' };
+  state.missions[index] = {
+    ...state.missions[index],
+    goal: state.agent?.goal || state.missions[index].goal,
+    stage: state.stage,
+    status: statusMap[state.agent?.status] || state.missions[index].status,
+    patchApplied: state.patchApplied,
+    benchmark: structuredClone(state.benchmark),
+    agent: structuredClone(state.agent),
+    updatedLabel: '刚刚',
+  };
+  return state;
+}
+
+export function selectMission(state, missionId) {
+  projectActiveMission(state);
+  const mission = state.missions.find((item) => item.id === missionId);
+  if (!mission) {
+    const error = new Error('Mission 不存在。');
+    error.status = 404;
+    throw error;
+  }
+  state.activeMissionId = mission.id;
+  state.stage = mission.stage || 'diagnosis';
+  state.patchApplied = Boolean(mission.patchApplied);
+  state.benchmark = structuredClone(mission.benchmark || { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] });
+  state.agent = structuredClone(mission.agent || createIdleAgent(mission.id, mission.goal));
+  addAuditEvent(state, 'Mission 已切换', `${mission.id} · ${mission.title}`, 'blue', 'GitBranch');
+  return state;
+}
+
+export function createMission(state, input) {
+  projectActiveMission(state);
+  const id = `MIS_${Date.now().toString(36).toUpperCase()}`;
+  const title = input.title?.trim() || input.goal.trim().slice(0, 30);
+  const hardware = Array.isArray(input.hardware) && input.hardware.length ? input.hardware : ['C500'];
+  const mission = {
+    id,
+    title,
+    goal: input.goal.trim(),
+    repository: input.repository?.trim() || 'mla-kernels',
+    hardware,
+    metric: input.metric?.trim() || 'latency p50',
+    stage: 'diagnosis',
+    status: 'ready',
+    updatedLabel: '刚刚',
+    result: { value: '—', improvement: 'new' },
+    patchApplied: false,
+    benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] },
+    agent: createIdleAgent(id, input.goal.trim()),
+  };
+  state.missions = [mission, ...state.missions];
+  return selectMission(state, id);
+}
+
 export async function loadState() {
   await ensureStorage();
   let state = JSON.parse(await readFile(statePath, 'utf8'));
+  const needsMigration = !Array.isArray(state.missions) || !state.capabilityRegistry || !Array.isArray(state.agent?.toolCalls);
+  state = ensureDomainState(state);
   const benchmarkBefore = JSON.stringify(state.benchmark);
   state = refreshBenchmark(state);
   const refreshedAgent = refreshAgent(state);
-  if (refreshedAgent.changed || benchmarkBefore !== JSON.stringify(state.benchmark)) return saveState(refreshedAgent.state);
+  if (needsMigration || refreshedAgent.changed || benchmarkBefore !== JSON.stringify(state.benchmark)) return saveState(refreshedAgent.state);
   return state;
 }
 
 export async function saveState(state) {
   await mkdir(dataDir, { recursive: true });
-  const next = { ...state, updatedAt: new Date().toISOString() };
+  const next = { ...projectActiveMission(ensureDomainState(state)), updatedAt: new Date().toISOString() };
   const temporaryPath = `${statePath}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   await rename(temporaryPath, statePath);
@@ -122,6 +258,11 @@ function refreshBenchmark(state) {
 function refreshAgent(state) {
   const agent = state.agent;
   if (!agent || agent.status !== 'running' || !agent.startedAt) return { state, changed: false };
+  const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+  const missionTitle = mission.title || '当前算子';
+  const hardware = mission.hardware?.[0] || '目标硬件';
+  const metric = mission.metric || '性能指标';
+  const candidateName = `${missionTitle} ${metric} fast path`;
   const elapsed = Date.now() - new Date(agent.startedAt).getTime();
   const progress = Math.min(100, Math.max(0, Math.floor((elapsed / agent.durationMs) * 100 / 10) * 10));
   const phases = [
@@ -142,24 +283,31 @@ function refreshAgent(state) {
     time: threshold === 0 ? '刚刚' : `${Math.max(1, Math.floor((elapsed - (threshold / 100) * agent.durationMs) / 1000))}s 前`,
   }));
   const artifacts = [
-    { id: 'artifact-context', kind: 'Context Snapshot', title: progress >= 20 ? 'MLA Paged KV Cache / context' : '正在读取仓库上下文', status: progress >= 20 ? 'ready' : 'running', meta: 'repository · constraints · baseline' },
-    { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: progress >= 40 ? '3 条 C500 相关 Experience' : '等待知识检索', status: progress >= 40 ? 'ready' : progress >= 20 ? 'running' : 'queued', meta: 'C500 · paged_attention · validated' },
+    { id: 'artifact-context', kind: 'Context Snapshot', title: progress >= 20 ? `${missionTitle} / context` : '正在读取仓库上下文', status: progress >= 20 ? 'ready' : 'running', meta: `${mission.repository || 'repository'} · constraints · baseline` },
+    { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: progress >= 40 ? `3 条 ${hardware} 相关 Experience` : '等待知识检索', status: progress >= 40 ? 'ready' : progress >= 20 ? 'running' : 'queued', meta: `${hardware} · ${metric} · validated` },
   ];
-  const next = { ...agent, progress, phase: current[1], messages, artifacts };
+  const toolDefinitions = [
+    [0, 'tool.repository-inspect', 'Repository Inspector', 'v1.5.0', '读取仓库、Git 状态和当前最佳', 'skill.context-snapshot'],
+    [20, 'tool.experience-search', 'Experience Search', 'v2.0.3', `检索到 3 条 ${hardware} 相关经验`, 'skill.context-snapshot'],
+    [40, 'tool.profile-timeline', 'Profile Timeline', 'v1.8.0', '定位 plan、workspace 和 host mirror 固定开销', 'skill.bottleneck-segmentation'],
+    [60, 'tool.patch-workspace', 'Patch Workspace', 'v1.4.2', `生成 ${missionTitle} 的有界变更计划`, 'skill.candidate-planning'],
+  ];
+  const toolCalls = toolDefinitions.filter(([threshold]) => progress >= threshold).map(([threshold, id, name, version, summary, skillId]) => ({ id: `${id}-${agent.runId}`, toolId: id, name, version, skillId, status: progress >= Math.min(100, threshold + 20) ? 'completed' : 'running', summary, permission: capabilityRegistry.tools.find((tool) => tool.id === id)?.permission || 'read' }));
+  const next = { ...agent, progress, phase: current[1], messages, artifacts, toolCalls };
   if (progress >= 100) {
     next.status = 'awaiting_approval';
     next.currentAction = {
       id: 'action.candidate-02',
       type: 'candidate.plan',
-      title: '审阅 Candidate 02 · Async plan descriptor cache',
-      reason: '固定开销已成为短序列延迟的主要来源。',
+      title: `审阅 Candidate 02 · ${candidateName}`,
+      reason: `${metric} 的主要瓶颈已定位，候选变更限定在当前 Mission 的受控工作区。`,
       expectedOutput: '2 个文件 · 受控 Patch · Correctness Matrix',
       risk: 'medium',
       approvalRequired: true,
     };
     next.artifacts = [
       ...artifacts,
-      { id: 'artifact-candidate', kind: 'Candidate Plan', title: 'Candidate 02 · Async plan descriptor cache', status: 'awaiting_approval', meta: '2 files · +37 −18 · digest recorded' },
+      { id: 'artifact-candidate', kind: 'Candidate Plan', title: `Candidate 02 · ${candidateName}`, status: 'awaiting_approval', meta: '2 files · +37 −18 · digest recorded' },
     ];
     if (state.stage === 'diagnosis') state.stage = 'candidate';
     if (!state.auditEvents?.some((event) => event.detail === 'agent run completed')) addAuditEvent(state, 'Candidate Agent 已完成计划', 'agent run completed · Candidate 02 awaiting approval', 'blue', 'Code2');
@@ -177,10 +325,12 @@ export function startAgentRun(state, goal) {
     progress: 0,
     missionId: state.agent?.missionId || 'MIS_01JH7R',
     runId,
+    profileId: 'profile.operator-orchestrator',
     goal: goal.trim(),
     startedAt: new Date().toISOString(),
     durationMs: 7200,
     currentAction: null,
+    toolCalls: [],
     messages: [{ id: `agent-start-${runId}`, phase: 'Mission', status: 'running', title: 'Orchestrator 已接管 Mission', detail: `Run ${runId} 已启动，正在建立 Context Snapshot。`, time: '刚刚' }],
     artifacts: [
       { id: 'artifact-context', kind: 'Context Snapshot', title: '正在读取仓库上下文', status: 'running', meta: 'repository · constraints · baseline' },

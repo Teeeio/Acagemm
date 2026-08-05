@@ -5,10 +5,12 @@ import { fileURLToPath } from 'node:url';
 import {
   addAuditEvent,
   applyCandidatePatch,
+  createMission,
   ensureStorage,
   loadState,
   resetDemoData,
   saveState,
+  selectMission,
   startAgentRun,
   workspaceFiles,
 } from './state-store.mjs';
@@ -76,6 +78,11 @@ async function handleApi(request, response, url) {
     json(response, 200, { patchApplied: state.patchApplied, workspace: 'runtime/mla-kernels', files: workspaceFiles });
     return;
   }
+  if (request.method === 'GET' && url.pathname === '/api/missions') {
+    const state = await loadState();
+    json(response, 200, { missions: state.missions, activeMissionId: state.activeMissionId });
+    return;
+  }
   if (request.method === 'POST' && url.pathname === '/api/missions') {
     const state = await loadState();
     guardMutation(state);
@@ -84,7 +91,25 @@ async function handleApi(request, response, url) {
       json(response, 400, { error: '请输入一个可执行的优化目标。' });
       return;
     }
-    json(response, 202, { state: await saveState(startAgentRun(state, body.goal)) });
+    json(response, 201, { state: await saveState(createMission(state, body)) });
+    return;
+  }
+  const missionRunMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/runs$/);
+  if (request.method === 'POST' && missionRunMatch) {
+    const state = await loadState();
+    guardMutation(state);
+    const missionId = decodeURIComponent(missionRunMatch[1]);
+    if (state.activeMissionId !== missionId) selectMission(state, missionId);
+    const body = await readJson(request);
+    const mission = state.missions.find((item) => item.id === missionId);
+    json(response, 202, { state: await saveState(startAgentRun(state, body.goal?.trim() || mission.goal)) });
+    return;
+  }
+  const missionSelectMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/select$/);
+  if (request.method === 'POST' && missionSelectMatch) {
+    const state = await loadState();
+    const missionId = decodeURIComponent(missionSelectMatch[1]);
+    json(response, 200, { state: await saveState(selectMission(state, missionId)) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/apply-patch') {

@@ -121,6 +121,7 @@ const stageMeta = {
 
 const globalNavItems = [
   { id: 'missions', label: '优化任务', icon: GitBranch },
+  { id: 'capabilities', label: 'Agent 能力', icon: Grid2X2 },
   { id: 'knowledge', label: '知识资产', icon: BookOpen },
   { id: 'resources', label: '算力资源', icon: Cpu, modal: 'environments' },
   { id: 'audit', label: '审计中心', icon: ShieldCheck, modal: 'events' },
@@ -179,7 +180,7 @@ function RailButton({ icon: Icon, label, active, onClick }) {
   );
 }
 
-function MissionFlowBar({ view, stage, onSelect }) {
+function MissionFlowBar({ view, stage, mission, onSelect }) {
   const activeId = view === 'mission' ? 'overview' : view;
   const lifecycleIndex = {
     diagnosis: 0,
@@ -195,13 +196,13 @@ function MissionFlowBar({ view, stage, onSelect }) {
       <div className="mission-context-summary">
         <div className="mission-context-title">
           <span className="live-mission-mark"><CircleDot size={13} /> LIVE MISSION</span>
-          <strong>MLA Paged KV Cache</strong>
-          <small>MIS_01JH7R</small>
+          <strong>{mission?.title || 'MLA Paged KV Cache'}</strong>
+          <small>{mission?.id || 'MIS_01JH7R'}</small>
         </div>
         <div className="mission-context-facts">
-          <span><i className="fact-platform">C5</i>C500 + CUDA</span>
-          <span><small>当前最佳</small><strong>41.8 μs</strong></span>
-          <span className="mission-gain"><small>累计提升</small><strong>−22.3%</strong></span>
+          <span><i className="fact-platform">C5</i>{mission?.hardware?.join(' + ') || 'C500 + CUDA'}</span>
+          <span><small>当前最佳</small><strong>{mission?.result?.value || '41.8 μs'}</strong></span>
+          <span className="mission-gain"><small>累计提升</small><strong>{mission?.result?.improvement || '−22.3%'}</strong></span>
           <span className={`mission-stage-state ${stage}`}><Mark pulse={stage !== 'published'} />{stageMeta[stage].status}</span>
         </div>
       </div>
@@ -225,8 +226,9 @@ function MissionFlowBar({ view, stage, onSelect }) {
   );
 }
 
-function AppShell({ view, stage, missionContext, workspace, unreadCount, mobileNavOpen, missionPaused, backendStatus, backendError, onToggleMobileNav, onGlobalNavigate, onMissionStep, onOpenModal, children }) {
+function AppShell({ view, stage, missionContext, activeMission, workspace, unreadCount, mobileNavOpen, missionPaused, backendStatus, backendError, onToggleMobileNav, onGlobalNavigate, onMissionStep, onOpenModal, children }) {
   const currentStep = missionFlow.find((item) => item.id === (view === 'mission' ? 'overview' : view));
+  const areaLabel = view === 'knowledge' ? '知识资产' : view === 'capabilities' ? 'Agent 能力' : '优化任务';
   const selectGlobal = (item) => {
     if (item.modal) onOpenModal(item.modal);
     else onGlobalNavigate(item.id);
@@ -246,7 +248,7 @@ function AppShell({ view, stage, missionContext, workspace, unreadCount, mobileN
         <div className="nav-group-title">产品域</div>
         <nav aria-label="全局导航">
           {globalNavItems.map((item) => (
-            <RailButton key={item.id} {...item} active={(item.id === 'missions' && missionContext) || (item.id === 'knowledge' && !missionContext && view === 'knowledge')} onClick={() => selectGlobal(item)} />
+            <RailButton key={item.id} {...item} active={(item.id === 'missions' && (missionContext || view === 'missions')) || (item.id === 'knowledge' && view === 'knowledge') || (item.id === 'capabilities' && view === 'capabilities')} onClick={() => selectGlobal(item)} />
           ))}
         </nav>
         <div className="nav-group-title project-title">组织管理</div>
@@ -263,7 +265,7 @@ function AppShell({ view, stage, missionContext, workspace, unreadCount, mobileN
         <header className="app-header">
           <div className="header-context">
             <button className="mobile-menu" aria-label="打开导航" onClick={() => onToggleMobileNav(true)}><Menu size={18} /></button>
-            <span>{missionContext ? '优化任务' : '知识资产'}</span><ChevronRight size={13} /><span>{missionContext ? 'MLA Paged KV Cache' : '组织知识库'}</span>{missionContext && <><ChevronRight size={13} /><strong>{currentStep?.label}</strong></>}
+            <span>{areaLabel}</span><ChevronRight size={13} /><span>{missionContext ? (activeMission?.title || 'MLA Paged KV Cache') : view === 'missions' ? 'Mission 中心' : view === 'capabilities' ? '能力注册表' : '组织知识库'}</span>{missionContext && <><ChevronRight size={13} /><strong>{currentStep?.label}</strong></>}
           </div>
           <div className="header-actions">
             <button className="header-search" aria-label="搜索" onClick={() => onOpenModal('search')}><Search size={16} /><span>搜索任务、资产或成员</span><kbd>⌘K</kbd></button>
@@ -271,7 +273,7 @@ function AppShell({ view, stage, missionContext, workspace, unreadCount, mobileN
             <button className="header-icon" aria-label="通知" onClick={() => onOpenModal('notifications')}><Bell size={17} />{unreadCount > 0 && <i>{unreadCount}</i>}</button>
           </div>
         </header>
-        {missionContext && <MissionFlowBar view={view} stage={stage} onSelect={onMissionStep} />}
+        {missionContext && <MissionFlowBar view={view} stage={stage} mission={activeMission} onSelect={onMissionStep} />}
         {backendStatus === 'offline' && <div className="service-offline-banner"><TriangleAlert size={14} /><span>业务服务不可用，修改操作不会提交。{backendError ? ` ${backendError}` : ''}</span></div>}
         {missionPaused && <div className="mission-paused-banner"><Pause size={14} />任务已暂停，浏览与导出仍可使用，新的审批和测试操作已锁定。</div>}
         {children}
@@ -489,7 +491,67 @@ function MissionView({ stage, setView, onAdvance, onOpenModal, paused }) {
   );
 }
 
-function AgentWorkbenchView({ stage, agentState, onStartAgent, onAdvance, setView, onOpenModal, paused }) {
+function MissionHub({ missions = [], activeMissionId, onSelect, onCreate }) {
+  const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState('');
+  const [draft, setDraft] = useState({ title: '', goal: '', repository: 'mla-kernels', hardware: ['C500'], metric: 'latency p50' });
+  const visible = missions.filter((mission) => `${mission.title} ${mission.goal} ${mission.repository}`.toLowerCase().includes(query.toLowerCase()));
+  const statusLabel = { ready: '就绪', running: '运行中', awaiting_approval: '待审批', completed: '已完成' };
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!draft.goal.trim()) return;
+    await onCreate(draft);
+    setCreating(false);
+    setDraft({ title: '', goal: '', repository: 'mla-kernels', hardware: ['C500'], metric: 'latency p50' });
+  };
+  return (
+    <main className="page mission-hub-page">
+      <section className="detail-heading mission-hub-heading">
+        <div><span className="detail-overline">MISSION CONTROL</span><h1>优化任务</h1><p>从一个清晰目标开始，让 Agent 持续推进代码、实验、证据和知识。</p></div>
+        <button className="primary-action" onClick={() => setCreating((value) => !value)}>{creating ? <><X size={15} /> 取消创建</> : <><GitBranch size={15} /> 新建 Mission</>}</button>
+      </section>
+
+      {creating && <form className="mission-create-panel" onSubmit={submit}>
+        <div className="mission-create-lead"><span>NEW MISSION</span><strong>定义 Agent 的目标与执行边界</strong><p>创建后先进入就绪状态，由你决定何时启动 Agent Run。</p></div>
+        <label className="wide"><span>优化目标</span><textarea aria-label="新 Mission 优化目标" value={draft.goal} onChange={(event) => setDraft((current) => ({ ...current, goal: event.target.value }))} placeholder="例如：降低 Paged Decode 在 C500 长尾 shape 下的 P95 延迟" /></label>
+        <label><span>任务名称</span><input aria-label="Mission 名称" value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="自动从目标生成" /></label>
+        <label><span>代码仓库</span><input aria-label="代码仓库" value={draft.repository} onChange={(event) => setDraft((current) => ({ ...current, repository: event.target.value }))} /></label>
+        <label><span>目标指标</span><select aria-label="目标指标" value={draft.metric} onChange={(event) => setDraft((current) => ({ ...current, metric: event.target.value }))}><option>latency p50</option><option>latency p95</option><option>throughput</option></select></label>
+        <fieldset><legend>目标硬件</legend>{['C500', 'CUDA', 'ROCm MI300'].map((item) => <label key={item}><input type="checkbox" checked={draft.hardware.includes(item)} onChange={(event) => setDraft((current) => ({ ...current, hardware: event.target.checked ? [...current.hardware, item] : current.hardware.filter((value) => value !== item) }))} /><span>{item}</span></label>)}</fieldset>
+        <button className="primary-action mission-create-submit" disabled={!draft.goal.trim() || !draft.hardware.length} type="submit"><ArrowRight size={15} /> 创建并进入 Mission</button>
+      </form>}
+
+      <section className="mission-hub-summary">
+        <div><span>全部任务</span><strong>{missions.length}</strong><small>本地持久化 Mission</small></div>
+        <div><span>Agent 运行中</span><strong>{missions.filter((mission) => mission.status === 'running').length}</strong><small>包含工具执行</small></div>
+        <div><span>等待决策</span><strong>{missions.filter((mission) => mission.status === 'awaiting_approval').length}</strong><small>需要人工审批</small></div>
+        <div><span>已完成</span><strong>{missions.filter((mission) => mission.status === 'completed').length}</strong><small>证据和知识已固化</small></div>
+      </section>
+
+      <section className="mission-hub-list">
+        <div className="mission-hub-toolbar"><div><span className="eyebrow">MISSION LEDGER</span><strong>任务台账</strong></div><label><Search size={15} /><input aria-label="搜索 Mission" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索任务、目标或仓库" /></label></div>
+        <div className="mission-table-head"><span>Mission</span><span>Agent 状态</span><span>目标硬件</span><span>当前结果</span><span>更新</span><span /></div>
+        {visible.map((mission) => <button className={`mission-table-row ${mission.id === activeMissionId ? 'active' : ''}`} key={mission.id} onClick={() => onSelect(mission.id)}><div><span className="mission-list-id">{mission.id}</span><strong>{mission.title}</strong><small>{mission.goal}</small></div><span className={`mission-list-status ${mission.status}`}><Mark tone={mission.status === 'awaiting_approval' ? 'ochre' : 'green'} pulse={mission.status === 'running'} />{statusLabel[mission.status] || mission.status}</span><span>{mission.hardware.join(' + ')}</span><div className="mission-result"><strong>{mission.result?.value || '—'}</strong><small>{mission.result?.improvement || 'new'}</small></div><span>{mission.updatedLabel}</span><ChevronRight size={16} /></button>)}
+      </section>
+    </main>
+  );
+}
+
+function CapabilitiesView({ agentProfiles = [], capabilityRegistry = { skills: [], tools: [] } }) {
+  const [tab, setTab] = useState('profiles');
+  return (
+    <main className="page capability-page">
+      <section className="detail-heading"><div><span className="detail-overline">AGENT CONTROL PLANE</span><h1>Agent 能力中心</h1><p>Profile 决定 Agent 的职责，Skill 定义工作方法，Tool 提供受控执行能力。</p></div><div className="capability-health"><Mark tone="green" /><span>{agentProfiles.length} Profiles · {capabilityRegistry.skills.length} Skills · {capabilityRegistry.tools.length} Tools</span></div></section>
+      <section className="capability-tabs" role="tablist"><button className={tab === 'profiles' ? 'active' : ''} onClick={() => setTab('profiles')}>Agent Profiles</button><button className={tab === 'skills' ? 'active' : ''} onClick={() => setTab('skills')}>Skills</button><button className={tab === 'tools' ? 'active' : ''} onClick={() => setTab('tools')}>Tools</button></section>
+      {tab === 'profiles' && <section className="profile-registry">{agentProfiles.map((profile, index) => <article key={profile.id} className={profile.status === 'active' ? 'active' : ''}><div className="profile-registry-head"><span className="profile-registry-mark">{String(index + 1).padStart(2, '0')}</span><span className={`profile-state ${profile.status}`}>{profile.status}</span></div><span className="eyebrow">{profile.id}</span><h2>{profile.name}</h2><p>{profile.role}</p><dl><div><dt>版本</dt><dd>{profile.version}</dd></div><div><dt>Skills</dt><dd>{profile.skills}</dd></div><div><dt>Tools</dt><dd>{profile.tools}</dd></div></dl></article>)}</section>}
+      {tab !== 'profiles' && <section className="capability-registry"><div className="capability-registry-head"><span>能力</span><span>固定版本</span><span>执行权限</span><span>{tab === 'tools' ? '风险' : '类型'}</span><span>状态</span></div>{(tab === 'tools' ? capabilityRegistry.tools : capabilityRegistry.skills).map((item) => <div className="capability-registry-row" key={item.id}><div><span className={`capability-kind ${tab}`}><>{tab === 'tools' ? <TerminalSquare size={15} /> : <Layers3 size={15} />}</></span><span><strong>{item.name}</strong><small>{item.id}</small></span></div><code>{item.version}</code><span>{item.permission}</span><span>{item.risk || 'workflow'}</span><em><Mark tone="green" /> available</em></div>)}</section>}
+    </main>
+  );
+}
+
+function AgentWorkbenchView({ stage, activeMission, agentState, agentProfiles = [], capabilityRegistry = { skills: [], tools: [] }, onStartAgent, onAdvance, setView, onOpenModal, paused }) {
+  const mission = activeMission || { id: 'MIS_01JH7R', title: 'MLA Paged KV Cache', goal: '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟', hardware: ['C500', 'CUDA'], repository: 'mla-kernels', metric: 'latency p50' };
+  const activeProfile = agentProfiles.find((profile) => profile.id === agentState.profileId) || agentProfiles[0];
   const [goal, setGoal] = useState(agentState.goal || '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟');
   const isRunning = agentState.status === 'running' || agentState.status === 'executing';
   const isAwaitingApproval = agentState.status === 'awaiting_approval';
@@ -504,11 +566,11 @@ function AgentWorkbenchView({ stage, agentState, onStartAgent, onAdvance, setVie
     <main className="page agent-workbench-page">
       <section className="agent-command-header">
         <div className="agent-command-copy">
-          <span className="detail-overline">MISSION WORKSPACE / MIS_01JH7R</span>
+          <span className="detail-overline">MISSION WORKSPACE / {mission.id}</span>
           <div className="agent-command-title"><h1>让 Agent 负责迭代，你负责决策。</h1><span className={`mission-status-chip ${agentState.status}`}>{statusLabel}</span></div>
           <p>持续工作的算子优化 Mission，所有计划、代码、实验和证据都在同一条工作链上。</p>
         </div>
-        <div className="agent-command-meta"><span><Mark tone="green" pulse={isRunning} /> C500 connected</span><span><GitBranch size={14} /> Matrix Lab</span></div>
+        <div className="agent-command-meta"><span><Mark tone="green" pulse={isRunning} /> {mission.hardware?.join(' + ') || 'C500'} connected</span><span><GitBranch size={14} /> {mission.repository || 'mla-kernels'}</span></div>
       </section>
 
       <section className="mission-intent-bar">
@@ -517,7 +579,7 @@ function AgentWorkbenchView({ stage, agentState, onStartAgent, onAdvance, setVie
           <input value={goal} onChange={(event) => setGoal(event.target.value)} aria-label="优化目标" placeholder="输入一个优化目标" disabled={isRunning || paused} />
           <button className="primary-action" type="submit" disabled={isRunning || paused || !goal.trim()}>{isRunning ? <><Activity size={15} /> Agent 执行中</> : <><ArrowRight size={15} /> {agentState.status === 'idle' ? '启动 Agent' : '重新运行'}</>}</button>
         </form>
-        <div className="intent-facts"><span>C500</span><span>paged_attention</span><span>latency p50</span></div>
+        <div className="intent-facts">{(mission.hardware || ['C500']).map((item) => <span key={item}>{item}</span>)}<span>{mission.metric || 'latency p50'}</span></div>
       </section>
 
       <section className="agent-workbench-grid">
@@ -543,8 +605,10 @@ function AgentWorkbenchView({ stage, agentState, onStartAgent, onAdvance, setVie
 
         <aside className="agent-context-panel panel-surface">
           <div className="workbench-panel-head"><div><span className="eyebrow">MISSION CONTEXT</span><strong>任务上下文</strong></div><button className="icon-inline-button" aria-label="任务审计" onClick={() => onOpenModal('events')}><History size={15} /></button></div>
-          <div className="context-goal"><span>目标</span><strong>{agentState.goal || goal}</strong></div>
+          <div className="context-goal"><span>目标</span><strong>{agentState.goal || mission.goal || goal}</strong></div>
+          {activeProfile && <div className="context-profile"><span className="eyebrow">ACTIVE PROFILE</span><div><span className="profile-avatar">AO</span><div><strong>{activeProfile.name}</strong><small>{activeProfile.version} · {activeProfile.role}</small></div><Mark tone="green" /></div></div>}
           <div className="context-section"><span className="eyebrow">ARTIFACTS</span>{(agentState.artifacts || []).map((artifact) => <button className="artifact-row" key={artifact.id} onClick={() => artifact.kind.includes('Candidate') ? setView('code') : onOpenModal('events')}><span className={`artifact-dot ${artifact.status}`} /><div><strong>{artifact.title}</strong><small>{artifact.kind} · {artifact.meta}</small></div><ChevronRight size={14} /></button>)}</div>
+          <div className="context-section context-tools"><span className="eyebrow">TOOL CALLS</span>{(agentState.toolCalls || []).slice(-3).map((call) => <div className="tool-call-row" key={call.id}><span className={`tool-call-status ${call.status}`} /><div><strong>{call.name}</strong><small>{call.version} · {call.permission}</small></div><em>{call.status === 'completed' ? 'done' : 'running'}</em></div>)}</div>
           <div className="context-section context-gates"><span className="eyebrow">GATES</span><div><CheckCircle2 size={14} /><span>Correctness 24 / 24</span><em>ready</em></div><div><ShieldCheck size={14} /><span>Human approval</span><em>{isAwaitingApproval ? 'required' : 'policy'}</em></div></div>
           <button className="ghost-action context-advance" onClick={() => onAdvance()} disabled={isRunning || paused}><Activity size={14} /> 查看当前阶段</button>
         </aside>
@@ -1121,6 +1185,10 @@ export default function App() {
   const [missionPaused, setMissionPaused] = useState(false);
   const [patchApplied, setPatchApplied] = useState(false);
   const [agentState, setAgentState] = useState({ status: 'idle', phase: '待启动', progress: 0, goal: '', messages: [], artifacts: [], currentAction: null });
+  const [missionsState, setMissionsState] = useState([]);
+  const [activeMissionId, setActiveMissionId] = useState('MIS_01JH7R');
+  const [agentProfiles, setAgentProfiles] = useState([]);
+  const [capabilityRegistry, setCapabilityRegistry] = useState({ skills: [], tools: [] });
   const [benchmarkStatus, setBenchmarkStatus] = useState('idle');
   const [benchmarkProgress, setBenchmarkProgress] = useState(0);
   const [benchmarkLogs, setBenchmarkLogs] = useState([]);
@@ -1145,6 +1213,10 @@ export default function App() {
     if (state.stage) setStage(state.stage);
     if (typeof state.patchApplied === 'boolean') setPatchApplied(state.patchApplied);
     if (state.agent) setAgentState(state.agent);
+    if (Array.isArray(state.missions)) setMissionsState(state.missions);
+    if (state.activeMissionId) setActiveMissionId(state.activeMissionId);
+    if (Array.isArray(state.agentProfiles)) setAgentProfiles(state.agentProfiles);
+    if (state.capabilityRegistry) setCapabilityRegistry(state.capabilityRegistry);
     if (state.benchmark) {
       setBenchmarkStatus(state.benchmark.status);
       setBenchmarkProgress(state.benchmark.progress || 0);
@@ -1183,19 +1255,36 @@ export default function App() {
   };
 
   const navigateMission = (nextView) => { setMissionContext(true); setView(nextView); };
-  const navigateAny = (nextView) => { setMissionContext(nextView !== 'knowledge'); setView(nextView); };
+  const navigateAny = (nextView) => { setMissionContext(!['knowledge', 'missions', 'capabilities'].includes(nextView)); setView(nextView); };
   const openMissionStep = (item) => { setMissionContext(true); setView(item.view); notify(`已进入任务阶段：${item.label}`); };
   const navigateGlobal = (target) => {
     if (target === 'knowledge') { setMissionContext(false); setView('knowledge'); return; }
+    if (target === 'missions') { setMissionContext(false); setView('missions'); return; }
+    if (target === 'capabilities') { setMissionContext(false); setView('capabilities'); return; }
     setMissionContext(true); setView('mission');
   };
   const startAgentMission = async (goal) => {
     if (missionPaused || !goal?.trim()) return;
-    const result = await requestBackend('/api/missions', { method: 'POST', body: JSON.stringify({ goal: goal.trim() }) });
+    const result = await requestBackend(`/api/missions/${encodeURIComponent(activeMissionId)}/runs`, { method: 'POST', body: JSON.stringify({ goal: goal.trim() }) });
     if (!result) return;
     setMissionContext(true);
     setView('mission');
     notify('Agent Run 已启动，正在建立任务上下文。');
+  };
+  const createMission = async (input) => {
+    if (missionPaused || !input?.goal?.trim()) return;
+    const result = await requestBackend('/api/missions', { method: 'POST', body: JSON.stringify(input) });
+    if (!result) return;
+    setMissionContext(true);
+    setView('mission');
+    notify('Mission 已创建，Agent 可以开始接管。');
+  };
+  const selectMission = async (missionId) => {
+    const result = await requestBackend(`/api/missions/${encodeURIComponent(missionId)}/select`, { method: 'POST' });
+    if (!result) return;
+    setMissionContext(true);
+    setView('mission');
+    notify('已切换 Mission 工作区。');
   };
   const handleMissionAction = () => {
     if (stage === 'diagnosis') navigateMission('iterations');
@@ -1305,11 +1394,13 @@ export default function App() {
   else if (view === 'decision') content = <DecisionView stage={stage} onAdopt={adoptCandidate} onReject={rejectCandidate} onOpenModal={openModal} paused={missionPaused} />;
   else if (view === 'curation') content = <CurationView stage={stage} drafts={knowledgeDraftsState} publishedAssets={publishedAssets} onUpdateDraft={updateKnowledgeDraft} onPublish={publishKnowledge} onPublishAll={publishAllKnowledge} onViewLibrary={() => navigateGlobal('knowledge')} onOpenModal={openModal} paused={missionPaused} />;
   else if (view === 'knowledge') content = <KnowledgeView catalog={effectiveCatalog} setView={navigateMission} onOpenModal={openModal} missionContext={missionContext} />;
-  else content = <AgentWorkbenchView stage={stage} agentState={agentState} onStartAgent={startAgentMission} onAdvance={handleMissionAction} setView={navigateMission} onOpenModal={openModal} paused={missionPaused} />;
+  else if (view === 'capabilities') content = <CapabilitiesView agentProfiles={agentProfiles} capabilityRegistry={capabilityRegistry} />;
+  else if (view === 'missions') content = <MissionHub missions={missionsState} activeMissionId={activeMissionId} onSelect={selectMission} onCreate={createMission} />;
+  else content = <AgentWorkbenchView stage={stage} activeMission={missionsState.find((mission) => mission.id === activeMissionId)} agentState={agentState} agentProfiles={agentProfiles} capabilityRegistry={capabilityRegistry} onStartAgent={startAgentMission} onAdvance={handleMissionAction} setView={navigateMission} onOpenModal={openModal} paused={missionPaused} />;
 
   return (
     <>
-      <AppShell view={view} stage={stage} missionContext={missionContext} workspace={workspace} unreadCount={unreadCount} mobileNavOpen={mobileNavOpen} missionPaused={missionPaused} backendStatus={backendStatus} backendError={backendError} onToggleMobileNav={setMobileNavOpen} onGlobalNavigate={navigateGlobal} onMissionStep={openMissionStep} onOpenModal={openModal}>
+      <AppShell view={view} stage={stage} missionContext={missionContext} activeMission={missionsState.find((mission) => mission.id === activeMissionId)} workspace={workspace} unreadCount={unreadCount} mobileNavOpen={mobileNavOpen} missionPaused={missionPaused} backendStatus={backendStatus} backendError={backendError} onToggleMobileNav={setMobileNavOpen} onGlobalNavigate={navigateGlobal} onMissionStep={openMissionStep} onOpenModal={openModal}>
         {content}
       </AppShell>
       <ModalLayer modal={modal} closeModal={closeModal} setView={navigateAny} notify={notify} testMatrix={testMatrix} onSaveMatrix={updateMatrix} unreadCount={unreadCount} onMarkNotifications={markNotificationsRead} workspace={workspace} onWorkspaceChange={changeWorkspace} missionPaused={missionPaused} onTogglePause={togglePause} auditEvents={auditEvents} />

@@ -37,8 +37,13 @@ const waitForServer = async () => {
 try {
   await waitForServer();
   await request('/api/reset', { method: 'POST' });
-  const mission = await request('/api/missions', { method: 'POST', body: JSON.stringify({ goal: '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟' }) });
-  assert.equal(mission.state.agent.status, 'running');
+  const mission = await request('/api/missions', { method: 'POST', body: JSON.stringify({ title: 'Smoke Mission', goal: '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟', repository: 'mla-kernels', hardware: ['C500'] }) });
+  assert.equal(mission.state.missions.length, 4);
+  assert.equal(mission.state.agent.status, 'idle');
+  const missionId = mission.state.activeMissionId;
+  const startedMission = await request(`/api/missions/${missionId}/runs`, { method: 'POST', body: '{}' });
+  assert.equal(startedMission.state.agent.status, 'running');
+  assert.equal(startedMission.state.agent.artifacts[0].title, '正在读取仓库上下文');
   let agentState;
   for (let attempt = 0; attempt < 50; attempt += 1) {
     agentState = (await request('/api/state')).state;
@@ -47,6 +52,8 @@ try {
   }
   assert.equal(agentState.agent.status, 'awaiting_approval');
   assert.equal(agentState.agent.currentAction.type, 'candidate.plan');
+  assert.match(agentState.agent.artifacts.find((artifact) => artifact.kind === 'Candidate Plan').title, /Smoke Mission/);
+  assert.match(agentState.agent.toolCalls.find((call) => call.name === 'Experience Search').summary, /C500/);
   const applied = await request('/api/actions/apply-patch', { method: 'POST', body: JSON.stringify({ candidate: 'candidate-02' }) });
   assert.equal(applied.state.patchApplied, true);
   assert.equal(applied.state.stage, 'validation');
