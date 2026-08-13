@@ -735,6 +735,10 @@ async function handleApi(request, response, url) {
       goal = `${goal}\n【调研注入】${state.iterationStats.pendingInjection.briefing}`;
       state.iterationStats = { ...state.iterationStats, pendingInjection: null };
     }
+    // 操作员手动启动 run = 人工接管：恢复循环自动流转（若此前命中全局兜底标记）
+    if (state.iterationStats) {
+      state.iterationStats = { ...state.iterationStats, loopStatus: 'running', loopStatusReason: null };
+    }
     const runtimeDescriptor = await agentRuntime.describe();
     const preflight = await buildRuntimePreflight(mission);
     if (!preflight.ready) {

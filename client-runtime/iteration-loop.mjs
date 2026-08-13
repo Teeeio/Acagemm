@@ -7,6 +7,10 @@ import { appendRuntimeEvent } from './agent-runtime.mjs';
 export const STAGNATION_WINDOW = 3;            // 尺子 B：连续 N 轮无被采纳候选 → 停滞
 export const RESEARCH_BUDGET_MS = 20 * 60 * 1000; // 研究员时长预算（仅上限，不强制调研）
 export const ROUND_BUDGET_MS = 15 * 60 * 1000;   // 单轮时长预算（预留，Slice 1 不自动取消主线程）
+// 全局兜底（防无休止兜圈）：任一命中 → 循环标记需要人工介入，但不禁用手动操作。
+export const MAX_ROUNDS = 20;                          // 最大轮数
+export const TOTAL_BUDGET_MS = 2 * 60 * 60 * 1000;     // 累计时长预算（自首轮起算 wall-clock）
+export const MAX_RESEARCH_ESCALATIONS = 3;             // 研究员升级次数上限
 
 const AGENT_ACTIVE_STATUS = ['running', 'executing', 'awaiting_action', 'cancel_requested', 'awaiting_approval'];
 const WORKFLOW_STAGES = ['candidate', 'validation', 'evidence', 'curation'];
@@ -126,12 +130,39 @@ export const evaluateResearchValue = ({ research = {}, knowledge = {} }) => {
   return { value, inject, reason, matches: matches.slice(0, 10) };
 };
 
+const LOOP_GUARD_TEXT = {
+  max_rounds: '已迭代到最大轮数上限，仍未完成采纳，请人工介入',
+  total_budget: '累计迭代时长超出预算上限，请人工介入',
+  max_research: '研究员已多次升级仍未产生被采纳候选，请人工介入',
+};
+
+// 全局兜底：任一上限命中返回原因码；未命中返回 null。命中后循环停止自动流转，但手动操作不受阻。
+export const detectLoopGuard = (state) => {
+  const stats = state?.iterationStats || {};
+  if (stats.loopStatus === 'needs_human') return stats.loopStatusReason || 'needs_human';
+  const totalElapsedMs = stats.loopStartedAt ? Date.now() - new Date(stats.loopStartedAt).getTime() : 0;
+  if ((stats.round || 0) >= MAX_ROUNDS) return 'max_rounds';
+  if (totalElapsedMs >= TOTAL_BUDGET_MS) return 'total_budget';
+  if ((stats.researchRounds || 0) >= MAX_RESEARCH_ESCALATIONS) return 'max_research';
+  return null;
+};
+
 // 循环编排器（决策表，按序短路）。在 loadRuntimeState 内单飞调用；依赖注入避免反向耦合。
 // deps: { startResearch, cancelResearch, startMainRound, researchDirForMission }
 export async function advanceIteration(state, deps = {}) {
   if (process.env.NO_AUTO_LOOP === '1') return { state, action: 'disabled' };
   if (state.missionPaused) return { state, action: 'paused' };
   if (state.stage === 'published' && state.knowledgeMaintenance?.status === 'completed') return { state, action: 'completed' };
+
+  const guardReason = detectLoopGuard(state);
+  if (guardReason) {
+    state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: guardReason };
+    if (!state.runtimeEvents?.some((event) => event.type === 'loop.needs_human' && event.payload?.reason === guardReason)) {
+      addAuditEvent(state, '循环需要人工介入', LOOP_GUARD_TEXT[guardReason] || guardReason, 'warning', 'UserRound');
+      appendRuntimeEvent(state, 'loop.needs_human', { reason: guardReason }, { kind: 'policy', mode: 'client' });
+    }
+    return { state, action: 'needs_human' };
+  }
 
   const researchAgent = state.researchAgent || {};
   const stats = state.iterationStats || {};
@@ -187,6 +218,7 @@ export async function advanceIteration(state, deps = {}) {
       round: (stats.round || 0) + 1,
       lastRoundOutcome: adopted ? 'adopted' : latestRound.stage || 'no_adopt',
       consecutiveNoAdopt: adopted ? 0 : (stats.consecutiveNoAdopt || 0) + 1,
+      loopStartedAt: stats.loopStartedAt || new Date().toISOString(),
     };
     return { state, action: 'round_counted' };
   }

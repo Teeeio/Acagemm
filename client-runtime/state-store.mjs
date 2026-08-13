@@ -284,6 +284,7 @@ export const createIterationStats = () => ({
   round: 0, consecutiveNoAdopt: 0, lastRoundOutcome: null,
   lastCountedRunId: null, researchRounds: 0, lastResearchRunId: null,
   pendingInjection: null,
+  loopStatus: 'running', loopStatusReason: null, loopStartedAt: null,
 });
 
 export const createResearchNote = ({ runId, direction, content, summary, findings = [], suggestedDirections = [], sources = [], researchDir, startedAt, completedAt, value = null }) => ({
@@ -812,7 +813,7 @@ function ensureDomainState(state) {
   if (typeof state.missionPaused !== 'boolean') state.missionPaused = false;
   if (!Array.isArray(state.researchNotes)) state.researchNotes = [];
   if (!state.researchAgent) state.researchAgent = createResearchAgentState();
-  if (!state.iterationStats) state.iterationStats = createIterationStats();
+  state.iterationStats = { ...createIterationStats(), ...(state.iterationStats || {}) };
   if (!state.decisionReview?.policy) {
     const reviewStatus = state.stage === 'evidence' ? 'auto_ready' : (['curation', 'published'].includes(state.stage) ? 'resolved' : 'idle');
     state.decisionReview = createDecisionReviewState(reviewStatus);

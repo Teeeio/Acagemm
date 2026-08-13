@@ -6,7 +6,11 @@ import {
   selectResearchDirection,
   buildResearchBriefing,
   evaluateResearchValue,
+  detectLoopGuard,
   STAGNATION_WINDOW,
+  MAX_ROUNDS,
+  MAX_RESEARCH_ESCALATIONS,
+  TOTAL_BUDGET_MS,
 } from '../client-runtime/iteration-loop.mjs';
 
 // ---- 纯函数：停滞判定（尺子 B 采纳尺） ----
@@ -75,7 +79,7 @@ const makeState = (overrides = {}) => {
     agent: { status: 'idle' },
     researchAgent: { status: 'idle', runId: null },
     researchNotes: [],
-    iterationStats: { round: 0, consecutiveNoAdopt: 0, lastCountedRunId: null, lastResearchRunId: null, researchRounds: 0, pendingInjection: null },
+    iterationStats: { round: 0, consecutiveNoAdopt: 0, lastCountedRunId: null, lastResearchRunId: null, researchRounds: 0, pendingInjection: null, loopStatus: 'running', loopStatusReason: null, loopStartedAt: null },
     runHistory: [],
     benchmark: { status: 'idle' },
     failureRecords: [], publishedAssets: [], knowledgeDrafts: [], knowledgeReferences: [],
@@ -174,5 +178,34 @@ const noopEscalation = await advanceIteration(makeState({
 }), { ...deps, startResearch: async ({ state }) => state });
 assert.equal(noopEscalation.action, 'none');
 assert.equal(startResearchCalls, 0);
+
+// ---- 全局兜底：防无休止兜圈 ----
+// max_rounds
+assert.equal(detectLoopGuard({ iterationStats: { round: MAX_ROUNDS - 1 } }), null);
+let guarded = await advanceIteration(makeState({ iterationStats: { round: MAX_ROUNDS, lastCountedRunId: 'run_1', consecutiveNoAdopt: 0 } }), deps);
+assert.equal(guarded.action, 'needs_human');
+assert.equal(guarded.state.iterationStats.loopStatusReason, 'max_rounds');
+// max_research
+guarded = await advanceIteration(makeState({ iterationStats: { researchRounds: MAX_RESEARCH_ESCALATIONS, lastResearchRunId: 'n1', consecutiveNoAdopt: 0 } }), deps);
+assert.equal(guarded.action, 'needs_human');
+assert.equal(guarded.state.iterationStats.loopStatusReason, 'max_research');
+// total_budget（loopStartedAt 在预算时长之前）
+guarded = await advanceIteration(makeState({ iterationStats: { round: 1, loopStartedAt: new Date(Date.now() - TOTAL_BUDGET_MS - 1000).toISOString(), lastCountedRunId: 'run_1', consecutiveNoAdopt: 0 } }), deps);
+assert.equal(guarded.action, 'needs_human');
+assert.equal(guarded.state.iterationStats.loopStatusReason, 'total_budget');
+// needs_human 短路：不再自动升级研究员
+resetCounters();
+guarded = await advanceIteration(makeState({
+  runHistory: [{ runId: 'run_1', stage: 'diagnosis' }],
+  iterationStats: { researchRounds: MAX_RESEARCH_ESCALATIONS, lastResearchRunId: 'n1', consecutiveNoAdopt: 3, lastCountedRunId: 'run_1' },
+}), deps);
+assert.equal(guarded.action, 'needs_human');
+assert.equal(startResearchCalls, 0);
+// 幂等：needs_human 只发一次 loop.needs_human 事件
+guarded = await advanceIteration(guarded.state, deps);
+assert.equal(guarded.state.runtimeEvents.filter((event) => event.type === 'loop.needs_human').length, 1);
+// 手动接管重置 loopStatus 后循环恢复
+guarded = await advanceIteration(makeState({ iterationStats: { loopStatus: 'running', loopStatusReason: null, round: 0, consecutiveNoAdopt: 0 } }), deps);
+assert.equal(guarded.action !== 'needs_human', true);
 
 console.log('[loop] researcher iteration loop policy passed');
