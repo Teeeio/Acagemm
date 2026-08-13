@@ -187,18 +187,19 @@ export const createCodexClient = (options = {}) => {
     };
   };
 
-  const start = async ({ runId = `codex_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, missionId, goal, workspace, additionalDirectories = [], resumeThreadId = null, sandboxMode: runSandboxMode = null }) => {
+  const start = async ({ runId = `codex_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, missionId, goal, workspace, additionalDirectories = [], resumeThreadId = null, sandboxMode: runSandboxMode = null, skipGitRepoCheck = false }) => {
     await mkdir(runsDir, { recursive: true });
     const writableDirectories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const effectiveSandbox = runSandboxMode || sandboxMode;
-    const record = { schemaVersion: 1, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, error: null };
+    const record = { schemaVersion: 1, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null };
     await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
     const sandboxArgs = process.platform === 'win32' && windowsSandbox
       ? ['-c', `windows.sandbox="${windowsSandbox}"`]
       : [];
+    const gitRepoArgs = skipGitRepoCheck ? ['--skip-git-repo-check'] : [];
     const args = resumeThreadId
-      ? ['exec', 'resume', '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
-      : ['exec', '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
+      ? ['exec', 'resume', ...gitRepoArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
+      : ['exec', ...gitRepoArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
     const child = spawnImpl(command, args, {
       cwd: record.workspace,
       stdio: ['pipe', 'pipe', 'pipe'],

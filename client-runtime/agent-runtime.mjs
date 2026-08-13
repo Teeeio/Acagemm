@@ -466,6 +466,8 @@ export function createAgentRuntime(options = {}) {
       workspace,
       additionalDirectories: mission.sourceRoot ? [mission.sourceRoot] : [],
       sandboxMode: 'danger-full-access',
+      // 研究目录不是 git 仓库（裸 scratch 目录），codex 0.147+ 需要跳过 git-repo 检查
+      skipGitRepoCheck: true,
     });
     state.researchAgent = {
       status: 'running',

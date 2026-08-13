@@ -76,6 +76,7 @@ try {
   assert.equal(started.state.researchAgent.synchronous, false, 'manual research defaults to asynchronous (parallel)');
   // 沙箱开放 + 只读边界
   assert.match(spawnCalls[0].args.join(' '), /--sandbox danger-full-access/);
+  assert.match(spawnCalls[0].args.join(' '), /--skip-git-repo-check/);
   assert.match(spawnCalls[0].args.join(' '), /--cd .*research/);
   assert.match(spawnCalls[0].args.join(' '), /--add-dir .*sources/);
   assert.match(spawnCalls[0].stdin, /Research Agent/);
