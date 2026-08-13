@@ -115,6 +115,19 @@ let timeout = await advanceIteration(makeState({ researchAgent: { status: 'runni
 assert.equal(timeout.action, 'research_timeout');
 assert.equal(cancelResearchCalls, 1);
 
+// 同步研究员（停滞升级）运行中 → 主循环串行等待
+resetCounters();
+let syncWait = await advanceIteration(makeState({ researchAgent: { status: 'running', synchronous: true, runId: 'codex_research_1', startedAt: new Date().toISOString(), budgetMs: 20 * 60 * 1000 } }), deps);
+assert.equal(syncWait.action, 'wait_research');
+assert.equal(startResearchCalls, 0);
+assert.equal(startMainRoundCalls, 0);
+
+// 异步研究员（操作员触发）运行中 → 主循环不阻塞（放行到 round 计数/停滞检测等）
+resetCounters();
+let asyncRun = await advanceIteration(makeState({ researchAgent: { status: 'running', synchronous: false, runId: 'codex_research_1', startedAt: new Date().toISOString(), budgetMs: 20 * 60 * 1000 } }), deps);
+assert.notEqual(asyncRun.action, 'wait_research');
+assert.equal(asyncRun.action, 'none', 'async research must not stall the main loop');
+
 // 研究员终态 → 价值闸 → research_injected（addresses_failure → inject）
 resetCounters();
 const gatedState = makeState({

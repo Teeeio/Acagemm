@@ -73,6 +73,7 @@ try {
   assert.equal(started.state.researchAgent.direction, '调研 paged_attention 最新 kernel 优化');
   assert.equal(started.state.researchAgent.researchDir, researchDir);
   assert.equal(started.state.researchAgent.budgetMs, 20 * 60 * 1000);
+  assert.equal(started.state.researchAgent.synchronous, false, 'manual research defaults to asynchronous (parallel)');
   // 沙箱开放 + 只读边界
   assert.match(spawnCalls[0].args.join(' '), /--sandbox danger-full-access/);
   assert.match(spawnCalls[0].args.join(' '), /--cd .*research/);
@@ -88,10 +89,24 @@ try {
   assert.equal(started.state.candidateEvaluations.length, 1);
   assert.ok(started.state.runtimeEvents.some((event) => event.type === 'research.run_started'));
 
-  // ---- 串行 guard：主线程运行中 → 409 ----
+  // ---- 同步/异步调度：主线程运行中 → 同步研究 409，异步研究放行 ----
   const busyState = { activeMissionId: 'MIS_BUSY', runtimeEvents: [], agent: { status: 'running', runId: 'codex_MAIN' }, researchAgent: null, researchNotes: [] };
   await assert.rejects(
-    runtime.startResearch({ state: busyState, mission, direction: 'x', workspace: researchDir }),
+    runtime.startResearch({ state: structuredClone(busyState), mission, direction: 'x', workspace: researchDir, synchronous: true }),
+    (error) => error.code === 'RESEARCH_SERIAL_BUSY',
+  );
+  // 异步研究（操作员触发）在主线程运行时允许并行启动
+  const asyncStarted = await runtime.startResearch({ state: structuredClone(busyState), mission, direction: '并行调研', workspace: researchDir });
+  assert.equal(asyncStarted.state.researchAgent.status, 'running');
+  assert.equal(asyncStarted.state.researchAgent.synchronous, false);
+  // 主线程 startRun 在异步研究员运行时允许并行（放行串行守卫）
+  const researchRunningState = { activeMissionId: 'MIS_ASYNC', runtimeEvents: [], agent: { status: 'idle' }, researchAgent: { status: 'running', runId: 'codex_research_ASYNC', synchronous: false } };
+  await runtime.startRun({ state: researchRunningState, mission, goal: 'inspect', workspace: researchDir });
+  assert.equal(researchRunningState.agent.status, 'running', 'async research must not block main thread start');
+  // 同步研究员运行时主线程 startRun 被拦
+  const syncResearchState = { activeMissionId: 'MIS_SYNC', runtimeEvents: [], agent: { status: 'idle' }, researchAgent: { status: 'running', runId: 'codex_research_SYNC', synchronous: true } };
+  await assert.rejects(
+    runtime.startRun({ state: syncResearchState, mission, goal: 'inspect', workspace: researchDir }),
     (error) => error.code === 'RESEARCH_SERIAL_BUSY',
   );
   // 非 codex-cli 模式 → 503

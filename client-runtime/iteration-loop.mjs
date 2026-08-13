@@ -177,7 +177,8 @@ export async function advanceIteration(state, deps = {}) {
       addAuditEvent(cancelled.state, '研究员预算耗尽', `Run ${researchAgent.runId} 已请求取消`, 'warning', 'Timer');
       return { state: cancelled.state, action: 'research_timeout' };
     }
-    return { state, action: 'wait_research' };
+    // 同步研究（停滞升级）→ 主循环串行等待；异步研究（操作员触发）→ 放行，主循环不阻塞
+    if (researchAgent.synchronous) return { state, action: 'wait_research' };
   }
 
   // 研究员终态 → 价值闸 → 注入准备（只处理一次）

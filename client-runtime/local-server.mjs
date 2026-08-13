@@ -667,7 +667,8 @@ const commandRegistry = {
       const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
       const clone = structuredClone(state);
       await mkdir(researchDir, { recursive: true });
-      const started = await agentRuntime.startResearch({ state: clone, mission, direction, workspace: researchDir });
+      // 操作员主动触发 → 默认异步（并行，主循环不阻塞）；可在 body 显式传 synchronous:true 改为串行等待
+      const started = await agentRuntime.startResearch({ state: clone, mission, direction, workspace: researchDir, synchronous: body?.synchronous === true });
       return { payload: { direction, researchAgent: clone.researchAgent }, result: { runId: clone.researchAgent.runId } };
     },
     apply: (state, payload) => {
@@ -685,7 +686,8 @@ const iterationDeps = {
     // 非 codex-cli 模式不支持研究员：返回 state 不变，避免循环崩溃（如 reference-fixture）。
     if (agentRuntime.mode !== 'codex-cli') return state;
     await mkdir(workspace, { recursive: true });
-    const started = await agentRuntime.startResearch({ state, mission, direction, workspace });
+    // 循环停滞升级触发 → 同步研究：主循环串行等待，研究完才续下一轮
+    const started = await agentRuntime.startResearch({ state, mission, direction, workspace, synchronous: true });
     return started.state;
   },
   cancelResearch: async ({ state, runId }) => agentRuntime.cancelRun({ state, runId }),

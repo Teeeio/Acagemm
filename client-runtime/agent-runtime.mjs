@@ -303,8 +303,9 @@ export function createAgentRuntime(options = {}) {
         error.code = 'CODEX_RUNTIME_UNAVAILABLE';
         throw error;
       }
-      if (state.researchAgent?.runId) {
-        const error = new Error('研究员正在运行，主线程与研究员串行执行。');
+      // 同步研究员（停滞升级）在跑时主线程必须等待；异步研究员（操作员触发）可与主线程并行。
+      if (state.researchAgent?.runId && state.researchAgent?.synchronous) {
+        const error = new Error('同步研究员正在运行，主线程需等待研究员完成。');
         error.status = 409;
         error.code = 'RESEARCH_SERIAL_BUSY';
         throw error;
@@ -421,7 +422,7 @@ export function createAgentRuntime(options = {}) {
     'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v1","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}]}. If no structured material can be gathered, return a plain-text summary instead.',
   ].join('\n');
 
-  const startResearch = async ({ state, mission, direction, workspace }) => {
+  const startResearch = async ({ state, mission, direction, workspace, synchronous = false }) => {
     if (mode !== 'codex-cli') {
       const error = new Error(`Research Agent is only supported by runtime mode codex-cli (current: ${mode}).`);
       error.status = 503;
@@ -435,8 +436,9 @@ export function createAgentRuntime(options = {}) {
       error.code = 'CODEX_RUNTIME_UNAVAILABLE';
       throw error;
     }
-    if (state.agent?.runId) {
-      const error = new Error('主线程 Agent 正在运行，研究员与主线程串行执行。');
+    // 同步研究（停滞升级）需要主线程空闲才能启动；异步研究（操作员触发）可与主线程并行。
+    if (state.agent?.runId && synchronous) {
+      const error = new Error('主线程 Agent 正在运行，同步研究员需等待主线程空闲。');
       error.status = 409;
       error.code = 'RESEARCH_SERIAL_BUSY';
       throw error;
@@ -482,8 +484,9 @@ export function createAgentRuntime(options = {}) {
       messages: [{ id: `research-start-${runId}`, phase: 'research', status: 'running', title: '研究员已启动', detail: `Run ${runId} · 开放沙箱 · ${direction}`, time: '刚刚' }],
       artifacts: [{ id: `research-run-${runId}`, kind: 'Research Run', title: '研究员调研', status: 'running', meta: 'Codex exec --json · research-notes/v1' }],
       injected: false,
+      synchronous: Boolean(synchronous),
     };
-    appendRuntimeEvent(state, 'research.run_started', { runId, direction, researchDir: workspace }, { kind: 'research', mode: 'codex-cli' });
+    appendRuntimeEvent(state, 'research.run_started', { runId, direction, researchDir: workspace, synchronous: Boolean(synchronous) }, { kind: 'research', mode: 'codex-cli' });
     return { handled: true, state };
   };
 

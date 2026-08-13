@@ -279,6 +279,7 @@ export const createResearchAgentState = () => ({
   runtimeKind: null, threadId: null, direction: null, researchDir: null,
   startedAt: null, completedAt: null, budgetMs: 20 * 60 * 1000,
   notes: [], messages: [], artifacts: [], injected: false,
+  synchronous: false, // true=停滞升级（主循环串行等待）；false=操作员触发（并行不阻塞）
 });
 
 export const createIterationStats = () => ({
