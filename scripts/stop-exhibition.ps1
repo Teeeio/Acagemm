@@ -14,7 +14,7 @@ $processId = [int](Get-Content -LiteralPath $pidFile -Raw)
 $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
 if ($process) {
   $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue
-  if ($process.ProcessName -notmatch '^node' -or $processInfo.CommandLine -notmatch 'server[\\/]mock-server\.mjs') {
+  if ($process.ProcessName -notmatch '^node' -or $processInfo.CommandLine -notmatch 'client-runtime[\\/]local-server\.mjs') {
     throw "PID $processId is not the Operator Studio server. Refusing to stop it."
   }
   Stop-Process -Id $processId

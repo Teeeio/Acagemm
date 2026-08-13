@@ -1,28 +1,26 @@
 # 展会交付验收
 
-## 启动
+## 必须通过
 
 - `npm run build` 成功。
-- `npm start` 后 `/api/health` 返回 `status: ok`。
-- 双击 `启动展会版.cmd` 可以启动服务并打开浏览器。
-- `展会诊断.cmd` 的 Node、Web bundle、Local service 全部为 PASS。
-- 断开公网后，页面、Logo、API 和示例数据仍可访问。
+- 八组测试全部通过：Runtime、Queue、Test Service、Boundary、OpenCode、Codex、Smoke、Release Guard。
+- `npm start` 后 Client Runtime 的 `/api/health` 和 Test Service 的 `/health` 均返回 `status: ok`。
+- `展会诊断.cmd` 的 Runtime authority 必须为 PASS；默认要求本机 `codex-cli` 可执行，Provider 与认证由 Codex 自身负责，`unavailable` 和 `reference-fixture` 均不能通过展会诊断。
+- 断开公网后，页面、Logo、本地状态和 Mock 测试服务仍可使用。
 
-## 核心路径
+## 核心闭环
 
-- 应用补丁后，`runtime/mla-kernels/kernels/paged_attention.cu` 内容发生变化。
-- 刷新页面后仍显示补丁已应用。
-- Benchmark 进度由 API 返回，刷新后可以恢复运行状态。
-- Run 完成后出现完整执行日志并进入效果决策。
-- 采用候选后可以编辑三条知识草稿。
-- 草稿编辑、发布进度和知识资产在刷新后保留。
-- 审计中心可以重建上述操作时间线。
-- `/api/missions/{id}/events` 返回严格递增的 Runtime 事件序列。
+- Codex Agent 的 thread、运行事件、消息和工具调用能进入本地 Mission 状态；未连接时页面明确显示未连接，不生成新的样例结果。
+- Candidate Diff 可逐文件查看，应用补丁会真实写入隔离工作区并生成恢复检查点。
+- 客户端只把算子测试任务提交给 Test Service；服务返回 Benchmark、Tracer 和 Profiler。
+- 测试完成后，Accept Gate 根据证据自动给出策略结果；只有用户发起意见或命中风险信号时才阻塞人工处理。
+- 失败运行不保留为候选，但保留审计记录并可提取负向经验。
+- 采用、回退、知识提取和知识版本关系均持久化且可审计。
 
-## 现场边界
+## 当前交付缺口
 
-- C500/CUDA 数值是固定历史样例，不宣称为现场测量。
-- 展台操作只修改隔离工作区，不访问讲解人员的真实仓库。
-- 现场异常时先检查 `/api/health`，再执行 `npm run demo:reset` 恢复官方样例。
-- 顶栏显示“本地参考 Runtime”时，不宣称已连接真实 CLI 或实时硬件。
-- 顶栏显示“CLI Agent Runtime”且 `/api/runtime` 返回 `connected: true` 时，才说明已连接真实 CLI 文件投影。
+- Codex 原生运行桥已完成启动、恢复和 JSONL 状态投影；结构化 Candidate/Patch/Decision 的完整双向领域协议仍需实现。
+- Test Service 是契约级 Mock，不代表真实 C500/CUDA 硬件测试。
+- `data/mock-db.json` 名称尚未迁移，但该文件属于客户端本地数据，不是服务端数据库。
+
+以上缺口未关闭前，可以进行产品和接口联调，但不能宣称已经完成真实 Codex Agent 全闭环或真实硬件验收。

@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { createWorkspaceManager } from '../client-runtime/workspace-manager.mjs';
+
+const execFileAsync = promisify(execFile);
+const root = await mkdtemp(path.join(os.tmpdir(), 'operator-workspaces-'));
+const manager = createWorkspaceManager();
+
+try {
+  const template = path.join(root, 'template');
+  await mkdir(template, { recursive: true });
+  await writeFile(path.join(template, 'kernel.cu'), '// baseline\n', 'utf8');
+  const snapshotTarget = path.join(root, 'managed', 'MIS_SNAPSHOT', 'workspace');
+  const snapshot = await manager.ensure({ missionId: 'MIS_SNAPSHOT', target: snapshotTarget, repository: 'demo', template });
+  assert.equal(snapshot.ready, true, JSON.stringify(snapshot));
+  assert.equal(await realpath(snapshot.gitRoot), await realpath(snapshotTarget));
+  assert.equal(snapshot.dirty, false);
+  const snapshotMetadata = JSON.parse(await readFile(path.join(path.dirname(snapshotTarget), 'workspace.json'), 'utf8'));
+  assert.equal(snapshotMetadata.mode, 'managed-snapshot');
+  await writeFile(path.join(snapshotTarget, 'kernel.cu'), '// candidate change\n', 'utf8');
+  await writeFile(path.join(snapshotTarget, 'new-kernel.cu'), '// new candidate file\n', 'utf8');
+  const snapshotDiff = await manager.captureDiff(snapshotTarget);
+  assert.equal(snapshotDiff.dirty, true);
+  assert.deepEqual(snapshotDiff.changedFiles.toSorted(), ['kernel.cu', 'new-kernel.cu']);
+  assert.match(snapshotDiff.digest, /^sha256:[a-f0-9]{64}$/);
+  assert.match(snapshotDiff.diff, /candidate change/);
+  assert.match(snapshotDiff.diff, /new candidate file/);
+
+  const repository = path.join(root, 'source-repository');
+  await mkdir(repository, { recursive: true });
+  await execFileAsync('git', ['init'], { cwd: repository });
+  await execFileAsync('git', ['config', 'user.name', 'Workspace Test'], { cwd: repository });
+  await execFileAsync('git', ['config', 'user.email', 'workspace-test@local.invalid'], { cwd: repository });
+  await writeFile(path.join(repository, 'operator.py'), '# source\n', 'utf8');
+  await execFileAsync('git', ['add', '-A'], { cwd: repository });
+  await execFileAsync('git', ['commit', '-m', 'source baseline'], { cwd: repository });
+  await manager.excludeProjectRuntime(repository);
+
+  const projectLocalTarget = path.join(repository, '.operator-studio', 'workspaces', 'MIS_LOCAL', 'workspace');
+  const projectLocal = await manager.ensure({ missionId: 'MIS_LOCAL', target: projectLocalTarget, repository, template, mode: 'snapshot' });
+  assert.equal(projectLocal.ready, true, JSON.stringify(projectLocal));
+  assert.equal(await realpath(projectLocal.gitRoot), await realpath(projectLocalTarget));
+  const localMetadata = JSON.parse(await readFile(path.join(path.dirname(projectLocalTarget), 'workspace.json'), 'utf8'));
+  assert.equal(localMetadata.mode, 'managed-snapshot');
+  assert.equal((await readFile(path.join(projectLocalTarget, 'operator.py'), 'utf8')).trim(), '# source');
+  await assert.rejects(readFile(path.join(projectLocalTarget, '.operator-studio', 'workspaces', 'MIS_LOCAL', 'workspace', 'operator.py'), 'utf8'));
+	  assert.equal((await execFileAsync('git', ['status', '--porcelain'], { cwd: repository })).stdout.trim(), '');
+
+	  const remoteRepository = path.join(root, 'remote-repository');
+	  await mkdir(remoteRepository, { recursive: true });
+	  await execFileAsync('git', ['init'], { cwd: remoteRepository });
+	  await execFileAsync('git', ['config', 'user.name', 'Workspace Test'], { cwd: remoteRepository });
+	  await execFileAsync('git', ['config', 'user.email', 'workspace-test@local.invalid'], { cwd: remoteRepository });
+	  await writeFile(path.join(remoteRepository, 'README.md'), '# remote baseline\n', 'utf8');
+	  await execFileAsync('git', ['add', '-A'], { cwd: remoteRepository });
+	  await execFileAsync('git', ['commit', '-m', 'remote baseline'], { cwd: remoteRepository });
+
+	  const clonedRepository = path.join(root, 'cloned-repository');
+	  const clonedBootstrap = await manager.bootstrapRepository({ target: clonedRepository, source: remoteRepository, ref: 'HEAD' });
+	  assert.equal(clonedBootstrap.trackedFiles, 1);
+	  assert.equal((await readFile(path.join(clonedRepository, 'README.md'), 'utf8')).trim(), '# remote baseline');
+
+	  const emptyRepository = path.join(root, 'empty-repository');
+	  await mkdir(emptyRepository, { recursive: true });
+	  await execFileAsync('git', ['init'], { cwd: emptyRepository });
+	  await execFileAsync('git', ['config', 'user.name', 'Workspace Test'], { cwd: emptyRepository });
+	  await execFileAsync('git', ['config', 'user.email', 'workspace-test@local.invalid'], { cwd: emptyRepository });
+	  await execFileAsync('git', ['commit', '--allow-empty', '-m', 'empty baseline'], { cwd: emptyRepository });
+	  assert.equal((await manager.inspect(emptyRepository, { refresh: true })).baselineEmpty, true);
+	  const fetchedBootstrap = await manager.bootstrapRepository({ target: emptyRepository, source: remoteRepository, ref: 'HEAD' });
+	  assert.equal(fetchedBootstrap.trackedFiles, 1);
+	  assert.equal((await readFile(path.join(emptyRepository, 'README.md'), 'utf8')).trim(), '# remote baseline');
+
+	  console.log('[workspace] managed snapshot, authoritative diff, and project-local isolation contracts passed');
+} finally {
+  await rm(root, { recursive: true, force: true });
+}

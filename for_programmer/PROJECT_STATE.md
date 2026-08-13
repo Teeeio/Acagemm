@@ -1,112 +1,54 @@
-# Operator Studio 项目状态
+# Project State
 
-> 盘点日期：2026-08-06
->
-> 盘点对象：当前工作区，而不是仅盘点 Git HEAD
->
-> Git 基线：`f683dcfa5b4894510ee636ddc560849ee20136f9` (`feat: prepare exhibition runtime delivery`)
+## 2026-08-12 implementation update
 
-## 1. 一句话结论
+- The operator test queue is now a real client-side module at `client-runtime/operator-test-queue.mjs`. It persists JSONL tasks, enforces one active task, polls the remote boundary, and records cancellation locally.
+- The remote test service remains Mock by design. It only accepts operator test tasks and returns benchmark, tracer, profiler, logs, and cancellation snapshots.
+- A Codex-first native adapter is now implemented at `client-runtime/codex-client.mjs`. Set `OPERATOR_RUNTIME_MODE=codex-cli`; the adapter requires only an available Codex executable, starts `codex exec --json`, inherits the local Codex configuration, persists JSONL events, and projects thread/tool/message state into the local Mission. Official login status is diagnostic only.
+- The Codex adapter is implemented and contract-tested with an injected process runner; real credentials and a live provider are not exercised by automated tests.
+- Codex Candidate files are now verified against the authoritative Git Diff in a managed Mission workspace. Client-owned Decision, Intervention, Rollback, and Adoption Revert actions are available for both `reference-fixture` and `codex-cli` modes.
+- Accept Gate requires an explicit numeric performance target. Mock test results remain usable for workflow demonstrations, but are marked `publishable=false`; their knowledge output is `simulation` and is excluded from the formal knowledge catalog.
+- Mission completion is derived from the terminal workflow state (`published` plus completed knowledge maintenance), not from one Agent Run finishing.
 
-当前项目是一个可在 Windows 本机运行、可离线打包的展会演示系统。React 前端、Node 本地 HTTP 服务、JSON 持久化、候选补丁写盘、检查点恢复、流程状态、审计事件和知识资产维护已经形成闭环；默认 Agent、Benchmark、C500/CUDA 指标和优化证据仍由本地参考 Runtime 生成，不代表真实硬件执行。外部 CLI 仅接通 Mission 请求和状态文件投影，Patch、Benchmark、Decision 动作桥尚未实现。
+## 当前结论
 
-## 2. 状态标记
+代码已经拆分为客户端本地运行时和单一职责的 Operator Test Service Mock。默认启动不再生成 Demo Agent 数据；Agent 未连接时产品明确显示未连接。
 
-| 标记 | 含义 |
-| --- | --- |
-| A | 已真实实现，并由本次盘点命令验证 |
-| B | 已实现，但缺少充分自动化或真实环境验证 |
-| C | 占位、固定样例或 Mock |
-| D | 只有设计或接口边界，没有实现 |
+| 能力 | 状态 | 证据/限制 |
+| --- | --- | --- |
+| React OA 风格产品 UI | 已真实实现并可构建 | `npm run build`；浏览器核验默认未连接态 |
+| 本地 Mission/流程/工作区/检查点 | 已真实实现并通过 Smoke | 文件系统写入和状态持久化由 Smoke 覆盖 |
+| 人工意见、阻塞、撤回、采用回退 | 已真实实现并通过 Smoke | 客户端动作不依赖 Agent 类型；CLI-file 兼容模式除外 |
+| 自动知识维护 | 已真实实现并通过 Smoke/Gate | Mock 只生成仿真预览；真实 Level 3 才正式发布 |
+| Operator Test Service HTTP 契约 | 已真实实现并通过契约测试 | 执行数据本身为 Mock |
+| Benchmark/Tracer/Profiler 消费链路 | 已真实实现并通过 Smoke | Client Runtime 提交、轮询和落状态 |
+| Codex Agent 启动/恢复与 JSONL 投影 | 已实现并有契约测试 | 自动化使用注入进程；本机 Codex 配置由 Codex 自身负责 |
+| 旧 CLI 文件状态投影和 Mission 请求 | 已实现并有 Runtime contract 测试 | 兼容适配器，文件协议依赖真实 CLI 产物 |
+| Codex Candidate/Patch/Decision 客户端闭环 | 已实现并有 Codex/Workspace/Smoke 测试 | 仍基于一次性 `codex exec --json`，未迁移 app-server |
+| 旧 CLI-file Candidate/Patch/Decision 双向桥 | 仅存在边界设计，未实现 | 兼容适配器仍返回 `RUNTIME_ACTION_UNAVAILABLE` |
+| OpenCode Headless Server 接入 | 已实现并通过 Mock 契约测试 | 真实 Server 1.1.25 的健康、Session、Message、Diff 已探测 |
+| OpenCode Provider 模型调用 | 已尝试但未成功 | 隔离运行目录没有 API key；Zen 返回 401，OpenAI Provider 报 key missing |
+| OpenCode Patch/Decision 回传 | 仅存在设计，没有实现 | 当前模式只支持 Mission 和状态/工件观察 |
+| 真实 C500/CUDA 执行器 | Mock/占位 | Test Service `liveHardware=false`；不会发布正式知识 |
+| 完整浏览器 E2E | 未充分验证 | 当前主要为 Build、API Smoke 和人工浏览器核验 |
 
-## 3. 能力盘点
-
-| 能力 | 状态 | 代码证据 | 本次验证结论 |
-| --- | --- | --- | --- |
-| React 单页应用和生产构建 | A | `src/`、`vite.config.js` | `npm run build` 通过，1581 modules transformed |
-| 单进程静态站点与 `/api` 服务 | A | `server/mock-server.mjs` | 临时端口 4183 启动，`/` 为 HTTP 200，`/api/health` 为 `ok` |
-| 磁盘 JSON 状态持久化 | A | `server/state-store.mjs` | Smoke 覆盖状态迁移与流程持久化；写入采用临时文件后 `rename` |
-| Mission 创建、切换、运行与事件序列 | A | `mock-server.mjs`、`agent-runtime.mjs` | Smoke 和 Runtime contract 通过 |
-| 候选 Patch 写入隔离工作区 | A | `applyCandidatePatch()` | Smoke 验证实际文件包含 `plan_cache.get_or_build` |
-| 工作区检查点、阶段回退、采用后回退 | A | `createWorkspaceCheckpoint()`、`restoreWorkspaceCheckpoint()` | Smoke 验证文件恢复、后续工件失效和幂等回退 |
-| Accept Gate 自动采用与知识自动维护 | A/C | `runAutomaticAdoption()`、`runKnowledgeMaintenance()` | 本地状态机和持久化由 Smoke 验证；Gate 规则、查重与版本计划是固定参考数据 |
-| 失败候选记录与失败经验提取 | C | `candidateEvaluations`、`failureRecords` | Smoke 只验证固定 seed 的分类和经验状态；没有由真实失败运行动态生成 |
-| 人工介入的发起、撤回、补充验证、调整方向、采用 | B | `/api/actions/*review` | Smoke 覆盖介入阻塞与 redirect；其余分支有代码但未逐分支自动化验证 |
-| Demo Runtime Agent 推进与 Benchmark 进度 | C | `refreshAgent()`、`refreshBenchmark()` | 流程可运行，但进度、日志、指标和结论是按时间生成的固定参考数据 |
-| C500/CUDA 实机性能结论 | C | `buildBenchmarkLogs()`、seed state | 明确 `liveHardware=false`；不能作为现场实测结果 |
-| CLI 文件桥 Mission 请求 | A | `server/agent-runtime.mjs` | Runtime contract 验证请求文件、状态探针和事件序列 |
-| CLI 状态投影 | B | `projectState()` | fixture contract 通过，未对接用户的真实 CLI 仓库做端到端验证 |
-| CLI Patch/Benchmark/Decision 动作桥 | D | `guardReferenceRuntimeAction()` | CLI 模式主动返回 `409 RUNTIME_ACTION_UNAVAILABLE` |
-| 生产级服务、身份认证、多用户并发 | D | 仓库中不存在对应模块 | 当前服务只绑定 `127.0.0.1`，无认证、数据库和并发控制 |
-
-## 4. 当前默认流程
-
-1. 选择或创建 Mission。
-2. 启动 Agent Run；Demo Runtime 按时间生成上下文、知识检索、诊断和候选计划。
-3. 用户审阅 Candidate 02 并批准 Patch。
-4. 服务创建工作区检查点，把补丁真实写入 `runtime/mla-kernels`。
-5. 提交测试矩阵；Demo Runtime 生成固定的 Correctness 和 Benchmark 进度/日志。
-6. 如没有人工介入阻塞，Accept Gate 自动采用 Candidate 02。
-7. 知识维护自动执行查重计划、版本化和 3 个资产发布，流程进入 `published`。
-8. 用户可回退到 Patch 前检查点，或在采用后恢复 `candidate-01` 并将关联知识标记为 `superseded`。
-
-## 5. 运行方式
-
-开发模式：
+## 运行命令
 
 ```powershell
-npm install
 npm run dev
-```
-
-- Web：`http://127.0.0.1:5173`
-- API：`http://127.0.0.1:4174`
-- Vite 将 `/api` 代理到 4174。
-
-展会模式：
-
-```powershell
 npm run build
 npm start
 ```
 
-- Web + API：`http://127.0.0.1:4173`
-- 当前用户浏览器中的 4175 是手工指定端口，不是仓库默认端口。
-
-离线包：
+## 测试命令
 
 ```powershell
-npm run demo:package
+npm run test:runtime
+npm run test:test-service
+npm run test:boundary
+npm run test:opencode
+npm run test:smoke
+npm run test:release
 ```
 
-输出 `release/OperatorStudio-Exhibition/` 和同名 ZIP；该目录由 `.gitignore` 排除。
-
-## 6. 持久化位置
-
-| 内容 | 源码运行默认位置 | 离线包运行位置 |
-| --- | --- | --- |
-| 状态数据库 | `data/mock-db.json` | `%LOCALAPPDATA%\OperatorStudioExhibition\data\mock-db.json` |
-| 工作区 | `runtime/mla-kernels/` | `%LOCALAPPDATA%\OperatorStudioExhibition\runtime\mla-kernels/` |
-| 检查点 | `runtime/checkpoints/` | `%LOCALAPPDATA%\OperatorStudioExhibition\runtime\checkpoints/` |
-| PID | `runtime/operator-studio.pid` | `%LOCALAPPDATA%\OperatorStudioExhibition\runtime\operator-studio.pid` |
-| CLI 请求桥 | `runtime/agent-bridge/requests/` | 由 `OPERATOR_BRIDGE_DIR` 决定 |
-
-`data/`、`runtime/`、`dist/`、`release/` 和日志均被 Git 忽略。
-
-## 7. Git 收口说明
-
-盘点开始时工作区已包含多项未提交业务改动，以及未跟踪的 `server/release-guard-test.mjs`。本次工作不修改或回退这些文件，文档描述的是这些改动存在时的当前工作区。文档提交只应包含 `for_programmer/`；因此，该文档 commit 本身不是一个可完全复现业务代码状态的 release tag。正式发布前仍需由代码所有者审查并单独提交现有业务改动。
-
-## 8. 本次实际验证摘要
-
-| 命令/流程 | 结果 |
-| --- | --- |
-| `npm run build` | PASS |
-| `npm run test:runtime` | PASS |
-| `npm run test:smoke` | PASS |
-| `npm run test:release` | PASS |
-| `npm start`，隔离目录、端口 4183 | PASS；首页 200，Health `ok` |
-| `scripts/diagnose-exhibition.ps1 -Port 4183` | 7 项全部 PASS |
-| `npm run demo:package` | PASS；ZIP 已生成 |
-
-完整命令、覆盖范围和限制见 [TEST_PLAN.md](./TEST_PLAN.md)。
+本文件描述当前工作区代码，不把 Mock 结果、CLI-file 动作桥或尚未实现的耐久工作流内核描述为已交付能力。

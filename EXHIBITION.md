@@ -2,54 +2,36 @@
 
 ## 展前准备
 
-1. 在联网开发机执行 `npm ci`、`npm run build`、`npm run test:runtime`、`npm run test:smoke`。
-2. 执行 `npm run demo:package` 生成 `release/OperatorStudio-Exhibition.zip`；包内自带经过验证的 Node 运行时。
-3. 将压缩包解压到展机本地磁盘，不从 U 盘直接运行。
-4. 断开公网后双击 `启动展会版.cmd`，再运行 `展会诊断.cmd`。
-5. 展示前双击 `重置演示数据.cmd`，刷新页面。
+1. 确认本机 `codex exec` 已可正常调用；默认 `codex-cli` 模式会直接沿用本机 Codex 的 Provider、模型与认证并自动启动或恢复 Agent。
+2. 依次运行八组测试和 `npm run build`。
+3. 运行 `npm run demo:package` 生成离线包。
+4. 在展机启动后运行 `展会诊断.cmd`，所有检查必须为 PASS。
 
-离线包的状态、日志和隔离工作区保存在 `%LOCALAPPDATA%\OperatorStudioExhibition`，不会修改分发包本身。
+`reference-fixture` 只用于自动化测试，展会诊断会主动拒绝该模式。
 
-## 五分钟主线
+## 五分钟展示主线
 
-| 时间 | 操作 | 讲解重点 |
+| 时间 | 操作 | 展示重点 |
 | --- | --- | --- |
-| 0:00–0:40 | 打开 Mission 工作台 | 目标、硬件、指标、当前最佳和审批状态在一个任务上下文中。 |
-| 0:40–1:30 | 查看 Agent Run、Profile 和 Tool Calls | Agent 的每一步、使用的 Skill/Tool、版本和权限均可追溯。 |
-| 1:30–2:20 | 审阅 Candidate Plan 与文件 Diff | 人在写入工作区前决策；补丁范围和代码依据可检查。 |
-| 2:20–3:20 | 应用 Patch 并运行测试矩阵 | Patch 真实写入隔离工作区；进度和日志由本地服务持久化。 |
-| 3:20–4:15 | 查看效果决策 | Correctness、固定环境和性能证据共同决定是否采用。 |
-| 4:15–5:00 | 发布知识资产 | 将结论、约束、硬件范围和证据形成可检索经验。 |
+| 0:00-0:50 | 创建或打开 Mission | 本地客户端持有目标、仓库、硬件和 Agent 上下文。 |
+| 0:50-1:40 | 查看 Agent 推理与工具调用 | 所有步骤来自已连接 Agent，未连接时不显示伪造记录。 |
+| 1:40-2:30 | 比较候选并审阅 Diff | 候选按通过门禁、弱候选、失败记录分层；失败不进入候选集。 |
+| 2:30-3:30 | 应用 Patch 并运行测试 | 工作区真实修改；远端服务只返回 Benchmark/Tracer/Profiler。 |
+| 3:30-4:20 | 查看 Accept Gate 与人工介入 | 默认策略自动决策，人工意见仅在需要时阻塞。 |
+| 4:20-5:00 | 查看知识维护 | 成功经验和失败经验都可检索、复用并追溯证据。 |
 
 ## 现场口径
 
-- 可以说：这是可运行的产品闭环，页面交互、状态持久化、Patch 写入、审批、事件和知识发布均真实执行。
-- 可以说：系统已有与 CLI 对接的 Runtime Adapter 边界，CLI 保持执行和 current best 权威。
-- 不应说：默认演示中的 C500/CUDA 数值是现场实时测量。
-- 不应说：顶栏显示“本地参考 Runtime”时已经连接真实 CLI 或 GPU Worker。
+- 可以说：Operator Studio 是本地 Agentic IDE，Agent 和业务流程不托管在测试服务端。
+- 可以说：当前测试服务使用 Mock，但请求、轮询、Benchmark、Tracer、Profiler 契约是真实实现。
+- 可以说：Patch、检查点、状态持久化、策略流程和知识维护都在客户端真实执行。
+- 不应说：Mock 返回的 C500/CUDA 数字是现场硬件实测。
+- 不应说：Codex 已经完成全部领域动作协议；当前 JSONL 运行桥已接通，但结构化 Candidate/Patch/Decision 回写仍需完善。
 
 ## 故障恢复
 
-1. 页面打不开：运行 `展会诊断.cmd`，检查 Local service。
-2. 服务未启动：运行 `停止展会版.cmd`，再运行 `启动展会版.cmd`。
-3. 数据状态不适合演示：运行 `重置演示数据.cmd` 后刷新。
-4. 页面仍异常：检查 `runtime/logs/operator-studio.err.log`。
-5. 展机环境不可恢复：展示预先准备的产品录屏，并说明当前使用离线演示预案。
-
-## CLI 文件投影模式
-
-第一版真实接入使用文件型 Adapter：
-
-```powershell
-$env:OPERATOR_RUNTIME_MODE='cli-file'
-$env:OPERATOR_CLI_ROOT='D:\flashinfer_task_package'
-./启动展会版.cmd
-```
-
-默认探测：
-
-- `results/agent_status_cli_integration.json`
-- `results/test_queue.jsonl`
-- `docs/optimization_records.json`
-
-Mission Run 请求写入 `runtime/agent-bridge/requests/`。CLI 侧需要消费该请求并更新 status/queue/canonical records；Adapter 只做投影与事件排序，不越权修改 current best。
+1. 页面打不开：运行 `展会诊断.cmd`，检查 Client Runtime。
+2. 测试不启动：检查 `http://127.0.0.1:4180/health` 和 `OPERATOR_TEST_SERVICE_URL`。
+3. Agent 未连接：运行 `codex --version` 检查命令；若 Run 启动后失败，直接用本机 `codex exec` 核对其 Provider 与认证配置。
+4. 状态不适合展示：仅在确认不需要保留当前数据后运行 `npm run demo:reset`。
+5. 不得切换到 `reference-fixture` 冒充真实闭环；Codex 事件、候选和工具调用必须来自真实 thread。
