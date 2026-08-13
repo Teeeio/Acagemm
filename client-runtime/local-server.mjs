@@ -42,6 +42,7 @@ import {
 } from './state-store.mjs';
 import { agentRuntime, appendRuntimeEvent } from './agent-runtime.mjs';
 import { advanceIteration, selectResearchDirection } from './iteration-loop.mjs';
+import { createCommandJournal, executeCommand, hashKey } from './command-journal.mjs';
 import { testServiceClient } from './test-service-client.mjs';
 import { createOperatorTestQueue } from './operator-test-queue.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
@@ -55,6 +56,7 @@ const serverPidPath = path.join(runtimeDir, 'operator-studio.pid');
 const port = Number(process.env.API_PORT || process.env.PORT || 4173);
 const serveWeb = process.env.SERVE_WEB !== 'false';
 const operatorTestQueue = createOperatorTestQueue({ serviceClient: testServiceClient });
+const commandJournal = createCommandJournal({ filePath: path.join(runtimeDir, 'command-journal.jsonl') });
 
 const buildRuntimePreflight = async (mission) => {
   const workspace = await ensureMissionWorkspace(mission.id, mission.repository);
@@ -180,7 +182,7 @@ const streamMissionEvents = async (request, response, missionId, after = 0) => {
         if (!sse(response, 'runtime', event)) return close();
         nextSequence = Math.max(nextSequence, event.sequence || nextSequence);
       }
-      const revision = state.updatedAt || `${state.agent?.runId || ''}:${state.benchmark?.status || ''}:${state.benchmark?.progress || 0}`;
+      const revision = String(state.stateVersion ?? '') || state.updatedAt || `${state.agent?.runId || ''}:${state.benchmark?.status || ''}:${state.benchmark?.progress || 0}`;
       if (revision !== lastRevision) {
         lastRevision = revision;
         if (!sse(response, 'state', { missionId, state })) return close();
@@ -287,6 +289,396 @@ const adoptCandidateState = (state, note, source = 'policy') => {
   return state;
 };
 
+// 命令注册表：keyFor（幂等键）、prepare（外部副作用，返回 payload+result）、apply（纯状态变换）、isApplied（去重精确化）。
+// apply 必须是纯状态函数：崩溃恢复 reconcile 会用它重放，绝不能再次触发 spawn/提交/文件写入。
+const commandRegistry = {
+  'apply-patch': {
+    keyFor: (state, body) => `apply-patch:${state.activeMissionId}:${body?.candidate || state.appliedCandidateId}`,
+    isApplied: (state, payload) => state.patchApplied === true && state.appliedCandidateId === payload?.candidateId,
+    prepare: async ({ state, body }) => {
+      const runtime = await agentRuntime.describe();
+      const candidate = (state.candidateEvaluations || []).find((item) => item.id === body.candidate);
+      const declaredFiles = String(candidate?.files || '').split(',').map((item) => item.trim()).filter(Boolean);
+      const codexPatch = runtime.mode === 'codex-cli' ? await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId)) : null;
+      const actualFiles = (codexPatch?.changedFiles || []).map((file) => file.replaceAll('\\', '/'));
+      const normalizedDeclaredFiles = declaredFiles.map((file) => file.replaceAll('\\', '/'));
+      const undeclaredFiles = actualFiles.filter((file) => !normalizedDeclaredFiles.includes(file));
+      const missingFiles = normalizedDeclaredFiles.filter((file) => !actualFiles.includes(file));
+      const codexPolicyChecks = runtime.mode === 'codex-cli' ? [
+        { id: 'patch.diff.nonempty', label: 'Mission 工作区存在真实 Git Diff', passed: Boolean(codexPatch?.dirty && codexPatch.diff) },
+        { id: 'patch.diff.matches', label: 'Candidate 文件清单与真实 Diff 一致', passed: undeclaredFiles.length === 0 && missingFiles.length === 0, detail: { undeclaredFiles, missingFiles } },
+      ] : [];
+      const policyChecks = [
+        { id: 'candidate.exists', label: '候选身份有效', passed: Boolean(candidate) },
+        { id: 'patch.declared', label: 'Patch 文件清单非空', passed: declaredFiles.length > 0 },
+        { id: 'patch.paths', label: '变更路径位于受控工作区', passed: declaredFiles.length > 0 && declaredFiles.every((file) => !path.isAbsolute(file) && !file.split(/[\\/]/).includes('..') && !file.startsWith('.git')) },
+        ...codexPolicyChecks,
+        { id: 'risk.policy', label: '风险未命中强制人工介入', passed: state.agent?.currentAction?.risk !== 'high' },
+      ];
+      if (policyChecks.some((check) => !check.passed)) {
+        const error = new Error('Patch 自动策略检查未通过，请通过人工介入查看失败项。');
+        error.status = 409;
+        error.code = 'PATCH_POLICY_CHECK_FAILED';
+        error.details = policyChecks;
+        throw error;
+      }
+      const checkpoint = runtime.mode === 'codex-cli' && state.workflowRecovery?.checkpoints?.length
+        ? state.workflowRecovery.checkpoints.at(-1)
+        : await createWorkspaceCheckpoint(state.activeMissionId, 'candidate', body.candidate);
+      const workspace = runtime.mode === 'codex-cli'
+        ? { workspace: path.relative(rootDir, codexPatch.workspace).replaceAll('\\', '/'), files: actualFiles.map((file) => ({ path: file, status: 'modified' })), digest: codexPatch.digest, diff: codexPatch.diff }
+        : await applyCandidatePatch(state.activeMissionId);
+      const appliedDiff = codexPatch || await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId));
+      if (runtime.mode !== 'codex-cli') workspace.digest = appliedDiff.digest, workspace.diff = appliedDiff.diff;
+      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+      const artifactDir = artifactDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
+      await mkdir(artifactDir, { recursive: true });
+      const patchPath = path.join(artifactDir, `${body.candidate}.patch`);
+      const manifestPath = path.join(artifactDir, `${body.candidate}.manifest.json`);
+      const sourceReferences = Array.isArray(candidate?.sourceReferences) ? candidate.sourceReferences : [];
+      await writeFile(patchPath, appliedDiff.diff, 'utf8');
+      await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, missionId: state.activeMissionId, candidateId: body.candidate, digest: appliedDiff.digest, files: appliedDiff.changedFiles, sourceReferences, sourceRunId: state.agent.runId, createdAt: new Date().toISOString() }, null, 2)}\n`, 'utf8');
+      if (mission.sourceRoot && mission.runtimeRoot) await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot: mission.runtimeRoot, missionId: state.activeMissionId, references: sourceReferences });
+      return {
+        payload: { candidateId: body.candidate, checkpoint, workspace, digest: appliedDiff.digest, files: actualFiles, sourceReferences, artifacts: { patch: patchPath, manifest: manifestPath }, policyChecks, runtimeMode: runtime.mode },
+        result: { workspace, policyChecks },
+      };
+    },
+    apply: (state, payload) => {
+      const candidate = (state.candidateEvaluations || []).find((item) => item.id === payload.candidateId);
+      candidate.patchDigest = payload.digest;
+      candidate.sourceRunId = state.agent.runId;
+      if (payload.runtimeMode === 'codex-cli') candidate.files = payload.files.join(', ');
+      candidate.artifacts = payload.artifacts;
+      state.patchApplied = true;
+      state.appliedCandidateId = payload.candidateId;
+      state.stage = 'validation';
+      state.workflowRecovery = {
+        ...(state.workflowRecovery || {}),
+        previousBest: state.workflowRecovery?.previousBest || structuredClone(state.currentBest || { candidateId: null, version: 'baseline', value: '--', improvement: '--', status: 'active' }),
+        worktree: { ...(state.workflowRecovery?.worktree || {}), candidateId: payload.candidateId, status: 'active', activatedAt: new Date().toISOString() },
+        checkpoints: [...(state.workflowRecovery?.checkpoints || []).filter((item) => item.id !== payload.checkpoint.id), payload.checkpoint].slice(-5),
+        lastRecovery: null,
+        invalidatedArtifacts: [],
+      };
+      state.agent = {
+        ...state.agent,
+        status: 'awaiting_action',
+        phase: '异构验证已就绪',
+        currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '运行 C500 + CUDA 测试矩阵', reason: 'Patch 自动策略检查已通过并写入隔离工作区，下一步验证正确性和完整性能。', expectedOutput: '24 / 24 Correctness · 2 个 Full Benchmark Run', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' },
+        messages: [...(state.agent?.messages || []), { id: `patch-${Date.now()}`, phase: 'candidate', status: 'completed', title: 'Patch 自动检查通过并应用', detail: '变更边界、工作区路径和风险策略均已通过，补丁已写入隔离工作区。', time: '刚刚' }],
+      };
+      appendRuntimeEvent(state, 'patch.applied', { workspace: payload.workspace.workspace, checkpointId: payload.checkpoint.id, files: payload.workspace.files.map((file) => file.path), digest: payload.digest || null, artifacts: payload.artifacts, sourceReferences: payload.sourceReferences, policyChecks: payload.policyChecks, approvalRequired: false, mock: false }, { kind: 'workspace', mode: payload.runtimeMode === 'codex-cli' ? 'codex-cli' : 'client' });
+      addAuditEvent(state, 'Patch 自动策略检查通过', `${payload.workspace.workspace} · ${payload.candidateId} · 无需人工审批`, 'green', 'ShieldCheck');
+    },
+  },
+  'start-benchmark': {
+    keyFor: (state, body) => `benchmark:${state.activeMissionId}:${body?.candidate || state.appliedCandidateId}:${body?.candidateDigest || (state.candidateEvaluations || []).find((c) => c.id === (body?.candidate || state.appliedCandidateId))?.patchDigest}:${hashKey(JSON.stringify(body?.matrix || state.testMatrix))}`,
+    isApplied: (state, payload) => state.benchmark?.status === 'running' && state.appliedCandidateId === payload?.candidateId && JSON.stringify(state.benchmark?.matrix || {}) === JSON.stringify(payload?.matrix || {}),
+    prepare: async ({ state, body }) => {
+      const matrix = body.matrix || state.testMatrix;
+      const runId = `run_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
+      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+      const candidateId = body.candidate || state.appliedCandidateId;
+      const appliedCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === candidateId);
+      const candidateDigest = body.candidateDigest || appliedCandidate?.patchDigest || null;
+      if (!candidateDigest) {
+        const error = new Error('候选缺少由真实工作区 Diff 生成的 digest，不能提交测试。');
+        error.status = 409;
+        error.code = 'TEST_CANDIDATE_DIGEST_MISSING';
+        throw error;
+      }
+      const normalizedMatrix = { ...structuredClone(matrix), warmup: Number(body.warmup || 50), repeats: Number(body.repeats || 200), correctnessCases: Number(body.correctnessCases || 24) };
+      const submitted = await operatorTestQueue.submit({
+        schemaVersion: 1, requestId: runId, missionId: state.activeMissionId,
+        operator: body.operator || 'mla_paged_attention', candidate: { id: candidateId, digest: candidateDigest },
+        hardware: mission.hardware || matrix.environments, runtime: body.runtime || 'client-managed-runtime', metric: mission.metric || 'latency_p50',
+        matrix: normalizedMatrix, tracer: { enabled: true, format: 'operator-trace/v1' }, profiler: { enabled: true, format: 'operator-profile/v1' },
+        limits: { timeoutSeconds: Number(body.timeoutSeconds || 3) },
+      });
+      return {
+        payload: { runId, taskId: submitted.taskId, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages, submittedAt: submitted.submittedAt },
+        result: { runId, taskId: submitted.taskId },
+      };
+    },
+    apply: (state, payload) => {
+      state.testMatrix = structuredClone(payload.matrix);
+      state.stage = 'validation';
+      state.benchmark = {
+        status: 'running', progress: 0, runId: payload.runId, startedAt: payload.submittedAt || new Date().toISOString(), completedAt: null, durationMs: 0,
+        logs: [{ sequence: 1, progress: 0, message: `调度器已锁定 ${payload.environments.length} 个环境快照` }], matrix: structuredClone(payload.matrix),
+        candidate: { id: payload.candidateId, digest: payload.candidateDigest }, testTaskId: payload.taskId, result: null,
+        source: { kind: 'operator-test-service', transport: 'local-serial-queue', mock: true }, lastServiceError: null,
+      };
+      state.agent = { ...state.agent, status: 'executing', phase: '异构验证', currentAction: null, messages: [...(state.agent?.messages || []), { id: `test-${payload.runId}`, phase: 'validation', status: 'running', title: 'Validation Agent 已提交测试矩阵', detail: `${payload.runId} 正在两个固定环境中执行。`, time: '刚刚' }] };
+      appendRuntimeEvent(state, 'operator_test.queued', { runId: payload.runId, taskId: payload.taskId, candidate: { id: payload.candidateId, digest: payload.candidateDigest }, environments: payload.environments, stages: payload.stages, matrix: structuredClone(payload.matrix) }, { kind: 'operator-test-queue', mode: 'client' });
+      addAuditEvent(state, 'Full Benchmark 已提交', `${payload.runId} · ${payload.environments.length} environments`, 'blue', 'TestTube2');
+    },
+  },
+  'adopt': {
+    keyFor: (state) => `adopt:${state.activeMissionId}:${state.appliedCandidateId || state.decisionReview?.candidateId}`,
+    isApplied: (state) => state.knowledgeMaintenance?.status === 'completed' && state.publishedAssets?.length === state.knowledgeDrafts?.length,
+    apply: (state, payload) => { adoptCandidateState(state, payload?.note || '证据完整且未命中人工复核信号。', 'policy'); },
+    prepare: async ({ body }) => ({ payload: { note: body?.note || '' }, result: null }),
+  },
+  'reject': {
+    keyFor: (state) => `reject:${state.activeMissionId}:${state.appliedCandidateId || state.decisionReview?.candidateId}`,
+    isApplied: (state) => state.decisionReview?.resolution?.outcome === 'supplement' && state.decisionReview?.resolution?.source === 'direct_action',
+    apply: (state) => {
+      state.stage = 'validation';
+      state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
+      state.decisionReview = { ...createDecisionReviewState('resolved'), recommendation: null, resolution: { outcome: 'supplement', source: 'direct_action', note: '需要补充验证', resolvedAt: new Date().toISOString() } };
+      state.agent = { ...state.agent, status: 'awaiting_action', phase: '补充验证', currentAction: { id: 'action.revalidation', type: 'test.plan', title: '运行补充验证矩阵', reason: '效果决策要求补充验证。', expectedOutput: 'Updated Full Benchmark · refreshed Level 3 evidence', risk: 'medium', approvalRequired: false } };
+      const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
+      appendRuntimeEvent(state, 'decision.revalidation_requested', { candidate: candidateId || null, reason: '需要补充验证' }, { kind: 'policy', mode: 'client' });
+      addAuditEvent(state, '候选退回验证', `${candidateId || '当前候选'} · 需要补充验证`, 'warning', 'TriangleAlert');
+    },
+  },
+  'rollback-stage': {
+    keyFor: (state) => `rollback-stage:${state.activeMissionId}:${state.workflowRecovery?.checkpoints?.at(-1)?.id || 'none'}`,
+    isApplied: (state) => state.stage === 'candidate' && state.patchApplied === false,
+    prepare: async ({ state }) => {
+      const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
+      const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
+      return { payload: { checkpointId: checkpoint.id, recovery }, result: { recovery } };
+    },
+    apply: (state, payload) => {
+      const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
+      const invalidatedArtifacts = [
+        state.benchmark?.runId ? { type: 'benchmark', id: state.benchmark.runId } : null,
+        state.stage === 'evidence' && candidateId ? { type: 'evidence', id: `decision.${candidateId}` } : null,
+      ].filter(Boolean);
+      state.stage = 'candidate';
+      state.patchApplied = false;
+      state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
+      state.decisionReview = createDecisionReviewState('idle');
+      state.agent = {
+        ...state.agent,
+        status: 'awaiting_approval',
+        phase: '候选补丁审查',
+        currentAction: { id: `action.${candidateId || 'candidate'}-restored`, type: 'candidate.plan', title: `重新审阅 ${candidateId || '候选'}`, reason: '流程已恢复到补丁应用前的工作区检查点。', expectedOutput: 'Candidate Plan · isolated worktree', risk: 'medium', approvalRequired: true },
+        messages: [...(state.agent?.messages || []), { id: `rollback-${Date.now()}`, phase: 'candidate', status: 'completed', title: '已返回补丁应用前', detail: `${payload.checkpointId} 已恢复，${invalidatedArtifacts.length} 个后续工件已失效。`, time: '刚刚' }],
+      };
+      state.workflowRecovery = {
+        ...state.workflowRecovery,
+        worktree: { ...state.workflowRecovery.worktree, status: 'restored' },
+        lastRecovery: { type: 'stage_rollback', from: 'validation_or_evidence', to: 'candidate', checkpointId: payload.checkpointId, restoredAt: payload.recovery.restoredAt },
+        invalidatedArtifacts: [...(state.workflowRecovery.invalidatedArtifacts || []), ...invalidatedArtifacts],
+      };
+      appendRuntimeEvent(state, 'workflow.stage_rolled_back', { from: 'validation_or_evidence', to: 'candidate', checkpointId: payload.checkpointId, invalidatedArtifacts }, { kind: 'recovery', mode: 'client' });
+      addAuditEvent(state, '流程已返回补丁应用前', `${payload.checkpointId} · ${invalidatedArtifacts.length} artifacts invalidated`, 'warning', 'History');
+    },
+  },
+  'request-review': {
+    keyFor: (state) => `request-review:${state.activeMissionId}`,
+    isApplied: (state) => state.decisionReview?.status === 'awaiting_review',
+    apply: (state, payload) => {
+      const requestedAt = new Date().toISOString();
+      const outcomeMeta = interventionOutcomeMeta[payload.outcome];
+      state.decisionReview = {
+        ...(state.decisionReview || createDecisionReviewState('auto_ready')),
+        status: 'awaiting_review', requiresApproval: true,
+        request: { candidateId: payload.candidate || state.appliedCandidateId || null, outcome: payload.outcome, note: payload.note, originStage: payload.originStage, submittedBy: payload.submittedBy || 'Yilin Lu', requestedAt },
+        resolution: null, requestedAt, resolvedAt: null,
+      };
+      state.agent = {
+        ...state.agent,
+        status: 'awaiting_approval', phase: '人工介入待处理',
+        currentAction: { id: 'action.resolve-decision-review', type: 'review.resolve', title: '处理人工介入事项', reason: payload.note, expectedOutput: outcomeMeta.expectedOutput, risk: 'high', approvalRequired: true, reviewMode: 'human_requested' },
+        messages: [...(state.agent?.messages || []), { id: `review-${Date.now()}`, phase: 'approval', status: 'waiting', title: '已收到人工介入意见', detail: `${outcomeMeta.label} · ${payload.note}`, time: '刚刚' }],
+      };
+      appendRuntimeEvent(state, 'decision.review_requested', { candidate: state.appliedCandidateId || state.decisionReview?.candidateId || null, originStage: payload.originStage, outcome: payload.outcome, note: payload.note }, { kind: 'approval', mode: 'client' });
+      addAuditEvent(state, '流程已被人工介入阻塞', `${outcomeMeta.label} · ${payload.note}`, 'warning', 'ShieldCheck');
+    },
+    prepare: async ({ state, body }) => {
+      const outcome = ['adopt', 'supplement', 'redirect'].includes(body.outcome) ? body.outcome : 'redirect';
+      const allowedOutcomes = state.stage === 'evidence' ? ['adopt', 'supplement', 'redirect'] : state.stage === 'validation' ? ['supplement', 'redirect'] : ['redirect'];
+      if (!allowedOutcomes.includes(outcome)) {
+        const error = new Error('当前阶段尚不支持该介入指令，请先查看证据状态。');
+        error.status = 409; error.code = 'INTERVENTION_OUTCOME_UNAVAILABLE'; throw error;
+      }
+      const note = String(body.note || '').trim();
+      if (note.length < 4) {
+        const error = new Error('请填写具体的审批意见后再提交。');
+        error.status = 400; error.code = 'DECISION_REVIEW_NOTE_REQUIRED'; throw error;
+      }
+      return { payload: { outcome, note, candidate: body.candidate || null, originStage: state.stage, submittedBy: body.submittedBy || null }, result: null };
+    },
+  },
+  'cancel-review': {
+    keyFor: (state) => `cancel-review:${state.activeMissionId}`,
+    isApplied: (state) => !state.decisionReview?.request,
+    apply: (state) => {
+      const previousRequest = state.decisionReview?.request;
+      const candidateId = state.appliedCandidateId || previousRequest?.candidateId || state.decisionReview?.candidateId;
+      const restoredStatus = state.stage === 'evidence' ? 'auto_ready' : 'idle';
+      const restoredAction = state.stage === 'evidence'
+        ? { id: 'action.adoption-decision', type: 'adoption.decision', title: `确认 ${candidateId || '候选'} 的策略建议`, reason: '人工意见已撤回，当前未命中强制复核信号。', expectedOutput: 'Policy Decision · current best update', risk: 'medium', approvalRequired: false, reviewMode: 'conditional' }
+        : state.stage === 'validation'
+          ? { id: 'action.validation-resumed', type: 'test.plan', title: '继续异构验证', reason: '人工介入已撤回，恢复原验证计划。', expectedOutput: 'Correctness · Full Benchmark · Level 3 evidence', risk: 'medium', approvalRequired: false }
+          : { id: 'action.candidate-resumed', type: 'candidate.plan', title: '继续候选自动检查', reason: '人工介入已撤回，恢复原 Candidate Plan 和自动策略。', expectedOutput: 'Candidate Plan · patch proposal', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' };
+      state.decisionReview = { ...createDecisionReviewState(restoredStatus), cancelledRequest: previousRequest || null };
+      state.agent = { ...state.agent, status: 'awaiting_action', phase: state.stage === 'evidence' ? '效果策略评估' : state.stage === 'validation' ? '异构验证' : '候选补丁审查', currentAction: restoredAction };
+      appendRuntimeEvent(state, 'decision.review_cancelled', { candidate: candidateId || null }, { kind: 'approval', mode: 'client' });
+      addAuditEvent(state, '人工审批意见已撤回', '流程恢复为条件式策略决策', 'blue', 'ShieldCheck');
+      if (state.stage === 'evidence' && state.benchmark?.status === 'complete') runAutomaticAdoption(state, `人工介入已撤回，Accept Gate 继续按策略自动采用 ${candidateId || '候选'}。`);
+    },
+  },
+  'revert-adoption': {
+    keyFor: (state) => `revert-adoption:${state.activeMissionId}:${state.currentBest?.candidateId || state.appliedCandidateId}`,
+    isApplied: (state) => state.decisionReview?.resolution?.outcome === 'reverted',
+    prepare: async ({ state }) => {
+      const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
+      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+      const repositoryAdoption = state.workflowRecovery?.repositoryAdoption;
+      const repositoryRevert = mission.projectRoot && repositoryAdoption?.commit
+        ? await workspaceManager.revertAdoption({ repository: mission.repository, commit: repositoryAdoption.commit })
+        : null;
+      const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
+      return { payload: { checkpointId: checkpoint.id, recovery, repositoryRevert, repositoryAdoption, revertedAt: new Date().toISOString(), previousBest: state.workflowRecovery?.previousBest || { candidateId: null, version: 'baseline', value: '--', improvement: '--', status: 'active' } }, result: { recovery, repositoryRevert } };
+    },
+    apply: (state, payload) => {
+      const revertedCandidateId = state.currentBest?.candidateId || state.appliedCandidateId || 'candidate';
+      state.currentBest = payload.previousBest;
+      state.decisionReview = { ...(state.decisionReview || createDecisionReviewState('resolved')), status: 'resolved', recommendation: null, requiresApproval: false, resolution: { outcome: 'reverted', source: 'human_recovery', note: `已恢复上一稳定版本 ${payload.previousBest.version || 'baseline'}`, resolvedAt: payload.revertedAt }, resolvedAt: payload.revertedAt };
+      state.publishedAssets = (state.publishedAssets || []).map((asset) => ({ ...asset, status: 'superseded', supersededAt: payload.revertedAt, supersededBy: `rollback.${payload.previousBest.version || 'baseline'}` }));
+      state.knowledgeMaintenance = { ...state.knowledgeMaintenance, rollback: { status: 'completed', reason: `${revertedCandidateId} adoption reverted`, revertedAt: payload.revertedAt }, changes: (state.knowledgeMaintenance?.changes || []).map((change) => ({ ...change, outcome: 'superseded' })) };
+      state.agent = { ...state.agent, status: 'completed', phase: '已回退到上一稳定版本', currentAction: null, messages: [...(state.agent?.messages || []), { id: `adoption-revert-${Date.now()}`, phase: 'decision', status: 'completed', title: '采用结果已回退', detail: `current best 已恢复为 ${payload.previousBest.version || 'baseline'}，${revertedCandidateId} 关联知识已标记为被替代。`, time: '刚刚' }] };
+      state.workflowRecovery = {
+        ...state.workflowRecovery,
+        repositoryAdoption: payload.repositoryRevert ? { ...payload.repositoryAdoption, status: 'reverted', ...payload.repositoryRevert } : payload.repositoryAdoption,
+        worktree: { ...state.workflowRecovery.worktree, status: 'reverted', revertedAt: payload.revertedAt },
+        lastRecovery: { type: 'adoption_revert', from: revertedCandidateId, to: payload.previousBest.candidateId || 'baseline', checkpointId: payload.checkpointId, restoredAt: payload.recovery.restoredAt },
+        invalidatedArtifacts: [...(state.workflowRecovery.invalidatedArtifacts || []), { type: 'decision', id: `decision.${revertedCandidateId}` }, ...(state.publishedAssets || []).map((asset) => ({ type: 'knowledge', id: `${asset.id}@${asset.version}` }))],
+      };
+      appendRuntimeEvent(state, 'decision.adoption_reverted', { from: revertedCandidateId, to: payload.previousBest.candidateId || 'baseline', checkpointId: payload.checkpointId }, { kind: 'recovery', mode: 'client' });
+      appendRuntimeEvent(state, 'knowledge.assets_superseded', { assets: state.publishedAssets.map((asset) => `${asset.id}@${asset.version}`) }, { kind: 'knowledge', mode: 'client' });
+      addAuditEvent(state, '已回退到上一稳定版本', `${revertedCandidateId} → ${payload.previousBest.version || 'baseline'} · ${payload.checkpointId}`, 'warning', 'History');
+    },
+  },
+  'resolve-review': {
+    keyFor: (state, body) => `resolve-review:${state.activeMissionId}:${body?.outcome || state.decisionReview?.request?.outcome}`,
+    isApplied: (state) => state.decisionReview?.status === 'resolved',
+    prepare: async ({ state, body }) => {
+      const outcome = body.outcome || state.decisionReview?.request?.outcome;
+      const note = String(body.note || state.decisionReview?.request?.note || '').trim();
+      if (outcome === 'redirect') {
+        const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
+        if (!checkpoint) {
+          const error = new Error('当前 Mission 没有可恢复的工作区检查点，无法调整优化方向。');
+          error.status = 409; error.code = 'WORKSPACE_CHECKPOINT_MISSING'; throw error;
+        }
+        const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
+        return { payload: { outcome, note, checkpointId: checkpoint.id, recovery }, result: { review: null, recovery } };
+      }
+      return { payload: { outcome, note, checkpointId: null, recovery: null }, result: null };
+    },
+    apply: (state, payload) => {
+      const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
+      const resolvedAt = new Date().toISOString();
+      if (payload.outcome === 'adopt') {
+        adoptCandidateState(state, payload.note, 'human_review');
+        return;
+      }
+      if (payload.outcome === 'redirect') {
+        const invalidatedArtifacts = [
+          state.benchmark?.runId ? { type: 'benchmark', id: state.benchmark.runId } : null,
+          state.stage === 'evidence' && candidateId ? { type: 'evidence', id: `decision.${candidateId}` } : null,
+        ].filter(Boolean);
+        state.stage = 'candidate';
+        state.patchApplied = false;
+        state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
+        state.decisionReview = { ...state.decisionReview, status: 'resolved', requiresApproval: false, recommendation: null, resolution: { outcome: payload.outcome, source: 'human_review', note: payload.note, resolvedAt }, resolvedAt };
+        state.agent = {
+          ...state.agent, status: 'awaiting_action', phase: '调整优化方向',
+          currentAction: { id: 'action.redirect-candidate', type: 'candidate.plan', title: '根据人工意见生成新候选方向', reason: payload.note, expectedOutput: 'Revised Candidate Plan · isolated worktree', risk: 'medium', approvalRequired: true, reviewMode: 'resolved' },
+          messages: [...(state.agent?.messages || []), { id: `review-redirect-${Date.now()}`, phase: 'candidate', status: 'completed', title: '人工介入已调整优化方向', detail: `${payload.checkpointId || 'candidate baseline'} 已恢复，${invalidatedArtifacts.length} 个后续工件已失效。`, time: '刚刚' }],
+        };
+        state.workflowRecovery = {
+          ...state.workflowRecovery,
+          worktree: { ...state.workflowRecovery?.worktree, status: payload.checkpointId ? 'restored' : 'clean' },
+          lastRecovery: payload.checkpointId ? { type: 'intervention_redirect', from: state.decisionReview.request?.originStage || 'workflow', to: 'candidate', checkpointId: payload.checkpointId, restoredAt: payload.recovery.restoredAt } : state.workflowRecovery?.lastRecovery,
+          invalidatedArtifacts: [...(state.workflowRecovery?.invalidatedArtifacts || []), ...invalidatedArtifacts],
+        };
+        appendRuntimeEvent(state, 'decision.review_resolved', { candidate: candidateId || null, outcome: payload.outcome, note: payload.note }, { kind: 'approval', mode: 'client' });
+        appendRuntimeEvent(state, 'workflow.redirected_by_intervention', { candidate: candidateId || null, checkpointId: payload.checkpointId || null, invalidatedArtifacts }, { kind: 'recovery', mode: 'client' });
+        addAuditEvent(state, '人工介入已调整优化方向', `${payload.checkpointId || 'candidate baseline'} · ${payload.note}`, 'warning', 'GitBranch');
+        return;
+      }
+      // supplement
+      state.stage = 'validation';
+      state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
+      state.decisionReview = { ...state.decisionReview, status: 'resolved', requiresApproval: false, recommendation: null, resolution: { outcome: payload.outcome, source: 'human_review', note: payload.note, resolvedAt }, resolvedAt };
+      state.agent = {
+        ...state.agent, status: 'awaiting_action', phase: '补充验证',
+        currentAction: { id: 'action.supplement-validation', type: 'test.plan', title: '运行补充验证矩阵', reason: payload.note, expectedOutput: 'Updated Full Benchmark · refreshed Level 3 evidence', risk: 'medium', approvalRequired: false, reviewMode: 'resolved' },
+        messages: [...(state.agent?.messages || []), { id: `review-resolved-${Date.now()}`, phase: 'approval', status: 'completed', title: '审批意见已处理', detail: `流程返回验证阶段 · ${payload.note}`, time: '刚刚' }],
+      };
+      appendRuntimeEvent(state, 'decision.review_resolved', { candidate: candidateId || null, outcome: payload.outcome, note: payload.note }, { kind: 'approval', mode: 'client' });
+      addAuditEvent(state, '审批意见已处理：补充验证', payload.note, 'warning', 'TestTube2');
+    },
+  },
+  'runs': {
+    keyFor: (state, body) => `run-start:${state.activeMissionId}:${state.runHistory?.length || 0}:${hashKey(body?.goal || state.missions?.find((m) => m.id === state.activeMissionId)?.goal || '')}`,
+    isApplied: (state, payload) => state.agent?.runId === payload?.runId && ['running', 'executing', 'awaiting_action'].includes(state.agent?.status),
+    prepare: async ({ state, body }) => {
+      const runtimeDescriptor = await agentRuntime.describe();
+      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+      const goal = body?.goal?.trim() || mission.goal;
+      let workspace = body?.workspace;
+      if (!workspace) {
+        const preflight = await buildRuntimePreflight(mission);
+        if (!preflight.ready) {
+          const error = new Error(preflight.workspaceCheck?.detail || 'Agent Runtime 预检失败。');
+          error.status = 503; error.code = preflight.workspaceCheck?.code || 'RUNTIME_PREFLIGHT_FAILED'; throw error;
+        }
+        workspace = preflight.workspace;
+      }
+      const referenceFixture = runtimeDescriptor.mode === 'reference-fixture';
+      // 捕获-重放：在克隆上执行 reset + startRun（含 spawn），把结果摘进 payload；apply 只做确定性的状态重建。
+      const clone = structuredClone(state);
+      resetMissionRunState(clone, goal, { referenceFixture });
+      let checkpoint = null;
+      if (runtimeDescriptor.mode === 'reference-fixture') await resetMissionWorkspace(state.activeMissionId);
+      if (runtimeDescriptor.mode === 'codex-cli') {
+        checkpoint = await createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline');
+        clone.workflowRecovery = { ...(clone.workflowRecovery || {}), checkpoints: [...(clone.workflowRecovery?.checkpoints || []), checkpoint].slice(-5) };
+      }
+      const runtimeRun = await agentRuntime.startRun({ state: clone, mission, goal, resumeThreadId: body?.resumeThreadId || null, workspace });
+      if (!runtimeRun.handled) startAgentRun(clone, goal, { reset: false });
+      const eventType = referenceFixture ? 'mission.run_started' : runtimeDescriptor.mode === 'cli-file' ? 'mission.run_requested' : 'codex.run_started';
+      return { payload: { goal, referenceFixture, eventType, agent: clone.agent, checkpoint, runId: clone.agent.runId }, result: { runId: clone.agent.runId } };
+    },
+    apply: (state, payload) => {
+      resetMissionRunState(state, payload.goal, { referenceFixture: payload.referenceFixture });
+      if (payload.checkpoint) state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), payload.checkpoint].slice(-5) };
+      state.agent = payload.agent;
+      if (!state.runtimeEvents?.some((e) => e.type === payload.eventType && e.payload?.runId === payload.runId)) {
+        appendRuntimeEvent(state, payload.eventType, { runId: payload.runId, goal: payload.goal }, { kind: 'adapter', mode: payload.referenceFixture ? 'reference-fixture' : payload.eventType === 'mission.run_requested' ? 'cli-file' : 'codex-cli' });
+      }
+    },
+  },
+  'research': {
+    keyFor: (state, body) => `research:${state.activeMissionId}:${state.researchNotes?.length || 0}:${hashKey(body?.direction || selectResearchDirection(state))}`,
+    isApplied: (state, payload) => state.researchAgent?.runId === payload?.runId && state.researchAgent?.status === 'running',
+    prepare: async ({ state, body }) => {
+      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+      const direction = body?.direction?.trim() || selectResearchDirection(state);
+      const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
+      const clone = structuredClone(state);
+      await mkdir(researchDir, { recursive: true });
+      const started = await agentRuntime.startResearch({ state: clone, mission, direction, workspace: researchDir });
+      return { payload: { direction, researchAgent: clone.researchAgent }, result: { runId: clone.researchAgent.runId } };
+    },
+    apply: (state, payload) => {
+      state.researchAgent = payload.researchAgent;
+      if (!state.runtimeEvents?.some((e) => e.type === 'research.run_started' && e.payload?.runId === payload.researchAgent.runId)) {
+        appendRuntimeEvent(state, 'research.run_started', { runId: payload.researchAgent.runId, direction: payload.direction, researchDir: payload.researchAgent.researchDir }, { kind: 'research', mode: 'codex-cli' });
+      }
+    },
+  },
+};
+
 // 循环驱动依赖：advanceIteration 编排器通过 deps 拿到 agentRuntime 能力与目录函数。
 const iterationDeps = {
   startResearch: async ({ state, mission, direction, workspace }) => {
@@ -324,7 +716,7 @@ const loadRuntimeState = async () => {
   if (runtimeStateInFlight) return structuredClone(await runtimeStateInFlight);
   runtimeStateInFlight = (async () => {
   const runtime = await agentRuntime.describe();
-  const state = await loadState({ runtimeMode: runtime.mode });
+  const state = await loadState({ runtimeMode: runtime.mode, commandJournal, applyRegistry: commandRegistry });
   const projection = await agentRuntime.projectState({ ...state, runtime });
   let changed = projection.changed;
   if (projection.state.benchmark?.status === 'running' && projection.state.benchmark?.testTaskId) {
@@ -529,7 +921,7 @@ async function handleApi(request, response, url) {
   const projectBootstrapMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/bootstrap$/);
   if (request.method === 'POST' && projectBootstrapMatch) {
     const runtime = await agentRuntime.describe();
-    const state = await loadState({ runtimeMode: runtime.mode, ensureWorkspace: false });
+    const state = await loadState({ runtimeMode: runtime.mode, ensureWorkspace: false, commandJournal, applyRegistry: commandRegistry });
     guardMutation(state);
     const project = state.projects.find((item) => item.id === decodeURIComponent(projectBootstrapMatch[1]));
     if (!project) {
@@ -750,25 +1142,12 @@ async function handleApi(request, response, url) {
       throw error;
     }
     assertMissionIntent(goal, mission);
-    const workspace = preflight.workspace;
     const resumeThreadId = body.resume === true
       ? state.agent?.threadId || state.runHistory?.find((run) => run.runtimeKind === 'codex-cli' && run.threadId)?.threadId || null
       : null;
-    resetMissionRunState(state, goal, { referenceFixture: runtimeDescriptor.mode === 'reference-fixture' });
-    if (runtimeDescriptor.mode === 'reference-fixture') await resetMissionWorkspace(missionId);
-    if (runtimeDescriptor.mode === 'codex-cli') {
-      const baselineCheckpoint = await createWorkspaceCheckpoint(missionId, 'agent-run-baseline');
-      state.workflowRecovery = {
-        ...(state.workflowRecovery || {}),
-        checkpoints: [...(state.workflowRecovery?.checkpoints || []), baselineCheckpoint].slice(-5),
-      };
-    }
-    const runtimeRun = await agentRuntime.startRun({ state, mission, goal, resumeThreadId, workspace });
-    if (!runtimeRun.handled) {
-      startAgentRun(state, goal, { reset: false });
-      appendRuntimeEvent(state, 'mission.run_started', { runId: state.agent.runId, goal }, { kind: 'adapter', mode: 'reference-fixture' });
-    }
-    json(response, 202, { state: await saveState(runtimeRun.state || state) });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'runs', body: { ...body, goal, resumeThreadId, workspace: preflight.workspace }, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 202, { state: result.state, runId: result.result?.runId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   const missionRunCancelMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/runs\/([^/]+)\/cancel$/);
@@ -798,10 +1177,9 @@ async function handleApi(request, response, url) {
       return;
     }
     const body = await readJson(request);
-    const direction = body.direction?.trim() || selectResearchDirection(state);
-    const researchDir = researchDirForMission(missionId, mission.repository, mission.projectRoot);
-    const started = await agentRuntime.startResearch({ state, mission, direction, workspace: researchDir });
-    json(response, 202, { state: await saveState(started.state), research: started.state.researchAgent });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'research', body, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 202, { state: result.state, research: result.state.researchAgent, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   const missionResearchNotesMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/research\/notes$/);
@@ -849,7 +1227,7 @@ async function handleApi(request, response, url) {
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/apply-patch') {
-    const runtime = await guardSupportedRuntimeAction('Patch');
+    await guardSupportedRuntimeAction('Patch');
     const state = await loadRuntimeState();
     guardMutation(state);
     guardWorkflowTransition(state, { stages: ['candidate'], actionType: 'candidate.plan', label: 'Patch 自动策略检查' });
@@ -860,80 +1238,9 @@ async function handleApi(request, response, url) {
       error.code = 'CANDIDATE_MISMATCH';
       throw error;
     }
-    const candidate = (state.candidateEvaluations || []).find((item) => item.id === body.candidate);
-    const declaredFiles = String(candidate?.files || '').split(',').map((item) => item.trim()).filter(Boolean);
-    const codexPatch = runtime.mode === 'codex-cli'
-      ? await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId))
-      : null;
-    const actualFiles = (codexPatch?.changedFiles || []).map((file) => file.replaceAll('\\', '/'));
-    const normalizedDeclaredFiles = declaredFiles.map((file) => file.replaceAll('\\', '/'));
-    const undeclaredFiles = actualFiles.filter((file) => !normalizedDeclaredFiles.includes(file));
-    const missingFiles = normalizedDeclaredFiles.filter((file) => !actualFiles.includes(file));
-    const codexPolicyChecks = runtime.mode === 'codex-cli' ? [
-      { id: 'patch.diff.nonempty', label: 'Mission 工作区存在真实 Git Diff', passed: Boolean(codexPatch?.dirty && codexPatch.diff) },
-      { id: 'patch.diff.matches', label: 'Candidate 文件清单与真实 Diff 一致', passed: undeclaredFiles.length === 0 && missingFiles.length === 0, detail: { undeclaredFiles, missingFiles } },
-    ] : [];
-    const policyChecks = [
-      { id: 'candidate.exists', label: '候选身份有效', passed: Boolean(candidate) },
-      { id: 'patch.declared', label: 'Patch 文件清单非空', passed: declaredFiles.length > 0 },
-      { id: 'patch.paths', label: '变更路径位于受控工作区', passed: declaredFiles.length > 0 && declaredFiles.every((file) => !path.isAbsolute(file) && !file.split(/[\\/]/).includes('..') && !file.startsWith('.git')) },
-      ...codexPolicyChecks,
-      { id: 'risk.policy', label: '风险未命中强制人工介入', passed: state.agent?.currentAction?.risk !== 'high' },
-    ];
-    if (policyChecks.some((check) => !check.passed)) {
-      const error = new Error('Patch 自动策略检查未通过，请通过人工介入查看失败项。');
-      error.status = 409;
-      error.code = 'PATCH_POLICY_CHECK_FAILED';
-      error.details = policyChecks;
-      throw error;
-    }
-    const checkpoint = runtime.mode === 'codex-cli' && state.workflowRecovery?.checkpoints?.length
-      ? state.workflowRecovery.checkpoints.at(-1)
-      : await createWorkspaceCheckpoint(state.activeMissionId, 'candidate', candidate.id);
-    let workspace = runtime.mode === 'codex-cli'
-      ? {
-          workspace: path.relative(rootDir, codexPatch.workspace).replaceAll('\\', '/'),
-          files: actualFiles.map((file) => ({ path: file, status: 'modified' })),
-          digest: codexPatch.digest,
-          diff: codexPatch.diff,
-        }
-      : await applyCandidatePatch(state.activeMissionId);
-    const appliedDiff = codexPatch || await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId));
-    if (runtime.mode !== 'codex-cli') workspace = { ...workspace, digest: appliedDiff.digest, diff: appliedDiff.diff };
-    candidate.patchDigest = appliedDiff.digest;
-    candidate.sourceRunId = state.agent.runId;
-    if (runtime.mode === 'codex-cli') candidate.files = actualFiles.join(', ');
-    const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-    const artifactDir = artifactDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
-    await mkdir(artifactDir, { recursive: true });
-    const patchPath = path.join(artifactDir, `${candidate.id}.patch`);
-    const manifestPath = path.join(artifactDir, `${candidate.id}.manifest.json`);
-    const sourceReferences = Array.isArray(candidate.sourceReferences) ? candidate.sourceReferences : [];
-    await writeFile(patchPath, appliedDiff.diff, 'utf8');
-    await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, missionId: state.activeMissionId, candidateId: candidate.id, digest: appliedDiff.digest, files: appliedDiff.changedFiles, sourceReferences, sourceRunId: state.agent.runId, createdAt: new Date().toISOString() }, null, 2)}\n`, 'utf8');
-    candidate.artifacts = { patch: patchPath, manifest: manifestPath };
-    if (mission.sourceRoot && mission.runtimeRoot) await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot: mission.runtimeRoot, missionId: state.activeMissionId, references: sourceReferences });
-    state.patchApplied = true;
-    state.appliedCandidateId = candidate.id;
-    state.stage = 'validation';
-    state.workflowRecovery = {
-      ...(state.workflowRecovery || {}),
-      previousBest: state.workflowRecovery?.previousBest || structuredClone(state.currentBest || { candidateId: null, version: 'baseline', value: '--', improvement: '--', status: 'active' }),
-      worktree: { ...(state.workflowRecovery?.worktree || {}), candidateId: candidate.id, status: 'active', activatedAt: new Date().toISOString() },
-      checkpoints: [...(state.workflowRecovery?.checkpoints || []).filter((item) => item.id !== checkpoint.id), checkpoint].slice(-5),
-      lastRecovery: null,
-      invalidatedArtifacts: [],
-    };
-    state.agent = {
-      ...state.agent,
-      status: 'awaiting_action',
-      phase: '异构验证已就绪',
-      currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '运行 C500 + CUDA 测试矩阵', reason: 'Patch 自动策略检查已通过并写入隔离工作区，下一步验证正确性和完整性能。', expectedOutput: '24 / 24 Correctness · 2 个 Full Benchmark Run', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' },
-      messages: [...(state.agent?.messages || []), { id: `patch-${Date.now()}`, phase: 'candidate', status: 'completed', title: 'Patch 自动检查通过并应用', detail: '变更边界、工作区路径和风险策略均已通过，补丁已写入隔离工作区。', time: '刚刚' }],
-    };
-    appendRuntimeEvent(state, 'patch.applied', { workspace: workspace.workspace, checkpointId: checkpoint.id, files: workspace.files.map((file) => file.path), digest: workspace.digest || null, artifacts: candidate.artifacts, sourceReferences, policyChecks, approvalRequired: false, mock: false }, { kind: 'workspace', mode: runtime.mode === 'codex-cli' ? 'codex-cli' : 'client' });
-    addAuditEvent(state, 'Patch 自动策略检查通过', `${workspace.workspace} · ${body.candidate} · 无需人工审批`, 'green', 'ShieldCheck');
-    json(response, 200, { state: await saveState(state), workspace, policyChecks });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'apply-patch', body, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 200, { state: result.state, workspace: result.result?.workspace, policyChecks: result.result?.policyChecks, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/start-benchmark') {
@@ -950,41 +1257,14 @@ async function handleApi(request, response, url) {
       json(response, 400, { error: '本次测试矩阵至少需要一个环境和一个验证阶段。', code: 'TEST_MATRIX_INVALID' });
       return;
     }
-    state.testMatrix = structuredClone(matrix);
-    const runId = `run_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
-    const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
     const candidateId = body.candidate || state.appliedCandidateId;
     if (!candidateId) {
       json(response, 409, { error: '无法确定本次测试对应的候选，请重新应用候选 Patch。', code: 'TEST_CANDIDATE_MISSING' });
       return;
     }
-    const appliedCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === candidateId);
-    const candidateDigest = body.candidateDigest || appliedCandidate?.patchDigest || null;
-    if (!candidateDigest) {
-      json(response, 409, { error: '候选缺少由真实工作区 Diff 生成的 digest，不能提交测试。', code: 'TEST_CANDIDATE_DIGEST_MISSING' });
-      return;
-    }
-    const submitted = await operatorTestQueue.submit({
-      schemaVersion: 1,
-      requestId: runId,
-      missionId: state.activeMissionId,
-      operator: body.operator || 'mla_paged_attention',
-      candidate: { id: candidateId, digest: candidateDigest },
-      hardware: mission.hardware || matrix.environments,
-      runtime: body.runtime || 'client-managed-runtime',
-      metric: mission.metric || 'latency_p50',
-      matrix: { ...structuredClone(matrix), warmup: Number(body.warmup || 50), repeats: Number(body.repeats || 200), correctnessCases: Number(body.correctnessCases || 24) },
-      tracer: { enabled: true, format: 'operator-trace/v1' },
-      profiler: { enabled: true, format: 'operator-profile/v1' },
-      limits: { timeoutSeconds: Number(body.timeoutSeconds || 3) },
-    });
-    state.stage = 'validation';
-    state.benchmark = { status: 'running', progress: 0, runId, startedAt: new Date().toISOString(), completedAt: null, durationMs: 2600, logs: [{ sequence: 1, progress: 0, message: `调度器已锁定 ${matrix.environments.length} 个环境快照` }], matrix: structuredClone(matrix) };
-    state.agent = { ...state.agent, status: 'executing', phase: '异构验证', currentAction: null, messages: [...(state.agent?.messages || []), { id: `test-${runId}`, phase: 'validation', status: 'running', title: 'Validation Agent 已提交测试矩阵', detail: `${runId} 正在两个固定环境中执行。`, time: '刚刚' }] };
-    state.benchmark = { ...state.benchmark, candidate: { id: candidateId, digest: candidateDigest }, testTaskId: submitted.taskId, startedAt: submitted.submittedAt, durationMs: 0, result: null, source: { kind: 'operator-test-service', transport: 'local-serial-queue', mock: true }, lastServiceError: null };
-    appendRuntimeEvent(state, 'operator_test.queued', { runId, taskId: submitted.taskId, candidate: { id: candidateId, digest: candidateDigest }, environments: matrix.environments, stages: matrix.stages, matrix: structuredClone(matrix) }, { kind: 'operator-test-queue', mode: 'client' });
-    addAuditEvent(state, 'Full Benchmark 已提交', `${runId} · ${matrix.environments.length} environments`, 'blue', 'TestTube2');
-    json(response, 202, { state: await saveState(state) });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'start-benchmark', body, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 202, { state: result.state, runId: result.result?.runId, taskId: result.result?.taskId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/rollback-stage') {
@@ -998,33 +1278,9 @@ async function handleApi(request, response, url) {
       throw error;
     }
     guardWorkflowTransition(state, { stages: ['validation', 'evidence'], label: '返回上一步' });
-    const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
-    const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
-    const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
-    const invalidatedArtifacts = [
-      state.benchmark?.runId ? { type: 'benchmark', id: state.benchmark.runId } : null,
-      state.stage === 'evidence' && candidateId ? { type: 'evidence', id: `decision.${candidateId}` } : null,
-    ].filter(Boolean);
-    state.stage = 'candidate';
-    state.patchApplied = false;
-    state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
-    state.decisionReview = createDecisionReviewState('idle');
-    state.agent = {
-      ...state.agent,
-      status: 'awaiting_approval',
-      phase: '候选补丁审查',
-      currentAction: { id: `action.${candidateId || 'candidate'}-restored`, type: 'candidate.plan', title: `重新审阅 ${candidateId || '候选'}`, reason: '流程已恢复到补丁应用前的工作区检查点。', expectedOutput: 'Candidate Plan · isolated worktree', risk: 'medium', approvalRequired: true },
-      messages: [...(state.agent?.messages || []), { id: `rollback-${Date.now()}`, phase: 'candidate', status: 'completed', title: '已返回补丁应用前', detail: `${checkpoint.id} 已恢复，${invalidatedArtifacts.length} 个后续工件已失效。`, time: '刚刚' }],
-    };
-    state.workflowRecovery = {
-      ...state.workflowRecovery,
-      worktree: { ...state.workflowRecovery.worktree, status: 'restored' },
-      lastRecovery: { type: 'stage_rollback', from: 'validation_or_evidence', to: 'candidate', checkpointId: checkpoint.id, restoredAt: recovery.restoredAt },
-      invalidatedArtifacts: [...(state.workflowRecovery.invalidatedArtifacts || []), ...invalidatedArtifacts],
-    };
-    appendRuntimeEvent(state, 'workflow.stage_rolled_back', { from: 'validation_or_evidence', to: 'candidate', checkpointId: checkpoint.id, invalidatedArtifacts }, { kind: 'recovery', mode: 'client' });
-    addAuditEvent(state, '流程已返回补丁应用前', `${checkpoint.id} · ${invalidatedArtifacts.length} artifacts invalidated`, 'warning', 'History');
-    json(response, 200, { state: await saveState(state), recovery });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'rollback-stage', body: {}, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 200, { state: result.state, recovery: result.result?.recovery, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/adopt') {
@@ -1047,8 +1303,9 @@ async function handleApi(request, response, url) {
       return;
     }
     const body = await readJson(request);
-    adoptCandidateState(state, body.note || '证据完整且未命中人工复核信号。', 'policy');
-    json(response, 200, { state: await saveState(state), maintenance: state.knowledgeMaintenance });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'adopt', body, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 200, { state: result.state, maintenance: result.state.knowledgeMaintenance, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/request-review') {
@@ -1063,43 +1320,9 @@ async function handleApi(request, response, url) {
       throw error;
     }
     const body = await readJson(request);
-    const outcome = ['adopt', 'supplement', 'redirect'].includes(body.outcome) ? body.outcome : 'redirect';
-    const allowedOutcomes = state.stage === 'evidence' ? ['adopt', 'supplement', 'redirect'] : state.stage === 'validation' ? ['supplement', 'redirect'] : ['redirect'];
-    if (!allowedOutcomes.includes(outcome)) {
-      const error = new Error('当前阶段尚不支持该介入指令，请先查看证据状态。');
-      error.status = 409;
-      error.code = 'INTERVENTION_OUTCOME_UNAVAILABLE';
-      throw error;
-    }
-    const note = String(body.note || '').trim();
-    if (note.length < 4) {
-      const error = new Error('请填写具体的审批意见后再提交。');
-      error.status = 400;
-      error.code = 'DECISION_REVIEW_NOTE_REQUIRED';
-      throw error;
-    }
-    const requestedAt = new Date().toISOString();
-    const originStage = state.stage;
-    const outcomeMeta = interventionOutcomeMeta[outcome];
-    state.decisionReview = {
-      ...(state.decisionReview || createDecisionReviewState('auto_ready')),
-      status: 'awaiting_review',
-      requiresApproval: true,
-      request: { candidateId: body.candidate || state.appliedCandidateId || null, outcome, note, originStage, submittedBy: body.submittedBy || 'Yilin Lu', requestedAt },
-      resolution: null,
-      requestedAt,
-      resolvedAt: null,
-    };
-    state.agent = {
-      ...state.agent,
-      status: 'awaiting_approval',
-      phase: '人工介入待处理',
-      currentAction: { id: 'action.resolve-decision-review', type: 'review.resolve', title: '处理人工介入事项', reason: note, expectedOutput: outcomeMeta.expectedOutput, risk: 'high', approvalRequired: true, reviewMode: 'human_requested' },
-      messages: [...(state.agent?.messages || []), { id: `review-${Date.now()}`, phase: 'approval', status: 'waiting', title: '已收到人工介入意见', detail: `${outcomeMeta.label} · ${note}`, time: '刚刚' }],
-    };
-    appendRuntimeEvent(state, 'decision.review_requested', { candidate: state.appliedCandidateId || state.decisionReview?.candidateId || null, originStage, outcome, note }, { kind: 'approval', mode: 'client' });
-    addAuditEvent(state, '流程已被人工介入阻塞', `${outcomeMeta.label} · ${note}`, 'warning', 'ShieldCheck');
-    json(response, 202, { state: await saveState(state), review: state.decisionReview });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'request-review', body, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 202, { state: result.state, review: result.state.decisionReview, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/cancel-review') {
@@ -1107,25 +1330,9 @@ async function handleApi(request, response, url) {
     const state = await loadRuntimeState();
     guardMutation(state);
     guardWorkflowTransition(state, { stages: ['candidate', 'validation', 'evidence'], actionType: 'review.resolve', label: '人工介入撤回' });
-    const previousRequest = state.decisionReview?.request;
-    const candidateId = state.appliedCandidateId || previousRequest?.candidateId || state.decisionReview?.candidateId;
-    const restoredStatus = state.stage === 'evidence' ? 'auto_ready' : 'idle';
-    const restoredAction = state.stage === 'evidence'
-      ? { id: 'action.adoption-decision', type: 'adoption.decision', title: `确认 ${candidateId || '候选'} 的策略建议`, reason: '人工意见已撤回，当前未命中强制复核信号。', expectedOutput: 'Policy Decision · current best update', risk: 'medium', approvalRequired: false, reviewMode: 'conditional' }
-      : state.stage === 'validation'
-        ? { id: 'action.validation-resumed', type: 'test.plan', title: '继续异构验证', reason: '人工介入已撤回，恢复原验证计划。', expectedOutput: 'Correctness · Full Benchmark · Level 3 evidence', risk: 'medium', approvalRequired: false }
-        : { id: 'action.candidate-resumed', type: 'candidate.plan', title: '继续候选自动检查', reason: '人工介入已撤回，恢复原 Candidate Plan 和自动策略。', expectedOutput: 'Candidate Plan · patch proposal', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' };
-    state.decisionReview = { ...createDecisionReviewState(restoredStatus), cancelledRequest: previousRequest || null };
-    state.agent = {
-      ...state.agent,
-      status: 'awaiting_action',
-      phase: state.stage === 'evidence' ? '效果策略评估' : state.stage === 'validation' ? '异构验证' : '候选补丁审查',
-      currentAction: restoredAction,
-    };
-    appendRuntimeEvent(state, 'decision.review_cancelled', { candidate: candidateId || null }, { kind: 'approval', mode: 'client' });
-    addAuditEvent(state, '人工审批意见已撤回', '流程恢复为条件式策略决策', 'blue', 'ShieldCheck');
-    if (state.stage === 'evidence' && state.benchmark?.status === 'complete') runAutomaticAdoption(state, `人工介入已撤回，Accept Gate 继续按策略自动采用 ${candidateId || '候选'}。`);
-    json(response, 200, { state: await saveState(state), review: state.decisionReview });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'cancel-review', body: {}, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 200, { state: result.state, review: result.state.decisionReview, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/resolve-review') {
@@ -1141,81 +1348,26 @@ async function handleApi(request, response, url) {
     }
     const body = await readJson(request);
     const outcome = body.outcome || state.decisionReview.request.outcome;
-    const note = String(body.note || state.decisionReview.request.note).trim();
-    const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
-    if (outcome === 'adopt') {
-      if (state.stage !== 'evidence' || state.benchmark.status !== 'complete') {
-        const error = new Error('当前尚未形成可采用的 Level 3 证据。');
-        error.status = 409;
-        error.code = 'INTERVENTION_ADOPTION_UNAVAILABLE';
-        throw error;
-      }
-      adoptCandidateState(state, note, 'human_review');
-      json(response, 200, { state: await saveState(state), maintenance: state.knowledgeMaintenance });
-      return;
+    if (outcome === 'adopt' && (state.stage !== 'evidence' || state.benchmark.status !== 'complete')) {
+      const error = new Error('当前尚未形成可采用的 Level 3 证据。');
+      error.status = 409;
+      error.code = 'INTERVENTION_ADOPTION_UNAVAILABLE';
+      throw error;
     }
-    if (!['supplement', 'redirect'].includes(outcome)) {
+    if (!['adopt', 'supplement', 'redirect'].includes(outcome)) {
       const error = new Error('人工介入处理结果仅支持采用、补充验证或调整优化方向。');
       error.status = 400;
       error.code = 'DECISION_REVIEW_OUTCOME_INVALID';
       throw error;
     }
-    const resolvedAt = new Date().toISOString();
-    if (outcome === 'redirect') {
-      const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
-      const invalidatedArtifacts = [
-        state.benchmark?.runId ? { type: 'benchmark', id: state.benchmark.runId } : null,
-        state.stage === 'evidence' && candidateId ? { type: 'evidence', id: `decision.${candidateId}` } : null,
-      ].filter(Boolean);
-      if (!checkpoint) {
-        const error = new Error('当前 Mission 没有可恢复的工作区检查点，无法调整优化方向。');
-        error.status = 409;
-        error.code = 'WORKSPACE_CHECKPOINT_MISSING';
-        throw error;
-      }
-      const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
-      state.stage = 'candidate';
-      state.patchApplied = false;
-      state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
-      state.decisionReview = { ...state.decisionReview, status: 'resolved', requiresApproval: false, recommendation: null, resolution: { outcome, source: 'human_review', note, resolvedAt }, resolvedAt };
-      state.agent = {
-        ...state.agent,
-        status: 'awaiting_action',
-        phase: '调整优化方向',
-        currentAction: { id: 'action.redirect-candidate', type: 'candidate.plan', title: '根据人工意见生成新候选方向', reason: note, expectedOutput: 'Revised Candidate Plan · isolated worktree', risk: 'medium', approvalRequired: true, reviewMode: 'resolved' },
-        messages: [...(state.agent?.messages || []), { id: `review-redirect-${Date.now()}`, phase: 'candidate', status: 'completed', title: '人工介入已调整优化方向', detail: `${checkpoint?.id || 'candidate baseline'} 已恢复，${invalidatedArtifacts.length} 个后续工件已失效。`, time: '刚刚' }],
-      };
-      state.workflowRecovery = {
-        ...state.workflowRecovery,
-        worktree: { ...state.workflowRecovery?.worktree, status: checkpoint ? 'restored' : 'clean' },
-        lastRecovery: checkpoint ? { type: 'intervention_redirect', from: state.decisionReview.request?.originStage || 'workflow', to: 'candidate', checkpointId: checkpoint.id, restoredAt: recovery.restoredAt } : state.workflowRecovery?.lastRecovery,
-        invalidatedArtifacts: [...(state.workflowRecovery?.invalidatedArtifacts || []), ...invalidatedArtifacts],
-      };
-      appendRuntimeEvent(state, 'decision.review_resolved', { candidate: candidateId || null, outcome, note }, { kind: 'approval', mode: 'client' });
-      appendRuntimeEvent(state, 'workflow.redirected_by_intervention', { candidate: candidateId || null, checkpointId: checkpoint?.id || null, invalidatedArtifacts }, { kind: 'recovery', mode: 'client' });
-      addAuditEvent(state, '人工介入已调整优化方向', `${checkpoint?.id || 'candidate baseline'} · ${note}`, 'warning', 'GitBranch');
-      json(response, 200, { state: await saveState(state), review: state.decisionReview, recovery });
-      return;
-    }
-    if (!state.patchApplied) {
-      const error = new Error('候选补丁尚未应用，当前不能提交补充验证指令。');
-      error.status = 409;
-      error.code = 'INTERVENTION_VALIDATION_UNAVAILABLE';
-      throw error;
-    }
-    state.stage = 'validation';
-    state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
-    state.decisionReview = { ...state.decisionReview, status: 'resolved', requiresApproval: false, recommendation: null, resolution: { outcome, source: 'human_review', note, resolvedAt }, resolvedAt };
-    state.agent = {
-      ...state.agent,
-      status: 'awaiting_action',
-      phase: '补充验证',
-      currentAction: { id: 'action.supplement-validation', type: 'test.plan', title: '运行补充验证矩阵', reason: note, expectedOutput: 'Updated Full Benchmark · refreshed Level 3 evidence', risk: 'medium', approvalRequired: false, reviewMode: 'resolved' },
-      messages: [...(state.agent?.messages || []), { id: `review-resolved-${Date.now()}`, phase: 'approval', status: 'completed', title: '审批意见已处理', detail: `流程返回验证阶段 · ${note}`, time: '刚刚' }],
-    };
-    appendRuntimeEvent(state, 'decision.review_resolved', { candidate: candidateId || null, outcome, note }, { kind: 'approval', mode: 'client' });
-    addAuditEvent(state, '审批意见已处理：补充验证', note, 'warning', 'TestTube2');
-    json(response, 200, { state: await saveState(state), review: state.decisionReview });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'resolve-review', body, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 200, {
+      state: result.state,
+      ...(outcome === 'adopt' ? { maintenance: result.state.knowledgeMaintenance } : { review: result.state.decisionReview }),
+      ...(outcome === 'redirect' ? { recovery: result.result?.recovery } : {}),
+      ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}),
+    });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/reject') {
@@ -1223,14 +1375,9 @@ async function handleApi(request, response, url) {
     const state = await loadRuntimeState();
     guardMutation(state);
     guardWorkflowTransition(state, { stages: ['evidence'], actionType: 'adoption.decision', label: '候选退回' });
-    state.stage = 'validation';
-    state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
-    state.decisionReview = { ...createDecisionReviewState('resolved'), recommendation: null, resolution: { outcome: 'supplement', source: 'direct_action', note: '需要补充验证', resolvedAt: new Date().toISOString() } };
-    state.agent = { ...state.agent, status: 'awaiting_action', phase: '补充验证', currentAction: { id: 'action.revalidation', type: 'test.plan', title: '运行补充验证矩阵', reason: '效果决策要求补充验证。', expectedOutput: 'Updated Full Benchmark · refreshed Level 3 evidence', risk: 'medium', approvalRequired: false } };
-    const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
-    appendRuntimeEvent(state, 'decision.revalidation_requested', { candidate: candidateId || null, reason: '需要补充验证' }, { kind: 'policy', mode: 'client' });
-    addAuditEvent(state, '候选退回验证', `${candidateId || '当前候选'} · 需要补充验证`, 'warning', 'TriangleAlert');
-    json(response, 200, { state: await saveState(state) });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'reject', body: {}, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 200, { state: result.state, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/revert-adoption') {
@@ -1242,49 +1389,9 @@ async function handleApi(request, response, url) {
       return;
     }
     guardWorkflowTransition(state, { stages: ['published'], label: '回退到上一版本' });
-    const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
-    const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-    const repositoryAdoption = state.workflowRecovery?.repositoryAdoption;
-    const repositoryRevert = mission.projectRoot && repositoryAdoption?.commit
-      ? await workspaceManager.revertAdoption({ repository: mission.repository, commit: repositoryAdoption.commit })
-      : null;
-    const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
-    const revertedAt = new Date().toISOString();
-    const revertedCandidateId = state.currentBest?.candidateId || state.appliedCandidateId || checkpoint?.candidateId || 'candidate';
-    const previousBest = state.workflowRecovery?.previousBest || { candidateId: null, version: 'baseline', value: '--', improvement: '--', status: 'active' };
-    state.currentBest = previousBest;
-    state.decisionReview = {
-      ...(state.decisionReview || createDecisionReviewState('resolved')),
-      status: 'resolved',
-      recommendation: null,
-      requiresApproval: false,
-      resolution: { outcome: 'reverted', source: 'human_recovery', note: `已恢复上一稳定版本 ${previousBest.version || 'baseline'}`, resolvedAt: revertedAt },
-      resolvedAt: revertedAt,
-    };
-    state.publishedAssets = (state.publishedAssets || []).map((asset) => ({ ...asset, status: 'superseded', supersededAt: revertedAt, supersededBy: `rollback.${previousBest.version || 'baseline'}` }));
-    state.knowledgeMaintenance = {
-      ...state.knowledgeMaintenance,
-      rollback: { status: 'completed', reason: `${revertedCandidateId} adoption reverted`, revertedAt },
-      changes: (state.knowledgeMaintenance?.changes || []).map((change) => ({ ...change, outcome: 'superseded' })),
-    };
-    state.agent = {
-      ...state.agent,
-      status: 'completed',
-      phase: '已回退到上一稳定版本',
-      currentAction: null,
-      messages: [...(state.agent?.messages || []), { id: `adoption-revert-${Date.now()}`, phase: 'decision', status: 'completed', title: '采用结果已回退', detail: `current best 已恢复为 ${previousBest.version || 'baseline'}，${revertedCandidateId} 关联知识已标记为被替代。`, time: '刚刚' }],
-    };
-    state.workflowRecovery = {
-      ...state.workflowRecovery,
-      repositoryAdoption: repositoryRevert ? { ...repositoryAdoption, status: 'reverted', ...repositoryRevert } : repositoryAdoption,
-      worktree: { ...state.workflowRecovery.worktree, status: 'reverted', revertedAt },
-      lastRecovery: { type: 'adoption_revert', from: revertedCandidateId, to: previousBest.candidateId || 'baseline', checkpointId: checkpoint.id, restoredAt: recovery.restoredAt },
-      invalidatedArtifacts: [...(state.workflowRecovery.invalidatedArtifacts || []), { type: 'decision', id: `decision.${revertedCandidateId}` }, ...(state.publishedAssets || []).map((asset) => ({ type: 'knowledge', id: `${asset.id}@${asset.version}` }))],
-    };
-    appendRuntimeEvent(state, 'decision.adoption_reverted', { from: revertedCandidateId, to: previousBest.candidateId || 'baseline', checkpointId: checkpoint.id }, { kind: 'recovery', mode: 'client' });
-    appendRuntimeEvent(state, 'knowledge.assets_superseded', { assets: state.publishedAssets.map((asset) => `${asset.id}@${asset.version}`) }, { kind: 'knowledge', mode: 'client' });
-    addAuditEvent(state, '已回退到上一稳定版本', `${revertedCandidateId} → ${previousBest.version || 'baseline'} · ${checkpoint.id}`, 'warning', 'History');
-    json(response, 200, { state: await saveState(state), recovery, repositoryRevert });
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'revert-adoption', body: {}, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 200, { state: result.state, recovery: result.result?.recovery, repositoryRevert: result.result?.repositoryRevert, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'PATCH' && url.pathname.startsWith('/api/knowledge/drafts/')) {

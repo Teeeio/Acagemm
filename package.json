@@ -24,6 +24,7 @@
     "test:intent": "node tests/mission-intent-test.mjs",
     "test:research": "node tests/research-test.mjs",
     "test:loop": "node tests/loop-test.mjs",
+    "test:journal": "node tests/command-journal-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
     "opencode:serve": "opencode serve --hostname 127.0.0.1 --port 4096",
     "demo:diagnose": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/diagnose-exhibition.ps1",

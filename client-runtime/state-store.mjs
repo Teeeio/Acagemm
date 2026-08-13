@@ -13,6 +13,7 @@ import {
 } from './storage-paths.mjs';
 import { copyWorkspaceSnapshot, workspaceManager } from './workspace-manager.mjs';
 import { MLA_OPTIMIZATION_TEST_GOAL } from './mission-intent.mjs';
+import { journalPathFor, reconcileCommandJournal } from './command-journal.mjs';
 
 export { runtimeDir } from './storage-paths.mjs';
 const statePath = path.join(dataDir, 'mock-db.json');
@@ -544,6 +545,8 @@ export const createSeedState = () => {
   const activeMission = missions[0];
   return {
   schemaVersion: 5,
+  stateVersion: 0,
+  commandJournalSeq: 0,
   updatedAt: new Date().toISOString(),
   stage: activeMission.stage,
   patchApplied: activeMission.patchApplied,
@@ -850,6 +853,8 @@ function ensureDomainState(state) {
   });
   ensureProjects(state);
   state.schemaVersion = 5;
+  if (!Number.isFinite(Number(state.stateVersion))) state.stateVersion = 0;
+  if (!Number.isFinite(Number(state.commandJournalSeq))) state.commandJournalSeq = 0;
   return state;
 }
 
@@ -1026,11 +1031,20 @@ export function deleteProject(state, projectId) {
   return project;
 }
 
-export async function loadState({ runtimeMode, ensureWorkspace = true } = {}) {
+export async function loadState({ runtimeMode, ensureWorkspace = true, commandJournal = null, applyRegistry = null } = {}) {
   await ensureStorage({ ensureWorkspace });
   let state = JSON.parse(await readFile(statePath, 'utf8'));
   const needsMigration = state.schemaVersion !== 5 || !Array.isArray(state.projects) || !Array.isArray(state.missions) || !state.capabilityRegistry || !Array.isArray(state.agent?.toolCalls) || !Array.isArray(state.knowledgeReferences) || !state.knowledgeMaintenance?.policy || !state.decisionReview?.policy || !Array.isArray(state.candidateEvaluations) || !Array.isArray(state.failureRecords) || state.missions.some((mission) => !mission.workflowRecovery || !mission.testMatrix || !Array.isArray(mission.knowledgeDrafts) || !Array.isArray(mission.candidateEvaluations) || !Array.isArray(mission.failureRecords) || !Array.isArray(mission.publishedAssets) || !mission.knowledgeMaintenance?.policy || !mission.decisionReview?.policy || !Array.isArray(mission.runtimeEvents) || !Array.isArray(mission.runHistory));
   state = ensureDomainState(state);
+  // 耐久命令日志崩溃恢复：重放 journal 中 seq > commandJournalSeq 的 applied 条目追上快照。
+  let recoveryReplayed = false;
+  if (commandJournal && applyRegistry) {
+    const recovered = await reconcileCommandJournal(state, { journal: commandJournal, registry: applyRegistry });
+    if (recovered.replayed.length) {
+      state = recovered.state;
+      recoveryReplayed = true;
+    }
+  }
   const effectiveRuntimeMode = runtimeMode || process.env.OPERATOR_RUNTIME_MODE || 'unavailable';
   const usesReferenceRuntime = effectiveRuntimeMode === 'reference-fixture' && !state.agent?.runId?.startsWith('cli_');
   const usesVerifiedCodexRuntime = effectiveRuntimeMode === 'codex-cli' && state.agent?.runtimeKind === 'codex-cli';
@@ -1057,13 +1071,13 @@ export async function loadState({ runtimeMode, ensureWorkspace = true } = {}) {
   const benchmarkBefore = JSON.stringify(state.benchmark);
   if (usesReferenceRuntime && !state.benchmark?.testTaskId) state = refreshBenchmark(state);
   const refreshedAgent = usesReferenceRuntime ? refreshAgent(state) : { state, changed: false };
-  if (needsMigration || policyAutoAdopted || knowledgeChanged || refreshedAgent.changed || benchmarkBefore !== JSON.stringify(state.benchmark)) return saveState(refreshedAgent.state);
+  if (needsMigration || recoveryReplayed || policyAutoAdopted || knowledgeChanged || refreshedAgent.changed || benchmarkBefore !== JSON.stringify(state.benchmark)) return saveState(refreshedAgent.state);
   return state;
 }
 
 export async function saveState(state) {
   await mkdir(dataDir, { recursive: true });
-  const next = { ...projectActiveMission(ensureDomainState(state)), updatedAt: new Date().toISOString() };
+  const next = { ...projectActiveMission(ensureDomainState(state)), updatedAt: new Date().toISOString(), stateVersion: (Number(state.stateVersion) || 0) + 1 };
   const temporaryPath = `${statePath}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   for (let attempt = 0; ; attempt += 1) {
@@ -1079,6 +1093,8 @@ export async function saveState(state) {
 }
 
 export async function resetDemoData() {
+  // 清空命令日志，避免旧命令在新 seed（stateVersion=0）上被崩溃恢复误回放。
+  await rm(journalPathFor(runtimeDir), { force: true });
   const state = await saveState(createSeedState());
   if (await exists(missionWorkspaceRoot)) await rm(missionWorkspaceRoot, { recursive: true, force: true });
   if (await exists(workspaceDir)) await rm(workspaceDir, { recursive: true, force: true });
