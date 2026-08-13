@@ -682,12 +682,12 @@ const commandRegistry = {
 
 // 循环驱动依赖：advanceIteration 编排器通过 deps 拿到 agentRuntime 能力与目录函数。
 const iterationDeps = {
-  startResearch: async ({ state, mission, direction, workspace }) => {
+  startResearch: async ({ state, mission, direction, workspace, synchronous = true }) => {
     // 非 codex-cli 模式不支持研究员：返回 state 不变，避免循环崩溃（如 reference-fixture）。
     if (agentRuntime.mode !== 'codex-cli') return state;
     await mkdir(workspace, { recursive: true });
-    // 循环停滞升级触发 → 同步研究：主循环串行等待，研究完才续下一轮
-    const started = await agentRuntime.startResearch({ state, mission, direction, workspace, synchronous: true });
+    // 停滞升级 → synchronous:true（主循环串行等待）；隧道视野 → synchronous:false（主线程继续，并行审查）
+    const started = await agentRuntime.startResearch({ state, mission, direction, workspace, synchronous });
     return started.state;
   },
   cancelResearch: async ({ state, runId }) => agentRuntime.cancelRun({ state, runId }),

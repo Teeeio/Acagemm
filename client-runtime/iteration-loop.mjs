@@ -41,7 +41,8 @@ export const decideResearchTrigger = (state) => {
   };
 };
 
-// 调研方向：从任务卡点（goal + failedRules + failureRecords + currentBest）生成针对性方向，不泛泛而谈。
+// 调研方向：从任务卡点（goal + failedRules + failureRecords + currentBest + 已试方向）生成针对性方向，
+// 并要求研究员从算子优化全局角度评估"继续还是换方向"与 ROI 排序，不泛泛而谈。
 export const selectResearchDirection = (state) => {
   const mission = state?.missions?.find((item) => item.id === state?.activeMissionId) || {};
   const parts = [];
@@ -51,9 +52,14 @@ export const selectResearchDirection = (state) => {
   if (state?.currentBest?.value && state?.currentBest?.value !== '—') parts.push(`当前最佳：${state.currentBest.value}`);
   const gate = state?.candidateEvaluations?.find((candidate) => candidate?.acceptGate?.failedRules?.length)?.acceptGate;
   if (gate?.failedRules?.length) parts.push(`Accept Gate 未通过规则：${gate.failedRules.join(', ')}`);
+  const tried = (state?.candidateEvaluations || []).filter((candidate) => candidate.classification !== 'accepted').slice(-4);
+  if (tried.length) parts.push(`已尝试方向及结果：${tried.map((candidate) => `${candidate.title || candidate.label || '候选'}（${candidate.decisionReason || candidate.change || '结果待查'}）`).join('；')}`);
   const failure = (state?.failureRecords || [])[0];
-  if (failure) parts.push(`最近失败：${failure.title || failure.label || '未知'}（${failure.failure?.code || ''}）`);
-  parts.push('请调研上述卡点相关的已知优化做法、最新论文与开源实现，给出针对性方向，不要泛泛而谈。');
+  if (failure) parts.push(`失败原因：${failure.title || failure.label || '未知'}（${failure.failure?.code || ''}）`);
+  parts.push('请从算子优化全局角度评估：当前方向是否值得继续投入（失败是在收敛还是重复无进展），以及各方向的预期收益/成本/风险。');
+  parts.push('① 最容易获取收益的优化方向（即使尚未尝试，优先给出）');
+  parts.push('② 应停止投入的低 ROI 死磕陷阱（与已尝试方向同族、收益边际的方向）');
+  parts.push('请明确回答：继续当前方向，还是换方向？给出理由。');
   return parts.join('\n');
 };
 
@@ -128,6 +134,35 @@ export const evaluateResearchValue = ({ research = {}, knowledge = {} }) => {
         ? '与已验证经验重叠，无需注入'
         : '缺少可追溯内容';
   return { value, inject, reason, matches: matches.slice(0, 10) };
+};
+
+const directionFamily = (text) => new Set(tokenize(`${text || ''}`));
+
+const overlapCount = (a, b) => [...a].filter((word) => b.has(word)).length;
+
+// shape 特化的领域线索（与 failureRecords 的 CORRECTNESS_BOUNDARY_MISMATCH 对齐）
+const SHAPE_SPECIALIZATION_TERMS = ['shape', 'batch', 'seq', 'tile', 'head_dim', 'block', '长尾', '分块', '特化'];
+
+// 方向视野检测（死磕识别）：主 agent 是否在同一方向上重复无进展地失败。
+// 收敛守卫：只标"重复同一失败"（同错误码或强症状重合），不标"有信息地演进"（错误码在变）——
+// 后者说明方向值得继续试，不应误伤需要耐心的方向。
+export const detectTunnelVision = (state, { window = 3, overlapThreshold = 2 } = {}) => {
+  const recent = (state.failureRecords || []).slice(0, window);
+  if (recent.length < 2) return { tunnelVision: false, reason: null, directionFamily: null };
+  const families = recent.map((record) => directionFamily(`${record.title || ''} ${record.decisionReason || ''} ${record.failure?.code || ''}`));
+  const sameFamily = families.every((family, index) => index === 0 || overlapCount(families[index - 1], family) >= overlapThreshold);
+  if (!sameFamily) return { tunnelVision: false, reason: null, directionFamily: null };
+  const codes = recent.map((record) => record.failure?.code || '').filter(Boolean);
+  const sameCode = codes.length >= 2 && new Set(codes).size === 1;
+  const strongSymptomOverlap = families.every((family, index) => index === 0 || overlapCount(families[index - 1], family) >= overlapThreshold + 1);
+  const repetitive = sameCode || (codes.length < 2 && strongSymptomOverlap);
+  if (!repetitive) return { tunnelVision: false, reason: null, directionFamily: null }; // 在收敛，值得继续试
+  const shapeRabbitHole = recent.every((record) => SHAPE_SPECIALIZATION_TERMS.some((term) => new RegExp(term, 'i').test(`${record.title || ''} ${record.failure?.code || ''}`)));
+  return {
+    tunnelVision: true,
+    reason: shapeRabbitHole ? '低 ROI shape 特化死磕（重复同一失败）' : '连续失败停留在同一方向族（重复无进展）',
+    directionFamily: recent.map((record) => record.id).join(','),
+  };
 };
 
 const LOOP_GUARD_TEXT = {
@@ -234,16 +269,20 @@ export async function advanceIteration(state, deps = {}) {
     return { state: nextState, action: 'resumed_agent' };
   }
 
-  // 停滞升级：连续 N 轮无采纳 → 自动拉起研究员（仅当研究员实际启动成功）
+  // 升级决策：停滞（连续 N 轮无采纳）或隧道视野（同一方向重复无进展失败）。
+  // 停滞 → 同步研究（下一轮依赖调研结果，串行等待）；隧道视野 → 异步研究（主线程继续，研究员并行审查，不误伤需要耐心的方向）。
   const { stagnated, consecutiveNoAdopt } = detectStagnation(state);
-  if (stagnated && deps.startResearch) {
+  const vision = detectTunnelVision(state);
+  const shouldEscalate = stagnated || vision.tunnelVision;
+  if (shouldEscalate && deps.startResearch) {
     const direction = selectResearchDirection(state);
     const researchDir = deps.researchDirForMission
       ? deps.researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot)
       : null;
-    const nextState = await deps.startResearch({ state, mission, direction, workspace: researchDir });
+    const synchronous = vision.tunnelVision ? false : true;
+    const nextState = await deps.startResearch({ state, mission, direction, workspace: researchDir, synchronous });
     if (nextState.researchAgent?.runId) {
-      addAuditEvent(nextState, '停滞检测触发调研', `连续 ${consecutiveNoAdopt} 轮无采纳 · 研究员已启动`, 'warning', 'Search');
+      addAuditEvent(nextState, vision.tunnelVision ? '方向审视触发调研' : '停滞检测触发调研', `${vision.tunnelVision ? vision.reason : `连续 ${consecutiveNoAdopt} 轮无采纳`} · 研究员已${synchronous ? '串行' : '并行'}启动`, 'warning', 'Search');
       return { state: nextState, action: 'research_escalated' };
     }
     return { state: nextState, action: 'none' };

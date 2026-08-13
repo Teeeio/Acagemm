@@ -7,6 +7,7 @@ import {
   buildResearchBriefing,
   evaluateResearchValue,
   detectLoopGuard,
+  detectTunnelVision,
   STAGNATION_WINDOW,
   MAX_ROUNDS,
   MAX_RESEARCH_ESCALATIONS,
@@ -97,9 +98,10 @@ const makeState = (overrides = {}) => {
 let startResearchCalls = 0;
 let startMainRoundCalls = 0;
 let cancelResearchCalls = 0;
-const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; };
+let lastResearchSynchronous = null;
+const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; lastResearchSynchronous = null; };
 const deps = {
-  startResearch: async ({ state, mission, direction, workspace }) => { startResearchCalls += 1; state.researchAgent = { ...state.researchAgent, status: 'running', runId: 'codex_research_1', runtimeKind: 'codex-cli', direction, researchDir: workspace, startedAt: new Date().toISOString(), budgetMs: 20 * 60 * 1000, notes: [] }; return state; },
+  startResearch: async ({ state, mission, direction, workspace, synchronous }) => { startResearchCalls += 1; lastResearchSynchronous = synchronous; state.researchAgent = { ...state.researchAgent, status: 'running', runId: 'codex_research_1', runtimeKind: 'codex-cli', direction, researchDir: workspace, startedAt: new Date().toISOString(), budgetMs: 20 * 60 * 1000, notes: [], synchronous: Boolean(synchronous) }; return state; },
   cancelResearch: async ({ state, runId }) => { cancelResearchCalls += 1; state.researchAgent = { ...state.researchAgent, status: 'cancel_requested' }; return { state }; },
   startMainRound: async ({ state, goal }) => { startMainRoundCalls += 1; state.agent = { status: 'running', runId: 'codex_MAIN' }; state.iterationStats = { ...state.iterationStats, round: (state.iterationStats.round || 0) + 1 }; return state; },
   researchDirForMission: () => '/tmp/research',
@@ -175,6 +177,7 @@ const stallState = makeState({
 let escalated = await advanceIteration(stallState, deps);
 assert.equal(escalated.action, 'research_escalated');
 assert.equal(startResearchCalls, 1);
+assert.equal(lastResearchSynchronous, true, 'stagnation escalation should be synchronous (serial wait)');
 assert.match(escalated.state.researchAgent.direction, /C500/);
 
 // 主线程活跃 → wait_main（候选/验证/证据期间不自动开新轮）
@@ -220,5 +223,55 @@ assert.equal(guarded.state.runtimeEvents.filter((event) => event.type === 'loop.
 // 手动接管重置 loopStatus 后循环恢复
 guarded = await advanceIteration(makeState({ iterationStats: { loopStatus: 'running', loopStatusReason: null, round: 0, consecutiveNoAdopt: 0 } }), deps);
 assert.equal(guarded.action !== 'needs_human', true);
+
+// ---- 方向视野检测：死磕识别（收敛守卫） ----
+// 同方向 + 同错误码（重复无进展）→ 死磕
+const tunnel = detectTunnelVision({ failureRecords: [
+  { id: 'f1', title: 'Adaptive tile shape', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile boundary' },
+  { id: 'f2', title: 'Tile shape retry', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile boundary again' },
+  { id: 'f3', title: 'Shape tile again', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile boundary persists' },
+] });
+assert.equal(tunnel.tunnelVision, true);
+assert.match(tunnel.reason, /shape 特化/);
+// 同方向但错误码在变（有信息地演进）→ 收敛守卫放行，不判死磕（方向值得多试）
+const converging = detectTunnelVision({ failureRecords: [
+  { id: 'f1', title: 'Async dispatch plan', failure: { code: 'CODEX_AUTH_FAILED' }, decisionReason: 'auth' },
+  { id: 'f2', title: 'Async dispatch cache', failure: { code: 'CODEX_RATE_LIMITED' }, decisionReason: 'rate' },
+  { id: 'f3', title: 'Async dispatch mirror', failure: { code: 'CODEX_NETWORK_FAILED' }, decisionReason: 'network' },
+] });
+assert.equal(converging.tunnelVision, false);
+// 不同方向 → 不判
+const diverse = detectTunnelVision({ failureRecords: [
+  { id: 'f1', title: 'Tile optimization', failure: { code: 'X1' } },
+  { id: 'f2', title: 'Memory layout', failure: { code: 'X2' } },
+  { id: 'f3', title: 'Launch overhead', failure: { code: 'X3' } },
+] });
+assert.equal(diverse.tunnelVision, false);
+
+// ---- 调研方向简报：已试方向 + 继续/换方向 + ROI 排序 ----
+const visionDirection = selectResearchDirection({
+  activeMissionId: 'MIS', missions: [{ id: 'MIS', goal: '降低 C500 延迟', hardware: ['C500'], metric: 'latency_p50' }],
+  candidateEvaluations: [{ id: 'c1', title: 'Adaptive tile', classification: 'reference', decisionReason: '边界失败' }],
+  failureRecords: [{ id: 'fail.1', title: 'Tile 边界失败', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' } }],
+});
+assert.match(visionDirection, /已尝试方向/);
+assert.match(visionDirection, /最容易获取收益/);
+assert.match(visionDirection, /继续当前方向，还是换方向/);
+
+// ---- 隧道视野升级：同方向重复失败 + 主线程空闲 → 异步（并行）触发研究员 ----
+resetCounters();
+const visionState = makeState({
+  runHistory: [],
+  failureRecords: [
+    { id: 'f1', title: 'Adaptive tile shape', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile boundary' },
+    { id: 'f2', title: 'Tile shape retry', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile boundary again' },
+    { id: 'f3', title: 'Shape tile again', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile boundary persists' },
+  ],
+  iterationStats: { consecutiveNoAdopt: 0, lastCountedRunId: null, lastResearchRunId: null, researchRounds: 0, pendingInjection: null },
+});
+const visionEscalated = await advanceIteration(visionState, deps);
+assert.equal(visionEscalated.action, 'research_escalated');
+assert.equal(lastResearchSynchronous, false, 'tunnel vision escalation should be async (parallel review, main thread continues)');
+assert.match(visionEscalated.state.researchAgent.direction, /最容易获取收益/);
 
 console.log('[loop] researcher iteration loop policy passed');
