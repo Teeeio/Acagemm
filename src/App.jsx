@@ -821,7 +821,58 @@ function CapabilitiesView({ agentProfiles = [], capabilityRegistry = { skills: [
   );
 }
 
-function AgentWorkbenchView({ stage, activeMission, agentState, agentProfiles = [], capabilityRegistry = { skills: [], tools: [] }, runtimeInfo, runtimePreflight, intentIssue, onStartAgent, onCancelAgent, onAdvance, setView, onOpenModal, paused }) {
+function ResearcherPanel({ researchAgent = {}, researchNotes = [], iterationStats = null, onStartResearch, onCancelResearch }) {
+  const [direction, setDirection] = useState('');
+  const status = researchAgent.status || 'idle';
+  const isResearching = status === 'running' || status === 'cancel_requested';
+  const statusLabel = { running: '调研中', completed: '调研完成', failed: '调研失败', timed_out: '预算耗尽', cancelled: '已取消', cancel_requested: '正在取消' }[status] || (status === 'idle' ? '待调研' : status);
+  const syncLabel = researchAgent.synchronous ? '串行等待' : '并行不阻塞';
+  const loopStatus = iterationStats?.loopStatus;
+  const loopReasonText = { max_rounds: '已迭代到最大轮数上限，仍未完成采纳，请人工介入', total_budget: '累计迭代时长超出预算上限，请人工介入', max_research: '研究员已多次升级仍未产生被采纳候选，请人工介入' }[iterationStats?.loopStatusReason] || iterationStats?.loopStatusReason;
+  return (
+    <section className="research-panel panel-surface">
+      <div className="workbench-panel-head">
+        <div><span className="eyebrow">RESEARCH SCOUT</span><strong>研究员 · 外部调研</strong></div>
+        <div className="research-panel-head-actions"><span className={`run-status ${status}`}>{statusLabel}</span><span className="research-mode-chip">{syncLabel}</span></div>
+      </div>
+
+      {loopStatus === 'needs_human' && <div className="research-loop-status blocked"><TriangleAlert size={16} /><div><strong>循环需要人工介入</strong><span>{loopReasonText || '已触发自动流转上限，请人工决策后继续。'}</span></div></div>}
+
+      <div className="research-loop-meta"><span>第 {iterationStats?.round || 0} 轮</span><span>连续 {iterationStats?.consecutiveNoAdopt || 0} 轮无采纳</span><span>研究员升级 {iterationStats?.researchRounds || 0} 次</span></div>
+
+      {isResearching && <div className="research-current">
+        <div className="research-current-head"><span>当前调研</span><strong>{researchAgent.direction || '自动生成方向'}</strong><em>{researchAgent.phase || '调研中'}</em></div>
+        <div className="agent-progress-track"><i style={{ width: `${researchAgent.progress || 5}%` }} /></div>
+      </div>}
+
+      <div className="research-actions">
+        <input value={direction} onChange={(event) => setDirection(event.target.value)} placeholder="研究方向（留空 = 自动从卡点生成）" disabled={isResearching} aria-label="研究方向" />
+        {isResearching
+          ? <button className="agent-stop-action" type="button" onClick={onCancelResearch} disabled={status === 'cancel_requested'}><Pause size={15} /> {status === 'cancel_requested' ? '正在取消' : '取消调研'}</button>
+          : <button className="primary-action" type="button" onClick={() => { onStartResearch(direction); setDirection(''); }}><Search size={15} /> 发起调研</button>}
+      </div>
+
+      {(researchNotes || []).length > 0 ? (
+        <div className="research-notes-list">
+          {(researchNotes || []).map((note) => (
+            <details className="research-note" key={note.id}>
+              <summary><div><strong>{note.direction || '调研笔记'}</strong>{note.summary && <span>{note.summary}</span>}</div><em className={note.value === 'high' ? 'high' : note.value === 'medium' ? 'medium' : 'low'}>{note.value ? `价值 ${note.value}` : '未评估'}{note.injected ? ' · 已注入' : ''}</em></summary>
+              <div className="research-note-body">
+                {(note.findings || []).length > 0 && <div className="research-note-block"><span className="eyebrow">FINDINGS</span>{(note.findings || []).map((finding, index) => <div className="knowledge-row" key={index}><div className="knowledge-type">F{index + 1}</div><div><strong>{finding}</strong></div></div>)}</div>}
+                {(note.suggestedDirections || []).length > 0 && <div className="research-note-block"><span className="eyebrow">SUGGESTED DIRECTIONS</span>{(note.suggestedDirections || []).map((item, index) => <div className="reference-row" key={index}><div className="reference-icon">→</div><div><strong>{item}</strong></div></div>)}</div>}
+                {(note.sources || []).length > 0 && <div className="research-note-block"><span className="eyebrow">SOURCES</span>{(note.sources || []).map((source, index) => <div className="reference-row" key={index}><div className="reference-icon">⌁</div><div><strong>{source.title || '来源'}</strong>{source.url && <small>{source.url}</small>}</div></div>)}</div>}
+              </div>
+            </details>
+          ))}
+        </div>
+      ) : (
+        <div className="agent-empty"><Search size={22} /><strong>尚未发起调研</strong><span>陷入停滞或操作员触发时，研究员会联网调研最新算子做法并产出针对性笔记。</span></div>
+      )}
+    </section>
+  );
+}
+
+function AgentWorkbenchView({ stage, activeMission, agentState, agentProfiles = [], capabilityRegistry = { skills: [], tools: [] }, runtimeInfo, runtimePreflight, intentIssue, onStartAgent, onCancelAgent, onAdvance, setView, onOpenModal, paused, researchAgent, researchNotes, iterationStats, onStartResearch, onCancelResearch }) {
   const mission = activeMission || { id: '—', title: '未选择任务', goal: '', hardware: [], repository: '', metric: '' };
   const activeProfile = agentProfiles.find((profile) => profile.id === agentState.profileId) || agentProfiles[0];
   const [goal, setGoal] = useState(agentState.goal || mission.goal || '');
@@ -1063,6 +1114,8 @@ function AgentWorkbenchView({ stage, activeMission, agentState, agentProfiles = 
         <button onClick={() => setView('experiments')}><TestTube2 size={17} /><div><span>VALIDATION</span><strong>{correctnessTotal ? `${correctnessPassed} / ${correctnessTotal} correctness` : mission.benchmark?.status === 'running' ? `运行中 ${mission.benchmark.progress || 0}%` : '等待测试'}</strong><small>{mission.testMatrix?.environments?.join(' + ') || '尚未配置测试环境'}</small></div><ArrowRight size={15} /></button>
         <button onClick={() => setView('knowledge')}><BookOpen size={17} /><div><span>KNOWLEDGE</span><strong>{knowledgeCount ? `${knowledgeCount} 条任务知识` : '等待提取'}</strong><small>成功经验与失败记录均保留证据引用</small></div><ArrowRight size={15} /></button>
       </section>
+
+      <ResearcherPanel researchAgent={researchAgent} researchNotes={researchNotes} iterationStats={iterationStats} onStartResearch={onStartResearch} onCancelResearch={onCancelResearch} />
     </main>
   );
 }
@@ -2090,6 +2143,9 @@ export default function App() {
   const [intentIssue, setIntentIssue] = useState(null);
   const [runtimeInfo, setRuntimeInfo] = useState(null);
   const [runtimePreflight, setRuntimePreflight] = useState(null);
+  const [researchAgent, setResearchAgent] = useState({ status: 'idle', phase: '待调研', progress: 0, synchronous: false, direction: null, notes: [], messages: [], artifacts: [] });
+  const [researchNotes, setResearchNotes] = useState([]);
+  const [iterationStats, setIterationStats] = useState(null);
   const draftSaveTimers = useRef({});
   const knowledgeDraftsRef = useRef([]);
   const previousBenchmarkStatusRef = useRef('idle');
@@ -2147,6 +2203,9 @@ export default function App() {
     if (typeof state.unreadCount === 'number') setUnreadCount(state.unreadCount);
     if (typeof state.missionPaused === 'boolean') setMissionPaused(state.missionPaused);
     if (Array.isArray(state.auditEvents)) setAuditEvents(state.auditEvents);
+    if (state.researchAgent) setResearchAgent(state.researchAgent);
+    if (Array.isArray(state.researchNotes)) setResearchNotes(state.researchNotes);
+    if (state.iterationStats) setIterationStats(state.iterationStats);
   };
 
   const requestBackend = async (path, options = {}, silent = false) => {
@@ -2196,6 +2255,17 @@ export default function App() {
     if (!agentState.runId || !['running', 'cancel_requested'].includes(agentState.status)) return;
     const result = await requestBackend(`/api/missions/${encodeURIComponent(activeMissionId)}/runs/${encodeURIComponent(agentState.runId)}/cancel`, { method: 'POST' });
     if (result) notify('Agent stop requested.');
+  };
+  const startResearch = async (direction) => {
+    if (missionPaused) return;
+    const body = direction?.trim() ? { direction: direction.trim() } : {};
+    const result = await requestBackend(`/api/missions/${encodeURIComponent(activeMissionId)}/research`, { method: 'POST', body: JSON.stringify(body) });
+    if (result) notify('研究员已启动，正在后台调研最新算子做法。');
+  };
+  const cancelResearch = async () => {
+    if (!researchAgent.runId || !['running', 'cancel_requested'].includes(researchAgent.status)) return;
+    const result = await requestBackend(`/api/missions/${encodeURIComponent(activeMissionId)}/research/${encodeURIComponent(researchAgent.runId)}/cancel`, { method: 'POST' });
+    if (result) notify('研究员已请求取消。');
   };
   const createMission = async (input) => {
     if (missionPaused || !input?.goal?.trim()) return;
@@ -2486,7 +2556,7 @@ export default function App() {
   else if (view === 'knowledge') content = <KnowledgeView catalog={effectiveCatalog} setView={navigateMission} onOpenModal={openModal} missionContext={missionContext} activeMission={activeMission} references={knowledgeReferences} onReference={referenceKnowledge} />;
   else if (view === 'capabilities') content = <CapabilitiesView agentProfiles={agentProfiles} capabilityRegistry={capabilityRegistry} />;
   else if (view === 'missions') content = <MissionHub missions={missionsState} projects={projects} activeProjectId={activeProjectId} activeMissionId={activeMissionId} onSelect={selectMission} onCreate={createMission} />;
-  else content = <AgentWorkbenchView stage={stage} activeMission={missionsState.find((mission) => mission.id === activeMissionId)} agentState={agentState} agentProfiles={agentProfiles} capabilityRegistry={capabilityRegistry} runtimeInfo={runtimeInfo} runtimePreflight={runtimePreflight} intentIssue={intentIssue} onStartAgent={startAgentMission} onCancelAgent={cancelAgentMission} onAdvance={handleMissionAction} setView={navigateMission} onOpenModal={openModal} paused={missionPaused} />;
+  else content = <AgentWorkbenchView stage={stage} activeMission={missionsState.find((mission) => mission.id === activeMissionId)} agentState={agentState} agentProfiles={agentProfiles} capabilityRegistry={capabilityRegistry} runtimeInfo={runtimeInfo} runtimePreflight={runtimePreflight} intentIssue={intentIssue} onStartAgent={startAgentMission} onCancelAgent={cancelAgentMission} onAdvance={handleMissionAction} setView={navigateMission} onOpenModal={openModal} paused={missionPaused} researchAgent={researchAgent} researchNotes={researchNotes} iterationStats={iterationStats} onStartResearch={startResearch} onCancelResearch={cancelResearch} />;
 
   return (
     <>
