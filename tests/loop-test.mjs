@@ -100,12 +100,14 @@ let startMainRoundCalls = 0;
 let cancelResearchCalls = 0;
 let lastResearchSynchronous = null;
 let lastResearchRunPhase = null;
-const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; lastResearchSynchronous = null; lastResearchRunPhase = null; };
+let sourceCount = 0;
+const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; lastResearchSynchronous = null; lastResearchRunPhase = null; sourceCount = 0; };
 const deps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous, runPhase }) => { startResearchCalls += 1; lastResearchSynchronous = synchronous; lastResearchRunPhase = runPhase; state.researchAgent = { ...state.researchAgent, status: 'running', runId: runPhase === 'synthesize' ? 'codex_research_syn' : 'codex_research_1', runtimeKind: 'codex-cli', direction, researchDir: workspace, startedAt: new Date().toISOString(), budgetMs: runPhase === 'synthesize' ? 4 * 60 * 1000 : 30 * 60 * 1000, notes: [], synchronous: Boolean(synchronous), runPhase, acquireRunId: runPhase === 'synthesize' ? (state.researchAgent?.acquireRunId || 'codex_research_1') : 'codex_research_1', synthesizeRunId: runPhase === 'synthesize' ? 'codex_research_syn' : null, sourceRoot: state.researchAgent?.sourceRoot || null }; return state; },
   cancelResearch: async ({ state, runId }) => { cancelResearchCalls += 1; state.researchAgent = { ...state.researchAgent, status: 'cancel_requested' }; return { state }; },
   startMainRound: async ({ state, goal }) => { startMainRoundCalls += 1; state.agent = { status: 'running', runId: 'codex_MAIN' }; state.iterationStats = { ...state.iterationStats, round: (state.iterationStats.round || 0) + 1 }; return state; },
   researchDirForMission: () => '/tmp/research',
+  countSources: async () => ({ count: sourceCount }),
 };
 
 // paused / completed 短路
@@ -303,5 +305,24 @@ const singlePhaseState = makeState({
 let single = await advanceIteration(singlePhaseState, deps);
 assert.equal(single.action !== 'research_synthesizing', true);
 assert.equal(startResearchCalls, 0);
+
+// 资料停滞：sources/ 不再增长（120s）→ 取消采集，进入转综合路径（事件在涨但资料不涨不算进展）
+resetCounters();
+sourceCount = 3;
+const materialPlateauState = makeState({
+  researchAgent: { status: 'running', runPhase: 'acquire', runId: 'codex_research_1', sourceRoot: '/tmp/sources', startedAt: new Date().toISOString(), budgetMs: 30 * 60 * 1000, lastEventAt: Date.now(), eventCount: 30, materialCount: 3, materialLastGrownAt: new Date(Date.now() - 130_000).toISOString() },
+});
+let materialStalled = await advanceIteration(materialPlateauState, deps);
+assert.equal(materialStalled.action, 'research_timeout', 'material plateau should cancel acquire');
+assert.equal(cancelResearchCalls, 1);
+// 资料还在增长（countSources 变大）→ 不取消，继续采集
+resetCounters();
+sourceCount = 5;
+const materialGrowingState = makeState({
+  researchAgent: { status: 'running', runPhase: 'acquire', runId: 'codex_research_1', sourceRoot: '/tmp/sources', startedAt: new Date().toISOString(), budgetMs: 30 * 60 * 1000, lastEventAt: Date.now(), eventCount: 30, materialCount: 3, materialLastGrownAt: new Date(Date.now() - 130_000).toISOString() },
+});
+let growing = await advanceIteration(materialGrowingState, deps);
+assert.equal(growing.action !== 'research_timeout', true, 'material still growing must not cancel');
+assert.equal(cancelResearchCalls, 0);
 
 console.log('[loop] researcher iteration loop policy passed');

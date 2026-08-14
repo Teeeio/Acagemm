@@ -712,6 +712,13 @@ const iterationDeps = {
       return { count: 0, errors: [error.message] };
     }
   },
+  countSources: async ({ state, mission }) => {
+    if (!mission?.sourceRoot) return { count: 0 };
+    try {
+      const entries = await readdir(mission.sourceRoot).catch(() => []);
+      return { count: entries.filter((name) => name !== '.git').length };
+    } catch { return { count: 0 }; }
+  },
   startMainRound: async ({ state, goal }) => {
     const runtimeDescriptor = await agentRuntime.describe();
     const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};

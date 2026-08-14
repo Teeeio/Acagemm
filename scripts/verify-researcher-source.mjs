@@ -93,6 +93,10 @@ const exitCode = await (async () => {
         const entries = await readdir(sourceRoot).catch(() => []);
         return { count: entries.filter((name) => name !== '.git').length };
       },
+      countSources: async () => {
+        const entries = await readdir(sourceRoot).catch(() => []);
+        return { count: entries.filter((name) => name !== '.git').length };
+      },
     };
 
     console.log('[verify] 启动研究员两阶段（采集 → 综合）...');

@@ -7,9 +7,10 @@ import { appendRuntimeEvent } from './agent-runtime.mjs';
 export const STAGNATION_WINDOW = 3;            // 尺子 B：连续 N 轮无被采纳候选 → 停滞
 export const RESEARCH_BUDGET_MS = 20 * 60 * 1000; // 研究员时长预算（仅上限，不强制调研）
 export const ROUND_BUDGET_MS = 15 * 60 * 1000;   // 单轮时长预算（预留，Slice 1 不自动取消主线程）
-// 两阶段研究员预算：采集（联网，停滞/事件终止，放宽墙钟）；综合（本地，短墙钟保证笔记写完）
+// 两阶段研究员预算：采集（联网，停滞/事件/资料停滞终止，放宽墙钟）；综合（本地，短墙钟保证笔记写完）
 export const RESEARCH_STALL_MS = 90_000;          // 采集阶段：事件 90s 无新增 → 停滞终止
 export const RESEARCH_EVENT_BUDGET = 200;         // 采集阶段：事件数上限，防无限增长
+export const RESEARCH_MATERIAL_STALL_MS = 120_000; // 采集阶段：sources/ 资料 120s 不再增长 → 视为已搜集够，转综合
 // 全局兜底（防无休止兜圈）：任一命中 → 循环标记需要人工介入，但不禁用手动操作。
 export const MAX_ROUNDS = 20;                          // 最大轮数
 export const TOTAL_BUDGET_MS = 2 * 60 * 60 * 1000;     // 累计时长预算（自首轮起算 wall-clock）
@@ -206,19 +207,33 @@ export async function advanceIteration(state, deps = {}) {
   const stats = state.iterationStats || {};
   const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
 
-  // 研究员预算执行：按阶段终止——采集（停滞/事件预算/墙钟），综合（短墙钟保证笔记写完）。
+  // 研究员预算执行：按阶段终止——采集（停滞/事件/资料停滞/墙钟），综合（短墙钟保证笔记写完）。
   if (researchAgent.runId && researchAgent.status === 'running') {
     const now = Date.now();
     const elapsed = researchAgent.startedAt ? now - new Date(researchAgent.startedAt).getTime() : 0;
     const stalled = researchAgent.lastEventAt ? (now - researchAgent.lastEventAt >= RESEARCH_STALL_MS) : false;
     const eventBudgetHit = (researchAgent.eventCount || 0) >= RESEARCH_EVENT_BUDGET;
     const timeBudgetHit = elapsed >= (researchAgent.budgetMs || RESEARCH_BUDGET_MS);
+    // 采集阶段：sources/ 资料数量不再增长 → 视为已搜集够，可转综合（事件在涨不代表资料在涨）
+    let materialCount = researchAgent.materialCount || 0;
+    let materialLastGrownAt = researchAgent.materialLastGrownAt || null;
+    if (researchAgent.runPhase === 'acquire' && deps.countSources) {
+      const counted = await deps.countSources({ state, mission });
+      const current = counted?.count ?? 0;
+      if (current > materialCount) { materialCount = current; materialLastGrownAt = now; }
+      else if (current > 0 && !materialLastGrownAt) materialLastGrownAt = now;
+    }
+    const materialGrownAt = materialLastGrownAt ? new Date(materialLastGrownAt).getTime() : null;
+    const materialStall = materialCount > 0 && materialGrownAt && (now - materialGrownAt >= RESEARCH_MATERIAL_STALL_MS);
     const shouldCancel = researchAgent.runPhase === 'synthesize'
       ? timeBudgetHit
-      : (stalled || eventBudgetHit || timeBudgetHit);
+      : (stalled || eventBudgetHit || timeBudgetHit || materialStall);
+    if (materialCount !== (researchAgent.materialCount || 0) || materialLastGrownAt !== researchAgent.materialLastGrownAt) {
+      state.researchAgent = { ...researchAgent, materialCount, materialLastGrownAt };
+    }
     if (shouldCancel && deps.cancelResearch) {
       const cancelled = await deps.cancelResearch({ state, runId: researchAgent.runId });
-      if (cancelled?.state) addAuditEvent(cancelled.state, researchAgent.runPhase === 'synthesize' ? '研究员笔记超时' : '研究员采集停止', `Run ${researchAgent.runId} 已请求取消`, 'warning', 'Timer');
+      if (cancelled?.state) addAuditEvent(cancelled.state, researchAgent.runPhase === 'synthesize' ? '研究员笔记超时' : '研究员采集停止', `Run ${researchAgent.runId} 已请求取消${materialStall ? '（资料不再增长）' : ''}`, 'warning', 'Timer');
       return { state: cancelled?.state || state, action: 'research_timeout' };
     }
     // 同步研究（停滞升级）→ 主循环串行等待；异步研究（操作员触发）→ 放行，主循环不阻塞
