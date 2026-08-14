@@ -28,6 +28,7 @@
     "test:gate": "node tests/accept-gate-test.mjs",
     "opencode:serve": "opencode serve --hostname 127.0.0.1 --port 4096",
     "research:smoke": "node scripts/research-network-smoke.mjs",
+    "verify:researcher-source": "node scripts/verify-researcher-source.mjs",
     "demo:diagnose": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/diagnose-exhibition.ps1",
     "demo:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-exhibition-package.ps1"
   },
