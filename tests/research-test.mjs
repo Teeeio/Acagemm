@@ -81,6 +81,13 @@ try {
   assert.match(spawnCalls[0].args.join(' '), /--add-dir .*sources/);
   assert.match(spawnCalls[0].stdin, /Research Agent/);
   assert.match(spawnCalls[0].stdin, /read-only research turn/);
+  // mission 配置了 sourceRoot → prompt 包含拉资料进 Source Registry 的指令
+  assert.match(spawnCalls[0].stdin, /Source Registry/);
+  // 无 sourceRoot 的 mission → prompt 不含 Source Registry 指令（保持纯检索产笔记）
+  const noSourceMission = { id: 'MIS_NOSRC', title: 'No source', repository: root, sourceRoot: null, hardware: ['C500'], metric: 'latency_p50' };
+  const noSourceState = { activeMissionId: 'MIS_NOSRC', runtimeEvents: [], stage: 'diagnosis', agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
+  await runtime.startResearch({ state: noSourceState, mission: noSourceMission, direction: '纯检索', workspace: researchDir });
+  assert.doesNotMatch(spawnCalls.at(-1).stdin, /Source Registry/);
   assert.match(spawnCalls[0].stdin, /research-notes\/v1/);
   assert.match(spawnCalls[0].stdin, /调研 paged_attention 最新 kernel 优化/);
   assert.match(spawnCalls[0].stdin, /do not produce a "candidates" field/i);

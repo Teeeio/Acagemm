@@ -408,20 +408,30 @@ export function createAgentRuntime(options = {}) {
     return { handled: true, state };
   };
 
-  const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot }) => [
-    'You are the Research Agent for Operator Studio — a read-only research scout that assists operator iteration.',
-    `Mission ID: ${mission.id}`,
-    `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
-    `Metric: ${mission.metric || 'not specified'}`,
-    `Current best: ${mission.currentBest?.value || 'not established'}`,
-    `Research direction: ${direction}`,
-    `Research directory: ${researchDir}`,
-    'You have network access. Research the latest operator implementations, papers and open-source libraries relevant to the direction above. You may git clone repositories, read upstream sources, and browse documentation.',
-    `You may write ONLY inside the research directory: ${researchDir} (e.g. clones/ and notes/) and the Source Registry: ${sourceRoot || '(not configured)'} (for reference material: clone reference repositories or download docs there). You MUST NOT modify the Mission workspace, the Iteration Repository, or create any candidate patch. This is a read-only research turn with respect to the workspace.`,
-    'If the mission needs external reference source (for example migrating an operator from an upstream open-source repository), analyze what material is needed, clone the relevant repositories into the Source Registry directory, and reference them (repo URL / commit / path) in your note sources. Reference material goes to the Source Registry ONLY — never into the Mission workspace.',
-    'Do NOT propose candidates, do not produce a "candidates" field, and do not call any benchmark or test service.',
-    'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v1","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}]}. If no structured material can be gathered, return a plain-text summary instead.',
-  ].join('\n');
+  const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot }) => {
+    const lines = [
+      'You are the Research Agent for Operator Studio — a read-only research scout that assists operator iteration.',
+      `Mission ID: ${mission.id}`,
+      `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
+      `Metric: ${mission.metric || 'not specified'}`,
+      `Current best: ${mission.currentBest?.value || 'not established'}`,
+      `Research direction: ${direction}`,
+      `Research directory: ${researchDir}`,
+      'You have network access. Research the latest operator implementations, papers and open-source libraries relevant to the direction above. You may git clone repositories, read upstream sources, and browse documentation.',
+      `You may write ONLY inside the research directory: ${researchDir} (e.g. clones/ and notes/). You MUST NOT modify the Mission workspace, the Iteration Repository, or create any candidate patch. This is a read-only research turn.`,
+    ];
+    // 仅当 mission 配置了 Source Registry（sources/）时才指示研究员拉外部参考资料进去；否则保持纯检索产笔记。
+    if (sourceRoot) {
+      lines.push(
+        `The mission has a Source Registry: ${sourceRoot}. If the mission needs external reference source (for example migrating an operator from an upstream open-source repository), analyze what material is needed, clone the relevant repositories into the Source Registry directory as read-only reference, and reference them (repo URL / commit / path) in your note sources. Reference material goes to the Source Registry ONLY — never into the Mission workspace.`,
+      );
+    }
+    lines.push(
+      'Do NOT propose candidates, do not produce a "candidates" field, and do not call any benchmark or test service.',
+      'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v1","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}]}. If no structured material can be gathered, return a plain-text summary instead.',
+    );
+    return lines.join('\n');
+  };
 
   const startResearch = async ({ state, mission, direction, workspace, synchronous = false }) => {
     if (mode !== 'codex-cli') {
