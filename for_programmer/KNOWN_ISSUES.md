@@ -1,6 +1,7 @@
 # Known Issues
 
-- **P0: the workflow is not yet a durable event-sourced harness.** Runtime events exist, but mutable `stage`, Agent, benchmark, review, and knowledge states remain the primary persistence model. Crash-safe attempt replay, idempotent step execution, and checkpoint-based orchestration are not complete.
+- **P0: the workflow is not yet a full event-sourced harness.** 已落地命令日志（`command-journal.mjs`：11 个命令的幂等去重、崩溃恢复重放、stateVersion 乐观锁）和 checkpoints，但仍是"快照 + 命令日志"而非纯事件源——mutable `stage`/Agent/benchmark 仍是主持久化模型，agent/benchmark 从外部源投影，无法纯事件重建。崩溃窗口已覆盖，但非完整事件溯源。
+- **研究员真实联网调研已真机验证**（`npm run research:smoke` 两轮 PASS，261s/296s 产出真实来源笔记），但自动化测试仍用注入假进程——真实网络行为不跑 CI。
 - **P0: Codex still uses one-shot `codex exec --json`.** Managed workspace, authoritative Diff, Candidate admission, client Decision, Intervention, Rollback, and knowledge projection are connected, but persistent app-server Thread/Turn/Item streaming is not implemented.
 - **P0: Queue cleanup and real device lease are not implemented.** The local queue is persistent, serial, and cancellable, but environment cleanup and hardware ownership are still hooks to add when the real worker is connected.
 - **P1: Real structured Codex E2E is environment-dependent.** A user-terminal Codex run has completed successfully, but the isolated automated process did not inherit the user's local Provider authentication and returned HTTP 401. Structured Candidate projection is contract-tested, not yet verified end to end under the user's terminal identity.

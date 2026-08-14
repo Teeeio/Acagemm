@@ -53,6 +53,20 @@ npm start
 
 客户端通过 `codex exec --json` 启动新 thread；同一 Mission 再次运行时默认通过 `codex exec resume` 恢复历史 thread。`cli-file` 保留为旧算子迭代系统的兼容适配器，OpenCode 保留为实验适配器。
 
+## 研究员子 Agent（research scout）
+
+主优化线程之外，客户端可启动第二个 Codex 线程做**只读联网调研**：停滞升级或操作员触发时，研究员用开放沙箱检索论文/开源库，产出结构化调研笔记，经价值闸后注入下一轮优化目标。它绝不直接生成候选——候选准入仍由工作区 Git Diff 把关。
+
+- 手动触发：Mission 视图"研究员"面板发起（留空方向=自动从卡点生成）；`POST /api/missions/:id/research`。
+- 自动升级：停滞（连续 3 轮无采纳，串行等待）或死磕检测（同方向重复无进展失败，异步并行审查）。
+- 预算与兜底：单轮/研究员时长预算；MAX_ROUNDS / 总时长 / 研究员升级次数上限命中后标记需人工。
+- 真实联网验证：`npm run research:smoke`（需本机 codex 已登录 + 有网）。
+
+```powershell
+codex --version
+npm run research:smoke
+```
+
 ## 连接 OpenCode（实验模式）
 
 OpenCode `1.1.25` 可以通过 Headless Server 作为本地 Agent Runtime：
@@ -93,10 +107,13 @@ npm run test:opencode
 npm run test:codex
 npm run test:smoke
 npm run test:release
+npm run test:research
+npm run test:loop
+npm run test:journal
 npm run build
 ```
 
-`test:boundary` 会验证测试服务不存在 Mission API，并验证默认未连接状态不会生成 Agent Run。`test:opencode` 使用本地 Mock OpenCode Server 验证 Session、Prompt、Message、Tool、Diff 和 Provider 错误投影。
+`test:boundary` 会验证测试服务不存在 Mission API，并验证默认未连接状态不会生成 Agent Run。`test:opencode` 使用本地 Mock OpenCode Server 验证 Session、Prompt、Message、Tool、Diff 和 Provider 错误投影。`test:research`/`test:loop`/`test:journal` 覆盖研究员 run 生命周期、循环策略（停滞/死磕/预算/兜底/同步异步）与耐久命令日志。
 
 ## 数据与接口
 

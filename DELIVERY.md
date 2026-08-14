@@ -3,7 +3,7 @@
 ## 必须通过
 
 - `npm run build` 成功。
-- 八组测试全部通过：Runtime、Queue、Test Service、Boundary、OpenCode、Codex、Smoke、Release Guard。
+- 16 组测试全部通过：Runtime、Queue、Test Service、Boundary、OpenCode、Codex、Smoke、Release Guard、Workspace、Three-Layer、Intent、Gate、Research、Loop、Journal（及 Build 门禁）。
 - `npm start` 后 Client Runtime 的 `/api/health` 和 Test Service 的 `/health` 均返回 `status: ok`。
 - `展会诊断.cmd` 的 Runtime authority 必须为 PASS；默认要求本机 `codex-cli` 可执行，Provider 与认证由 Codex 自身负责，`unavailable` 和 `reference-fixture` 均不能通过展会诊断。
 - 断开公网后，页面、Logo、本地状态和 Mock 测试服务仍可使用。
@@ -16,6 +16,7 @@
 - 测试完成后，Accept Gate 根据证据自动给出策略结果；只有用户发起意见或命中风险信号时才阻塞人工处理。
 - 失败运行不保留为候选，但保留审计记录并可提取负向经验。
 - 采用、回退、知识提取和知识版本关系均持久化且可审计。
+- 研究员子 Agent 可真实联网调研（arXiv/GitHub 公开来源），产出带来源笔记并经价值闸注入下一轮；`npm run research:smoke` 真机两轮 PASS。
 
 ## 当前交付缺口
 
