@@ -76,8 +76,17 @@ const exitCode = await (async () => {
 
     // 用循环编排器驱动两阶段（采集 → 综合），保证笔记总能被综合阶段写出
     const loopDeps = {
-      startResearch: async ({ state, mission, direction, workspace: ws, synchronous, runPhase }) => (await runtime.startResearch({ state, mission, direction, workspace: ws, synchronous, runPhase })).state,
-      cancelResearch: async ({ state, runId }) => (await runtime.cancelRun({ state, runId })).state,
+      startResearch: async ({ state, mission, direction, workspace: ws, synchronous, runPhase }) => {
+        try {
+          return (await runtime.startResearch({ state, mission, direction, workspace: ws, synchronous, runPhase })).state;
+        } catch (error) {
+          console.error(`[verify]   startResearch(${runPhase}) 失败: ${error.message}`);
+          return state;
+        }
+      },
+      cancelResearch: async ({ state, runId }) => {
+        try { return (await runtime.cancelRun({ state, runId })).state; } catch (error) { console.error(`[verify]   cancelRun 失败: ${error.message}`); return state; }
+      },
       startMainRound: async ({ state }) => state,
       researchDirForMission: () => researchDir,
       registerSources: async ({ state, mission }) => {
@@ -148,6 +157,7 @@ const exitCode = await (async () => {
     return 0;
   } catch (error) {
     console.error(`[verify] FAIL: ${error.message}`);
+    if (error.stack) console.error(error.stack.split('\n').slice(0, 4).join('\n'));
     return 1;
   }
 })();

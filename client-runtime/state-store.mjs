@@ -1105,6 +1105,7 @@ export async function resetDemoData() {
 }
 
 export function addAuditEvent(state, title, detail, tone = 'blue', icon = 'Activity') {
+  if (!state) return null; // 防御：编排器边界可能出现瞬态 undefined，不崩循环
   const event = { time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), title, detail, tone, icon };
   state.auditEvents = [event, ...(state.auditEvents || [])].slice(0, 30);
   return event;

@@ -218,8 +218,8 @@ export async function advanceIteration(state, deps = {}) {
       : (stalled || eventBudgetHit || timeBudgetHit);
     if (shouldCancel && deps.cancelResearch) {
       const cancelled = await deps.cancelResearch({ state, runId: researchAgent.runId });
-      addAuditEvent(cancelled.state, researchAgent.runPhase === 'synthesize' ? '研究员笔记超时' : '研究员采集停止', `Run ${researchAgent.runId} 已请求取消`, 'warning', 'Timer');
-      return { state: cancelled.state, action: 'research_timeout' };
+      if (cancelled?.state) addAuditEvent(cancelled.state, researchAgent.runPhase === 'synthesize' ? '研究员笔记超时' : '研究员采集停止', `Run ${researchAgent.runId} 已请求取消`, 'warning', 'Timer');
+      return { state: cancelled?.state || state, action: 'research_timeout' };
     }
     // 同步研究（停滞升级）→ 主循环串行等待；异步研究（操作员触发）→ 放行，主循环不阻塞
     if (researchAgent.synchronous) return { state, action: 'wait_research' };

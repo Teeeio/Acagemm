@@ -63,6 +63,7 @@ const runtimeStatusMap = {
 };
 
 export function appendRuntimeEvent(state, type, payload = {}, source = { kind: 'adapter' }) {
+  if (!state) return null; // 防御：编排器边界可能出现瞬态 undefined，不崩循环
   const events = Array.isArray(state.runtimeEvents) ? state.runtimeEvents : [];
   const sequence = events.reduce((maximum, event) => Math.max(maximum, Number(event.sequence) || 0), 0) + 1;
   const event = {
