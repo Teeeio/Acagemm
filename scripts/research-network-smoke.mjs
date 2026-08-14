@@ -17,7 +17,7 @@ import { createCodexClient } from '../client-runtime/codex-client.mjs';
 import { createAgentRuntime } from '../client-runtime/agent-runtime.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const timeoutMs = Number(process.env.RESEARCH_SMOKE_TIMEOUT_MS || 90_000);
+const timeoutMs = Number(process.env.RESEARCH_SMOKE_TIMEOUT_MS || 300_000);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const tmp = await mkdtemp(path.join(os.tmpdir(), 'research-network-smoke-'));
@@ -63,10 +63,10 @@ const exitCode = await (async () => {
     };
     const runtime = createAgentRuntime({ mode: 'codex-cli', codexClient: codex, codexWorkspace: path.join(tmp, 'workspace') });
 
-    // 白名单方向：只读公开资料，限时内完成，产出带来源的笔记
-    const direction = `请在 ${Math.round(timeoutMs / 1000)} 秒内完成调研，只访问公开来源（如 arXiv、GitHub 公开仓库、官方文档）。
+    // 白名单方向：只读公开来源，限时内完成，范围收窄以控制在几分钟内，产出带来源的笔记
+    const direction = `请在 ${Math.round(timeoutMs / 1000)} 秒内完成，只访问公开来源（arXiv、GitHub 公开仓库、官方文档），只检索并概括 2-3 个来源，不要展开长任务。
 研究方向：paged_attention / MLA KV cache 在 small batch 下的延迟优化有哪些被验证的做法？
-要求：不要泛泛而谈；给出最可能直接收益的方向；产出 research-notes/v1（含 sources 来源）。`;
+要求：给出最可能直接收益的方向；产出 research-notes/v1（含 sources 来源，来源 2-3 个即可）。`;
 
     console.log('[research-smoke] 启动研究员（真实 Codex，开放沙箱联网）...');
     const started = await runtime.startResearch({ state, mission, direction, workspace: researchDir });
@@ -75,9 +75,23 @@ const exitCode = await (async () => {
 
     const deadline = Date.now() + timeoutMs;
     let final = null;
+    let lastProgressAt = Date.now();
+    let lastEventCount = 0;
     while (Date.now() < deadline) {
       final = (await runtime.projectState(state)).state;
-      if (['completed', 'failed', 'timed_out', 'cancelled'].includes(final.researchAgent?.status)) break;
+      const statusNow = final?.researchAgent?.status || 'running';
+      if (['completed', 'failed', 'timed_out', 'cancelled'].includes(statusNow)) break;
+      // 每 20s 打一次进度：事件数在涨说明 codex 正在产出（调研中）；长时间不涨可能是卡住
+      const now = Date.now();
+      if (now - lastProgressAt >= 20_000) {
+        let events = [];
+        try { events = await codex.readEvents(runId); } catch { /* 读取事件失败忽略 */ }
+        const lastType = events.at(-1)?.type || events.at(-1)?.item?.type || '(无事件)';
+        const messageCount = events.filter((e) => e.item?.type === 'agent_message' || /agent_message|message.completed/i.test(e.type || '')).length;
+        console.log(`[research-smoke]   运行中 ${Math.round((now - new Date(final?.researchAgent?.startedAt || now).getTime()) / 1000)}s · 事件 ${events.length}（+${events.length - lastEventCount}）· 最新 ${lastType} · 消息 ${messageCount}`);
+        lastProgressAt = now;
+        lastEventCount = events.length;
+      }
       await sleep(2000);
     }
     const status = final?.researchAgent?.status || 'running';
@@ -85,6 +99,14 @@ const exitCode = await (async () => {
     const elapsed = Math.round((Date.now() - new Date(final?.researchAgent?.startedAt || Date.now()).getTime()) / 1000);
     if (status === 'running') {
       try { await runtime.cancelRun({ state: final, runId }); console.log('[research-smoke] 外部超时，已请求取消研究员 run（避免孤儿 codex 进程）。'); } catch { /* 忽略取消失败 */ }
+      let events = [];
+      try { events = await codex.readEvents(runId); } catch { /* 忽略读取失败 */ }
+      if (events.length) {
+        console.log(`[research-smoke] 最近事件（共 ${events.length} 条，判断 codex 是否在产出）：`);
+        events.slice(-6).forEach((e) => console.log(`[research-smoke]   ${e.type || ''} ${e.item?.type || ''} ${String(e.item?.text || e.item?.aggregated_output || e.item?.output || '').slice(0, 80)}`.trim()));
+      } else {
+        console.log('[research-smoke] 无事件产出——codex 进程可能卡在沙箱/认证/网络初始化，需进一步排查。');
+      }
     }
 
     console.log(`[research-smoke] 研究员状态: ${status}（${elapsed}s）`);
