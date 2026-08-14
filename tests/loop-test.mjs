@@ -99,9 +99,10 @@ let startResearchCalls = 0;
 let startMainRoundCalls = 0;
 let cancelResearchCalls = 0;
 let lastResearchSynchronous = null;
-const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; lastResearchSynchronous = null; };
+let lastResearchRunPhase = null;
+const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; lastResearchSynchronous = null; lastResearchRunPhase = null; };
 const deps = {
-  startResearch: async ({ state, mission, direction, workspace, synchronous }) => { startResearchCalls += 1; lastResearchSynchronous = synchronous; state.researchAgent = { ...state.researchAgent, status: 'running', runId: 'codex_research_1', runtimeKind: 'codex-cli', direction, researchDir: workspace, startedAt: new Date().toISOString(), budgetMs: 20 * 60 * 1000, notes: [], synchronous: Boolean(synchronous) }; return state; },
+  startResearch: async ({ state, mission, direction, workspace, synchronous, runPhase }) => { startResearchCalls += 1; lastResearchSynchronous = synchronous; lastResearchRunPhase = runPhase; state.researchAgent = { ...state.researchAgent, status: 'running', runId: runPhase === 'synthesize' ? 'codex_research_syn' : 'codex_research_1', runtimeKind: 'codex-cli', direction, researchDir: workspace, startedAt: new Date().toISOString(), budgetMs: runPhase === 'synthesize' ? 4 * 60 * 1000 : 30 * 60 * 1000, notes: [], synchronous: Boolean(synchronous), runPhase, acquireRunId: runPhase === 'synthesize' ? (state.researchAgent?.acquireRunId || 'codex_research_1') : 'codex_research_1', synthesizeRunId: runPhase === 'synthesize' ? 'codex_research_syn' : null, sourceRoot: state.researchAgent?.sourceRoot || null }; return state; },
   cancelResearch: async ({ state, runId }) => { cancelResearchCalls += 1; state.researchAgent = { ...state.researchAgent, status: 'cancel_requested' }; return { state }; },
   startMainRound: async ({ state, goal }) => { startMainRoundCalls += 1; state.agent = { status: 'running', runId: 'codex_MAIN' }; state.iterationStats = { ...state.iterationStats, round: (state.iterationStats.round || 0) + 1 }; return state; },
   researchDirForMission: () => '/tmp/research',
@@ -273,5 +274,34 @@ const visionEscalated = await advanceIteration(visionState, deps);
 assert.equal(visionEscalated.action, 'research_escalated');
 assert.equal(lastResearchSynchronous, false, 'tunnel vision escalation should be async (parallel review, main thread continues)');
 assert.match(visionEscalated.state.researchAgent.direction, /最容易获取收益/);
+
+// ---- 两阶段研究员：采集终态 → 注册资料 + 启动综合阶段 ----
+// 采集完成且 sourceRoot 有资料 → 启动综合阶段（runPhase=synthesize）
+resetCounters();
+const acquireDoneState = makeState({
+  researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_1', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_1', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research' },
+});
+const depsWithRegister = { ...deps, registerSources: async () => ({ count: 7, references: [] }) };
+let syn = await advanceIteration(acquireDoneState, depsWithRegister);
+assert.equal(syn.action, 'research_synthesizing');
+assert.equal(lastResearchRunPhase, 'synthesize');
+assert.equal(syn.state.researchAgent.synthesizeRunId, 'codex_research_syn');
+assert.equal(syn.state.researchAgent.acquireHandled, true);
+// 采集完成但无资料 → 不启动综合，研究结束
+resetCounters();
+const acquireEmptyState = makeState({
+  researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_1', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_1', synthesizeRunId: null, acquireHandled: false },
+});
+let empty = await advanceIteration(acquireEmptyState, { ...deps, registerSources: async () => ({ count: 0 }) });
+assert.equal(empty.action, 'research_no_material');
+assert.equal(startResearchCalls, 0);
+// 无 sourceRoot 的 mission（单阶段）：采集终态不触发转移（projectState 已直接产笔记）
+resetCounters();
+const singlePhaseState = makeState({
+  researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_1', sourceRoot: null, synthesizeRunId: null, researchDir: '/tmp/research' },
+});
+let single = await advanceIteration(singlePhaseState, deps);
+assert.equal(single.action !== 'research_synthesizing', true);
+assert.equal(startResearchCalls, 0);
 
 console.log('[loop] researcher iteration loop policy passed');

@@ -72,7 +72,8 @@ try {
   assert.match(started.state.researchAgent.runId, /^codex_research_[A-Z0-9]+_[A-Z0-9]+$/);
   assert.equal(started.state.researchAgent.direction, '调研 paged_attention 最新 kernel 优化');
   assert.equal(started.state.researchAgent.researchDir, researchDir);
-  assert.equal(started.state.researchAgent.budgetMs, 20 * 60 * 1000);
+  assert.equal(started.state.researchAgent.budgetMs, 30 * 60 * 1000, 'acquire phase uses generous budget');
+  assert.equal(started.state.researchAgent.runPhase, 'acquire');
   assert.equal(started.state.researchAgent.synchronous, false, 'manual research defaults to asynchronous (parallel)');
   // 沙箱开放 + 只读边界
   assert.match(spawnCalls[0].args.join(' '), /--sandbox danger-full-access/);
@@ -80,17 +81,19 @@ try {
   assert.match(spawnCalls[0].args.join(' '), /--cd .*research/);
   assert.match(spawnCalls[0].args.join(' '), /--add-dir .*sources/);
   assert.match(spawnCalls[0].stdin, /Research Agent/);
-  assert.match(spawnCalls[0].stdin, /read-only research turn/);
-  // mission 配置了 sourceRoot → prompt 包含拉资料进 Source Registry 的指令
+  // mission 配置了 sourceRoot → 采集阶段 prompt（拉资料进 Source Registry，不写笔记）
+  assert.match(spawnCalls[0].stdin, /ACQUISITION phase/);
   assert.match(spawnCalls[0].stdin, /Source Registry/);
-  // 无 sourceRoot 的 mission → prompt 不含 Source Registry 指令（保持纯检索产笔记）
+  assert.doesNotMatch(spawnCalls[0].stdin, /research-notes\/v1/, 'acquire phase must not ask for the note JSON');
+  assert.doesNotMatch(spawnCalls[0].stdin, /do not produce a "candidates" field/i, 'acquire phase must not require the note schema');
+  // 无 sourceRoot 的 mission → 单阶段（检索 + 产笔记），不含 ACQUISITION 指令
   const noSourceMission = { id: 'MIS_NOSRC', title: 'No source', repository: root, sourceRoot: null, hardware: ['C500'], metric: 'latency_p50' };
   const noSourceState = { activeMissionId: 'MIS_NOSRC', runtimeEvents: [], stage: 'diagnosis', agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
   await runtime.startResearch({ state: noSourceState, mission: noSourceMission, direction: '纯检索', workspace: researchDir });
-  assert.doesNotMatch(spawnCalls.at(-1).stdin, /Source Registry/);
-  assert.match(spawnCalls[0].stdin, /research-notes\/v1/);
+  assert.match(spawnCalls.at(-1).stdin, /read-only research turn/, 'no-sourceRoot mission stays single-phase research');
+  assert.doesNotMatch(spawnCalls.at(-1).stdin, /ACQUISITION phase/);
+  assert.match(spawnCalls.at(-1).stdin, /research-notes\/v1/, 'single-phase research asks for the note JSON');
   assert.match(spawnCalls[0].stdin, /调研 paged_attention 最新 kernel 优化/);
-  assert.match(spawnCalls[0].stdin, /do not produce a "candidates" field/i);
   // 研究 run 不碰主线程
   assert.equal(started.state.agent.status, 'idle');
   assert.equal(started.state.stage, 'diagnosis');
@@ -141,12 +144,12 @@ try {
   const doneState = {
     activeMissionId: 'MIS_DONE', runtimeEvents: [], stage: 'candidate', patchApplied: true, candidateEvaluations: [{ id: 'stale' }],
     agent: { status: 'idle' },
-    researchAgent: { status: 'running', runtimeKind: 'codex-cli', runId: 'codex_research_DONE', direction: '调研 async dispatch', researchDir, startedAt: new Date().toISOString(), budgetMs: 20 * 60 * 1000, messages: [], artifacts: [], notes: [] },
+    researchAgent: { status: 'running', runtimeKind: 'codex-cli', runId: 'codex_research_DONE', runPhase: 'synthesize', direction: '调研 async dispatch', researchDir, startedAt: new Date().toISOString(), budgetMs: 20 * 60 * 1000, messages: [], artifacts: [], notes: [] },
     researchNotes: [],
   };
   const projected = await completedRuntime.projectState(doneState);
   assert.equal(projected.state.researchAgent.status, 'completed');
-  assert.equal(projected.state.researchAgent.phase, '研究员调研完成');
+  assert.equal(projected.state.researchAgent.phase, '研究员笔记完成');
   assert.equal(projected.state.researchNotes.length, 1);
   assert.equal(projected.state.researchNotes[0].findings[0], 'async dispatch reduces host overhead');
   assert.equal(projected.state.researchAgent.notes.length, 1);
@@ -169,7 +172,7 @@ try {
   cancelCalled = false;
   const timeoutState = {
     activeMissionId: 'MIS_T', runtimeEvents: [], stage: 'diagnosis', agent: { status: 'idle' },
-    researchAgent: { status: 'running', runtimeKind: 'codex-cli', runId: 'codex_research_T', direction: 'x', researchDir, startedAt: new Date(Date.now() - 21 * 60 * 1000).toISOString(), budgetMs: 20 * 60 * 1000, messages: [], artifacts: [], notes: [] },
+    researchAgent: { status: 'running', runtimeKind: 'codex-cli', runId: 'codex_research_T', runPhase: 'synthesize', direction: 'x', researchDir, startedAt: new Date(Date.now() - 21 * 60 * 1000).toISOString(), budgetMs: 20 * 60 * 1000, messages: [], artifacts: [], notes: [] },
     researchNotes: [],
   };
   const timedOut = await timeoutRuntime.projectState(timeoutState);

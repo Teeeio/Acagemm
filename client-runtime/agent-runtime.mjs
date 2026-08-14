@@ -408,8 +408,8 @@ export function createAgentRuntime(options = {}) {
     return { handled: true, state };
   };
 
-  const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot }) => {
-    const lines = [
+  const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot, runPhase = 'acquire' }) => {
+    const base = [
       'You are the Research Agent for Operator Studio — a read-only research scout that assists operator iteration.',
       `Mission ID: ${mission.id}`,
       `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
@@ -417,23 +417,34 @@ export function createAgentRuntime(options = {}) {
       `Current best: ${mission.currentBest?.value || 'not established'}`,
       `Research direction: ${direction}`,
       `Research directory: ${researchDir}`,
+      `Source Registry: ${sourceRoot || '(not configured)'}`,
+    ];
+    if (runPhase === 'acquire' && sourceRoot) {
+      // 两阶段·采集：分析任务 → 自主决定需要什么资料 → 拉进 Source Registry。只采集，不写最终笔记。
+      return [...base,
+        'You have network access. This is the ACQUISITION phase: analyze the mission and decide what external reference material is needed (upstream implementation, papers, platform docs). Fetch it into the Source Registry directory above (git clone repositories or download docs). Do NOT write the final research note yet — this phase only gathers material.',
+        `You may write ONLY inside the Source Registry: ${sourceRoot} and the research directory: ${researchDir} (e.g. clones/ and notes/). You MUST NOT modify the Mission workspace, the Iteration Repository, or create any candidate patch.`,
+        'When done, return a short plain-text summary of what material you fetched and where.',
+      ].join('\n');
+    }
+    if (runPhase === 'synthesize') {
+      // 两阶段·综合：只读已拉取的资料，写研究笔记。无网络、短、必然完成。
+      return [...base,
+        'This is the SYNTHESIS phase: read the reference material already present in the Source Registry and the research directory above. Write the research note: findings, suggestedDirections, and sources (each source references the actual material in the Source Registry with repo URL / commit / path). Do NOT fetch new material, do NOT modify the workspace.',
+        'Do NOT propose candidates, do not produce a "candidates" field, and do not call any benchmark or test service.',
+        'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v1","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}]}. If no structured material is available, return a plain-text summary instead.',
+      ].join('\n');
+    }
+    // 单阶段（无 sourceRoot）：检索 + 产笔记（旧行为），一个 run 完成
+    return [...base,
       'You have network access. Research the latest operator implementations, papers and open-source libraries relevant to the direction above. You may git clone repositories, read upstream sources, and browse documentation.',
       `You may write ONLY inside the research directory: ${researchDir} (e.g. clones/ and notes/). You MUST NOT modify the Mission workspace, the Iteration Repository, or create any candidate patch. This is a read-only research turn.`,
-    ];
-    // 仅当 mission 配置了 Source Registry（sources/）时才指示研究员拉外部参考资料进去；否则保持纯检索产笔记。
-    if (sourceRoot) {
-      lines.push(
-        `The mission has a Source Registry: ${sourceRoot}. If the mission needs external reference source (for example migrating an operator from an upstream open-source repository), analyze what material is needed, clone the relevant repositories into the Source Registry directory as read-only reference, and reference them (repo URL / commit / path) in your note sources. Reference material goes to the Source Registry ONLY — never into the Mission workspace.`,
-      );
-    }
-    lines.push(
       'Do NOT propose candidates, do not produce a "candidates" field, and do not call any benchmark or test service.',
       'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v1","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}]}. If no structured material can be gathered, return a plain-text summary instead.',
-    );
-    return lines.join('\n');
+    ].join('\n');
   };
 
-  const startResearch = async ({ state, mission, direction, workspace, synchronous = false }) => {
+  const startResearch = async ({ state, mission, direction, workspace, synchronous = false, runPhase = 'acquire' }) => {
     if (mode !== 'codex-cli') {
       const error = new Error(`Research Agent is only supported by runtime mode codex-cli (current: ${mode}).`);
       error.status = 503;
@@ -454,7 +465,8 @@ export function createAgentRuntime(options = {}) {
       error.code = 'RESEARCH_SERIAL_BUSY';
       throw error;
     }
-    if (state.researchAgent?.runId) {
+    // 仅当当前研究员仍处于运行中才拦截；终态（采集完成）允许启动综合阶段。
+    if (state.researchAgent?.runId && ['running', 'cancel_requested'].includes(state.researchAgent.status)) {
       const error = new Error('研究员已在运行。');
       error.status = 409;
       error.code = 'RESEARCH_RUN_ACTIVE';
@@ -469,7 +481,8 @@ export function createAgentRuntime(options = {}) {
     }
     await mkdir(path.join(workspace, 'notes'), { recursive: true });
     await mkdir(path.join(workspace, 'clones'), { recursive: true });
-    const prompt = buildResearchPrompt({ mission, direction, researchDir: workspace, sourceRoot: mission.sourceRoot });
+    const prevResearch = state.researchAgent || {};
+    const prompt = buildResearchPrompt({ mission, direction, researchDir: workspace, sourceRoot: mission.sourceRoot, runPhase });
     const run = await codex.start({
       runId,
       missionId: mission.id,
@@ -482,7 +495,8 @@ export function createAgentRuntime(options = {}) {
     });
     state.researchAgent = {
       status: 'running',
-      phase: '研究员调研中',
+      runPhase,
+      phase: runPhase === 'acquire' ? '研究员采集资料中' : '研究员整理笔记中',
       progress: 5,
       missionId: mission.id,
       runId,
@@ -490,16 +504,22 @@ export function createAgentRuntime(options = {}) {
       threadId: run.threadId || null,
       direction,
       researchDir: workspace,
+      sourceRoot: mission.sourceRoot || prevResearch.sourceRoot || null,
       startedAt: run.startedAt,
       completedAt: null,
-      budgetMs: 20 * 60 * 1000,
+      // 采集阶段预算宽松（主要靠停滞/事件终止），综合阶段短预算（无网络，本地读）
+      budgetMs: runPhase === 'acquire' ? 30 * 60 * 1000 : 4 * 60 * 1000,
+      acquireRunId: runPhase === 'acquire' ? runId : prevResearch.acquireRunId || null,
+      synthesizeRunId: runPhase === 'synthesize' ? runId : null,
+      lastEventAt: Date.now(),
+      eventCount: 0,
       notes: [],
-      messages: [{ id: `research-start-${runId}`, phase: 'research', status: 'running', title: '研究员已启动', detail: `Run ${runId} · 开放沙箱 · ${direction}`, time: '刚刚' }],
-      artifacts: [{ id: `research-run-${runId}`, kind: 'Research Run', title: '研究员调研', status: 'running', meta: 'Codex exec --json · research-notes/v1' }],
+      messages: [{ id: `research-start-${runId}`, phase: 'research', status: 'running', title: runPhase === 'acquire' ? '研究员采集资料中' : '研究员整理笔记中', detail: `Run ${runId} · ${runPhase === 'acquire' ? '联网采集外部资料' : '只读整理研究笔记'} · ${direction}`, time: '刚刚' }],
+      artifacts: [{ id: `research-run-${runId}`, kind: 'Research Run', title: runPhase === 'acquire' ? '研究员采集' : '研究员综合', status: 'running', meta: `Codex exec --json · ${runPhase}` }],
       injected: false,
       synchronous: Boolean(synchronous),
     };
-    appendRuntimeEvent(state, 'research.run_started', { runId, direction, researchDir: workspace, synchronous: Boolean(synchronous) }, { kind: 'research', mode: 'codex-cli' });
+    appendRuntimeEvent(state, 'research.run_started', { runId, runPhase, direction, researchDir: workspace, synchronous: Boolean(synchronous) }, { kind: 'research', mode: 'codex-cli' });
     return { handled: true, state };
   };
 
@@ -632,14 +652,23 @@ export function createAgentRuntime(options = {}) {
           try { await codex.cancel(prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
         }
         const terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
+        // 事件新鲜度：供循环做停滞/事件预算终止
+        const eventCount = events.length;
+        const lastEventAt = eventCount > (prev.eventCount || 0) ? Date.now() : (prev.lastEventAt || Date.now());
+        const phaseLabel = prev.runPhase === 'acquire' ? '研究员采集' : '研究员整理笔记';
         const nextResearchAgent = {
           ...prev,
           status: nextStatus,
-          phase: failed ? '研究员调研失败' : completed ? '研究员调研完成' : cancelled ? '研究员已取消' : nextStatus === 'timed_out' ? '研究员预算耗尽' : prev.status === 'cancel_requested' ? '正在取消研究员' : '研究员调研中',
+          runPhase: prev.runPhase,
+          phase: failed ? `${phaseLabel}失败` : completed ? (prev.runPhase === 'acquire' ? '采集完成，待整理笔记' : '研究员笔记完成') : cancelled ? '研究员已取消' : nextStatus === 'timed_out' ? '研究员预算耗尽' : prev.status === 'cancel_requested' ? '正在取消研究员' : (prev.runPhase === 'acquire' ? '研究员采集中' : '研究员整理笔记中'),
           progress: terminal ? 100 : prev.progress,
           messages: prev.messages,
+          lastEventAt,
+          eventCount,
         };
-        if (terminal && !prev.notes?.length) {
+        // 产出笔记：综合阶段，或单阶段（无 sourceRoot 的采集=一次检索产笔记）
+        const singlePhaseAcquire = prev.runPhase === 'acquire' && !prev.sourceRoot;
+        if (terminal && !prev.notes?.length && (prev.runPhase === 'synthesize' || singlePhaseAcquire)) {
           const parsed = parseResearchResult(events);
           const note = {
             id: `note_${prev.runId}`,
@@ -659,6 +688,8 @@ export function createAgentRuntime(options = {}) {
           nextResearchAgent.notes = [note];
           nextResearchAgent.completedAt = note.completedAt;
           appendRuntimeEvent(state, failed ? 'research.failed' : nextStatus === 'timed_out' ? 'research.timed_out' : 'research.completed', { runId: prev.runId, direction: prev.direction, summary: parsed.summary }, { kind: 'research', mode: 'codex-cli' });
+        } else if (terminal && !prev.notes?.length && prev.runPhase === 'acquire') {
+          appendRuntimeEvent(state, 'research.acquire_completed', { runId: prev.runId, phase: 'acquire' }, { kind: 'research', mode: 'codex-cli' });
         }
         const changed = runtimeChanged || JSON.stringify(nextResearchAgent) !== JSON.stringify(prev);
         state.researchAgent = nextResearchAgent;

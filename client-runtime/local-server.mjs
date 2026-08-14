@@ -682,15 +682,36 @@ const commandRegistry = {
 
 // 循环驱动依赖：advanceIteration 编排器通过 deps 拿到 agentRuntime 能力与目录函数。
 const iterationDeps = {
-  startResearch: async ({ state, mission, direction, workspace, synchronous = true }) => {
+  startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
     // 非 codex-cli 模式不支持研究员：返回 state 不变，避免循环崩溃（如 reference-fixture）。
     if (agentRuntime.mode !== 'codex-cli') return state;
     await mkdir(workspace, { recursive: true });
     // 停滞升级 → synchronous:true（主循环串行等待）；隧道视野 → synchronous:false（主线程继续，并行审查）
-    const started = await agentRuntime.startResearch({ state, mission, direction, workspace, synchronous });
+    const started = await agentRuntime.startResearch({ state, mission, direction, workspace, synchronous, runPhase });
     return started.state;
   },
   cancelResearch: async ({ state, runId }) => agentRuntime.cancelRun({ state, runId }),
+  registerSources: async ({ state, mission }) => {
+    if (!mission?.sourceRoot || !mission?.runtimeRoot) return { count: 0, errors: ['sourceRoot 未配置'] };
+    try {
+      const entries = await readdir(mission.sourceRoot).catch(() => []);
+      const repos = entries.filter((name) => name !== '.git');
+      const references = [];
+      for (const name of repos) {
+        const repoPath = path.join(mission.sourceRoot, name);
+        const isRepo = await stat(path.join(repoPath, '.git')).then(() => true).catch(() => false);
+        if (!isRepo) continue;
+        const head = await workspaceManager.git(['rev-parse', 'HEAD'], repoPath).then((result) => result.stdout.trim()).catch(() => null);
+        if (head) references.push({ repository: repoPath, commit: head, path: '' });
+      }
+      if (references.length) {
+        await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot: mission.runtimeRoot, missionId: state.activeMissionId, references });
+      }
+      return { count: repos.length, references };
+    } catch (error) {
+      return { count: 0, errors: [error.message] };
+    }
+  },
   startMainRound: async ({ state, goal }) => {
     const runtimeDescriptor = await agentRuntime.describe();
     const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
