@@ -104,15 +104,22 @@ const exitCode = await (async () => {
     const acquireRunId = runState.researchAgent.runId;
     console.log(`[verify] 采集 run ${acquireRunId} 已启动，驱动循环最多 ${Math.round(timeoutMs / 1000)}s。`);
 
-    const deadline = Date.now() + timeoutMs;
+    let deadline = Date.now() + timeoutMs;
     let lastProgressAt = Date.now();
     let stoppedBy = null;
+    let seenPhase = 'acquire';
     while (Date.now() < deadline) {
       runState = (await runtime.projectState(runState)).state;
       const ra = runState.researchAgent || {};
       const note = runState.researchNotes?.[0];
       // 研究完成：综合阶段已产出笔记，或采集无资料已结束
       if ((note && ra.acquireRunId) || (ra.runPhase === 'acquire' && ra.acquireHandled && !ra.synthesizeRunId && !note)) { stoppedBy = 'research_done'; break; }
+      // 转入综合阶段时重置预算窗口：采集时长不吃掉综合的写笔记时间
+      if (ra.runPhase === 'synthesize' && seenPhase !== 'synthesize') {
+        seenPhase = 'synthesize';
+        console.log(`[verify] 进入综合阶段，重置窗口 ${Math.round(Math.min(timeoutMs, 5 * 60 * 1000) / 1000)}s`);
+        deadline = Date.now() + Math.min(timeoutMs, 5 * 60 * 1000);
+      }
       const looped = await advanceIteration(runState, loopDeps);
       runState = looped.state;
       if (['research_no_material', 'needs_human', 'completed', 'paused', 'disabled'].includes(looped.action)) { stoppedBy = looped.action; break; }
