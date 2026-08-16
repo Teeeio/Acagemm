@@ -114,9 +114,9 @@ const deps = {
 assert.equal((await advanceIteration(makeState({ missionPaused: true }), deps)).action, 'paused');
 assert.equal((await advanceIteration(makeState({ stage: 'published', knowledgeMaintenance: { status: 'completed' } }), deps)).action, 'completed');
 
-// 研究员预算超时 → cancel + research_timeout
+// 综合阶段预算超时 → cancel + research_timeout（projectState 后续收敛产笔记）
 resetCounters();
-let timeout = await advanceIteration(makeState({ researchAgent: { status: 'running', runId: 'codex_research_1', startedAt: new Date(Date.now() - 21 * 60 * 1000).toISOString(), budgetMs: 20 * 60 * 1000 } }), deps);
+let timeout = await advanceIteration(makeState({ researchAgent: { status: 'running', runPhase: 'synthesize', runId: 'codex_research_1', startedAt: new Date(Date.now() - 21 * 60 * 1000).toISOString(), budgetMs: 20 * 60 * 1000 } }), deps);
 assert.equal(timeout.action, 'research_timeout');
 assert.equal(cancelResearchCalls, 1);
 
@@ -313,8 +313,9 @@ const materialPlateauState = makeState({
   researchAgent: { status: 'running', runPhase: 'acquire', runId: 'codex_research_1', sourceRoot: '/tmp/sources', startedAt: new Date().toISOString(), budgetMs: 30 * 60 * 1000, lastEventAt: Date.now(), eventCount: 30, materialCount: 3, materialLastGrownAt: new Date(Date.now() - 130_000).toISOString() },
 });
 let materialStalled = await advanceIteration(materialPlateauState, deps);
-assert.equal(materialStalled.action, 'research_timeout', 'material plateau should cancel acquire');
+assert.equal(materialStalled.action, 'research_synthesizing', 'material plateau should transition directly to synthesize');
 assert.equal(cancelResearchCalls, 1);
+assert.equal(lastResearchRunPhase, 'synthesize');
 // 资料还在增长（countSources 变大）→ 不取消，继续采集
 resetCounters();
 sourceCount = 5;

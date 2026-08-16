@@ -225,15 +225,29 @@ export async function advanceIteration(state, deps = {}) {
     }
     const materialGrownAt = materialLastGrownAt ? new Date(materialLastGrownAt).getTime() : null;
     const materialStall = materialCount > 0 && materialGrownAt && (now - materialGrownAt >= RESEARCH_MATERIAL_STALL_MS);
-    const shouldCancel = researchAgent.runPhase === 'synthesize'
-      ? timeBudgetHit
-      : (stalled || eventBudgetHit || timeBudgetHit || materialStall);
     if (materialCount !== (researchAgent.materialCount || 0) || materialLastGrownAt !== researchAgent.materialLastGrownAt) {
       state.researchAgent = { ...researchAgent, materialCount, materialLastGrownAt };
     }
-    if (shouldCancel && deps.cancelResearch) {
+    // 采集终止（资料停滞/事件预算/停滞/墙钟）：取消进程后，用已搜集资料【直接】转综合或结束——
+    // 不等 cancel_requested 收敛（codex 进程可能不立即死透，导致转移永不触发）
+    if (researchAgent.runPhase === 'acquire' && (materialStall || eventBudgetHit || timeBudgetHit || stalled)) {
+      if (deps.cancelResearch) { try { await deps.cancelResearch({ state, runId: researchAgent.runId }); } catch { /* 后台收敛 */ } }
+      state.researchAgent = { ...researchAgent, status: 'cancelled', acquireHandled: true, materialCount, materialLastGrownAt };
+      if (materialCount > 0 && deps.startResearch) {
+        const nextState = await deps.startResearch({ state, mission, direction: selectResearchDirection(state), workspace: researchAgent.researchDir, synchronous: Boolean(researchAgent.synchronous), runPhase: 'synthesize' });
+        if (nextState.researchAgent?.synthesizeRunId) {
+          addAuditEvent(nextState, '研究员进入综合阶段', `已采集 ${materialCount} 项资料，开始整理笔记`, 'blue', 'Search');
+          return { state: nextState, action: 'research_synthesizing' };
+        }
+        return { state: nextState, action: 'none' };
+      }
+      addAuditEvent(state, '研究员采集停止', materialStall ? '资料不再增长' : '采集停滞/超时', 'warning', 'Timer');
+      return { state, action: 'research_no_material' };
+    }
+    // 综合阶段短预算：取消后由 projectState 收敛产笔记
+    if (researchAgent.runPhase === 'synthesize' && timeBudgetHit && deps.cancelResearch) {
       const cancelled = await deps.cancelResearch({ state, runId: researchAgent.runId });
-      if (cancelled?.state) addAuditEvent(cancelled.state, researchAgent.runPhase === 'synthesize' ? '研究员笔记超时' : '研究员采集停止', `Run ${researchAgent.runId} 已请求取消${materialStall ? '（资料不再增长）' : ''}`, 'warning', 'Timer');
+      if (cancelled?.state) addAuditEvent(cancelled.state, '研究员笔记超时', `Run ${researchAgent.runId} 已请求取消`, 'warning', 'Timer');
       return { state: cancelled?.state || state, action: 'research_timeout' };
     }
     // 同步研究（停滞升级）→ 主循环串行等待；异步研究（操作员触发）→ 放行，主循环不阻塞

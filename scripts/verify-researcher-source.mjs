@@ -122,6 +122,7 @@ const exitCode = await (async () => {
       }
       const looped = await advanceIteration(runState, loopDeps);
       runState = looped.state;
+      if (looped.action !== 'wait_research') console.log(`[verify]   action=${looped.action} raPhase=${ra.runPhase} status=${ra.status} material=${ra.materialCount || 0} grownAt=${ra.materialLastGrownAt ? new Date(ra.materialLastGrownAt).toISOString().slice(11, 19) : 'null'}`);
       if (['research_no_material', 'needs_human', 'completed', 'paused', 'disabled'].includes(looped.action)) { stoppedBy = looped.action; break; }
       const now = Date.now();
       if (now - lastProgressAt >= 20_000) {
