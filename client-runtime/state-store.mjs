@@ -1181,6 +1181,20 @@ export function applyOperatorTestSnapshot(state, snapshot) {
     }
     return state;
   }
+  if (nextStatus === 'failed') {
+    // 测试提交/执行失败：恢复 test.plan 动作，操作员可直接重试（否则 guard 拦死，流程卡在 validation）
+    if (previousStatus !== 'failed') {
+      state.agent = {
+        ...state.agent,
+        status: 'awaiting_action',
+        phase: '异构验证待重试',
+        currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '重新提交测试矩阵', reason: '本次测试提交/执行失败，候选仍保留在隔离工作区，可重试。', expectedOutput: 'Correctness · Benchmark · Tracer · Profiler', risk: 'medium', approvalRequired: false },
+      };
+      addAuditEvent(state, '算子测试失败', `Queue ${snapshot.taskId} · ${snapshot.error?.message || '执行失败'}`, 'error', 'XCircle');
+      appendRuntimeEvent(state, 'operator_test.failed', { taskId: snapshot.taskId, runId: state.benchmark.runId, error: snapshot.error?.message || null }, { kind: 'operator-test-queue', mode: 'client' });
+    }
+    return state;
+  }
   if (nextStatus !== 'complete') return state;
 
   state.stage = 'evidence';

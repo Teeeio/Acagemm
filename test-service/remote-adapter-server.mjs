@@ -55,9 +55,10 @@ export const validateTask = (task) => {
 };
 
 /** 本地 payload → 远程 test-jobs body（v1 固定 test_type=correctness，target_platforms 只发天数/环境变量覆盖） */
-export const mapPayloadToRemoteSubmit = (payload, { targetPlatforms: platforms = targetPlatforms, systemId: system = systemId } = {}) => ({
+export const mapPayloadToRemoteSubmit = (payload, { targetPlatforms: platforms = targetPlatforms, systemId: system = systemId, candidateId = process.env.OPERATOR_TEST_CANDIDATE_ID || 'candidate-demo-001' } = {}) => ({
   system_id: system,
-  candidate_id: payload.candidate?.id || payload.candidate?.digest || 'candidate-demo-001',
+  // 远端 demo 系统只接受固定 candidate_id（其它值 404）；真实系统可经 OPERATOR_TEST_CANDIDATE_ID 覆盖
+  candidate_id: candidateId,
   test_type: 'correctness',
   scope: `demo-workspace/operator/${payload.operator || 'unknown'}`,
   target_platforms: platforms,
