@@ -96,12 +96,48 @@ npm start
 
 当前 `test-service/mock-server.mjs` 返回确定性 Mock 结果；替换真实服务时保持同一契约即可。
 
+### 远程真实平台模式（operator-iteration-platform）
+
+默认（无环境变量）启动本地 Mock 测试服务。设置 `OPERATOR_TEST_MODE=remote` 后，启动脚本改为拉起 `test-service/remote-adapter-server.mjs`：它在本地监听同一个 `/v1/operator-tests` 契约，内部把任务转发到真实 operator-iteration-platform（`https://frp-act.com:61110`）。客户端、测试队列与状态机零改动。
+
+```powershell
+# 真实调用远程平台（当前默认只提交到天数智芯 gpu-iluvatar-mainstream）
+$env:OPERATOR_TEST_MODE='remote'
+npm start
+```
+
+启动日志会显示 `Remote test service (adapter → https://frp-act.com:61110)`。真实模式的可验证差异：
+
+- 测试结果 `result.environment.liveHardware` 为 `true`，`source.mock` 为 `false`（真实硬件证据，可发布）
+- 队列文件 `runtime/operator-test-queue.jsonl` 中任务的 `remoteTaskId` 是远程真实 job id（形如 `test-xxxx`）
+- artifact `benchmark.json` 的 `environment` 为远程平台 id（如 `gpu-iluvatar-mainstream`），值为真实测量结果
+
+**环境变量**：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `OPERATOR_TEST_MODE` | 未设置（Mock） | `remote` 切换真实平台 |
+| `OPERATOR_API_BASE_URL` | `https://frp-act.com:61110` | 远程 Base URL |
+| `OPERATOR_API_USERNAME` / `OPERATOR_API_PASSWORD` | `demo_admin` / `demo123` | 登录凭据（共享环境请显式设置） |
+| `OPERATOR_API_SYSTEM_ID` | `system-demo` | system_id |
+| `OPERATOR_TEST_TARGET_PLATFORMS` | `gpu-iluvatar-mainstream` | 逗号分隔的目标平台 |
+| `OPERATOR_TLS_ALLOW_SELF_SIGNED` | `1` | 远程服务用自签名证书，adapter 内 node:https agent 关闭校验 |
+| `OPERATOR_TEST_MAX_POLL_SECONDS` | 未设置 | 可选看门狗，超时任务转失败 |
+
+**已知限制**：
+
+- 远程 API 不提供 cancel 端点：adapter 在本地把任务标记为取消，但远端平台任务仍会跑完。
+- 远程平台返回 `platform_results`，不含本地契约的 Tracer/Profiler 明细；adapter 生成符合契约的空 `tracer` 事件与最小 `profiler.metrics`，正确性来自 `correctness`/`status` 字段。
+- 状态 `needs_review`（通过待审查）映射为本地 `completed`。
+- 接受闸性能阈值按真实测量判定（如天数真实延迟 ~51.7µs 高于目标 45µs 会判为 `reference` 而非自动采用）；真实联调建议 mission goal 措辞为「控制在 X us 以下」。
+
 ## 验证
 
 ```powershell
 npm run test:runtime
 npm run test:queue
 npm run test:test-service
+npm run test:remote-adapter
 npm run test:boundary
 npm run test:opencode
 npm run test:codex

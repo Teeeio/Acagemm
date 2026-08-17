@@ -639,7 +639,13 @@ export function createAgentRuntime(options = {}) {
     }
     // 研究员子 Agent 是平行 run：只投影 state.researchAgent，绝不触碰主线程的
     // stage / candidateEvaluations / patchApplied，避免干扰候选验证路径。
-    if (mode === 'codex-cli' && state.researchAgent?.runId && state.researchAgent?.runtimeKind === 'codex-cli') {
+    // 只在研究活跃（running/cancel_requested）或终态待产笔记（synthesize 无笔记）时触发；
+    // 已定局的终态（采集完成/笔记已产）放行到主线程分支——否则研究分支会一直 return，
+    // 主 agent 完成的 run 永远不会被投影。
+    const researchNeedsProjection = ['running', 'cancel_requested'].includes(state.researchAgent?.status)
+      || (['completed', 'failed', 'timed_out', 'cancelled'].includes(state.researchAgent?.status)
+          && state.researchAgent?.runPhase === 'synthesize' && !(state.researchAgent?.notes || []).length);
+    if (mode === 'codex-cli' && researchNeedsProjection && state.researchAgent?.runId && state.researchAgent?.runtimeKind === 'codex-cli') {
       try {
         const prev = state.researchAgent;
         const run = await codex.readRun(prev.runId);

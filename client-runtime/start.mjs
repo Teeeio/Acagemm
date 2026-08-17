@@ -21,11 +21,20 @@ const findAvailablePort = async (preferred, reserved = new Set()) => {
 
 const testServicePort = await findAvailablePort(Number(inheritedEnv.TEST_SERVICE_PORT || 4180));
 const appPort = await findAvailablePort(Number(inheritedEnv.PORT || 4173), new Set([testServicePort]));
+const remoteMode = inheritedEnv.OPERATOR_TEST_MODE === 'remote';
+const testServiceScript = remoteMode ? 'test-service/remote-adapter-server.mjs' : 'test-service/mock-server.mjs';
 const env = {
   ...inheritedEnv,
   TEST_SERVICE_PORT: String(testServicePort),
   OPERATOR_TEST_SERVICE_URL: `http://127.0.0.1:${testServicePort}`,
   OPERATOR_RUNTIME_MODE: 'codex-cli',
+  // 远程模式（mock 模式忽略）：真实 operator-iteration-platform 连接
+  OPERATOR_API_BASE_URL: inheritedEnv.OPERATOR_API_BASE_URL || 'https://frp-act.com:61110',
+  OPERATOR_API_USERNAME: inheritedEnv.OPERATOR_API_USERNAME || 'demo_admin',
+  OPERATOR_API_PASSWORD: inheritedEnv.OPERATOR_API_PASSWORD || 'demo123',
+  OPERATOR_API_SYSTEM_ID: inheritedEnv.OPERATOR_API_SYSTEM_ID || 'system-demo',
+  OPERATOR_TEST_TARGET_PLATFORMS: inheritedEnv.OPERATOR_TEST_TARGET_PLATFORMS || 'gpu-iluvatar-mainstream',
+  OPERATOR_TLS_ALLOW_SELF_SIGNED: inheritedEnv.OPERATOR_TLS_ALLOW_SELF_SIGNED || '1',
 };
 
 const launch = (script, extraEnv = {}) => {
@@ -41,11 +50,11 @@ const launch = (script, extraEnv = {}) => {
   return child;
 };
 
-launch('test-service/mock-server.mjs');
+launch(testServiceScript);
 launch('client-runtime/local-server.mjs', { API_PORT: String(appPort), SERVE_WEB: 'true' });
 
 console.log(`[operator-studio] Open http://127.0.0.1:${appPort}`);
-console.log(`[operator-studio] Mock test service: http://127.0.0.1:${testServicePort}`);
+console.log(`[operator-studio] ${remoteMode ? `Remote test service (adapter → ${env.OPERATOR_API_BASE_URL})` : 'Mock test service'}: http://127.0.0.1:${testServicePort}`);
 if (restrictedUserContext) console.warn('[operator-studio] Codex Runtime disabled: start Operator Studio from your normal Windows user terminal.');
 
 let shuttingDown = false;

@@ -56,17 +56,28 @@ const run = await req(`/api/missions/${mid}/runs`, { method: 'POST', body: '{}' 
 const runId = run.state.agent.runId;
 console.log('main run:', runId, run.state.agent.status);
 
-// 6. 轮询候选
-const candDeadline = Date.now() + 10 * 60 * 1000;
+// 6. 轮询候选（长窗：默认 30 分钟，主 agent 迁移是长任务）
+const candTimeoutMs = Number(process.env.CANDIDATE_TIMEOUT_MS || 30 * 60 * 1000);
+const candDeadline = Date.now() + candTimeoutMs;
 let candidate = false;
+let lastEventCount = 0;
+let lastProgressAt = Date.now();
 while (Date.now() < candDeadline) {
   const st = await req('/api/state');
   const s = st.state;
   const a = s.agent || {};
   if (s.candidateEvaluations?.length) { candidate = true; console.log(`  候选生成: ${s.candidateEvaluations.length} 个（agent ${a.status}）`); break; }
-  if (['completed', 'failed'].includes(a.status)) break;
+  if (['completed', 'failed', 'awaiting_action'].includes(a.status)) break;
+  // 每 60s 打一次主 agent 进度，确认在推进
+  const now = Date.now();
+  if (now - lastProgressAt >= 60_000) {
+    const elapsed = Math.round((now - new Date(a.startedAt || now).getTime()) / 1000);
+    console.log(`  [${elapsed}s] 主 agent ${a.status} · ${(a.phase || '').slice(0, 24)}`);
+    lastProgressAt = now;
+  }
   await sleep(5000);
 }
-console.log(candidate ? 'PASS: 主 agent 从 sources/ 迁移生成候选' : 'FAIL: 主 agent 未生成候选');
-await rm(root, { recursive: true, force: true }).catch(() => {});
+console.log(candidate ? 'PASS: 主 agent 从 sources/ 迁移生成候选' : `FAIL: 主 agent 未生成候选（agent ${(await req('/api/state')).state.agent.status}）`);
+// 超时/失败也保留临时目录（root 路径已打印）供检查；成功才清理
+if (candidate) await rm(root, { recursive: true, force: true }).catch(() => {});
 process.exit(candidate ? 0 : 1);

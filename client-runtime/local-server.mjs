@@ -703,7 +703,10 @@ const iterationDeps = {
   },
   cancelResearch: async ({ state, runId }) => agentRuntime.cancelRun({ state, runId }),
   registerSources: async ({ state, mission }) => {
-    if (!mission?.sourceRoot || !mission?.runtimeRoot) return { count: 0, errors: ['sourceRoot 未配置'] };
+    if (!mission?.sourceRoot) return { count: 0, errors: ['sourceRoot 未配置'] };
+    // mission 记录可能没存 runtimeRoot；three-layer 项目由 projectRoot 推导
+    const runtimeRoot = mission.runtimeRoot || (mission.projectRoot ? path.join(mission.projectRoot, '.operator-studio') : null);
+    if (!runtimeRoot) return { count: 0, errors: ['runtimeRoot 未配置'] };
     try {
       const entries = await readdir(mission.sourceRoot).catch(() => []);
       const repos = entries.filter((name) => name !== '.git');
@@ -713,10 +716,11 @@ const iterationDeps = {
         const isRepo = await stat(path.join(repoPath, '.git')).then(() => true).catch(() => false);
         if (!isRepo) continue;
         const head = await workspaceManager.git(['rev-parse', 'HEAD'], repoPath).then((result) => result.stdout.trim()).catch(() => null);
-        if (head) references.push({ repository: repoPath, commit: head, path: '' });
+        const origin = await workspaceManager.git(['remote', 'get-url', 'origin'], repoPath).then((result) => result.stdout.trim()).catch(() => '');
+        if (head) references.push({ repository: origin || repoPath, commit: head, path: '' });
       }
       if (references.length) {
-        await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot: mission.runtimeRoot, missionId: state.activeMissionId, references });
+        await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot, missionId: state.activeMissionId, references });
       }
       return { count: repos.length, references };
     } catch (error) {

@@ -16,6 +16,7 @@
     "test:smoke": "node tests/client-runtime-smoke-test.mjs",
     "test:release": "node tests/release-guard-test.mjs",
     "test:test-service": "node test-service/contract-test.mjs",
+    "test:remote-adapter": "node test-service/remote-adapter-test.mjs",
     "test:boundary": "node tests/product-boundary-test.mjs",
     "test:opencode": "node tests/opencode-runtime-test.mjs",
     "test:codex": "node tests/codex-runtime-test.mjs",
