@@ -58,16 +58,27 @@ const serveWeb = process.env.SERVE_WEB !== 'false';
 const operatorTestQueue = createOperatorTestQueue({ serviceClient: testServiceClient });
 const commandJournal = createCommandJournal({ filePath: path.join(runtimeDir, 'command-journal.jsonl') });
 
+const hasSourceContent = async (sourceRoot) => {
+  if (!sourceRoot) return false;
+  try {
+    const entries = await readdir(sourceRoot).catch(() => []);
+    return entries.filter((name) => name !== '.git').length > 0;
+  } catch { return false; }
+};
+
 const buildRuntimePreflight = async (mission) => {
   const workspace = await ensureMissionWorkspace(mission.id, mission.repository);
-  const [workspaceCheck, agentCheck] = await Promise.all([
+  let [workspaceCheck, agentCheck] = await Promise.all([
     workspaceManager.inspect(workspace),
     agentRuntime.preflight({ workspace }),
   ]);
-  if (workspaceCheck.ready && workspaceCheck.baselineEmpty) {
-    workspaceCheck.ready = false;
-    workspaceCheck.code = 'WORKSPACE_BASELINE_EMPTY';
-    workspaceCheck.detail = 'Iteration Repository 基线为空，Mission 工作区没有可供 Agent 检查的源码或测试文件。请先把项目文件放入 repository，或重新选择包含代码的 Git 仓库。';
+  // 空基线：若 sources/（Source Registry）已有参考资料（研究员已拉取），视为"从参考迁移"场景，
+  // 允许主 agent 从空工作区起步、从 sources/ 参考资料构建迁移对象；否则阻断。
+  // 注意：inspect 返回的是缓存对象，绝不能原地改（会污染 inspectionCache，导致后续 loadState 抛错）；
+  // 用副本标记 ready:false。
+  const migrationFromSource = workspaceCheck.baselineEmpty && await hasSourceContent(mission.sourceRoot);
+  if (workspaceCheck.ready && workspaceCheck.baselineEmpty && !migrationFromSource) {
+    workspaceCheck = { ...workspaceCheck, ready: false, code: 'WORKSPACE_BASELINE_EMPTY', detail: 'Iteration Repository 基线为空，Mission 工作区没有可供 Agent 检查的源码或测试文件。请先把项目文件放入 repository，或重新选择包含代码的 Git 仓库。' };
   }
   return {
     ready: workspaceCheck.ready && agentCheck.ready,
