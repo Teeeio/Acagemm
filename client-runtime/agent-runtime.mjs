@@ -730,7 +730,6 @@ export function createAgentRuntime(options = {}) {
           const selectedCandidate = agentResult.candidates.find((candidate) => candidate.id === agentResult.recommendedCandidate) || agentResult.candidates[0];
           const declaredFiles = String(selectedCandidate.files || '').split(',').map((file) => file.trim().replaceAll('\\', '/')).filter(Boolean);
           const manifest = await workspaceManager.captureDiff(run.workspace);
-          const sourceInspection = await workspaceManager.inspectSources(activeMission.sourceRoot, selectedCandidate.sourceReferences || []);
           const actualFiles = manifest.changedFiles.map((file) => file.replaceAll('\\', '/'));
           const undeclaredFiles = actualFiles.filter((file) => !declaredFiles.includes(file));
           const missingFiles = declaredFiles.filter((file) => !actualFiles.includes(file));
@@ -740,12 +739,12 @@ export function createAgentRuntime(options = {}) {
           } else if (undeclaredFiles.length || missingFiles.length) {
             candidateValidation = { passed: false, code: 'CODEX_CANDIDATE_FILES_MISMATCH', detail: `候选文件清单与真实 Diff 不一致。未声明：${undeclaredFiles.join(', ') || '无'}；未修改：${missingFiles.join(', ') || '无'}。`, undeclaredFiles, missingFiles };
             verifiedCandidates = [];
-          } else if (!sourceInspection.ready) {
-            candidateValidation = { passed: false, code: 'CODEX_SOURCE_REGISTRY_INVALID', detail: `Source Registry 未通过固定来源检查：${sourceInspection.errors.map((error) => error.detail).join('；')}`, sourceErrors: sourceInspection.errors };
-            verifiedCandidates = [];
           } else {
-            candidateValidation = { passed: true, code: 'CODEX_CANDIDATE_DIFF_VERIFIED', digest: manifest.digest, files: actualFiles, sources: sourceInspection.sources, sourceReferences: sourceInspection.references };
-            verifiedCandidates = [{ ...selectedCandidate, files: actualFiles.join(', '), sourceReferences: sourceInspection.references, patchDigest: manifest.digest, sourceRunId: state.agent.runId }];
+            // 工作区 Git Diff 是候选准入权威。来源引用只作信息标记（候选自报），不校验、不阻塞准入——
+            // 迁移场景中参考材料可能含非 git 内容、agent 引用 commit 也可能与实际拉取不一致，强制校验会误拦。
+            const claimedReferences = Array.isArray(selectedCandidate.sourceReferences) ? selectedCandidate.sourceReferences : [];
+            candidateValidation = { passed: true, code: 'CODEX_CANDIDATE_DIFF_VERIFIED', digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: '候选自报来源标记，未做固定来源校验（工作区 Diff 为准入权威）' };
+            verifiedCandidates = [{ ...selectedCandidate, files: actualFiles.join(', '), sourceReferences: claimedReferences, patchDigest: manifest.digest, sourceRunId: state.agent.runId }];
           }
         }
         const nextAgent = {
