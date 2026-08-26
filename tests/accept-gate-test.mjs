@@ -99,9 +99,13 @@ const incompleteLocalC500Gate = evaluateAcceptGate(incompleteLocalC500State, {
   profiler: { format: 'operator-profile/v1', status: 'missing', metrics: {} },
   environment: { runtime: 'local-c500-runner/v1', service: 'local-c500-adapter', liveHardware: true },
 });
-assert.equal(incompleteLocalC500Gate.passed, false);
-assert.equal(incompleteLocalC500Gate.result, 'failed');
-assert.ok(incompleteLocalC500Gate.failedRules.includes('evidence.complete'));
+assert.equal(incompleteLocalC500Gate.passed, true);
+assert.equal(incompleteLocalC500Gate.publishable, true);
+assert.equal(incompleteLocalC500Gate.result, 'eligible');
+assert.ok(!incompleteLocalC500Gate.failedRules.includes('evidence.complete'));
+assert.equal(incompleteLocalC500Gate.rules.find((rule) => rule.id === 'diagnostics.mctracer')?.passed, false);
+assert.equal(incompleteLocalC500Gate.rules.find((rule) => rule.id === 'diagnostics.mcprofiler')?.passed, false);
+assert.match(incompleteLocalC500Gate.summary, /不阻塞采用/);
 
 applyOperatorTestSnapshot(liveState, { taskId: 'task-gate', status: 'completed', progress: 100, completedAt: new Date().toISOString(), result: result({ liveHardware: true }) });
 runAutomaticAdoption(liveState);

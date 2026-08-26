@@ -1,4 +1,7 @@
 import importlib.util
+import os
+import sys
+import tempfile
 from pathlib import Path
 
 
@@ -76,5 +79,28 @@ class SelfConsistentButWrongCandidate(GeneratedOperator):
 caught = runner._run_correctness(SelfConsistentButWrongCandidate, FakeTorch, 4, 1e-3, 1e-3, test_spec, GeneratedOperator)
 assert caught["passed"] is False
 assert caught["failedCaseName"] == "minimal"
+
+with tempfile.TemporaryDirectory() as temporary_directory:
+    missing = runner._analysis_tool(
+        "definitely-missing-analysis-tool",
+        "OPERATOR_TEST_MISSING_TOOL_COMMAND",
+        '"{tool}"',
+        {},
+        Path(temporary_directory) / "missing",
+    )
+    assert missing["status"] == "unavailable"
+    assert missing["attempted"] is True
+
+    os.environ["OPERATOR_TEST_FAILING_TOOL_COMMAND"] = f'"{sys.executable}" -c "import sys; sys.exit(7)"'
+    failed = runner._analysis_tool(
+        "definitely-missing-analysis-tool",
+        "OPERATOR_TEST_FAILING_TOOL_COMMAND",
+        '"{tool}"',
+        {},
+        Path(temporary_directory) / "failed",
+    )
+    assert failed["status"] == "failed"
+    assert failed["exitCode"] == 7
+    del os.environ["OPERATOR_TEST_FAILING_TOOL_COMMAND"]
 
 print("[local-c500-runner-contract] generated correctness and benchmark profiles passed")

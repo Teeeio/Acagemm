@@ -276,6 +276,8 @@ export const runDoctor = async () => {
   } catch (error) {
     sourceMirror = { status: 'invalid', configured: true, detail: `${error.code || 'SOURCE_MIRROR_CONFIG_INVALID'}: ${error.message}` };
   }
+  const mctracer = checkCommand('mctracer');
+  const mcProfiler = checkCommand('mcProfiler');
   return {
     status: 'completed',
     runtime,
@@ -283,8 +285,8 @@ export const runDoctor = async () => {
     checks: {
       python: checkCommand(process.env.PYTHON || 'python', ['--version']),
       mxSmi: checkCommand('mx-smi', []),
-      mctracer: checkCommand('mctracer'),
-      mcProfiler: checkCommand('mcProfiler'),
+      mctracer: { ...mctracer, required: false, status: mctracer.status === 'ok' ? 'ok' : 'optional-missing' },
+      mcProfiler: { ...mcProfiler, required: false, status: mcProfiler.status === 'ok' ? 'ok' : 'optional-missing' },
       sourceMirror,
     },
   };

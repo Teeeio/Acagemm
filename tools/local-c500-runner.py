@@ -190,19 +190,53 @@ def _render(template, values):
 def _analysis_tool(name, env_name, default_template, values, artifact_dir):
     executable = shutil.which(name)
     template = os.environ.get(env_name, default_template)
-    if not executable and env_name not in os.environ:
-        raise RuntimeError(f"{name} is unavailable; real C500 evidence requires the analysis tool")
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    if not executable and env_name not in os.environ:
+        error = f"{name} is unavailable; optional diagnostic collection was skipped"
+        (artifact_dir / "stderr.txt").write_text(error + "\n", encoding="utf-8")
+        (artifact_dir / "stdout.txt").write_text("", encoding="utf-8")
+        return {
+            "status": "unavailable",
+            "tool": name,
+            "attempted": True,
+            "artifactDir": str(artifact_dir),
+            "error": error,
+        }
     command = _render(template, {**values, "artifactDir": artifact_dir, "tool": executable or name})
     started = time.perf_counter()
-    process = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=300, check=False)
+    try:
+        process = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=300, check=False)
+    except Exception as error:
+        detail = f"{name} invocation failed: {error}"
+        (artifact_dir / "stderr.txt").write_text(detail + "\n", encoding="utf-8")
+        (artifact_dir / "stdout.txt").write_text("", encoding="utf-8")
+        return {
+            "status": "failed",
+            "tool": name,
+            "attempted": True,
+            "command": command,
+            "artifactDir": str(artifact_dir),
+            "durationMs": round((time.perf_counter() - started) * 1000, 3),
+            "error": detail,
+        }
     (artifact_dir / "stdout.txt").write_text(process.stdout or "", encoding="utf-8")
     (artifact_dir / "stderr.txt").write_text(process.stderr or "", encoding="utf-8")
     if process.returncode != 0:
-        raise RuntimeError(f"{name} failed with exit code {process.returncode}: {(process.stderr or process.stdout).strip()}")
+        detail = f"{name} failed with exit code {process.returncode}: {(process.stderr or process.stdout).strip()}"
+        return {
+            "status": "failed",
+            "tool": name,
+            "attempted": True,
+            "command": command,
+            "artifactDir": str(artifact_dir),
+            "durationMs": round((time.perf_counter() - started) * 1000, 3),
+            "exitCode": process.returncode,
+            "error": detail,
+        }
     return {
         "status": "completed",
         "tool": name,
+        "attempted": True,
         "command": command,
         "artifactDir": str(artifact_dir),
         "durationMs": round((time.perf_counter() - started) * 1000, 3),
@@ -278,19 +312,22 @@ def _run(args):
         } for benchmark in benchmark_results],
         "tracer": {
             "format": "operator-trace/v1",
-            "status": "completed",
-            "events": [{"name": "mctracer", "category": "tool", "artifactDir": trace["artifactDir"], "durationMs": trace["durationMs"]}],
+            "status": trace["status"],
+            "events": [{"name": "mctracer", "category": "tool", "artifactDir": trace["artifactDir"], "durationMs": trace.get("durationMs")}]
+            if trace["status"] == "completed" else [],
+            "diagnostics": [trace["error"]] if trace.get("error") else [],
             "artifacts": trace,
         },
         "profiler": {
             "format": "operator-profile/v1",
-            "status": "completed",
+            "status": profile["status"],
             "metrics": {
                 "latencyP50Us": primary_benchmark["p50Us"],
                 "latencyP95Us": primary_benchmark["p95Us"],
-                "toolDurationMs": profile["durationMs"],
+                "toolDurationMs": profile.get("durationMs"),
                 "artifactDir": profile["artifactDir"],
             },
+            "diagnostics": [profile["error"]] if profile.get("error") else [],
             "artifacts": profile,
         },
         "environment": {
@@ -302,6 +339,7 @@ def _run(args):
             "hardware": hardware,
             "candidateDigest": (task.get("candidate") or {}).get("digest"),
             "runPySource": task.get("runPySource"),
+            "optionalDiagnostics": {"mctracer": trace["status"], "mcProfiler": profile["status"]},
         },
     }
     result_json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

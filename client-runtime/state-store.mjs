@@ -1670,15 +1670,14 @@ export function evaluateAcceptGate(state, result = {}) {
   const measurements = Array.isArray(result.benchmark) ? result.benchmark : [];
   const expectedCases = Number(state.benchmark?.matrix?.correctnessCases || state.testMatrix?.correctnessCases || 24);
   const correctnessPassed = measurements.length > 0 && measurements.every((item) => item.correctness?.passed === true && Number(item.correctness?.total || 0) >= expectedCases);
-  const evidencePassed = measurements.length > 0
-    && result.tracer?.format === 'operator-trace/v1'
+  const diagnosticEvidenceStructured = result.tracer?.format === 'operator-trace/v1'
     && Array.isArray(result.tracer?.events)
     && result.profiler?.format === 'operator-profile/v1'
     && result.profiler?.metrics && typeof result.profiler.metrics === 'object';
   const localC500Evidence = result.environment?.service === 'local-c500-adapter';
   const localC500ToolsCompleted = !localC500Evidence
     || (result.tracer?.status === 'completed' && result.profiler?.status === 'completed');
-  const completeEvidence = Boolean(evidencePassed && localC500ToolsCompleted);
+  const completeEvidence = measurements.length > 0 && (localC500Evidence || diagnosticEvidenceStructured);
   const liveEvidence = result.environment?.liveHardware === true;
   const absoluteThreshold = parsePerformanceThreshold(mission);
   const relativeTarget = parseRelativeImprovementTarget(mission);
@@ -1726,7 +1725,9 @@ export function evaluateAcceptGate(state, result = {}) {
     : '同 runner · 同输入 shape · 上游权威来源 · PyTorch reference 单文件展开版本';
   const rules = [
     { id: 'correctness.complete', label: 'Correctness 用例全部通过', required: true, passed: correctnessPassed, actual: measurements.map((item) => `${item.environment} ${item.correctness?.passed ? item.correctness.total : 0}/${item.correctness?.total || expectedCases}`).join(' · '), expected: `${expectedCases}/${expectedCases}` },
-    { id: 'evidence.complete', label: 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: completeEvidence, actual: completeEvidence ? '三类证据齐全' : localC500Evidence && !localC500ToolsCompleted ? '本地 C500 Tracer / Profiler 未完成' : '证据缺失或格式不匹配', expected: 'operator benchmark + trace/v1 + profile/v1' },
+    { id: 'evidence.complete', label: localC500Evidence ? 'Benchmark 核心证据完整' : 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: completeEvidence, actual: completeEvidence ? (localC500Evidence && !localC500ToolsCompleted ? 'Benchmark 完整；可选诊断工具未全部完成' : '证据完整') : 'Benchmark 或证据格式缺失', expected: localC500Evidence ? 'operator benchmark' : 'operator benchmark + trace/v1 + profile/v1' },
+    { id: 'diagnostics.mctracer', label: 'mcTracer 可选诊断', required: false, passed: result.tracer?.status === 'completed', skipped: false, actual: result.tracer?.status || 'not_run', expected: 'best effort; failure does not block' },
+    { id: 'diagnostics.mcprofiler', label: 'mcProfiler 可选诊断', required: false, passed: result.profiler?.status === 'completed', skipped: false, actual: result.profiler?.status || 'not_run', expected: 'best effort; failure does not block' },
     { id: 'baseline.current_reference', label: baselineLabel, required: Boolean(baseline.required), passed: baselineReady, skipped: !baseline.required, actual: baselineReady ? `${baselineEvidence?.environment} ${baselineEvidence?.value}${baselineEvidence?.unit}${baselineKind === 'naive_v0' ? ' · v0' : ''}` : (baselineEvidence ? 'baseline 与当前 runner/shape/source 不匹配' : '缺少 baseline 证据'), expected: baselineExpected },
     { id: 'performance.target', label: hasThreshold ? '达到 Mission 性能目标' : '达到 Mission 性能策略', required: true, passed: performancePassed, skipped: false, actual: primary ? `${primary.environment} ${primary.value}${primary.unit}` : '无测量值', expected: performanceExpected },
     { id: 'cross_platform.regression', label: '跨平台相对 current best 无回归', required: false, passed: null, skipped: true, actual: '未配置逐平台 current best 基线', expected: '为各平台登记可比较基线后评估' },
@@ -1749,7 +1750,7 @@ export function evaluateAcceptGate(state, result = {}) {
     evaluatedRules: requiredRules.length,
     skippedRules: rules.filter((rule) => rule.skipped).map((rule) => rule.id),
     summary: passed
-      ? `${passedRules.length}/${requiredRules.length} 条必需规则通过；${liveEvidence ? '证据可用于正式发布。' : '当前为 Mock 证据，只能验证流程与生成预览资产。'}`
+      ? `${passedRules.length}/${requiredRules.length} 条必需规则通过；${localC500Evidence && !localC500ToolsCompleted ? 'mcTracer/mcProfiler 可选诊断未全部完成，不阻塞采用；' : ''}${liveEvidence ? '证据可用于正式发布。' : '当前为 Mock 证据，只能验证流程与生成预览资产。'}`
       : resultKind === 'reference'
         ? `正确性与证据完整，但未达到性能目标；候选保留为弱候选参考。`
         : `正确性或证据完整性未通过；候选退出候选池并保留失败记录。`,
