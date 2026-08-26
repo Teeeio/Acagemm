@@ -5,7 +5,7 @@
 ## 1. 环境要求
 
 - Git、Node.js 20+、npm
-- 已安装并登录的 Codex CLI，`codex --version` 可执行
+- 已安装并登录的 Codex CLI 或 Claude Code；Claude 模式要求 `claude --version` 和 `claude auth status` 可执行
 - Python 3.12（现场目标版本 3.12.11）
 - PyTorch `2.8.0+metax3.3.0.2`，且 `torch.cuda.is_available()` 为 `True`
 - MACA、Triton 和 C500 驱动环境已生效
@@ -95,9 +95,21 @@ $env:OPERATOR_SOURCE_MIRROR_CONFIG = (Resolve-Path '.\source-mirrors.json')
 
 ## 3. 真机预检
 
+使用 Claude Code 时必须在启动任何 doctor/runtime 进程之前设置：
+
+```bash
+export OPERATOR_RUNTIME_MODE=claude-code
+export CLAUDE_COMMAND=claude
+claude --version
+claude auth status
+```
+
+不要把 `CLAUDE_COMMAND` 指向 Codex wrapper，也不要启用 `--dangerously-skip-permissions`。Claude 的账号、模型和企业网关由测试机本地 Claude Code 配置管理，Operator Studio 不读取或保存凭据。
+
 ```bash
 node --version
-codex --version
+claude --version
+claude auth status
 python --version
 ixsmi
 python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
@@ -124,6 +136,8 @@ npm run tester:c500:doctor
 ```
 
 预期 backend 为 `local-c500` 且不是 simulation，Python、`ixsmi`、`mctracer`、`mcProfiler` 均为 `ok`。
+
+Claude 模式还应看到 runtime mode 为 `claude-code`、status 为 `connected`，并显示本机 Claude Code 版本。
 
 使用镜像时还应看到 `sourceMirror=ok`、映射数量以及 `required`。`sourceMirror=invalid` 时不要发布 Mission；先修复配置文件。
 

@@ -6,6 +6,8 @@ const checks = [
   'test:operator-test-resilience',
   'test:intent',
   'test:research',
+  'test:claude',
+  'test:claude-workflow',
   'test:loop',
   'test:gate',
   'test:workspace',

@@ -55,6 +55,19 @@ npm start
 
 客户端通过 `codex exec --json` 启动新 thread；同一 Mission 再次运行时默认通过 `codex exec resume` 恢复历史 thread。`cli-file` 保留为旧算子迭代系统的兼容适配器，OpenCode 保留为实验适配器。
 
+## 连接 Claude Code Agent
+
+完整生产工作流也支持 Claude Code CLI。Claude 使用本机账号、模型和网关配置，客户端通过非交互 `stream-json` 启动或恢复 session，并继续复用 Research、Baseline Materializer、Candidate Diff、测试和 Gate：
+
+```bash
+export OPERATOR_RUNTIME_MODE=claude-code
+export CLAUDE_COMMAND=claude
+claude auth status
+npm run tester:c500
+```
+
+各阶段只开放其所需工具，Bash 被禁用；不要使用 `--dangerously-skip-permissions`。
+
 ## 研究员子 Agent（research scout）
 
 主优化线程之外，客户端可启动第二个 Codex 线程做**只读联网调研**：停滞升级或操作员触发时，研究员用开放沙箱检索论文/开源库，产出结构化调研笔记，经价值闸后注入下一轮优化目标。它绝不直接生成候选——候选准入仍由工作区 Git Diff 把关。

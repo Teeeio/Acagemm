@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { appendRuntimeEvent } from './agent-runtime.mjs';
+import { appendRuntimeEvent, isManagedWorkspaceRuntimeMode } from './agent-runtime.mjs';
 import {
   dataDir,
   legacyDataDir,
@@ -458,7 +458,7 @@ export function markCandidateAccepted(state, note, source = 'policy') {
 export function runAutomaticAdoption(state, note = 'Accept Gate 全部通过，策略自动采用 Candidate 02。') {
   const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
   const candidate = (state.candidateEvaluations || []).find((item) => item.id === candidateId);
-  const isCodexCandidate = state.agent?.runtimeKind === 'codex-cli';
+  const isCodexCandidate = isManagedWorkspaceRuntimeMode(state.agent?.runtimeKind);
   const gate = state.decisionReview?.gate || candidate?.acceptGate || { passed: true, passedRules: [], evaluatedRules: 0 };
   if (state.decisionReview?.status === 'awaiting_review' || !candidateId || (isCodexCandidate && (!candidate?.patchDigest || gate?.passed !== true))) return state;
   const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
@@ -1215,7 +1215,7 @@ export async function loadState({ runtimeMode, ensureWorkspace = true, commandJo
   }
   const effectiveRuntimeMode = runtimeMode || process.env.OPERATOR_RUNTIME_MODE || 'unavailable';
   const usesReferenceRuntime = effectiveRuntimeMode === 'reference-fixture' && !state.agent?.runId?.startsWith('cli_');
-  const usesVerifiedCodexRuntime = effectiveRuntimeMode === 'codex-cli' && state.agent?.runtimeKind === 'codex-cli';
+  const usesVerifiedCodexRuntime = isManagedWorkspaceRuntimeMode(effectiveRuntimeMode) && state.agent?.runtimeKind === effectiveRuntimeMode;
   const staleMockPublication = state.benchmark?.result?.environment?.liveHardware === false
     && state.knowledgeMaintenance?.status === 'completed'
     && state.publishedAssets?.some((asset) => asset.status === 'published');
@@ -1372,7 +1372,7 @@ export function applyOperatorTestSnapshot(state, snapshot) {
       const candidateId = state.appliedCandidateId || state.benchmark?.candidate?.id || null;
       const failedSummary = snapshot.error?.message || snapshot.result?.summary || '执行失败';
       const infraFailure = isInfrastructureTestFailure(snapshot);
-      if (state.agent?.runtimeKind === 'codex-cli' && state.benchmark?.purpose === 'candidate' && !infraFailure) {
+      if (isManagedWorkspaceRuntimeMode(state.agent?.runtimeKind) && state.benchmark?.purpose === 'candidate' && !infraFailure) {
         state.stage = 'diagnosis';
         state.decisionReview = {
           ...(state.decisionReview || createDecisionReviewState('resolved')),
@@ -1507,7 +1507,7 @@ export function applyOperatorTestSnapshot(state, snapshot) {
   const candidateId = state.appliedCandidateId || state.benchmark?.candidate?.id || null;
   const recommendation = gate.result === 'eligible' ? 'adopt' : gate.result === 'reference' ? 'reference' : 'reject';
   applyGateDisposition(state, candidateId, gate);
-  if (gate.passed && state.agent?.runtimeKind === 'codex-cli') ensureEvidenceKnowledgeDraft(state, candidateId, gate);
+  if (gate.passed && isManagedWorkspaceRuntimeMode(state.agent?.runtimeKind)) ensureEvidenceKnowledgeDraft(state, candidateId, gate);
   appendRuntimeEvent(state, 'accept_gate.evaluated', { candidate: candidateId, result: gate.result, passed: gate.passed, rules: gate.rules }, { kind: 'policy', mode: 'client' });
   if (state.decisionReview?.status === 'awaiting_review') {
     state.decisionReview = { ...state.decisionReview, candidateId, recommendation, gate, gateEvaluatedAt: state.benchmark.completedAt };

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { opencodeClient as defaultOpenCodeClient, parseOpenCodeModel } from './opencode-client.mjs';
 import { classifyCodexFailure, codexClient as defaultCodexClient } from './codex-client.mjs';
+import { classifyClaudeFailure, claudeClient as defaultClaudeClient } from './claude-client.mjs';
 import { parseAgentResult, parseBaselineMaterializerResult, parseResearchResult } from './agent-result.mjs';
 import { runtimeDir } from './storage-paths.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
@@ -286,6 +287,7 @@ const MAIN_AGENT_STALL_MS = 2 * 60 * 1000;
 
 export const isMainAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_MAIN_AGENT_STATUSES.has(agent?.status));
 export const isResearchAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_RESEARCH_AGENT_STATUSES.has(agent?.status));
+export const isManagedWorkspaceRuntimeMode = (runtimeMode) => runtimeMode === 'codex-cli' || runtimeMode === 'claude-code';
 
 export function appendRuntimeEvent(state, type, payload = {}, source = { kind: 'adapter' }) {
   if (!state) return null; // 防御：编排器边界可能出现瞬态 undefined，不崩循环
@@ -315,7 +317,13 @@ export function createAgentRuntime(options = {}) {
   const openCodeAgent = options.openCodeAgent || process.env.OPENCODE_AGENT || 'plan';
   const openCodeModel = options.openCodeModel || process.env.OPENCODE_MODEL || '';
   const codex = options.codexClient || defaultCodexClient;
+  const claude = options.claudeClient || defaultClaudeClient;
   const codexWorkspace = options.codexWorkspace || process.env.OPERATOR_CODEX_WORKSPACE || rootDir;
+  const managedCliMode = mode === 'codex-cli' || mode === 'claude-code';
+  const managedClient = mode === 'claude-code' ? claude : codex;
+  const managedMeta = mode === 'claude-code'
+    ? { name: 'Claude Code', slug: 'claude', unavailableCode: 'CLAUDE_RUNTIME_UNAVAILABLE' }
+    : { name: 'Codex', slug: 'codex', unavailableCode: 'CODEX_RUNTIME_UNAVAILABLE' };
   let sourceMirrorPolicyPromise = null;
   const sourceMirrorPolicy = async () => {
     if (options.sourceMirrorPolicy) return options.sourceMirrorPolicy;
@@ -325,6 +333,8 @@ export function createAgentRuntime(options = {}) {
   const codexDescriptorTtlMs = Number(options.codexDescriptorTtlMs ?? 60_000);
   let codexDescriptorCache = null;
   let codexDescriptorCachedAt = 0;
+  let claudeDescriptorCache = null;
+  let claudeDescriptorCachedAt = 0;
   const openCodeDescriptorTtlMs = Number(options.openCodeDescriptorTtlMs ?? 5_000);
   let openCodeDescriptorCache = null;
   let openCodeDescriptorCachedAt = 0;
@@ -408,6 +418,39 @@ export function createAgentRuntime(options = {}) {
     return codexDescriptorCache;
   };
 
+  const describeClaude = async () => {
+    if (claudeDescriptorCache && Date.now() - claudeDescriptorCachedAt < codexDescriptorTtlMs) return claudeDescriptorCache;
+    const probe = await claude.describe();
+    const connected = Boolean(probe.installed) && probe.loggedIn !== false;
+    claudeDescriptorCache = {
+      mode: 'claude-code',
+      label: 'Claude Code Agent Runtime',
+      status: connected ? 'connected' : 'unavailable',
+      connected,
+      liveHardware: false,
+      authority: 'claude-code',
+      transport: 'Claude Code stdio stream-json',
+      actionBridge: 'mission-and-client-workflow',
+      projection: 'session-events-tools-artifacts',
+      version: probe.version || null,
+      workspace: codexWorkspace,
+      capabilities: connected ? ['mission.run', 'mission.resume', 'research.run', 'materializer.run', 'event.read', 'tool.read', 'candidate.observe', 'workflow.decide', 'workflow.intervene', 'workflow.rollback'] : [],
+      hint: connected
+        ? 'Claude Code CLI 已就绪；模型、网关与认证沿用测试机的 Claude Code 配置。'
+        : '未发现 Claude Code CLI，请安装并确保 claude 命令在 PATH 中。',
+      configurationAuthority: 'local-claude-code',
+      authProbe: probe.loggedIn ? 'official-login-detected' : 'authentication-unavailable',
+      probe: { installed: Boolean(probe.installed), officialLoginDetected: Boolean(probe.loggedIn) },
+    };
+    claudeDescriptorCachedAt = Date.now();
+    return claudeDescriptorCache;
+  };
+
+  const describeManagedCli = () => mode === 'claude-code' ? describeClaude() : describeCodex();
+  const classifyManagedFailure = (run, events) => mode === 'claude-code'
+    ? classifyClaudeFailure(run, events)
+    : classifyCodexFailure(run, events);
+
   const describe = async () => {
     if (mode === 'reference-fixture') {
       return {
@@ -426,6 +469,7 @@ export function createAgentRuntime(options = {}) {
 
     if (mode === 'opencode-server') return describeOpenCode();
     if (mode === 'codex-cli') return describeCodex();
+    if (mode === 'claude-code') return describeClaude();
 
     if (mode !== 'cli-file') {
       return {
@@ -471,10 +515,10 @@ export function createAgentRuntime(options = {}) {
     if (!descriptor.connected) {
       return { ready: false, code: 'AGENT_RUNTIME_UNAVAILABLE', detail: descriptor.hint || 'Agent Runtime 不可用。', runtime: descriptor, workspace };
     }
-    if (mode === 'codex-cli') {
-      const result = typeof codex.preflight === 'function'
-        ? await codex.preflight({ workspace })
-        : { ready: true, code: 'CODEX_READY', workspace };
+    if (managedCliMode) {
+      const result = typeof managedClient.preflight === 'function'
+        ? await managedClient.preflight({ workspace })
+        : { ready: true, code: `${managedMeta.slug.toUpperCase()}_READY`, workspace };
       return { ...result, runtime: descriptor };
     }
     return { ready: true, code: 'AGENT_RUNTIME_READY', runtime: descriptor, workspace };
@@ -527,12 +571,12 @@ export function createAgentRuntime(options = {}) {
       appendRuntimeEvent(state, 'opencode.session_started', { sessionId: session.id, agent: descriptor.agent, model: descriptor.model }, { kind: 'agent', mode: 'opencode-server' });
       return { handled: true, state };
     }
-    if (mode === 'codex-cli') {
-      const descriptor = await describeCodex();
+    if (managedCliMode) {
+      const descriptor = await describeManagedCli();
       if (!descriptor.connected) {
         const error = new Error(descriptor.hint);
         error.status = 503;
-        error.code = 'CODEX_RUNTIME_UNAVAILABLE';
+        error.code = managedMeta.unavailableCode;
         throw error;
       }
       // 同步研究员（停滞升级）在跑时主线程必须等待；异步研究员（操作员触发）可与主线程并行。
@@ -542,11 +586,11 @@ export function createAgentRuntime(options = {}) {
         error.code = 'RESEARCH_SERIAL_BUSY';
         throw error;
       }
-      const runId = `codex_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
+      const runId = `${managedMeta.slug}_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
       if (!requestedWorkspace || !await directoryExists(requestedWorkspace)) {
-        const error = new Error('Codex 只能在 Operator Studio 创建的 Mission 工作区中运行。');
+        const error = new Error(`${managedMeta.name} 只能在 Operator Studio 创建的 Mission 工作区中运行。`);
         error.status = 409;
-        error.code = 'CODEX_MANAGED_WORKSPACE_REQUIRED';
+        error.code = 'AGENT_MANAGED_WORKSPACE_REQUIRED';
         throw error;
       }
       const workspace = requestedWorkspace;
@@ -582,16 +626,16 @@ export function createAgentRuntime(options = {}) {
         'For a resumed thread, follow the new user goal while keeping all work inside this isolated Mission workspace.',
         boundary.toolInstruction,
       ].join('\n');
-      const run = await codex.start({ runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
+      const run = await managedClient.start({ runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
       state.stage = 'diagnosis';
       state.patchApplied = false;
       state.agent = {
         status: 'running',
-        phase: 'Codex 正在分析',
+        phase: `${managedMeta.name} 正在分析`,
         progress: 5,
         missionId: mission.id,
         runId,
-        runtimeKind: 'codex-cli',
+        runtimeKind: mode,
         threadId: run.threadId || resumeThreadId || null,
         profileId: 'profile.operator-orchestrator',
         goal,
@@ -601,10 +645,10 @@ export function createAgentRuntime(options = {}) {
         lastEventAt: Date.now(),
         currentAction: null,
         toolCalls: [],
-        messages: [{ id: `codex-start-${runId}`, phase: 'Mission', status: 'running', title: resumeThreadId ? 'Codex Mission 已恢复' : 'Codex Mission 已启动', detail: `Run ${runId} · ${descriptor.version || 'Codex CLI'}${resumeThreadId ? ` · thread ${resumeThreadId}` : ''}`, time: '刚刚' }],
-        artifacts: [{ id: `codex-run-${runId}`, kind: 'Codex Run', title: mission.title, status: 'running', meta: 'Codex exec --json · 本地事件投影' }],
+        messages: [{ id: `${managedMeta.slug}-start-${runId}`, phase: 'Mission', status: 'running', title: resumeThreadId ? `${managedMeta.name} Mission 已恢复` : `${managedMeta.name} Mission 已启动`, detail: `Run ${runId} · ${descriptor.version || managedMeta.name}${resumeThreadId ? ` · session ${resumeThreadId}` : ''}`, time: '刚刚' }],
+        artifacts: [{ id: `${managedMeta.slug}-run-${runId}`, kind: `${managedMeta.name} Run`, title: mission.title, status: 'running', meta: `${descriptor.transport} · 本地事件投影` }],
       };
-      appendRuntimeEvent(state, resumeThreadId ? 'codex.run_resumed' : 'codex.run_started', { runId, threadId: run.threadId || resumeThreadId || null, workspace: run.workspace }, { kind: 'agent', mode: 'codex-cli' });
+      appendRuntimeEvent(state, resumeThreadId ? `${managedMeta.slug}.run_resumed` : `${managedMeta.slug}.run_started`, { runId, threadId: run.threadId || resumeThreadId || null, workspace: run.workspace }, { kind: 'agent', mode });
       return { handled: true, state };
     }
 
@@ -724,17 +768,17 @@ export function createAgentRuntime(options = {}) {
   ].join('\n');
 
   const startBaselineMaterialization = async ({ state, mission, source, matrix = {}, workspace }) => {
-    if (mode !== 'codex-cli') {
-      const error = new Error(`Baseline materializer is only supported by runtime mode codex-cli (current: ${mode}).`);
+    if (!managedCliMode) {
+      const error = new Error(`Baseline materializer requires a managed workspace CLI runtime (current: ${mode}).`);
       error.status = 503;
       error.code = 'BASELINE_MATERIALIZER_RUNTIME_UNSUPPORTED';
       throw error;
     }
-    const descriptor = await describeCodex();
+    const descriptor = await describeManagedCli();
     if (!descriptor.connected) {
       const error = new Error(descriptor.hint);
       error.status = 503;
-      error.code = 'CODEX_RUNTIME_UNAVAILABLE';
+      error.code = managedMeta.unavailableCode;
       throw error;
     }
     const active = state.baseline?.materializer;
@@ -762,14 +806,14 @@ export function createAgentRuntime(options = {}) {
       commit: sourceEvidence.commit,
       tree: sourceEvidence.tree,
     };
-    const runId = `codex_materializer_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
+    const runId = `${managedMeta.slug}_materializer_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
     const boundary = await prepareAgentBoundary({
       workspace,
       role: 'materializer',
       roots: { workspace },
     });
     const prompt = `${buildBaselineMaterializerPrompt({ mission, source: verifiedSource, matrix, materializationDir: workspace, sourceEvidence })}\n${boundary.toolInstruction}`;
-    const run = await codex.start({
+    const run = await managedClient.start({
       runId,
       missionId: mission.id,
       goal: prompt,
@@ -786,7 +830,7 @@ export function createAgentRuntime(options = {}) {
         status: 'running',
         phase: 'Baseline 单文件展开中',
         progress: 5,
-        runtimeKind: 'codex-cli',
+        runtimeKind: mode,
         missionId: mission.id,
         runId,
         threadId: run.threadId || null,
@@ -799,27 +843,27 @@ export function createAgentRuntime(options = {}) {
         eventCount: 0,
         lastEventAt: Date.now(),
         messages: [{ id: `baseline-materializer-start-${runId}`, phase: 'baseline', status: 'running', title: 'Baseline materializer 已启动', detail: `Run ${runId} · 只生成单文件 run.py`, time: '刚刚' }],
-        artifacts: [{ id: `baseline-materializer-run-${runId}`, kind: 'Baseline Materializer Run', title: '单文件 baseline 展开', status: 'running', meta: 'Codex exec --json · materializer' }],
+        artifacts: [{ id: `baseline-materializer-run-${runId}`, kind: 'Baseline Materializer Run', title: '单文件 baseline 展开', status: 'running', meta: `${descriptor.transport} · materializer` }],
         result: null,
         error: null,
       },
     };
-    appendRuntimeEvent(state, 'baseline.materializer_started', { runId, source: verifiedSource, materializationDir: workspace }, { kind: 'baseline-materializer', mode: 'codex-cli' });
+    appendRuntimeEvent(state, 'baseline.materializer_started', { runId, source: verifiedSource, materializationDir: workspace }, { kind: 'baseline-materializer', mode });
     return { handled: true, state };
   };
 
   const startResearch = async ({ state, mission, direction, workspace, synchronous = false, runPhase = 'acquire' }) => {
-    if (mode !== 'codex-cli') {
-      const error = new Error(`Research Agent is only supported by runtime mode codex-cli (current: ${mode}).`);
+    if (!managedCliMode) {
+      const error = new Error(`Research Agent requires a managed workspace CLI runtime (current: ${mode}).`);
       error.status = 503;
       error.code = 'RESEARCH_RUNTIME_UNSUPPORTED';
       throw error;
     }
-    const descriptor = await describeCodex();
+    const descriptor = await describeManagedCli();
     if (!descriptor.connected) {
       const error = new Error(descriptor.hint);
       error.status = 503;
-      error.code = 'CODEX_RUNTIME_UNAVAILABLE';
+      error.code = managedMeta.unavailableCode;
       throw error;
     }
     // 同步研究（停滞升级）需要主线程空闲才能启动；异步研究（操作员触发）可与主线程并行。
@@ -836,7 +880,7 @@ export function createAgentRuntime(options = {}) {
       error.code = 'RESEARCH_RUN_ACTIVE';
       throw error;
     }
-    const runId = `codex_research_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
+    const runId = `${managedMeta.slug}_research_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
     if (!workspace) {
       const error = new Error('研究员需要一个隔离调研目录。');
       error.status = 409;
@@ -856,7 +900,7 @@ export function createAgentRuntime(options = {}) {
       roots: { workspace },
     });
     const prompt = `${buildResearchPrompt({ mission, direction, researchDir: workspace, sourceRoot: mission.sourceRoot, runPhase, sourceEvidence })}\n${boundary.toolInstruction}`;
-    const run = await codex.start({
+    const run = await managedClient.start({
       runId,
       missionId: mission.id,
       goal: prompt,
@@ -872,7 +916,7 @@ export function createAgentRuntime(options = {}) {
       progress: 5,
       missionId: mission.id,
       runId,
-      runtimeKind: 'codex-cli',
+      runtimeKind: mode,
       threadId: run.threadId || null,
       direction,
       researchDir: workspace,
@@ -887,23 +931,23 @@ export function createAgentRuntime(options = {}) {
       eventCount: 0,
       notes: [],
       messages: [{ id: `research-start-${runId}`, phase: 'research', status: 'running', title: runPhase === 'acquire' ? '研究员采集资料中' : '研究员整理笔记中', detail: `Run ${runId} · ${runPhase === 'acquire' ? '联网采集外部资料' : '只读整理研究笔记'} · ${direction}`, time: '刚刚' }],
-      artifacts: [{ id: `research-run-${runId}`, kind: 'Research Run', title: runPhase === 'acquire' ? '研究员采集' : '研究员综合', status: 'running', meta: `Codex exec --json · ${runPhase}` }],
+      artifacts: [{ id: `research-run-${runId}`, kind: 'Research Run', title: runPhase === 'acquire' ? '研究员采集' : '研究员综合', status: 'running', meta: `${descriptor.transport} · ${runPhase}` }],
       injected: false,
       synchronous: Boolean(synchronous),
     };
-    appendRuntimeEvent(state, 'research.run_started', { runId, runPhase, direction, researchDir: workspace, synchronous: Boolean(synchronous) }, { kind: 'research', mode: 'codex-cli' });
+    appendRuntimeEvent(state, 'research.run_started', { runId, runPhase, direction, researchDir: workspace, synchronous: Boolean(synchronous) }, { kind: 'research', mode });
     return { handled: true, state };
   };
 
   const cancelRun = async ({ state, runId }) => {
     if (state.baseline?.materializer?.runId && runId === state.baseline.materializer.runId) {
-      if (mode !== 'codex-cli') {
+      if (!managedCliMode) {
         const error = new Error(`Baseline materializer cancellation is not supported by runtime mode ${mode}.`);
         error.status = 409;
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await codex.cancel(runId);
+      const result = await managedClient.cancel(runId);
       state.baseline = {
         ...(state.baseline || {}),
         materializer: { ...state.baseline.materializer, status: 'cancel_requested', phase: 'Baseline materializer 取消已请求' },
@@ -912,13 +956,13 @@ export function createAgentRuntime(options = {}) {
       return { state, result };
     }
     if (state.researchAgent?.runId && runId === state.researchAgent.runId) {
-      if (mode !== 'codex-cli') {
+      if (!managedCliMode) {
         const error = new Error(`Research cancellation is not supported by runtime mode ${mode}.`);
         error.status = 409;
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await codex.cancel(runId);
+      const result = await managedClient.cancel(runId);
       state.researchAgent = { ...state.researchAgent, status: 'cancel_requested', phase: '研究员取消已请求' };
       appendRuntimeEvent(state, 'research.cancel_requested', { runId }, { kind: 'research', mode });
       return { state, result };
@@ -930,7 +974,7 @@ export function createAgentRuntime(options = {}) {
       throw error;
     }
     let result;
-    if (mode === 'codex-cli') result = await codex.cancel(runId);
+    if (managedCliMode) result = await managedClient.cancel(runId);
     else if (mode === 'opencode-server') result = await openCodeClient.abort(runId);
     else {
       const error = new Error(`Agent cancellation is not supported by runtime mode ${mode}.`);
@@ -1024,19 +1068,19 @@ export function createAgentRuntime(options = {}) {
       }
     }
     const materializerNeedsProjection = ['running', 'cancel_requested'].includes(state.baseline?.materializer?.status);
-    if (mode === 'codex-cli' && materializerNeedsProjection && state.baseline?.materializer?.runId && state.baseline.materializer.runtimeKind === 'codex-cli') {
+    if (managedCliMode && materializerNeedsProjection && state.baseline?.materializer?.runId && state.baseline.materializer.runtimeKind === mode) {
       try {
         const prev = state.baseline.materializer;
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
-        const run = await codex.readRun(prev.runId);
-        const events = await codex.readEvents(prev.runId);
+        const run = await managedClient.readRun(prev.runId);
+        const events = await managedClient.readEvents(prev.runId);
         const failed = run.status === 'failed';
         const completed = run.status === 'completed';
         const cancelled = run.status === 'cancelled';
         const budgetExceeded = prev.startedAt && Date.now() - new Date(prev.startedAt).getTime() >= (prev.budgetMs || 0);
         const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? 'cancelled' : (budgetExceeded && prev.status !== 'cancel_requested') ? 'timed_out' : prev.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         if (nextStatus === 'timed_out') {
-          try { await codex.cancel(prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
+          try { await managedClient.cancel(prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
         }
         const terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
         const eventCount = events.length;
@@ -1103,7 +1147,7 @@ export function createAgentRuntime(options = {}) {
             previousEvidenceRunId: null,
           } : state.baseline?.resolution,
         };
-        if (terminal) appendRuntimeEvent(state, finalStatus === 'completed' ? 'baseline.materializer_completed' : 'baseline.materializer_failed', { runId: prev.runId, status: finalStatus, source: state.baseline.source, error: materializerError }, { kind: 'baseline-materializer', mode: 'codex-cli' });
+        if (terminal) appendRuntimeEvent(state, finalStatus === 'completed' ? 'baseline.materializer_completed' : 'baseline.materializer_failed', { runId: prev.runId, status: finalStatus, source: state.baseline.source, error: materializerError }, { kind: 'baseline-materializer', mode });
         return { state, changed: true };
       } catch (error) {
         state.baseline = {
@@ -1122,18 +1166,18 @@ export function createAgentRuntime(options = {}) {
     const researchNeedsProjection = ['running', 'cancel_requested'].includes(state.researchAgent?.status)
       || (['completed', 'failed', 'timed_out', 'cancelled'].includes(state.researchAgent?.status)
           && state.researchAgent?.runPhase === 'synthesize' && !(state.researchAgent?.notes || []).length);
-    if (mode === 'codex-cli' && researchNeedsProjection && state.researchAgent?.runId && state.researchAgent?.runtimeKind === 'codex-cli') {
+    if (managedCliMode && researchNeedsProjection && state.researchAgent?.runId && state.researchAgent?.runtimeKind === mode) {
       try {
         const prev = state.researchAgent;
-        const run = await codex.readRun(prev.runId);
-        const events = await codex.readEvents(prev.runId);
+        const run = await managedClient.readRun(prev.runId);
+        const events = await managedClient.readEvents(prev.runId);
         const failed = run.status === 'failed';
         const completed = run.status === 'completed';
         const cancelled = run.status === 'cancelled';
         const budgetExceeded = prev.startedAt && Date.now() - new Date(prev.startedAt).getTime() >= (prev.budgetMs || 0);
         const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? 'cancelled' : (budgetExceeded && prev.status !== 'cancel_requested') ? 'timed_out' : prev.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         if (nextStatus === 'timed_out') {
-          try { await codex.cancel(prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
+          try { await managedClient.cancel(prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
         }
         const terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
         // 事件新鲜度：供循环做停滞/事件预算终止
@@ -1173,7 +1217,7 @@ export function createAgentRuntime(options = {}) {
           state.researchNotes = [note, ...(state.researchNotes || []).filter((n) => n.runId !== note.runId)].slice(0, 50);
           nextResearchAgent.notes = [note];
           nextResearchAgent.completedAt = note.completedAt;
-          appendRuntimeEvent(state, failed ? 'research.failed' : nextStatus === 'timed_out' ? 'research.timed_out' : 'research.completed', { runId: prev.runId, direction: prev.direction, summary: parsed.summary }, { kind: 'research', mode: 'codex-cli' });
+          appendRuntimeEvent(state, failed ? 'research.failed' : nextStatus === 'timed_out' ? 'research.timed_out' : 'research.completed', { runId: prev.runId, direction: prev.direction, summary: parsed.summary }, { kind: 'research', mode });
         } else if (terminal && !prev.notes?.length && prev.runPhase === 'acquire') {
           if (!failed && nextStatus === 'completed' && prev.sourceRoot) {
             const acquiredSources = await acquireSelectedSources({
@@ -1190,13 +1234,13 @@ export function createAgentRuntime(options = {}) {
               runId: prev.runId,
               phase: 'acquire',
               acquiredSources: acquiredSourceSummary,
-            }, { kind: 'research', mode: 'codex-cli' });
+            }, { kind: 'research', mode });
           } else {
             appendRuntimeEvent(state, 'research.failed', {
               runId: prev.runId,
               phase: 'acquire',
               errorCode: run.error?.code || (nextStatus === 'timed_out' ? 'CODEX_RESEARCH_TIMED_OUT' : 'CODEX_RESEARCH_FAILED'),
-            }, { kind: 'research', mode: 'codex-cli' });
+            }, { kind: 'research', mode });
           }
         }
         const changed = runtimeChanged || JSON.stringify(nextResearchAgent) !== JSON.stringify(prev);
@@ -1208,15 +1252,15 @@ export function createAgentRuntime(options = {}) {
           phase: state.researchAgent?.runPhase,
           errorCode: error.code || 'RESEARCH_SOURCE_ACQUISITION_FAILED',
           details: error.details || null,
-        }, { kind: 'research', mode: 'codex-cli' });
+        }, { kind: 'research', mode });
         state.researchAgent = { ...state.researchAgent, status: 'failed', phase: '研究员状态读取失败', progress: 100, messages: [...(state.researchAgent.messages || []), { id: `research-projection-error-${state.researchAgent.runId}`, phase: 'research', status: 'waiting', title: '无法读取研究员运行状态', detail: error.message, time: '刚刚' }] };
         return { state, changed: true };
       }
     }
-    if (mode === 'codex-cli' && state.agent?.runtimeKind === 'codex-cli' && state.agent?.runId) {
+    if (managedCliMode && state.agent?.runtimeKind === mode && state.agent?.runId) {
       try {
-        const run = await codex.readRun(state.agent.runId);
-        const events = await codex.readEvents(state.agent.runId);
+        const run = await managedClient.readRun(state.agent.runId);
+        const events = await managedClient.readEvents(state.agent.runId);
         const agentResult = parseAgentResult(events);
         const threadEvent = events.find((event) => event.type === 'thread.started' || event.type === 'thread_start' || event.thread_id || event.threadId);
         const assistantEvents = events.filter((event) => event.item?.type === 'agent_message' || /agent_message|message.completed/i.test(event.type || ''));
@@ -1234,13 +1278,13 @@ export function createAgentRuntime(options = {}) {
         const stalled = !completed && !failed && run.status !== 'cancelled' && lastEventAt && Date.now() - lastEventAt >= MAIN_AGENT_STALL_MS;
         const budgetExceeded = !completed && !failed && run.status !== 'cancelled' && elapsed >= (state.agent.budgetMs || MAIN_AGENT_BUDGET_MS);
         if ((stalled || budgetExceeded) && state.agent.status !== 'cancel_requested') {
-          try { await codex.cancel(state.agent.runId); } catch { /* 下一 tick 收敛 */ }
+          try { await managedClient.cancel(state.agent.runId); } catch { /* 下一 tick 收敛 */ }
         }
         const timedOut = stalled || budgetExceeded;
         const nextStatus = failed ? 'failed' : completed ? 'completed' : run.status === 'cancelled' ? 'cancelled' : timedOut ? 'completed' : state.agent.status === 'cancel_requested' ? 'cancel_requested' : 'running';
-        const failure = failed ? classifyCodexFailure(run, events) : null;
-        const projectedMessages = assistantEvents.slice(-8).map((event, index) => ({ id: event.id || `codex-event-${index}`, phase: event.type || 'Codex', status: failed ? 'waiting' : 'completed', title: event.type || 'Codex 事件', detail: codex.eventText(event) || 'Codex 已产生新的运行事件', time: event.timestamp || '刚刚' }));
-        if (failure) projectedMessages.push({ id: `codex-error-${state.agent.runId}`, phase: 'Codex', status: 'waiting', title: failure.title, detail: failure.detail, time: run.completedAt || '刚刚', errorCode: failure.code });
+        const failure = failed ? classifyManagedFailure(run, events) : null;
+        const projectedMessages = assistantEvents.slice(-8).map((event, index) => ({ id: event.id || `${managedMeta.slug}-event-${index}`, phase: event.type || managedMeta.name, status: failed ? 'waiting' : 'completed', title: event.type || `${managedMeta.name} 事件`, detail: managedClient.eventText(event) || `${managedMeta.name} 已产生新的运行事件`, time: event.timestamp || '刚刚' }));
+        if (failure) projectedMessages.push({ id: `${managedMeta.slug}-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: failure.title, detail: failure.detail, time: run.completedAt || '刚刚', errorCode: failure.code });
         const terminalCompleted = completed || timedOut;
         let candidateValidation = null;
         let verifiedCandidates = agentResult.candidates;
@@ -1254,16 +1298,16 @@ export function createAgentRuntime(options = {}) {
           const undeclaredFiles = actualFiles.filter((file) => !declaredFiles.includes(file));
           const missingFiles = declaredFiles.filter((file) => !actualFiles.includes(file));
           if (!manifest.dirty || !manifest.diff || (stableDigest && manifest.digest === stableDigest)) {
-            candidateValidation = { passed: false, code: 'CODEX_CANDIDATE_DIFF_EMPTY', detail: 'Codex 返回了候选，但 Mission 工作区没有真实 Git Diff。' };
+            candidateValidation = { passed: false, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_EMPTY`, detail: `${managedMeta.name} 返回了候选，但 Mission 工作区没有真实 Git Diff。` };
             verifiedCandidates = [];
           } else if (undeclaredFiles.length || missingFiles.length) {
-            candidateValidation = { passed: false, code: 'CODEX_CANDIDATE_FILES_MISMATCH', detail: `候选文件清单与真实 Diff 不一致。未声明：${undeclaredFiles.join(', ') || '无'}；未修改：${missingFiles.join(', ') || '无'}。`, undeclaredFiles, missingFiles };
+            candidateValidation = { passed: false, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_FILES_MISMATCH`, detail: `候选文件清单与真实 Diff 不一致。未声明：${undeclaredFiles.join(', ') || '无'}；未修改：${missingFiles.join(', ') || '无'}。`, undeclaredFiles, missingFiles };
             verifiedCandidates = [];
           } else {
             // 工作区 Git Diff 是候选准入权威。来源引用只作信息标记（候选自报），不校验、不阻塞准入——
             // 迁移场景中参考材料可能含非 git 内容、agent 引用 commit 也可能与实际拉取不一致，强制校验会误拦。
             const claimedReferences = Array.isArray(selectedCandidate.sourceReferences) ? selectedCandidate.sourceReferences : [];
-            candidateValidation = { passed: true, code: 'CODEX_CANDIDATE_DIFF_VERIFIED', digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: '候选自报来源标记，未做固定来源校验（工作区 Diff 为准入权威）' };
+            candidateValidation = { passed: true, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_VERIFIED`, digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: '候选自报来源标记，未做固定来源校验（工作区 Diff 为准入权威）' };
             verifiedCandidates = [{ ...selectedCandidate, files: actualFiles.join(', '), sourceReferences: claimedReferences, patchDigest: manifest.digest, sourceRunId: state.agent.runId }];
           }
         } else if (terminalCompleted && !agentResult.candidates.length && !workflowAdvanced) {
@@ -1272,7 +1316,7 @@ export function createAgentRuntime(options = {}) {
           const actualFiles = manifest.changedFiles.map((file) => file.replaceAll('\\', '/'));
           if (manifest.dirty && manifest.diff && actualFiles.length && (!stableDigest || manifest.digest !== stableDigest)) {
             const claimedReferences = Array.isArray(agentResult.sourceReferences) ? agentResult.sourceReferences : [];
-            candidateValidation = { passed: true, code: 'CODEX_CANDIDATE_DIFF_OBSERVED', digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: 'Agent 未返回 candidates；客户端以 Mission 工作区 Git Diff 作为候选准入权威。' };
+            candidateValidation = { passed: true, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_OBSERVED`, digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: 'Agent 未返回 candidates；客户端以 Mission 工作区 Git Diff 作为候选准入权威。' };
             verifiedCandidates = [{
               id: 'candidate-01',
               version: 'agent.1',
@@ -1291,7 +1335,7 @@ export function createAgentRuntime(options = {}) {
               knowledge: null,
               sourceReferences: claimedReferences,
               tone: 'blue',
-              source: 'codex-agent',
+              source: `${managedMeta.slug}-agent`,
               patchDigest: manifest.digest,
               sourceRunId: state.agent.runId,
             }];
@@ -1309,7 +1353,7 @@ export function createAgentRuntime(options = {}) {
             candidateValidation = { passed: false, code: 'STRICT_ZERO_SOURCE_EXTRA_FILES', detail: 'Cold-start Iteration Agent 只允许修改根目录 run.py。' };
             verifiedCandidates = [];
           } else if (previousDigests.has(nextDigest)) {
-            candidateValidation = { passed: false, code: 'CODEX_CANDIDATE_DIFF_REPEATED', detail: '该工作区 Diff 已在前一轮测试，不能重复消耗新的硬件测量序号。', digest: nextDigest };
+            candidateValidation = { passed: false, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_REPEATED`, detail: '该工作区 Diff 已在前一轮测试，不能重复消耗新的硬件测量序号。', digest: nextDigest };
             verifiedCandidates = [];
           } else {
             const ordinal = Math.max(1, Number(state.iterationStats?.round || 0) + 1);
@@ -1325,20 +1369,20 @@ export function createAgentRuntime(options = {}) {
         const nextAgent = {
           ...state.agent,
           status: nextStatus,
-          phase: failure?.phase || (timedOut ? 'Codex 单轮停滞，已收敛为无候选' : completed ? 'Codex 分析完成' : state.agent.status === 'cancel_requested' ? '正在取消 Codex' : 'Codex 正在分析'),
+          phase: failure?.phase || (timedOut ? `${managedMeta.name} 单轮停滞，已收敛为无候选` : completed ? `${managedMeta.name} 分析完成` : state.agent.status === 'cancel_requested' ? `正在取消 ${managedMeta.name}` : `${managedMeta.name} 正在分析`),
           progress: completed || failed || timedOut ? 100 : Math.max(5, Math.min(95, 5 + events.length * 3)),
           threadId: run.threadId || threadEvent?.thread_id || threadEvent?.threadId || state.agent.threadId || null,
           messages: projectedMessages.length ? projectedMessages : state.agent.messages,
           toolCalls: [...toolEvents.reduce((latestById, event, index) => {
-            const eventId = event.id || event.item?.id || `codex-tool-${index}`;
+            const eventId = event.id || event.item?.id || `${managedMeta.slug}-tool-${index}`;
             latestById.set(eventId, event);
             return latestById;
           }, new Map()).entries()].slice(-20).map(([eventId, event]) => {
             const toolFailed = event.item?.status === 'failed' || event.status === 'failed' || Boolean(event.item?.error);
             const toolCompleted = event.type === 'item.completed' || /completed|done/i.test(event.status || event.item?.status || '');
-            return { id: eventId, toolId: event.tool || event.name || event.item?.name || `codex.${event.item?.type || 'tool'}`, name: event.name || event.tool || event.item?.name || (event.item?.type === 'command_execution' ? 'Shell Command' : event.item?.type || 'Codex Tool'), version: descriptor.version ? `v${descriptor.version}` : 'runtime', skillId: 'codex.exec', status: toolFailed ? 'failed' : toolCompleted ? 'completed' : completed ? 'warning' : 'running', summary: codex.eventText(event) || 'Codex tool call', permission: 'codex:managed' };
+            return { id: eventId, toolId: event.tool || event.name || event.item?.name || `${managedMeta.slug}.${event.item?.type || 'tool'}`, name: event.name || event.tool || event.item?.name || (event.item?.type === 'command_execution' ? 'Managed Tool' : event.item?.type || `${managedMeta.name} Tool`), version: descriptor.version ? `v${descriptor.version}` : 'runtime', skillId: `${managedMeta.slug}.exec`, status: toolFailed ? 'failed' : toolCompleted ? 'completed' : completed ? 'warning' : 'running', summary: managedClient.eventText(event) || `${managedMeta.name} tool call`, permission: `${managedMeta.slug}:managed` };
           }),
-          artifacts: [{ id: `codex-run-${state.agent.runId}`, kind: 'Codex Run', title: state.agent.artifacts?.[0]?.title || 'Codex Mission', status: nextStatus, meta: `${events.length} events · ${run.threadId || 'thread pending'}` }],
+          artifacts: [{ id: `${managedMeta.slug}-run-${state.agent.runId}`, kind: `${managedMeta.name} Run`, title: state.agent.artifacts?.[0]?.title || `${managedMeta.name} Mission`, status: nextStatus, meta: `${events.length} events · ${run.threadId || 'session pending'}` }],
           result: agentResult,
           candidateValidation,
           eventCount,
@@ -1365,10 +1409,10 @@ export function createAgentRuntime(options = {}) {
           state.stage = 'diagnosis';
           state.candidateEvaluations = [];
           nextAgent.status = 'completed';
-          nextAgent.phase = 'Codex 分析完成，未生成候选';
+          nextAgent.phase = `${managedMeta.name} 分析完成，未生成候选`;
           nextAgent.currentAction = null;
           if (!state.runtimeEvents?.some((event) => event.type === 'candidate.not_proposed' && event.payload?.runId === state.agent.runId)) {
-            appendRuntimeEvent(state, 'candidate.not_proposed', { runId: state.agent.runId, summary: agentResult.summary }, { kind: 'agent', mode: 'codex-cli' });
+            appendRuntimeEvent(state, 'candidate.not_proposed', { runId: state.agent.runId, summary: agentResult.summary }, { kind: 'agent', mode });
           }
         }
         if (workflowAdvanced) {
@@ -1388,7 +1432,7 @@ export function createAgentRuntime(options = {}) {
             id: `action.${candidateId}.retry`,
             type: 'candidate.plan',
             title: `提交 ${candidateId} 测试`,
-            reason: '候选已在 Mission 工作区形成；上一 Codex 进程已结束，客户端可继续应用并提交测试。',
+            reason: `候选已在 Mission 工作区形成；上一 ${managedMeta.name} 进程已结束，客户端可继续应用并提交测试。`,
             expectedOutput: 'Correctness · Benchmark · Tracer · Profiler',
             risk: 'medium',
             approvalRequired: false,
@@ -1399,10 +1443,10 @@ export function createAgentRuntime(options = {}) {
         const changed = runtimeChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
         state.agent = nextAgent;
         if (nextStatus === 'completed' && verifiedCandidates.length && !workflowAdvanced) state.stage = 'candidate';
-        if (nextStatus !== previousStatus) appendRuntimeEvent(state, `codex.run_${nextStatus}`, { runId: state.agent.runId, threadId: nextAgent.threadId, eventCount: events.length, errorCode: failure?.code || null }, { kind: 'agent', mode: 'codex-cli' });
+        if (nextStatus !== previousStatus) appendRuntimeEvent(state, `${managedMeta.slug}.run_${nextStatus}`, { runId: state.agent.runId, threadId: nextAgent.threadId, eventCount: events.length, errorCode: failure?.code || null }, { kind: 'agent', mode });
         return { state, changed };
       } catch (error) {
-        const nextAgent = { ...state.agent, status: 'failed', phase: 'Codex 状态读取失败', progress: 100, messages: [...(state.agent.messages || []), { id: `codex-projection-error-${state.agent.runId}`, phase: 'Codex', status: 'waiting', title: '无法读取 Codex 运行状态', detail: error.message, time: '刚刚' }] };
+        const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }] };
         state.agent = nextAgent;
         return { state, changed: true };
       }
@@ -1439,7 +1483,7 @@ export function createAgentRuntime(options = {}) {
     return { state, changed };
   };
 
-  return { mode, describe, preflight, startRun, cancelRun, startResearch, startBaselineMaterialization, projectState, codexClient: codex };
+  return { mode, describe, preflight, startRun, cancelRun, startResearch, startBaselineMaterialization, projectState, codexClient: codex, claudeClient: claude };
 }
 
 export const agentRuntime = createAgentRuntime();

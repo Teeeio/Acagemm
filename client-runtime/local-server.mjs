@@ -42,7 +42,7 @@ import {
   researchDirForMission,
   createResearchAgentState,
 } from './state-store.mjs';
-import { agentRuntime, appendRuntimeEvent } from './agent-runtime.mjs';
+import { agentRuntime, appendRuntimeEvent, isManagedWorkspaceRuntimeMode } from './agent-runtime.mjs';
 import { advanceIteration, selectResearchDirection } from './iteration-loop.mjs';
 import { createCommandJournal, executeCommand, hashKey } from './command-journal.mjs';
 import { testServiceClient } from './test-service-client.mjs';
@@ -361,7 +361,7 @@ const guardSupportedRuntimeAction = async (action) => {
   // Codex owns reasoning and workspace changes; all workflow decisions remain
   // client-owned so the local harness can inspect, pause, adopt, redirect, and
   // roll back a verified candidate without asking the Agent adapter to mutate state.
-  if (runtime.mode === 'codex-cli') return runtime;
+  if (isManagedWorkspaceRuntimeMode(runtime.mode)) return runtime;
   const error = new Error(`${runtime.label || 'Agent Runtime'} 尚未实现 ${action} 动作桥；已拒绝生成本地参考结果。`);
   error.status = 409;
   error.code = 'RUNTIME_ACTION_UNAVAILABLE';
@@ -430,12 +430,12 @@ const commandRegistry = {
       const runtime = await agentRuntime.describe();
       const candidate = (state.candidateEvaluations || []).find((item) => item.id === body.candidate);
       const declaredFiles = String(candidate?.files || '').split(',').map((item) => item.trim()).filter(Boolean);
-      const codexPatch = runtime.mode === 'codex-cli' ? await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId)) : null;
+      const codexPatch = isManagedWorkspaceRuntimeMode(runtime.mode) ? await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId)) : null;
       const actualFiles = (codexPatch?.changedFiles || []).map((file) => file.replaceAll('\\', '/'));
       const normalizedDeclaredFiles = declaredFiles.map((file) => file.replaceAll('\\', '/'));
       const undeclaredFiles = actualFiles.filter((file) => !normalizedDeclaredFiles.includes(file));
       const missingFiles = normalizedDeclaredFiles.filter((file) => !actualFiles.includes(file));
-      const codexPolicyChecks = runtime.mode === 'codex-cli' ? [
+      const codexPolicyChecks = isManagedWorkspaceRuntimeMode(runtime.mode) ? [
         { id: 'patch.diff.nonempty', label: 'Mission 工作区存在真实 Git Diff', passed: Boolean(codexPatch?.dirty && codexPatch.diff) },
         { id: 'patch.diff.matches', label: 'Candidate 文件清单与真实 Diff 一致', passed: undeclaredFiles.length === 0 && missingFiles.length === 0, detail: { undeclaredFiles, missingFiles } },
       ] : [];
@@ -453,14 +453,14 @@ const commandRegistry = {
         error.details = policyChecks;
         throw error;
       }
-      const checkpoint = runtime.mode === 'codex-cli' && state.workflowRecovery?.checkpoints?.length
+      const checkpoint = isManagedWorkspaceRuntimeMode(runtime.mode) && state.workflowRecovery?.checkpoints?.length
         ? state.workflowRecovery.checkpoints.at(-1)
         : await createWorkspaceCheckpoint(state.activeMissionId, 'candidate', body.candidate);
-      const workspace = runtime.mode === 'codex-cli'
+      const workspace = isManagedWorkspaceRuntimeMode(runtime.mode)
         ? { workspace: path.relative(rootDir, codexPatch.workspace).replaceAll('\\', '/'), files: actualFiles.map((file) => ({ path: file, status: 'modified' })), digest: codexPatch.digest, diff: codexPatch.diff }
         : await applyCandidatePatch(state.activeMissionId);
       const appliedDiff = codexPatch || await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId));
-      if (runtime.mode !== 'codex-cli') workspace.digest = appliedDiff.digest, workspace.diff = appliedDiff.diff;
+      if (!isManagedWorkspaceRuntimeMode(runtime.mode)) workspace.digest = appliedDiff.digest, workspace.diff = appliedDiff.diff;
       const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
       const artifactDir = artifactDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
       await mkdir(artifactDir, { recursive: true });
@@ -479,7 +479,7 @@ const commandRegistry = {
       const candidate = (state.candidateEvaluations || []).find((item) => item.id === payload.candidateId);
       candidate.patchDigest = payload.digest;
       candidate.sourceRunId = state.agent.runId;
-      if (payload.runtimeMode === 'codex-cli') candidate.files = payload.files.join(', ');
+      if (isManagedWorkspaceRuntimeMode(payload.runtimeMode)) candidate.files = payload.files.join(', ');
       candidate.artifacts = payload.artifacts;
       state.patchApplied = true;
       state.appliedCandidateId = payload.candidateId;
@@ -499,7 +499,7 @@ const commandRegistry = {
         currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '运行 C500 + CUDA 测试矩阵', reason: 'Patch 自动策略检查已通过并写入隔离工作区，下一步验证正确性和完整性能。', expectedOutput: '24 / 24 Correctness · 2 个 Full Benchmark Run', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' },
         messages: [...(state.agent?.messages || []), { id: `patch-${Date.now()}`, phase: 'candidate', status: 'completed', title: 'Patch 自动检查通过并应用', detail: '变更边界、工作区路径和风险策略均已通过，补丁已写入隔离工作区。', time: '刚刚' }],
       };
-      appendRuntimeEvent(state, 'patch.applied', { workspace: payload.workspace.workspace, checkpointId: payload.checkpoint.id, files: payload.workspace.files.map((file) => file.path), digest: payload.digest || null, artifacts: payload.artifacts, sourceReferences: payload.sourceReferences, policyChecks: payload.policyChecks, approvalRequired: false, mock: false }, { kind: 'workspace', mode: payload.runtimeMode === 'codex-cli' ? 'codex-cli' : 'client' });
+      appendRuntimeEvent(state, 'patch.applied', { workspace: payload.workspace.workspace, checkpointId: payload.checkpoint.id, files: payload.workspace.files.map((file) => file.path), digest: payload.digest || null, artifacts: payload.artifacts, sourceReferences: payload.sourceReferences, policyChecks: payload.policyChecks, approvalRequired: false, mock: false }, { kind: 'workspace', mode: isManagedWorkspaceRuntimeMode(payload.runtimeMode) ? payload.runtimeMode : 'client' });
       addAuditEvent(state, 'Patch 自动策略检查通过', `${payload.workspace.workspace} · ${payload.candidateId} · 无需人工审批`, 'green', 'ShieldCheck');
     },
   },
@@ -902,21 +902,25 @@ const commandRegistry = {
       resetMissionRunState(clone, goal, { referenceFixture });
       let checkpoint = null;
       if (runtimeDescriptor.mode === 'reference-fixture') await resetMissionWorkspace(state.activeMissionId);
-      if (runtimeDescriptor.mode === 'codex-cli') {
+      if (isManagedWorkspaceRuntimeMode(runtimeDescriptor.mode)) {
         checkpoint = await createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline');
         clone.workflowRecovery = { ...(clone.workflowRecovery || {}), checkpoints: [...(clone.workflowRecovery?.checkpoints || []), checkpoint].slice(-5) };
       }
       const runtimeRun = await agentRuntime.startRun({ state: clone, mission, goal, resumeThreadId: body?.resumeThreadId || null, workspace });
       if (!runtimeRun.handled) startAgentRun(clone, goal, { reset: false });
-      const eventType = referenceFixture ? 'mission.run_started' : runtimeDescriptor.mode === 'cli-file' ? 'mission.run_requested' : 'codex.run_started';
-      return { payload: { goal, referenceFixture, eventType, agent: clone.agent, checkpoint, runId: clone.agent.runId }, result: { runId: clone.agent.runId } };
+      const eventType = referenceFixture
+        ? 'mission.run_started'
+        : runtimeDescriptor.mode === 'cli-file'
+          ? 'mission.run_requested'
+          : `${runtimeDescriptor.mode === 'claude-code' ? 'claude' : 'codex'}.run_started`;
+      return { payload: { goal, referenceFixture, eventType, runtimeMode: runtimeDescriptor.mode, agent: clone.agent, checkpoint, runId: clone.agent.runId }, result: { runId: clone.agent.runId } };
     },
     apply: (state, payload) => {
       resetMissionRunState(state, payload.goal, { referenceFixture: payload.referenceFixture });
       if (payload.checkpoint) state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), payload.checkpoint].slice(-5) };
       state.agent = payload.agent;
       if (!state.runtimeEvents?.some((e) => e.type === payload.eventType && e.payload?.runId === payload.runId)) {
-        appendRuntimeEvent(state, payload.eventType, { runId: payload.runId, goal: payload.goal }, { kind: 'adapter', mode: payload.referenceFixture ? 'reference-fixture' : payload.eventType === 'mission.run_requested' ? 'cli-file' : 'codex-cli' });
+        appendRuntimeEvent(state, payload.eventType, { runId: payload.runId, goal: payload.goal }, { kind: 'adapter', mode: payload.referenceFixture ? 'reference-fixture' : payload.eventType === 'mission.run_requested' ? 'cli-file' : payload.runtimeMode });
       }
     },
   },
@@ -936,7 +940,7 @@ const commandRegistry = {
     apply: (state, payload) => {
       state.researchAgent = payload.researchAgent;
       if (!state.runtimeEvents?.some((e) => e.type === 'research.run_started' && e.payload?.runId === payload.researchAgent.runId)) {
-        appendRuntimeEvent(state, 'research.run_started', { runId: payload.researchAgent.runId, direction: payload.direction, researchDir: payload.researchAgent.researchDir }, { kind: 'research', mode: 'codex-cli' });
+        appendRuntimeEvent(state, 'research.run_started', { runId: payload.researchAgent.runId, direction: payload.direction, researchDir: payload.researchAgent.researchDir }, { kind: 'research', mode: payload.researchAgent.runtimeKind });
       }
     },
   },
@@ -985,7 +989,7 @@ const commandRegistry = {
         },
       };
       if (!state.runtimeEvents?.some((e) => e.type === 'baseline.materializer_started' && e.payload?.runId === payload.materializer.runId)) {
-        appendRuntimeEvent(state, 'baseline.materializer_started', { runId: payload.materializer.runId, source: payload.baselineSource, materializationDir: payload.materializer.materializationDir }, { kind: 'baseline-materializer', mode: 'codex-cli' });
+        appendRuntimeEvent(state, 'baseline.materializer_started', { runId: payload.materializer.runId, source: payload.baselineSource, materializationDir: payload.materializer.materializationDir }, { kind: 'baseline-materializer', mode: payload.materializer.runtimeKind });
       }
       addAuditEvent(state, 'Baseline materializer 已启动', `${payload.materializer.runId} · authoritative source → single-file run.py`, 'blue', 'Baseline');
     },
@@ -995,8 +999,8 @@ const commandRegistry = {
 // 循环驱动依赖：advanceIteration 编排器通过 deps 拿到 agentRuntime 能力与目录函数。
 const iterationDeps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
-    // 非 codex-cli 模式不支持研究员：返回 state 不变，避免循环崩溃（如 reference-fixture）。
-    if (agentRuntime.mode !== 'codex-cli') return state;
+    // 非受管理 Workspace CLI 模式不支持研究员，避免 reference-fixture 等模式进入真实调研链路。
+    if (!isManagedWorkspaceRuntimeMode(agentRuntime.mode)) return state;
     await mkdir(workspace, { recursive: true });
     // 停滞升级 → synchronous:true（主循环串行等待）；隧道视野 → synchronous:false（主线程继续，并行审查）
     const started = await agentRuntime.startResearch({ state, mission, direction, workspace, synchronous, runPhase });
@@ -1047,7 +1051,7 @@ const iterationDeps = {
     const previousCandidateDigest = state.benchmark?.candidate?.digest
       || (state.candidateEvaluations || []).find((item) => item.id === previousCandidateId)?.patchDigest
       || null;
-    const shouldRestoreRejectedRound = runtimeDescriptor.mode === 'codex-cli'
+    const shouldRestoreRejectedRound = isManagedWorkspaceRuntimeMode(runtimeDescriptor.mode)
       && previousCheckpoint
       && (previousGate?.passed === false || state.decisionReview?.resolution?.outcome === 'reject');
     let rollback = null;
@@ -1078,7 +1082,7 @@ const iterationDeps = {
       addAuditEvent(state, '未采纳候选已回退', `${rollback.candidateId || 'candidate'} · ${rollback.checkpointId} · workspace clean`, 'warning', 'History');
     }
     if (runtimeDescriptor.mode === 'reference-fixture') await resetMissionWorkspace(state.activeMissionId);
-    if (runtimeDescriptor.mode === 'codex-cli') {
+    if (isManagedWorkspaceRuntimeMode(runtimeDescriptor.mode)) {
       const baselineCheckpoint = await createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline');
       state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), baselineCheckpoint].slice(-5) };
     }
@@ -1222,7 +1226,7 @@ const advanceTesterAutopilot = async (state) => {
     if (nextState.benchmark?.status === 'running' || nextState.baseline?.status === 'running') return { state: nextState, action: 'baseline_started' };
     const runtime = await agentRuntime.describe();
     const research = state.researchAgent || {};
-    if (runtime.mode === 'codex-cli' && !research.runId && research.status !== 'running') {
+    if (isManagedWorkspaceRuntimeMode(runtime.mode) && !research.runId && research.status !== 'running') {
       const direction = [
         `为 Mission ${mission.id} 查找可验证的权威 baseline：${mission.goal}`,
         '优先检查本地 Source Registry，再检索上游官方仓库、测试和 benchmark。',
@@ -1233,7 +1237,7 @@ const advanceTesterAutopilot = async (state) => {
       return { state: await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true }), action: 'baseline_research_started' };
     }
     const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
-    if (runtime.mode === 'codex-cli' && research.runId && researchTerminal && research.runPhase !== 'acquire') {
+    if (isManagedWorkspaceRuntimeMode(runtime.mode) && research.runId && researchTerminal && research.runPhase !== 'acquire') {
       state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unresolved' };
       appendRuntimeEvent(state, 'baseline.source_unresolved', { missionId: state.activeMissionId, researchRunId: research.runId }, { kind: 'baseline', mode: 'client' });
       addAuditEvent(state, 'Baseline 来源需要人工确认', 'Research Agent 未找到可固定版本且语义可验证的权威 baseline。', 'warning', 'UserRound');
@@ -1331,7 +1335,7 @@ const loadRuntimeState = async () => {
   const mission = projection.state.missions?.find((item) => item.id === projection.state.activeMissionId);
   const candidateId = projection.state.appliedCandidateId || projection.state.decisionReview?.candidateId;
   const candidate = (projection.state.candidateEvaluations || []).find((item) => item.id === candidateId);
-  const shouldAdoptThreeLayer = projection.state.agent?.runtimeKind === 'codex-cli'
+  const shouldAdoptThreeLayer = isManagedWorkspaceRuntimeMode(projection.state.agent?.runtimeKind)
     && mission?.projectRoot
     && projection.state.stage === 'evidence'
     && projection.state.benchmark?.status === 'complete'
@@ -1738,7 +1742,7 @@ async function handleApi(request, response, url) {
     }
     assertMissionIntent(goal, mission);
     const resumeThreadId = body.resume === true
-      ? state.agent?.threadId || state.runHistory?.find((run) => run.runtimeKind === 'codex-cli' && run.threadId)?.threadId || null
+      ? state.agent?.threadId || state.runHistory?.find((run) => run.runtimeKind === runtimeDescriptor.mode && run.threadId)?.threadId || null
       : null;
     const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'runs', body: { ...body, goal, resumeThreadId, workspace: preflight.workspace }, expectedVersion: state.stateVersion });
     if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });

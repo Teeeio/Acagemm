@@ -29,7 +29,7 @@ const tryParseJson = (value) => {
   return null;
 };
 
-const normalizeCandidate = (candidate, index) => {
+const normalizeCandidate = (candidate, index, source = 'codex-agent') => {
   if (!candidate || typeof candidate !== 'object') return null;
   const id = String(candidate.id || `agent-candidate-${String(index + 1).padStart(2, '0')}`);
   return {
@@ -56,7 +56,7 @@ const normalizeCandidate = (candidate, index) => {
       path: String(reference.path || '').trim(),
     })).filter((reference) => reference.repository || reference.path) : [],
     tone: candidate.tone || (candidate.classification === 'accepted' ? 'green' : 'blue'),
-    source: 'codex-agent',
+    source,
   };
 };
 
@@ -65,7 +65,8 @@ export function parseAgentResult(events = []) {
   const finalText = messages.at(-1) || '';
   const parsed = tryParseJson(finalText);
   const rawCandidates = parsed?.candidates || parsed?.candidatePlan?.candidates || [];
-  const candidates = Array.isArray(rawCandidates) ? rawCandidates.map(normalizeCandidate).filter(Boolean) : [];
+  const source = events.some((event) => event?.provider === 'claude-code') ? 'claude-agent' : 'codex-agent';
+  const candidates = Array.isArray(rawCandidates) ? rawCandidates.map((candidate, index) => normalizeCandidate(candidate, index, source)).filter(Boolean) : [];
   const proposedNextAction = parsed?.nextAction || parsed?.next_action || (candidates.length ? {
     type: 'candidate.plan',
     title: '执行 Candidate Plan',

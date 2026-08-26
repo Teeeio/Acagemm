@@ -20,6 +20,17 @@ bash scripts/with-bundled-node.sh npm run tester:c500
 
 未设置 `OPERATOR_LOCAL_C500_MOCK` 时默认使用真实 C500 runner。真机部署、验收项目和结果回传见 [`docs/local-c500-real-hardware-test.md`](../../docs/local-c500-real-hardware-test.md)。
 
+Agent Runtime 默认使用 Codex CLI。测试人员使用 Claude Code 时，在启动 doctor/runtime 之前设置：
+
+```bash
+export OPERATOR_RUNTIME_MODE=claude-code
+export CLAUDE_COMMAND=claude
+claude --version
+claude auth status
+```
+
+Claude Code 复用相同的 Research、Baseline Materializer、Candidate、Workspace Diff、回退和采用工作流。Runtime 使用非交互 `stream-json`，只向各阶段暴露受控的 Read/Write/Edit 工具；Research acquisition 额外允许 WebSearch/WebFetch，Bash 始终禁用。不要设置 `--dangerously-skip-permissions`。
+
 目标机无法访问 GitHub 时，设置 `OPERATOR_SOURCE_MIRROR_CONFIG` 指向管理员维护的 source mirror JSON。Research Agent 仍记录官方 canonical source，固定工作流从配置的 Gitee transport 获取并校验完整 commit/tree。示例见 [`docs/source-mirrors.example.json`](../../docs/source-mirrors.example.json)。
 
 TUI 会在 `http://127.0.0.1:4275` 启动 API-only 生产 runtime。端口可通过 `LOCAL_C500_API_PORT` 覆盖。状态、Mission Workspace、测试任务和导出文件默认写入 `.local-c500-production/`，可通过 `LOCAL_C500_TESTER_HOME` 覆盖。

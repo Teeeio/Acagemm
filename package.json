@@ -22,6 +22,8 @@
     "test:boundary": "node tests/product-boundary-test.mjs",
     "test:opencode": "node tests/opencode-runtime-test.mjs",
     "test:codex": "node tests/codex-runtime-test.mjs",
+    "test:claude": "node tests/claude-runtime-test.mjs",
+    "test:claude-workflow": "node tests/claude-workflow-compat-test.mjs",
     "test:workspace": "node tests/workspace-manager-test.mjs",
     "test:three-layer": "node tests/three-layer-model-test.mjs",
     "test:intent": "node tests/mission-intent-test.mjs",
