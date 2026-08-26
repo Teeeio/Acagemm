@@ -181,7 +181,40 @@ try {
   const reapplied = await request('/api/actions/apply-patch', { method: 'POST', body: JSON.stringify({ candidate: 'candidate-02' }) });
   assert.equal(reapplied.state.workflowRecovery.checkpoints.length, 2);
   const matrix = { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'] };
-  await request('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ matrix }) });
+  const baselineRunPy = [
+    'def get_inputs():',
+    '    return {"value": 1}',
+    '',
+    'def run(inputs):',
+    '    return inputs["value"]',
+    '',
+    'def reference(inputs):',
+    '    return inputs["value"]',
+    '',
+  ].join('\n');
+  await request('/api/actions/start-benchmark', {
+    method: 'POST',
+    body: JSON.stringify({
+      purpose: 'baseline',
+      runPy: baselineRunPy,
+      baselineSource: {
+        authority: 'upstream',
+        repository: 'https://github.com/flashinfer-ai/flashinfer.git',
+        commit: 'smoke-fixture',
+        path: 'tests/reference.py',
+        operator: 'paged_attention',
+        expandedSingleFile: true,
+      },
+      matrix,
+      timeoutSeconds: 1,
+    }),
+  });
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const baselineState = (await request('/api/state')).state;
+    if (baselineState.baseline?.status === 'complete' && baselineState.benchmark?.status === 'idle') break;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  await request('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ matrix, timeoutSeconds: 1 }) });
   const reviewRequested = await request('/api/actions/request-review', { method: 'POST', body: JSON.stringify({ outcome: 'supplement', note: '补充一个长尾 shape 回归结果' }) });
   assert.equal(reviewRequested.state.stage, 'validation');
   assert.equal(reviewRequested.state.decisionReview.status, 'awaiting_review');
@@ -211,7 +244,7 @@ try {
   assert.ok(redirected.state.workflowRecovery.invalidatedArtifacts.some((artifact) => artifact.type === 'benchmark'));
   const reappliedAfterRedirect = await request('/api/actions/apply-patch', { method: 'POST', body: JSON.stringify({ candidate: 'candidate-02' }) });
   assert.equal(reappliedAfterRedirect.state.stage, 'validation');
-  await request('/api/actions/start-benchmark', { method: 'POST', body: '{}' });
+  await request('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ timeoutSeconds: 1 }) });
   for (let attempt = 0; attempt < 20; attempt += 1) {
     state = (await request('/api/state')).state;
     if (state.stage === 'published' && state.knowledgeMaintenance.status === 'completed') break;

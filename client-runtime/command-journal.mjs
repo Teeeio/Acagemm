@@ -3,6 +3,7 @@
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { workflowEffectId } from './workflow-kernel.mjs';
 
 export const journalPathFor = (runtimeDir) => path.join(runtimeDir, 'command-journal.jsonl');
 
@@ -69,6 +70,7 @@ export async function executeCommand({ journal, saveState, registry, state, type
   const entry = {
     seq,
     commandId: `cmd_${seq}_${type}`,
+    effectId: workflowEffectId({ missionId: state.activeMissionId, type, round: state.iterationStats?.round || 0, subject: key }),
     idempotencyKey: key,
     type,
     missionId: state.activeMissionId,

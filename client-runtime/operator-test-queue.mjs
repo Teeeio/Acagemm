@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normalizeExternalOutcome, WORKFLOW_OUTCOME } from './workflow-kernel.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDir = process.env.OPERATOR_RUNTIME_DIR ? path.resolve(process.env.OPERATOR_RUNTIME_DIR) : path.join(rootDir, 'runtime');
@@ -60,15 +61,18 @@ const taskView = (task) => ({
   durationMs: task.durationMs || 0,
   payload: task.payload,
   remoteTaskId: task.remoteTaskId || null,
+  remoteTaskIds: task.remoteTaskIds || null,
   logs: task.logs || [],
   result: task.result || null,
   error: task.error || null,
+  attempts: task.attempts || { submit: 0, poll: 0 },
+  lastError: task.lastError || null,
   cancelRequested: task.cancelRequested === true,
 });
 
 const replaceTask = (tasks, next) => tasks.map((task) => task.taskId === next.taskId ? next : task);
 
-export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath } = {}) => {
+export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath, maxAttempts = 3 } = {}) => {
   const client = serviceClient;
   const pathOverride = filePath;
   const load = async () => {
@@ -111,6 +115,30 @@ export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath } 
     }
   };
 
+  const applyFailure = (task, error, lane) => {
+    const attempts = { submit: 0, poll: 0, ...(task.attempts || {}) };
+    attempts[lane] += 1;
+    const failure = { code: error.code || `${lane.toUpperCase()}_FAILED`, message: error.message, status: error.status || null, retryable: error.retryable === true };
+    const outcome = normalizeExternalOutcome({ status: 'failed', error: failure });
+    const retry = outcome.kind === WORKFLOW_OUTCOME.RETRYABLE_FAILURE && attempts[lane] < maxAttempts;
+    const sequence = (task.logs || []).length + 1;
+    return {
+      ...task,
+      status: retry ? (lane === 'submit' ? 'waiting' : 'running') : 'failed',
+      completedAt: retry ? null : now(),
+      attempts,
+      lastError: { ...failure, retryable: retry, observedAt: now() },
+      error: retry ? null : failure,
+      logs: [...(task.logs || []), {
+        sequence,
+        progress: Number(task.progress || 0),
+        message: retry
+          ? `${lane} temporarily failed; retry ${attempts[lane]}/${maxAttempts - 1} is pending.`
+          : failure.message,
+      }],
+    };
+  };
+
   const processTask = async (tasks, task) => {
     if (task.status === 'waiting') {
       try {
@@ -120,28 +148,44 @@ export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath } 
           status: 'running',
           startedAt: now(),
           remoteTaskId: submitted.taskId,
+          remoteTaskIds: submitted.remoteTaskIds || null,
           progress: Number(submitted.progress || 0),
+          attempts: { submit: Number(task.attempts?.submit || 0) + 1, poll: Number(task.attempts?.poll || 0) },
+          lastError: null,
+          error: null,
           logs: [{ sequence: 1, progress: 0, message: '本地队列已获得 Runner 锁，测试任务已提交到服务端。' }],
         };
         return replaceTask(tasks, next);
       } catch (error) {
-        return replaceTask(tasks, { ...task, status: 'failed', completedAt: now(), error: { code: error.code || 'SUBMIT_FAILED', message: error.message } });
+        return replaceTask(tasks, applyFailure(task, error, 'submit'));
       }
     }
     if (task.status !== 'running' && task.status !== 'cancel_requested') return tasks;
     if (!task.remoteTaskId) return replaceTask(tasks, { ...task, status: 'failed', completedAt: now(), error: { code: 'REMOTE_TASK_MISSING', message: '队列任务缺少远端测试任务标识。' } });
     try {
       const snapshot = await client.get(task.remoteTaskId);
+      const outcome = normalizeExternalOutcome(snapshot);
       if (task.status === 'cancel_requested') {
-        if (snapshot.status === 'completed' || snapshot.status === 'failed' || snapshot.status === 'cancelled') {
-          return replaceTask(tasks, { ...task, status: snapshot.status, progress: snapshot.progress || task.progress, completedAt: snapshot.completedAt || now(), durationMs: snapshot.durationMs || 0, logs: snapshot.logs || task.logs, result: snapshot.result || null, error: snapshot.error || null });
+        if (outcome.terminal) {
+          return replaceTask(tasks, { ...task, status: snapshot.status, progress: snapshot.progress || task.progress, completedAt: snapshot.completedAt || now(), durationMs: snapshot.durationMs || 0, remoteTaskIds: snapshot.remoteTaskIds || task.remoteTaskIds || null, logs: snapshot.logs || task.logs, result: snapshot.result || null, error: snapshot.error || null });
         }
         return tasks;
       }
-      const nextStatus = snapshot.status === 'completed' ? 'completed' : snapshot.status === 'failed' ? 'failed' : 'running';
-      return replaceTask(tasks, { ...task, status: nextStatus, progress: Number(snapshot.progress || task.progress || 0), completedAt: snapshot.completedAt || (nextStatus === 'completed' || nextStatus === 'failed' ? now() : null), durationMs: Number(snapshot.durationMs || task.durationMs || 0), logs: snapshot.logs || task.logs, result: snapshot.result || null, error: snapshot.error || null });
+      if (outcome.kind === WORKFLOW_OUTCOME.RETRYABLE_FAILURE) {
+        return replaceTask(tasks, applyFailure(task, { ...(outcome.error || {}), retryable: true }, 'poll'));
+      }
+      const nextStatus = outcome.kind === WORKFLOW_OUTCOME.COMPLETED
+        ? 'completed'
+        : outcome.kind === WORKFLOW_OUTCOME.CANCELLED
+          ? 'cancelled'
+          : outcome.kind === WORKFLOW_OUTCOME.TERMINAL_FAILURE
+            ? 'failed'
+            : 'running';
+      const terminal = ['completed', 'failed', 'cancelled'].includes(nextStatus);
+      const terminalError = nextStatus === 'failed' ? (snapshot.error || outcome.error) : snapshot.error || null;
+      return replaceTask(tasks, { ...task, status: nextStatus, progress: Number(snapshot.progress || task.progress || 0), completedAt: snapshot.completedAt || (terminal ? now() : null), durationMs: Number(snapshot.durationMs || task.durationMs || 0), remoteTaskIds: snapshot.remoteTaskIds || task.remoteTaskIds || null, logs: snapshot.logs || task.logs, result: snapshot.result || null, error: terminalError, lastError: null, attempts: { submit: Number(task.attempts?.submit || 0), poll: Number(task.attempts?.poll || 0) + 1 } });
     } catch (error) {
-      return replaceTask(tasks, { ...task, status: 'failed', completedAt: now(), error: { code: error.code || 'POLL_FAILED', message: error.message } });
+      return replaceTask(tasks, applyFailure(task, error, 'poll'));
     }
   };
 
@@ -182,7 +226,11 @@ export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath } 
         throw error;
       }
       const tasks = await load();
-      const task = { schemaVersion: 1, taskId: `queue_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, status: 'waiting', progress: 0, submittedAt: now(), payload: structuredClone(payload), logs: [], result: null, error: null };
+      const existing = payload.requestId
+        ? tasks.find((task) => task.payload?.requestId === payload.requestId && task.payload?.missionId === payload.missionId)
+        : null;
+      if (existing) return taskView(existing);
+      const task = { schemaVersion: 1, taskId: `queue_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, status: 'waiting', progress: 0, submittedAt: now(), payload: structuredClone(payload), logs: [], result: null, error: null, lastError: null, attempts: { submit: 0, poll: 0 } };
       await persist([...tasks, task]);
       return taskView(task);
     }),

@@ -18,7 +18,7 @@ const remoteError = (message, code = 'OPERATOR_TEST_SERVICE_ERROR', status = 500
  * 支持 token 缓存与 401 刷新、GET 幂等请求的指数退避重试。
  */
 export const createRemoteApiClient = ({
-  baseUrl = process.env.OPERATOR_API_BASE_URL || 'https://frp-act.com:61110',
+  baseUrl = process.env.OPERATOR_API_BASE_URL || 'https://frp-cat.com:58637',
   username = process.env.OPERATOR_API_USERNAME || 'demo_admin',
   password = process.env.OPERATOR_API_PASSWORD || 'demo123',
   systemId = process.env.OPERATOR_API_SYSTEM_ID || 'system-demo',
@@ -116,19 +116,49 @@ export const createRemoteApiClient = ({
   };
 
   const listPlatforms = () => authedJson('GET', '/api/v1/test-platforms');
+  const listCandidates = (candidateSystemId = systemId) => authedJson('GET', `/api/v1/systems/${encodeURIComponent(candidateSystemId)}/candidates`);
+  const getCandidate = (candidateId, candidateSystemId = systemId) => authedJson('GET', `/api/v1/systems/${encodeURIComponent(candidateSystemId)}/candidates/${encodeURIComponent(candidateId)}`);
+  const uploadOperatorFile = ({
+    systemId: uploadSystemId = systemId,
+    operatorName,
+    fileName = 'run.py',
+    content,
+    contentBase64,
+  }) => {
+    if (!operatorName) throw remoteError('operatorName is required to upload operator file', 'OPERATOR_UPLOAD_INVALID', 400);
+    const encoded = contentBase64 || (content != null ? Buffer.from(String(content), 'utf8').toString('base64') : null);
+    if (!encoded) throw remoteError('run.py content is required to upload operator file', 'OPERATOR_UPLOAD_INVALID', 400);
+    return authedJson('POST', '/api/v1/operator-files', {
+      body: {
+        system_id: uploadSystemId,
+        operator_name: operatorName,
+        file_name: fileName,
+        content_base64: encoded,
+      },
+    });
+  };
   const submitJob = (body, idempotencyKey) => authedJson('POST', '/api/v1/test-jobs', {
     body,
     headers: { 'Idempotency-Key': idempotencyKey },
   });
   const getJob = (id) => authedJson('GET', `/api/v1/test-jobs/${encodeURIComponent(id)}?system_id=${encodeURIComponent(systemId)}`);
+  const getEvidence = (entityId, evidenceSystemId = systemId) => authedJson('GET', `/api/v1/systems/${encodeURIComponent(evidenceSystemId)}/evidence?entity_id=${encodeURIComponent(entityId)}`);
+  const cancelJob = (id, cancelSystemId = systemId) => authedJson('POST', `/api/v1/test-jobs/${encodeURIComponent(id)}/cancel`, {
+    body: { system_id: cancelSystemId },
+  });
 
   return {
     baseUrl,
     systemId,
     login: refreshToken,
     listPlatforms,
+    listCandidates,
+    getCandidate,
+    uploadOperatorFile,
     submitJob,
     getJob,
+    getEvidence,
+    cancelJob,
     /** 启动时非致命探测：记录目标平台在线状态 */
     warmup: async () => {
       try {

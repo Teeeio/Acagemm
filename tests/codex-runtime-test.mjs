@@ -41,6 +41,7 @@ await execFileAsync('git', ['config', 'user.email', 'codex-runtime@test.invalid'
 await writeFile(path.join(root, 'kernel.cu'), '// baseline\n', 'utf8');
 await execFileAsync('git', ['add', '-A'], { cwd: root });
 await execFileAsync('git', ['commit', '-m', 'baseline'], { cwd: root });
+await writeFile(path.join(root, '.git', 'info', 'exclude'), 'bridge/\n', 'utf8');
 let child;
 const spawnCalls = [];
 const execFileImpl = (command, args, options, callback) => {
@@ -145,7 +146,7 @@ try {
   assert.equal(projected.state.runtimeEvents.filter((event) => event.type === 'candidate.not_proposed').length, 1);
 
   await execFileAsync('git', ['add', '-A'], { cwd: root });
-  await execFileAsync('git', ['commit', '-m', 'test fixture runtime artifacts'], { cwd: root });
+  await execFileAsync('git', ['commit', '--allow-empty', '-m', 'test fixture runtime artifacts'], { cwd: root });
   await writeFile(path.join(root, 'kernel.cu'), '// verified candidate\n', 'utf8');
   const diffRuntime = createAgentRuntime({
     mode: 'codex-cli',
@@ -167,6 +168,29 @@ try {
   assert.equal(diffProjected.state.agent.candidateValidation.code, 'CODEX_CANDIDATE_DIFF_VERIFIED');
   assert.equal(diffProjected.state.candidateEvaluations[0].files, 'kernel.cu');
   assert.match(diffProjected.state.candidateEvaluations[0].patchDigest, /^sha256:[a-f0-9]{64}$/);
+
+  const cancelledCandidateRuntime = createAgentRuntime({
+    mode: 'codex-cli',
+    codexWorkspace: root,
+    codexClient: {
+      describe: async () => ({ installed: true, loggedIn: true, version: 'codex-cli delegated' }),
+      readRun: async () => ({ runId: 'codex_CANCELLED_CANDIDATE', status: 'cancelled', completedAt: new Date().toISOString(), threadId: 'thread-cancelled', workspace: root, error: null }),
+      readEvents: async () => [],
+      eventText: () => '',
+    },
+  });
+  const cancelledCandidateState = {
+    activeMissionId: 'MIS_CANCELLED_CANDIDATE',
+    runtimeEvents: [],
+    candidateEvaluations: [{ id: 'candidate-01', title: 'Observed candidate', files: 'run.py' }],
+    stage: 'candidate',
+    patchApplied: false,
+    agent: { status: 'running', runtimeKind: 'codex-cli', runId: 'codex_CANCELLED_CANDIDATE', messages: [], toolCalls: [], artifacts: [] },
+  };
+  const cancelledCandidateProjected = await cancelledCandidateRuntime.projectState(cancelledCandidateState);
+  assert.equal(cancelledCandidateProjected.state.agent.status, 'awaiting_action');
+  assert.equal(cancelledCandidateProjected.state.agent.currentAction.type, 'candidate.plan');
+  assert.equal(cancelledCandidateProjected.state.stage, 'candidate');
 
   const authFailure = classifyCodexFailure(
     { error: { code: 'CODEX_EXIT_1', message: '401 invalid_api_key sk-sensitive-value' } },
@@ -190,11 +214,12 @@ try {
   assert.equal(windowsSandboxFailure.code, 'CODEX_WINDOWS_SANDBOX_SETUP_FAILED');
   assert.match(windowsSandboxFailure.detail, /unelevated fallback/);
 
+  await execFileAsync('git', ['checkout', '--', 'kernel.cu'], { cwd: root });
   const completedWithToolFailureRuntime = createAgentRuntime({
     mode: 'codex-cli',
     codexClient: {
       describe: async () => ({ installed: true, loggedIn: true, version: 'codex-cli delegated' }),
-      readRun: async () => ({ runId: 'codex_TOOL_WARNING', status: 'completed', completedAt: '2026-08-10T00:00:00.000Z', threadId: 'thread-warning', error: null }),
+      readRun: async () => ({ runId: 'codex_TOOL_WARNING', workspace: root, status: 'completed', completedAt: '2026-08-10T00:00:00.000Z', threadId: 'thread-warning', error: null }),
       readEvents: async () => [
         { type: 'item.started', item: { id: 'tool-warning', type: 'command_execution', status: 'in_progress' } },
         { type: 'item.completed', item: { id: 'tool-warning', type: 'command_execution', status: 'failed', aggregated_output: 'windows sandbox: helper_unknown_error: setup refresh had errors' } },

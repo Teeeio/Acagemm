@@ -36,6 +36,7 @@ try {
   let s = makeState();
   let r = await executeCommand({ journal, saveState: fakeSave, registry, state: s, type: 'test-cmd', body: { id: 'a' } });
   assert.equal(r.status, 'applied');
+  assert.match(r.entry.effectId, /^effect_[a-f0-9]{24}$/);
   assert.equal(applyCalls, 1);
   assert.equal(s.stateVersion, 1);
   assert.equal(s.commandJournalSeq, 3); // journal 已有 seq 1、2（case 1），本条为 seq 3
@@ -125,21 +126,72 @@ try {
     let state;
     for (let attempt = 0; attempt < 50; attempt += 1) { state = (await request('/api/state')).state; if (state.agent.status === 'awaiting_action') break; await new Promise((resolve) => setTimeout(resolve, 200)); }
     assert.equal(state.agent.status, 'awaiting_action');
+
+    // ---- 8. baseline start-benchmark：必须先跑 PyTorch reference 权威来源单文件 baseline，且允许在 patch 前运行 ----
+    const baselineRunPy = [
+      'def get_inputs():',
+      '    import torch',
+      '    return {"x": torch.arange(1024, dtype=torch.float32), "y": torch.ones(1024, dtype=torch.float32)}',
+      '',
+      'def run(inputs):',
+      '    return inputs["x"] + inputs["y"]',
+      '',
+      'def reference(inputs):',
+      '    return inputs["x"] + inputs["y"]',
+      '',
+    ].join('\n');
+    const baselineSource = {
+      authority: 'upstream',
+      repository: 'https://github.com/flashinfer-ai/flashinfer.git',
+      commit: 'ee3fda10',
+      path: 'flashinfer/decode.py',
+      operator: 'paged_decode',
+      expandedSingleFile: true,
+    };
+    const missingSource = await requestFailure('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ purpose: 'baseline', runPy: baselineRunPy, matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'] } }) });
+    assert.equal(missingSource.status, 400);
+    assert.equal(missingSource.payload.code, 'BASELINE_SOURCE_REQUIRED');
+    const naiveBaseline = await request('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ purpose: 'baseline', baselineKind: 'naive_v0', timeoutSeconds: 1, matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'] } }) });
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      state = (await request('/api/state')).state;
+      if (state.benchmark.status === 'idle' && state.baseline?.status === 'complete' && state.baseline?.evidence?.runId === naiveBaseline.runId) break;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    assert.equal(state.baseline.kind, 'naive_v0');
+    assert.equal(state.baseline.evidence.kind, 'naive_v0');
+    assert.equal(state.baseline.evidence.source.authority, 'generated');
+    assert.equal(state.baseline.evidence.source.basedOn, 'v0');
+    assert.equal(state.baseline.resolution.strategy, 'fallback_naive_v0');
+    const baseline = await request('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ purpose: 'baseline', runPy: baselineRunPy, baselineSource, timeoutSeconds: 1, matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'] } }) });
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      state = (await request('/api/state')).state;
+      if (state.benchmark.status === 'idle' && state.baseline?.status === 'complete' && state.baseline?.evidence?.runId === baseline.runId) break;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    assert.equal(state.benchmark.status, 'idle');
+    assert.equal(state.baseline.status, 'complete');
+    assert.equal(state.baseline.evidence.kind, 'pytorch_reference');
+    assert.equal(state.baseline.evidence.shapeKey, JSON.stringify({ correctnessCases: 24 }));
+    assert.equal(state.baseline.evidence.source.repository, baselineSource.repository);
+    assert.equal(state.stage, 'candidate');
+    assert.equal(state.agent.currentAction.type, 'candidate.plan');
+
     await request('/api/actions/apply-patch', { method: 'POST', body: JSON.stringify({ candidate: 'candidate-02' }) });
 
-    // ---- 8. start-benchmark：命令日志记录 + guard 阻止重复提交 → 队列只有 1 个任务 ----
-    const body = JSON.stringify({ matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'] } });
+    // ---- 9. candidate start-benchmark：命令日志记录 + guard 阻止重复提交 → 队列只有 1 个候选任务 ----
+    const body = JSON.stringify({ timeoutSeconds: 1, matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'] } });
     const first = await request('/api/actions/start-benchmark', { method: 'POST', body });
     const secondFailure = await requestFailure('/api/actions/start-benchmark', { method: 'POST', body });
     assert.equal(secondFailure.status, 409);
     assert.equal(secondFailure.payload.code, 'INVALID_WORKFLOW_TRANSITION');
     const queueRaw = await readFile(path.join(smokeRoot, 'runtime', 'operator-test-queue.jsonl'), 'utf8');
     const tasks = queueRaw.split('\n').filter(Boolean).map((line) => JSON.parse(line));
+    assert.equal(tasks.filter((task) => task.payload?.requestId === baseline.runId).length, 1, 'baseline benchmark should submit exactly once');
     assert.equal(tasks.filter((task) => task.payload?.requestId === first.runId).length, 1, 'same benchmark should submit exactly once');
     // 命令日志已记录 start-benchmark 且 stateVersionAfter 已补全
     const journalRaw = await readFile(path.join(smokeRoot, 'runtime', 'command-journal.jsonl'), 'utf8');
     const journalEntries = journalRaw.split('\n').filter(Boolean).map((line) => JSON.parse(line));
-    const benchmarkEntry = journalEntries.find((entry) => entry.type === 'start-benchmark');
+    const benchmarkEntry = journalEntries.find((entry) => entry.type === 'start-benchmark' && entry.payload?.runId === first.runId);
     assert.ok(benchmarkEntry, 'journal should record start-benchmark');
     assert.equal(benchmarkEntry.stateVersionAfter, first.state.stateVersion);
     assert.equal(benchmarkEntry.status, 'applied');

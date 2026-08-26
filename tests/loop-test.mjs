@@ -3,11 +3,15 @@ import {
   advanceIteration,
   detectStagnation,
   decideResearchTrigger,
+  detectPlateau,
   selectResearchDirection,
   buildResearchBriefing,
   evaluateResearchValue,
   detectLoopGuard,
   detectTunnelVision,
+  isResearchExhausted,
+  isResolvedEvidenceRound,
+  PLATEAU_NO_IMPROVE_ROUNDS,
   STAGNATION_WINDOW,
   MAX_ROUNDS,
   MAX_RESEARCH_ESCALATIONS,
@@ -22,6 +26,16 @@ assert.deepEqual(detectStagnation({ iterationStats: { consecutiveNoAdopt: 3, las
 assert.deepEqual(detectStagnation({ iterationStats: {}, runHistory: [{ runId: 'a', stage: 'diagnosis' }, { runId: 'b', stage: 'diagnosis' }, { runId: 'c', stage: 'candidate' }] }).consecutiveNoAdopt, 3);
 // adopted（decisionReview.resolution.outcome === 'adopt'）不计为停滞
 assert.deepEqual(detectStagnation({ iterationStats: {}, runHistory: [{ runId: 'a', stage: 'evidence', decisionReview: { resolution: { outcome: 'adopt' } } }, { runId: 'b', stage: 'diagnosis' }, { runId: 'c', stage: 'diagnosis' }] }).consecutiveNoAdopt, 2);
+assert.equal(detectStagnation({ iterationStats: {}, runHistory: [
+  { runId: 'r1', stage: 'evidence', candidateDigest: 'sha256:same', decisionReview: { resolution: { outcome: 'reference' } } },
+  { runId: 'r2', stage: 'evidence', candidateDigest: 'sha256:same', decisionReview: { resolution: { outcome: 'reference' } } },
+  { runId: 'r3', stage: 'evidence', candidateDigest: 'sha256:same', decisionReview: { resolution: { outcome: 'reference' } } },
+] }).stagnated, true);
+assert.equal(detectStagnation({ iterationStats: { consecutiveNoAdopt: 2, lastCountedRunId: 'r2' }, runHistory: [
+  { runId: 'r1', stage: 'evidence', candidateDigest: 'sha256:same', decisionReview: { resolution: { outcome: 'reference' } } },
+  { runId: 'r2', stage: 'evidence', candidateDigest: 'sha256:same', decisionReview: { resolution: { outcome: 'reference' } } },
+  { runId: 'r3', stage: 'evidence', candidateDigest: 'sha256:other', decisionReview: { resolution: { outcome: 'reference' } } },
+] }).stagnated, false);
 
 // ---- 纯函数：升级决策 ----
 const trigger = decideResearchTrigger({ iterationStats: { consecutiveNoAdopt: 3, lastCountedRunId: 'run_1' }, missions: [{ id: 'MIS', goal: 'optimize latency' }], activeMissionId: 'MIS' });
@@ -71,6 +85,17 @@ const duplicate = evaluateResearchValue({
 assert.equal(duplicate.inject, false);
 assert.equal(duplicate.value, 'low');
 
+// ---- 纯函数：已决策 evidence 终态识别 ----
+const resolvedReferenceEvidence = {
+  stage: 'evidence',
+  agent: { status: 'completed', runId: 'codex_done' },
+  benchmark: { status: 'complete' },
+  decisionReview: { status: 'resolved', recommendation: 'reference' },
+};
+assert.equal(isResolvedEvidenceRound(resolvedReferenceEvidence), true);
+assert.equal(isResolvedEvidenceRound({ ...resolvedReferenceEvidence, decisionReview: { status: 'pending', recommendation: 'reference' } }), false);
+assert.equal(isResolvedEvidenceRound({ ...resolvedReferenceEvidence, agent: { status: 'awaiting_action', runId: 'codex_done' } }), false);
+
 // ---- advanceIteration：短路与编排 ----
 const makeState = (overrides = {}) => {
   const base = {
@@ -98,14 +123,16 @@ const makeState = (overrides = {}) => {
 let startResearchCalls = 0;
 let startMainRoundCalls = 0;
 let cancelResearchCalls = 0;
+let startBaselineCalls = 0;
 let lastResearchSynchronous = null;
 let lastResearchRunPhase = null;
 let sourceCount = 0;
-const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; lastResearchSynchronous = null; lastResearchRunPhase = null; sourceCount = 0; };
+const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; startBaselineCalls = 0; lastResearchSynchronous = null; lastResearchRunPhase = null; sourceCount = 0; };
 const deps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous, runPhase }) => { startResearchCalls += 1; lastResearchSynchronous = synchronous; lastResearchRunPhase = runPhase; state.researchAgent = { ...state.researchAgent, status: 'running', runId: runPhase === 'synthesize' ? 'codex_research_syn' : 'codex_research_1', runtimeKind: 'codex-cli', direction, researchDir: workspace, startedAt: new Date().toISOString(), budgetMs: runPhase === 'synthesize' ? 4 * 60 * 1000 : 30 * 60 * 1000, notes: [], synchronous: Boolean(synchronous), runPhase, acquireRunId: runPhase === 'synthesize' ? (state.researchAgent?.acquireRunId || 'codex_research_1') : 'codex_research_1', synthesizeRunId: runPhase === 'synthesize' ? 'codex_research_syn' : null, sourceRoot: state.researchAgent?.sourceRoot || null }; return state; },
   cancelResearch: async ({ state, runId }) => { cancelResearchCalls += 1; state.researchAgent = { ...state.researchAgent, status: 'cancel_requested' }; return { state }; },
   startMainRound: async ({ state, goal }) => { startMainRoundCalls += 1; state.agent = { status: 'running', runId: 'codex_MAIN' }; state.iterationStats = { ...state.iterationStats, round: (state.iterationStats.round || 0) + 1 }; return state; },
+  startBaseline: async ({ state }) => { startBaselineCalls += 1; state.baseline = { ...(state.baseline || {}), required: true, status: 'running' }; state.benchmark = { ...(state.benchmark || {}), status: 'running', purpose: 'baseline' }; return state; },
   researchDirForMission: () => '/tmp/research',
   countSources: async () => ({ count: sourceCount }),
 };
@@ -132,6 +159,23 @@ resetCounters();
 let asyncRun = await advanceIteration(makeState({ researchAgent: { status: 'running', synchronous: false, runId: 'codex_research_1', startedAt: new Date().toISOString(), budgetMs: 20 * 60 * 1000 } }), deps);
 assert.notEqual(asyncRun.action, 'wait_research');
 assert.equal(asyncRun.action, 'none', 'async research must not stall the main loop');
+
+// Agent 识别硬基线缺失 → 自动提交 baseline，而不是停在 diagnosis
+resetCounters();
+const baselineAuto = await advanceIteration(makeState({
+  stage: 'diagnosis',
+  agent: {
+    status: 'completed',
+    result: {
+      summary: '缺少同 runner 同 shape baseline',
+      nextAction: { title: '先物化并排队测试权威单文件基线', reason: '需要 baseline run.py 和 runner 测量' },
+    },
+  },
+  baseline: { required: true, status: 'missing' },
+}), deps);
+assert.equal(baselineAuto.action, 'baseline_started');
+assert.equal(startBaselineCalls, 1);
+assert.equal(baselineAuto.state.baseline.status, 'running');
 
 // 研究员终态 → 价值闸 → research_injected（addresses_failure → inject）
 resetCounters();
@@ -171,6 +215,37 @@ assert.equal(counted.state.iterationStats.consecutiveNoAdopt, 1);
 counted = await advanceIteration(counted.state, deps);
 assert.equal(counted.action !== 'round_counted', true);
 
+// 当前已完成 evidence 轮也要结算；下一次调用自动续跑下一主轮
+resetCounters();
+const terminalEvidence = makeState({
+  stage: 'evidence',
+  agent: { status: 'completed', runId: 'codex_done', goal: '优化 C500 延迟' },
+  benchmark: { status: 'complete', result: { latencyUs: 55 } },
+  decisionReview: { status: 'resolved', recommendation: 'reference', resolution: { outcome: 'reference' }, resolvedAt: new Date().toISOString() },
+});
+let terminalCounted = await advanceIteration(terminalEvidence, deps);
+assert.equal(terminalCounted.action, 'round_counted');
+assert.equal(terminalCounted.state.iterationStats.lastCountedRunId, 'codex_done');
+assert.equal(terminalCounted.state.iterationStats.consecutiveNoAdopt, 1);
+let terminalResumed = await advanceIteration(terminalCounted.state, deps);
+assert.equal(terminalResumed.action, 'resumed_agent');
+assert.equal(startMainRoundCalls, 1);
+
+// 诊断轮无候选：计入未采纳轮次；下一 tick 自动再开主轮
+resetCounters();
+const noCandidateRound = makeState({
+  stage: 'diagnosis',
+  agent: { status: 'completed', runId: 'codex_no_candidate', goal: '优化 paged attention' },
+  baseline: { required: true, status: 'complete' },
+  candidateEvaluations: [],
+});
+let noCandidateCounted = await advanceIteration(noCandidateRound, deps);
+assert.equal(noCandidateCounted.action, 'round_counted');
+assert.equal(noCandidateCounted.state.iterationStats.consecutiveNoAdopt, 1);
+let noCandidateResumed = await advanceIteration(noCandidateCounted.state, deps);
+assert.equal(noCandidateResumed.action, 'resumed_agent');
+assert.equal(startMainRoundCalls, 1);
+
 // 停滞升级：连续 3 轮无采纳 + 主线程空闲 → startResearch
 resetCounters();
 const stallState = makeState({
@@ -182,6 +257,27 @@ assert.equal(escalated.action, 'research_escalated');
 assert.equal(startResearchCalls, 1);
 assert.equal(lastResearchSynchronous, true, 'stagnation escalation should be synchronous (serial wait)');
 assert.match(escalated.state.researchAgent.direction, /C500/);
+
+// 同步研究采集阶段无资料/无笔记：计为一次研究尝试，清空停滞计数，下一 tick 应继续主候选循环
+resetCounters();
+const noMaterialResearch = makeState({
+  stage: 'diagnosis',
+  agent: { status: 'completed', runId: 'codex_failed_candidate', goal: '优化 paged attention' },
+  baseline: { required: true, status: 'complete' },
+  benchmark: { status: 'failed', purpose: 'candidate', logs: [{ message: 'runner timeout' }] },
+  decisionReview: { status: 'resolved', recommendation: 'reject', resolution: { outcome: 'reject' } },
+  failureRecords: [{ id: 'fail.timeout', title: 'runner timeout', decisionReason: 'runner timeout' }],
+  candidateEvaluations: [{ id: 'candidate-01', classification: 'rejected' }],
+  researchAgent: { status: 'cancelled', runPhase: 'acquire', acquireHandled: true, runId: 'research_no_material', synchronous: true },
+  researchNotes: [],
+  iterationStats: { round: 3, consecutiveNoAdopt: 3, lastCountedRunId: 'codex_failed_candidate', lastResearchRunId: null, researchRounds: 0, pendingInjection: null },
+});
+const noMaterialRecorded = await advanceIteration(noMaterialResearch, deps);
+assert.equal(noMaterialRecorded.action, 'research_noted');
+assert.equal(noMaterialRecorded.state.iterationStats.consecutiveNoAdopt, 0);
+const noMaterialResumed = await advanceIteration(noMaterialRecorded.state, deps);
+assert.equal(noMaterialResumed.action, 'resumed_agent');
+assert.equal(startMainRoundCalls, 1);
 
 // 主线程活跃 → wait_main（候选/验证/证据期间不自动开新轮）
 resetCounters();
@@ -206,26 +302,62 @@ assert.equal(guarded.action, 'needs_human');
 assert.equal(guarded.state.iterationStats.loopStatusReason, 'max_rounds');
 // max_research
 guarded = await advanceIteration(makeState({ iterationStats: { researchRounds: MAX_RESEARCH_ESCALATIONS, lastResearchRunId: 'n1', consecutiveNoAdopt: 0 } }), deps);
-assert.equal(guarded.action, 'needs_human');
-assert.equal(guarded.state.iterationStats.loopStatusReason, 'max_research');
+assert.notEqual(guarded.action, 'needs_human', 'max_research no longer stops the main loop');
+assert.equal(detectLoopGuard({ iterationStats: { researchRounds: MAX_RESEARCH_ESCALATIONS } }), null);
+assert.equal(isResearchExhausted(guarded.state), true);
+// explicit mission budget replaces fixed max_research/max_rounds guards
+guarded = await advanceIteration(makeState({
+  missionBudgetMs: 5 * 60 * 60 * 1000,
+  missionBudgetStartedAt: new Date().toISOString(),
+  iterationStats: { round: MAX_ROUNDS + 1, researchRounds: MAX_RESEARCH_ESCALATIONS, lastResearchRunId: 'n1', consecutiveNoAdopt: 0 },
+}), deps);
+assert.notEqual(guarded.action, 'needs_human');
 // total_budget（loopStartedAt 在预算时长之前）
 guarded = await advanceIteration(makeState({ iterationStats: { round: 1, loopStartedAt: new Date(Date.now() - TOTAL_BUDGET_MS - 1000).toISOString(), lastCountedRunId: 'run_1', consecutiveNoAdopt: 0 } }), deps);
 assert.equal(guarded.action, 'needs_human');
 assert.equal(guarded.state.iterationStats.loopStatusReason, 'total_budget');
+guarded = await advanceIteration(makeState({
+  missionBudgetMs: 1,
+  missionBudgetStartedAt: new Date(Date.now() - 1000).toISOString(),
+  iterationStats: { round: 1, loopStartedAt: new Date().toISOString(), lastCountedRunId: 'run_1', consecutiveNoAdopt: 0 },
+}), deps);
+assert.equal(guarded.action, 'needs_human');
+assert.equal(guarded.state.iterationStats.loopStatusReason, 'total_budget');
+guarded = await advanceIteration(makeState({
+  objective: { mode: 'maximize' },
+  missions: [{ id: 'MIS', goal: '目标不设上限，加速比越高越好', metric: 'latency_p50', objective: { mode: 'maximize' } }],
+  missionBudgetMs: 1,
+  missionBudgetStartedAt: new Date(Date.now() - 1000).toISOString(),
+  iterationStats: { round: 1, loopStartedAt: new Date().toISOString(), lastCountedRunId: 'run_1', consecutiveNoAdopt: 0 },
+  currentBest: { candidateId: 'best', value: '42 us' },
+}), deps);
+assert.equal(guarded.action, 'completed_budget');
+assert.equal(guarded.state.stage, 'published');
+assert.equal(guarded.state.iterationStats.loopStatus, 'completed');
 // needs_human 短路：不再自动升级研究员
 resetCounters();
 guarded = await advanceIteration(makeState({
   runHistory: [{ runId: 'run_1', stage: 'diagnosis' }],
   iterationStats: { researchRounds: MAX_RESEARCH_ESCALATIONS, lastResearchRunId: 'n1', consecutiveNoAdopt: 3, lastCountedRunId: 'run_1' },
 }), deps);
-assert.equal(guarded.action, 'needs_human');
+assert.notEqual(guarded.action, 'needs_human');
 assert.equal(startResearchCalls, 0);
-// 幂等：needs_human 只发一次 loop.needs_human 事件
-guarded = await advanceIteration(guarded.state, deps);
-assert.equal(guarded.state.runtimeEvents.filter((event) => event.type === 'loop.needs_human').length, 1);
+assert.equal(guarded.state.runtimeEvents.filter((event) => event.type === 'research.exhausted').length, 1);
 // 手动接管重置 loopStatus 后循环恢复
 guarded = await advanceIteration(makeState({ iterationStats: { loopStatus: 'running', loopStatusReason: null, round: 0, consecutiveNoAdopt: 0 } }), deps);
 assert.equal(guarded.action !== 'needs_human', true);
+
+// maximize 平台期：研究耗尽 + 连续无提升达到窗口 → 完成并保留 current best
+const plateauState = makeState({
+  objective: { mode: 'maximize' },
+  missions: [{ id: 'MIS', goal: '不设上限，加速比越高越好', metric: 'latency_p50', objective: { mode: 'maximize' } }],
+  iterationStats: { researchRounds: MAX_RESEARCH_ESCALATIONS, researchExhausted: true, consecutiveNoAdopt: PLATEAU_NO_IMPROVE_ROUNDS, lastCountedRunId: 'run_1' },
+  currentBest: { candidateId: 'best', value: '40 us' },
+});
+assert.equal(detectPlateau(plateauState).plateau, true);
+guarded = await advanceIteration(plateauState, deps);
+assert.equal(guarded.action, 'completed_plateau');
+assert.equal(guarded.state.stage, 'published');
 
 // ---- 方向视野检测：死磕识别（收敛守卫） ----
 // 同方向 + 同错误码（重复无进展）→ 死磕
@@ -250,6 +382,37 @@ const diverse = detectTunnelVision({ failureRecords: [
   { id: 'f3', title: 'Launch overhead', failure: { code: 'X3' } },
 ] });
 assert.equal(diverse.tunnelVision, false);
+
+// ---- 中文分词（B1）：价值闸与死磕检测对中文有效 ----
+const zhNovel = evaluateResearchValue({
+  research: { summary: '研究员分析了天数平台的显存带宽与访存模式，发现连续访存可降低 bank conflict', findings: ['连续访存减少 bank 冲突'], suggestedDirections: ['尝试 swizzle 布局'], sources: [{ title: '平台文档', url: 'https://x.invalid' }] },
+  knowledge: {},
+});
+assert.equal(zhNovel.inject, true, '中文研究笔记应被识别为 novel（≥5 token）');
+assert.equal(zhNovel.value, 'medium');
+
+const zhAddressesFailure = evaluateResearchValue({
+  research: { summary: '迁移到天数平台时发生 shape 边界不一致，需检查 tile 划分', findings: [] },
+  knowledge: { failureRecords: [{ id: 'fail.zh', title: '天数平台 shape 边界失败', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile 划分' }] },
+});
+assert.equal(zhAddressesFailure.inject, true, '中文调研命中已知失败 → 注入');
+assert.equal(zhAddressesFailure.value, 'high');
+
+// 中文 + 同错误码重复 → 判死磕
+const zhTunnel = detectTunnelVision({ failureRecords: [
+  { id: 'zf1', title: '迁移天数 tile 边界失败', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile 划分' },
+  { id: 'zf2', title: '天数 tile 边界再失败', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile 划分仍不对' },
+  { id: 'zf3', title: 'tile 边界依然失败', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: 'tile 划分持续' },
+] });
+assert.equal(zhTunnel.tunnelVision, true, '中文同错误码 + 同方向族 → 判死磕');
+
+// 中文但错误码在变（有信息地演进）→ 收敛守卫放行，不判死磕
+const zhConverging = detectTunnelVision({ failureRecords: [
+  { id: 'zc1', title: '迁移天数 认证失败', failure: { code: 'CODEX_AUTH_FAILED' } },
+  { id: 'zc2', title: '迁移天数 限流失败', failure: { code: 'CODEX_RATE_LIMITED' } },
+  { id: 'zc3', title: '迁移天数 网络失败', failure: { code: 'CODEX_NETWORK_FAILED' } },
+] });
+assert.equal(zhConverging.tunnelVision, false, '中文但错误码在变（有信息地演进）→ 收敛守卫放行');
 
 // ---- 调研方向简报：已试方向 + 继续/换方向 + ROI 排序 ----
 const visionDirection = selectResearchDirection({

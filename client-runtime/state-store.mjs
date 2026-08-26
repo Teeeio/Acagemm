@@ -14,6 +14,7 @@ import {
 import { copyWorkspaceSnapshot, workspaceManager } from './workspace-manager.mjs';
 import { MLA_OPTIMIZATION_TEST_GOAL } from './mission-intent.mjs';
 import { journalPathFor, reconcileCommandJournal } from './command-journal.mjs';
+import { runnerMatches } from './runner-aliases.mjs';
 
 export { runtimeDir } from './storage-paths.mjs';
 const statePath = path.join(dataDir, 'mock-db.json');
@@ -44,6 +45,8 @@ export const workspaceDirForMission = (missionId, repository = '', projectRoot =
 };
 
 export const missionRootFor = (missionId, repository = '', projectRoot = '') => path.dirname(workspaceDirForMission(missionId, repository, projectRoot));
+export const missionSourceDirFor = (missionId, repository = '', projectRoot = '') => path.join(missionRootFor(missionId, repository, projectRoot), 'sources');
+export const baselineDirForMission = (missionId, repository = '', projectRoot = '') => path.join(missionRootFor(missionId, repository, projectRoot), 'baseline');
 export const artifactDirForMission = (missionId, repository = '', projectRoot = '') => {
   const layout = projectLayoutFor(repository, projectRoot);
   return layout.root
@@ -82,6 +85,52 @@ export async function ensureProjectLayout({ root, repository, sourceRoot, projec
 
 const projectIdForRepository = (repository = '') => `PRJ_${Buffer.from(String(repository || 'repository')).toString('hex').slice(0, 16).toUpperCase()}`;
 const projectNameForRepository = (repository = '') => path.basename(String(repository || 'repository').replaceAll('\\', '/')) || 'repository';
+export const normalizeMissionBudgetMs = (valueOrInput = null) => {
+  const raw = valueOrInput && typeof valueOrInput === 'object' && !Array.isArray(valueOrInput)
+    ? (Object.hasOwn(valueOrInput, 'missionBudgetMs') ? valueOrInput.missionBudgetMs
+      : Object.hasOwn(valueOrInput, 'timeBudgetMs') ? valueOrInput.timeBudgetMs
+        : Object.hasOwn(valueOrInput, 'missionBudgetHours') ? Number(valueOrInput.missionBudgetHours) * 60 * 60 * 1000
+          : Object.hasOwn(valueOrInput, 'timeBudgetHours') ? Number(valueOrInput.timeBudgetHours) * 60 * 60 * 1000
+            : null)
+    : valueOrInput;
+  if (raw === null || raw === undefined || raw === '' || raw === false || raw === true || Number(raw) === 0) return null;
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || numeric < 0) return null;
+  return Math.floor(numeric);
+};
+
+const OBJECTIVE_MODES = new Set(['smoke', 'threshold', 'maximize']);
+const objectiveTextFor = (mission = {}, overrides = {}) => `${overrides.goal || mission.goal || ''} ${overrides.title || mission.title || ''} ${overrides.metric || mission.metric || ''}`.toLowerCase();
+
+export const inferMissionObjectiveMode = (mission = {}, overrides = {}) => {
+  const explicit = String(overrides.mode || mission.objective?.mode || '').toLowerCase();
+  if (OBJECTIVE_MODES.has(explicit)) return explicit;
+  const text = objectiveTextFor(mission, overrides);
+  if (/不设.*上限|越.*好|maximi[sz]e|最大化|持续优化|加速比.*越|speedup\s*maximi[sz]e/.test(text)) return 'maximize';
+  if (/smoke|冒烟|闭环验证|runner\s*测试|runner\s*验证|接入测试/.test(text)) return 'smoke';
+  if (/(?:<|<=|≤|低于|不高于|控制在)\s*\d+(?:\.\d+)?\s*(?:μs|us|ms)?/i.test(text)) return 'threshold';
+  return 'threshold';
+};
+
+export const normalizeMissionObjective = (objective = {}, mission = {}) => {
+  const mode = inferMissionObjectiveMode(mission, objective || {});
+  const metric = objective?.metric || mission.metric || 'latency_p50';
+  const direction = objective?.direction || (String(metric).toLowerCase().includes('throughput') ? 'maximize' : 'minimize');
+  const completionPolicy = objective?.completionPolicy || objective?.completion || (mode === 'maximize' ? 'budget_or_plateau' : 'gate');
+  return {
+    mode,
+    metric,
+    direction,
+    completionPolicy,
+    ...(Number.isFinite(Number(objective?.targetRelativeImprovement))
+      ? { targetRelativeImprovement: Number(objective.targetRelativeImprovement) }
+      : {}),
+    inferred: !objective?.mode,
+  };
+};
+
+export const isMaximizeMission = (mission = {}) => normalizeMissionObjective(mission.objective || {}, mission).mode === 'maximize';
+
 const createProjectRecord = (repository, overrides = {}) => ({
   id: overrides.id || projectIdForRepository(repository),
   name: overrides.name || projectNameForRepository(repository),
@@ -319,6 +368,8 @@ export const toPublishedKnowledgeAsset = (draft, version = 'v1.0') => {
 };
 
 export function runKnowledgeMaintenance(state) {
+  const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+  const maximizeObjective = isMaximizeMission({ ...mission, objective: state.objective || mission.objective, goal: mission.goal });
   const liveEvidence = state.benchmark?.result?.environment?.liveHardware === true;
   const expectedAssetStatus = liveEvidence ? 'published' : 'simulation';
   if (state.knowledgeMaintenance?.status === 'completed'
@@ -364,7 +415,7 @@ export function runKnowledgeMaintenance(state) {
       ? `效果决策 · ${activeCandidateId} 已采用`
       : `仿真闭环 · ${activeCandidateId} 仅生成预览资产`,
   };
-  state.stage = 'published';
+  state.stage = maximizeObjective ? 'evidence' : 'published';
   state.decisionReview = {
     ...(state.decisionReview || createDecisionReviewState('resolved')),
     status: 'resolved',
@@ -376,13 +427,13 @@ export function runKnowledgeMaintenance(state) {
   state.agent = {
     ...state.agent,
     status: 'completed',
-    phase: '知识自动维护完成',
+    phase: maximizeObjective ? 'Current best 已更新，继续优化' : '知识自动维护完成',
     progress: 100,
     currentAction: null,
-    messages: [...(state.agent?.messages || []), { id: `knowledge-${Date.now()}`, phase: 'knowledge', status: 'completed', title: liveEvidence ? '知识资产已自动维护' : '仿真经验预览已生成', detail: liveEvidence ? `${publishedCount} 条经验已完成查重、版本化和策略发布。` : `${simulationCount} 条经验仅用于验证客户端闭环，不会进入正式知识资产库。`, time: '刚刚' }],
+    messages: [...(state.agent?.messages || []), { id: `knowledge-${Date.now()}`, phase: 'knowledge', status: 'completed', title: maximizeObjective ? 'Current best 经验已记录' : liveEvidence ? '知识资产已自动维护' : '仿真经验预览已生成', detail: maximizeObjective ? `${state.currentBest?.value || 'current best'} 已记录，Mission 继续优化。` : liveEvidence ? `${publishedCount} 条经验已完成查重、版本化和策略发布。` : `${simulationCount} 条经验仅用于验证客户端闭环，不会进入正式知识资产库。`, time: '刚刚' }],
   };
-  appendRuntimeEvent(state, 'knowledge.maintenance_completed', { policyId: state.knowledgeMaintenance.policy.id, summary: state.knowledgeMaintenance.summary, changes: state.knowledgeMaintenance.changes, liveEvidence }, { kind: 'knowledge', mode: 'client' });
-  addAuditEvent(state, liveEvidence ? '知识资产已按策略自动维护' : '仿真经验预览已生成', `${state.publishedAssets.length} Experiences · ${state.knowledgeMaintenance.policy.version} · ${simulationCount} simulation only`, liveEvidence ? 'green' : 'warning', 'BookOpen');
+  appendRuntimeEvent(state, 'knowledge.maintenance_completed', { policyId: state.knowledgeMaintenance.policy.id, summary: state.knowledgeMaintenance.summary, changes: state.knowledgeMaintenance.changes, liveEvidence, objectiveMode: maximizeObjective ? 'maximize' : 'gate' }, { kind: 'knowledge', mode: 'client' });
+  addAuditEvent(state, maximizeObjective ? 'Current best 经验已记录，继续优化' : liveEvidence ? '知识资产已按策略自动维护' : '仿真经验预览已生成', `${state.publishedAssets.length} Experiences · ${state.knowledgeMaintenance.policy.version} · ${simulationCount} simulation only`, liveEvidence ? 'green' : 'warning', 'BookOpen');
   return state;
 }
 
@@ -410,8 +461,10 @@ export function runAutomaticAdoption(state, note = 'Accept Gate 全部通过，�
   const isCodexCandidate = state.agent?.runtimeKind === 'codex-cli';
   const gate = state.decisionReview?.gate || candidate?.acceptGate || { passed: true, passedRules: [], evaluatedRules: 0 };
   if (state.decisionReview?.status === 'awaiting_review' || !candidateId || (isCodexCandidate && (!candidate?.patchDigest || gate?.passed !== true))) return state;
+  const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+  const maximizeObjective = isMaximizeMission({ ...mission, objective: state.objective || mission.objective, goal: mission.goal });
   const resolvedAt = markCandidateAccepted(state, note, 'policy');
-  state.stage = 'curation';
+  state.stage = maximizeObjective ? 'evidence' : 'curation';
   const primaryMeasurement = state.benchmark?.result?.benchmark?.[0];
   state.currentBest = {
     candidateId,
@@ -431,13 +484,13 @@ export function runAutomaticAdoption(state, note = 'Accept Gate 全部通过，�
   state.knowledgeMaintenance = createKnowledgeMaintenanceState('ready');
   state.agent = {
     ...state.agent,
-    status: 'executing',
-    phase: 'Accept Gate 自动采用',
+    status: maximizeObjective ? 'completed' : 'executing',
+    phase: maximizeObjective ? 'Accept Gate 自动采用，继续优化' : 'Accept Gate 自动采用',
     currentAction: null,
-    messages: [...(state.agent?.messages || []), { id: `auto-adopt-${Date.now()}`, phase: 'decision', status: 'completed', title: `Accept Gate 已自动采用 ${candidateId}`, detail: `${gate.passedRules?.length || 0} / ${gate.evaluatedRules || gate.passedRules?.length || 0} 条必需规则通过 · current best 已更新`, time: '刚刚' }],
+    messages: [...(state.agent?.messages || []), { id: `auto-adopt-${Date.now()}`, phase: 'decision', status: 'completed', title: `Accept Gate 已自动采用 ${candidateId}`, detail: `${gate.passedRules?.length || 0} / ${gate.evaluatedRules || gate.passedRules?.length || 0} 条必需规则通过 · current best 已更新${maximizeObjective ? ' · Mission 继续优化' : ''}`, time: '刚刚' }],
   };
-  appendRuntimeEvent(state, 'decision.auto_adopted', { candidate: candidateId, policyId: state.decisionReview.policy.id, passedRules: gate.passedRules || [], gate }, { kind: 'policy', mode: 'client' });
-  addAuditEvent(state, 'Accept Gate 自动采用候选', `${candidateId} · ${gate.passedRules?.length || 0}/${gate.evaluatedRules || gate.passedRules?.length || 0} required rules passed`, 'green', 'ShieldCheck');
+  appendRuntimeEvent(state, 'decision.auto_adopted', { candidate: candidateId, policyId: state.decisionReview.policy.id, passedRules: gate.passedRules || [], gate, objectiveMode: maximizeObjective ? 'maximize' : 'gate' }, { kind: 'policy', mode: 'client' });
+  addAuditEvent(state, maximizeObjective ? 'Accept Gate 自动采用候选，继续优化' : 'Accept Gate 自动采用候选', `${candidateId} · ${gate.passedRules?.length || 0}/${gate.evaluatedRules || gate.passedRules?.length || 0} required rules passed`, 'green', 'ShieldCheck');
   return state;
 }
 
@@ -450,6 +503,7 @@ const agentProfiles = [
 const capabilityRegistry = {
   skills: [
     { id: 'skill.context-snapshot', name: '仓库上下文快照', version: 'v2.1.0', permission: 'repository:read' },
+    { id: 'skill.baseline-resolution', name: 'Baseline Resolver', version: 'v1.0.0', permission: 'repository:read' },
     { id: 'skill.bottleneck-segmentation', name: '性能瓶颈分段分析', version: 'v2.3.1', permission: 'artifact:write' },
     { id: 'skill.candidate-planning', name: '有界候选规划', version: 'v1.9.0', permission: 'candidate:create' },
     { id: 'skill.experience-curation', name: '经验沉淀', version: 'v1.6.0', permission: 'knowledge:draft' },
@@ -507,9 +561,46 @@ const createAwaitingAgent = (missionId, goal, candidateName, hardware = 'C500') 
   ],
 });
 
+const normalizeBaselineKind = (kind = 'pytorch_reference') => (String(kind || '').trim() === 'naive_v0' ? 'naive_v0' : 'pytorch_reference');
+
+const createBaselineSourcePolicy = (kind = 'pytorch_reference', overrides = {}) => {
+  const baselineKind = normalizeBaselineKind(kind);
+  const defaults = baselineKind === 'naive_v0'
+    ? { requireAuthority: false, requireSingleFileExpansion: true, allowGeneratedV0: true }
+    : { requireAuthority: true, requireSingleFileExpansion: true, allowGeneratedV0: false };
+  return { ...defaults, ...(overrides || {}) };
+};
+
+const createBaselineResolutionState = (overrides = {}, kind = 'pytorch_reference') => {
+  const baselineKind = normalizeBaselineKind(kind);
+  return {
+    status: overrides.status || (overrides.resolvedAt || overrides.source || overrides.evidence ? 'resolved' : 'unresolved'),
+    strategy: overrides.strategy || 'authoritative_first',
+    kind: normalizeBaselineKind(overrides.kind || baselineKind),
+    attemptedAuthority: overrides.attemptedAuthority === true,
+    reused: overrides.reused === true,
+    reason: overrides.reason || (baselineKind === 'naive_v0' ? '权威算子库 baseline 不可用，使用基于 v0 的 naive baseline。' : '等待解析权威算子库 baseline。'),
+    resolvedAt: overrides.resolvedAt || null,
+    previousEvidenceRunId: overrides.previousEvidenceRunId || null,
+  };
+};
+
+const createBaselineRequirementState = (overrides = {}) => ({
+  required: overrides.required ?? true,
+  kind: normalizeBaselineKind(overrides.kind || 'pytorch_reference'),
+  status: overrides.status || 'missing',
+  description: overrides.description || '优化候选采用前，必须先在同一 runner、同一输入 shape 下运行当前有效 baseline；权威 reference 优先，找不到时允许基于 v0 的 naive 单文件 baseline。',
+  sourcePolicy: createBaselineSourcePolicy(overrides.kind || 'pytorch_reference', overrides.sourcePolicy),
+  resolution: createBaselineResolutionState(overrides.resolution || {}, overrides.kind || 'pytorch_reference'),
+  source: overrides.source || null,
+  evidence: overrides.evidence || null,
+  materializer: overrides.materializer || null,
+});
+
 const createMissionDomainState = (missionId, stage = 'diagnosis') => {
   const published = stage === 'published';
   const state = {
+    baseline: createBaselineRequirementState(),
     testMatrix: { environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] },
     runtimeEvents: [],
     knowledgeDrafts: structuredClone(knowledgeDrafts),
@@ -524,6 +615,9 @@ const createMissionDomainState = (missionId, stage = 'diagnosis') => {
     auditEvents: [],
     runHistory: [],
     missionPaused: false,
+    objective: normalizeMissionObjective(),
+    missionBudgetMs: null,
+    missionBudgetStartedAt: null,
     researchNotes: [],
     researchAgent: createResearchAgentState(),
     iterationStats: createIterationStats(),
@@ -545,7 +639,7 @@ export const createSeedState = () => {
   const missions = createSeedMissions();
   const activeMission = missions[0];
   return {
-  schemaVersion: 5,
+  schemaVersion: 6,
   stateVersion: 0,
   commandJournalSeq: 0,
   updatedAt: new Date().toISOString(),
@@ -558,6 +652,8 @@ export const createSeedState = () => {
   capabilityRegistry: structuredClone(capabilityRegistry),
   runtimeEvents: structuredClone(activeMission.runtimeEvents),
   benchmark: structuredClone(activeMission.benchmark),
+  baseline: structuredClone(activeMission.baseline || createBaselineRequirementState()),
+  objective: structuredClone(activeMission.objective || normalizeMissionObjective({}, activeMission)),
   testMatrix: structuredClone(activeMission.testMatrix),
   knowledgeDrafts: structuredClone(activeMission.knowledgeDrafts),
   candidateEvaluations: structuredClone(activeMission.candidateEvaluations),
@@ -576,6 +672,8 @@ export const createSeedState = () => {
   workspace: 'Matrix Lab',
   unreadCount: 2,
   missionPaused: false,
+  missionBudgetMs: activeMission.missionBudgetMs ?? null,
+  missionBudgetStartedAt: activeMission.missionBudgetStartedAt ?? null,
   researchNotes: structuredClone(activeMission.researchNotes || []),
   researchAgent: structuredClone(activeMission.researchAgent || createResearchAgentState()),
   iterationStats: structuredClone(activeMission.iterationStats || createIterationStats()),
@@ -622,6 +720,7 @@ export const createProductState = () => {
     runtimeEvents: [],
     auditEvents: [],
     currentBest: { candidateId: null, version: null, value: '—', improvement: '—', status: 'empty' },
+    baseline: createBaselineRequirementState(),
   };
   return {
     ...fixture,
@@ -655,10 +754,10 @@ const exists = async (target) => {
   try { await stat(target); return true; } catch { return false; }
 };
 
-export async function ensureMissionWorkspace(missionId, repository = '') {
+export async function ensureMissionWorkspace(missionId, repository = '', options = {}) {
   let sourceRepository = String(repository || '').trim();
-  let projectRoot = '';
-  let sourceRoot = '';
+  let projectRoot = String(options.projectRoot || '').trim();
+  let sourceRoot = String(options.sourceRoot || '').trim();
   if (!sourceRepository && await exists(statePath)) {
     try {
       const stored = JSON.parse(await readFile(statePath, 'utf8'));
@@ -678,9 +777,23 @@ export async function ensureMissionWorkspace(missionId, repository = '') {
       sourceRoot ||= mission?.sourceRoot || project?.sourceRoot || '';
     } catch { /* state loading reports malformed JSON separately */ }
   }
-  if (projectRoot) await ensureProjectLayout({ root: projectRoot, repository: sourceRepository, sourceRoot });
   const target = workspaceDirForMission(missionId, sourceRepository, projectRoot);
-  await mkdir(path.dirname(target), { recursive: true });
+  const missionRoot = path.dirname(target);
+  const missionLocalSource = sourceRoot
+    && path.resolve(sourceRoot).startsWith(`${path.resolve(missionRoot)}${path.sep}`);
+  if (projectRoot) {
+    await ensureProjectLayout({
+      root: projectRoot,
+      repository: sourceRepository,
+      sourceRoot: missionLocalSource ? path.join(projectRoot, 'sources') : sourceRoot,
+    });
+  }
+  await mkdir(missionRoot, { recursive: true });
+  if (missionLocalSource) {
+    await mkdir(sourceRoot, { recursive: true });
+    await mkdir(researchDirForMission(missionId, sourceRepository, projectRoot), { recursive: true });
+    await mkdir(baselineDirForMission(missionId, sourceRepository, projectRoot), { recursive: true });
+  }
   if (path.isAbsolute(sourceRepository) && await exists(sourceRepository)) {
     await workspaceManager.excludeProjectRuntime(sourceRepository);
   }
@@ -823,16 +936,25 @@ function ensureDomainState(state) {
     state.decisionReview = createDecisionReviewState(reviewStatus);
   }
   const activeMissionRecord = state.missions.find((mission) => mission.id === state.activeMissionId);
+  state.objective = normalizeMissionObjective(state.objective || activeMissionRecord?.objective || {}, activeMissionRecord || {});
+  const missionBudgetMsInput = Object.hasOwn(state, 'missionBudgetMs') ? state.missionBudgetMs : activeMissionRecord?.missionBudgetMs ?? null;
+  const missionBudgetStartedAtInput = Object.hasOwn(state, 'missionBudgetStartedAt') ? state.missionBudgetStartedAt : activeMissionRecord?.missionBudgetStartedAt ?? null;
+  state.missionBudgetMs = normalizeMissionBudgetMs(missionBudgetMsInput);
+  state.missionBudgetStartedAt = missionBudgetStartedAtInput ?? null;
   const expectedWorkspacePath = path.relative(rootDir, workspaceDirForMission(state.activeMissionId, activeMissionRecord?.repository, activeMissionRecord?.projectRoot)).replaceAll('\\', '/');
   if (!state.workflowRecovery?.worktree) state.workflowRecovery = createWorkflowRecoveryState(state.activeMissionId, activeMissionRecord?.repository, activeMissionRecord?.projectRoot);
   else state.workflowRecovery.worktree.path = expectedWorkspacePath;
+  if (!state.baseline) state.baseline = structuredClone(activeMissionRecord?.baseline || createBaselineRequirementState());
+  state.baseline = createBaselineRequirementState(state.baseline);
   if (!state.currentBest || !Object.hasOwn(state.currentBest, 'candidateId')) state.currentBest = createCurrentBestState(state.stage === 'published' ? 'candidate-02' : 'candidate-01');
   state.missions = state.missions.map((mission) => {
     const defaults = createMissionDomainState(mission.id, mission.stage || 'diagnosis');
-    const next = { ...defaults, ...mission };
+    const next = { ...defaults, ...mission, objective: normalizeMissionObjective(mission.objective || defaults.objective, mission) };
     if (mission.id !== state.activeMissionId) return next;
     return {
       ...next,
+      objective: structuredClone(state.objective),
+      baseline: structuredClone(createBaselineRequirementState(state.baseline || next.baseline || createBaselineRequirementState())),
       testMatrix: structuredClone(state.testMatrix),
       decisionReview: structuredClone(state.decisionReview),
       workflowRecovery: structuredClone(state.workflowRecovery),
@@ -847,13 +969,15 @@ function ensureDomainState(state) {
       auditEvents: structuredClone(state.auditEvents || []),
       runHistory: structuredClone(state.runHistory || []),
       missionPaused: Boolean(state.missionPaused),
+      missionBudgetMs: normalizeMissionBudgetMs(state.missionBudgetMs),
+      missionBudgetStartedAt: state.missionBudgetStartedAt ?? null,
       researchNotes: structuredClone(state.researchNotes || []),
       researchAgent: structuredClone(state.researchAgent || createResearchAgentState()),
       iterationStats: structuredClone(state.iterationStats || createIterationStats()),
     };
   });
   ensureProjects(state);
-  state.schemaVersion = 5;
+  state.schemaVersion = 6;
   if (!Number.isFinite(Number(state.stateVersion))) state.stateVersion = 0;
   if (!Number.isFinite(Number(state.commandJournalSeq))) state.commandJournalSeq = 0;
   return state;
@@ -863,6 +987,29 @@ function projectActiveMission(state) {
   if (!Array.isArray(state.missions)) return state;
   const index = state.missions.findIndex((mission) => mission.id === state.activeMissionId);
   if (index === -1) return state;
+  if (!state.agent) state.agent = createIdleAgent(state.activeMissionId, state.agent?.goal || state.missions[index]?.goal);
+  if (state.stage === 'candidate'
+    && !state.patchApplied
+    && !state.agent.currentAction
+    && Array.isArray(state.candidateEvaluations)
+    && state.candidateEvaluations.length > 0) {
+    const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId || state.candidateEvaluations[0]?.id || 'candidate-01';
+    state.agent = {
+      ...state.agent,
+      status: state.agent.status === 'idle' ? 'awaiting_action' : state.agent.status,
+      phase: 'Candidate Plan 已生成',
+      currentAction: {
+        id: `action.${candidateId}.resume`,
+        type: 'candidate.plan',
+        title: `提交 ${candidateId} 测试`,
+        reason: '候选已在 Mission 工作区形成，恢复后可继续真实 runner 验证。',
+        expectedOutput: 'Correctness · Benchmark · Tracer · Profiler',
+        risk: 'medium',
+        approvalRequired: false,
+        approvalPolicy: 'client-controlled',
+      },
+    };
+  }
   const deriveMissionStatus = () => {
     if (state.agent?.status === 'awaiting_approval') return 'awaiting_approval';
     if (['running', 'executing', 'cancel_requested'].includes(state.agent?.status)) return 'running';
@@ -871,11 +1018,11 @@ function projectActiveMission(state) {
   };
   state.missions[index] = {
     ...state.missions[index],
-    goal: state.agent?.goal || state.missions[index].goal,
     stage: state.stage,
     status: deriveMissionStatus(),
     patchApplied: state.patchApplied,
     benchmark: structuredClone(state.benchmark),
+    baseline: structuredClone(state.baseline || state.missions[index].baseline || createBaselineRequirementState()),
     testMatrix: structuredClone(state.testMatrix),
     decisionReview: structuredClone(state.decisionReview),
     workflowRecovery: structuredClone(state.workflowRecovery),
@@ -890,6 +1037,9 @@ function projectActiveMission(state) {
     auditEvents: structuredClone(state.auditEvents),
     runHistory: structuredClone(state.runHistory || []),
     missionPaused: Boolean(state.missionPaused),
+    objective: structuredClone(state.objective || normalizeMissionObjective(state.missions[index].objective, state.missions[index])),
+    missionBudgetMs: normalizeMissionBudgetMs(state.missionBudgetMs),
+    missionBudgetStartedAt: state.missionBudgetStartedAt ?? null,
     researchNotes: structuredClone(state.researchNotes || []),
     researchAgent: structuredClone(state.researchAgent || createResearchAgentState()),
     iterationStats: structuredClone(state.iterationStats || createIterationStats()),
@@ -913,6 +1063,8 @@ export function selectMission(state, missionId) {
   state.stage = mission.stage || 'diagnosis';
   state.patchApplied = Boolean(mission.patchApplied);
   state.benchmark = structuredClone(mission.benchmark || { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] });
+  state.baseline = createBaselineRequirementState(mission.baseline || defaults.baseline || createBaselineRequirementState());
+  state.objective = normalizeMissionObjective(mission.objective || defaults.objective, mission);
   state.testMatrix = structuredClone(mission.testMatrix || defaults.testMatrix);
   state.decisionReview = structuredClone(mission.decisionReview || defaults.decisionReview);
   state.workflowRecovery = structuredClone(mission.workflowRecovery || defaults.workflowRecovery);
@@ -927,6 +1079,8 @@ export function selectMission(state, missionId) {
   state.auditEvents = structuredClone(mission.auditEvents || defaults.auditEvents);
   state.runHistory = structuredClone(mission.runHistory || defaults.runHistory);
   state.missionPaused = Boolean(mission.missionPaused ?? false);
+  state.missionBudgetMs = normalizeMissionBudgetMs(mission.missionBudgetMs);
+  state.missionBudgetStartedAt = mission.missionBudgetStartedAt ?? null;
   state.researchNotes = structuredClone(mission.researchNotes || defaults.researchNotes || []);
   state.researchAgent = structuredClone(mission.researchAgent || defaults.researchAgent || createResearchAgentState());
   state.iterationStats = structuredClone(mission.iterationStats || defaults.iterationStats || createIterationStats());
@@ -957,6 +1111,11 @@ export function createMission(state, input) {
   const hardware = Array.isArray(input.hardware) && input.hardware.length ? input.hardware : ['C500'];
   const project = state.projects?.find((item) => item.id === input.projectId) || state.projects?.find((item) => item.repository === input.repository);
   const repository = project?.repository || input.repository?.trim() || 'mla-kernels';
+  const sourcePolicy = input.sourcePolicy ? structuredClone(input.sourcePolicy) : null;
+  const strictMissionWorkspace = sourcePolicy?.strictZeroSource === true || sourcePolicy?.mode === 'agent-research-only';
+  const sourceRoot = strictMissionWorkspace
+    ? missionSourceDirFor(id, repository, project?.root || input.projectRoot || '')
+    : project?.sourceRoot || input.sourceRoot || null;
   const mission = {
     id,
     ...createMissionDomainState(id, 'diagnosis'),
@@ -965,15 +1124,23 @@ export function createMission(state, input) {
     projectId: project?.id || projectIdForRepository(repository),
     repository,
     projectRoot: project?.root || input.projectRoot || null,
-    sourceRoot: project?.sourceRoot || input.sourceRoot || null,
+    sourceRoot,
+    runtimeRoot: project?.runtimeRoot || input.runtimeRoot || null,
     hardware,
     metric: input.metric?.trim() || 'latency p50',
+    testMatrix: input.testMatrix ? structuredClone(input.testMatrix) : undefined,
+    sourcePolicy,
+    testScenario: input.testScenario ? structuredClone(input.testScenario) : null,
+    objective: normalizeMissionObjective(input.objective || {}, { ...input, metric: input.metric?.trim() || 'latency p50' }),
+    missionBudgetMs: normalizeMissionBudgetMs(input),
+    missionBudgetStartedAt: null,
     stage: 'diagnosis',
     status: 'ready',
     updatedLabel: '刚刚',
     result: { value: '—', improvement: 'new' },
     patchApplied: false,
     benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] },
+    baseline: createBaselineRequirementState(input.baseline || {}),
     knowledgeDrafts: [],
     candidateEvaluations: [],
     failureRecords: [],
@@ -1035,7 +1202,7 @@ export function deleteProject(state, projectId) {
 export async function loadState({ runtimeMode, ensureWorkspace = true, commandJournal = null, applyRegistry = null } = {}) {
   await ensureStorage({ ensureWorkspace });
   let state = JSON.parse(await readFile(statePath, 'utf8'));
-  const needsMigration = state.schemaVersion !== 5 || !Array.isArray(state.projects) || !Array.isArray(state.missions) || !state.capabilityRegistry || !Array.isArray(state.agent?.toolCalls) || !Array.isArray(state.knowledgeReferences) || !state.knowledgeMaintenance?.policy || !state.decisionReview?.policy || !Array.isArray(state.candidateEvaluations) || !Array.isArray(state.failureRecords) || state.missions.some((mission) => !mission.workflowRecovery || !mission.testMatrix || !Array.isArray(mission.knowledgeDrafts) || !Array.isArray(mission.candidateEvaluations) || !Array.isArray(mission.failureRecords) || !Array.isArray(mission.publishedAssets) || !mission.knowledgeMaintenance?.policy || !mission.decisionReview?.policy || !Array.isArray(mission.runtimeEvents) || !Array.isArray(mission.runHistory));
+  const needsMigration = state.schemaVersion !== 6 || !Array.isArray(state.projects) || !Array.isArray(state.missions) || !state.capabilityRegistry || !Array.isArray(state.agent?.toolCalls) || !Array.isArray(state.knowledgeReferences) || !state.knowledgeMaintenance?.policy || !state.decisionReview?.policy || !Array.isArray(state.candidateEvaluations) || !Array.isArray(state.failureRecords) || state.missions.some((mission) => !mission.workflowRecovery || !mission.testMatrix || !Array.isArray(mission.knowledgeDrafts) || !Array.isArray(mission.candidateEvaluations) || !Array.isArray(mission.failureRecords) || !Array.isArray(mission.publishedAssets) || !mission.knowledgeMaintenance?.policy || !mission.decisionReview?.policy || !Array.isArray(mission.runtimeEvents) || !Array.isArray(mission.runHistory) || !Object.hasOwn(mission, 'missionBudgetMs'));
   state = ensureDomainState(state);
   // 耐久命令日志崩溃恢复：重放 journal 中 seq > commandJournalSeq 的 applied 条目追上快照。
   let recoveryReplayed = false;
@@ -1068,7 +1235,12 @@ export async function loadState({ runtimeMode, ensureWorkspace = true, commandJo
     && state.decisionReview?.gate?.passed === true
     && state.decisionReview?.status !== 'awaiting_review';
   const policyAutoAdopted = referenceAutoAdoption || codexAutoAdoption;
-  if (policyAutoAdopted) state = runAutomaticAdoption(state);
+  if (policyAutoAdopted) {
+    state = runAutomaticAdoption(state);
+    const adoptedMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
+    const adoptedMaximize = isMaximizeMission({ ...adoptedMission, objective: state.objective || adoptedMission.objective, goal: adoptedMission.goal });
+    if (adoptedMaximize && state.knowledgeMaintenance?.status === 'ready') state = runKnowledgeMaintenance(state);
+  }
   const benchmarkBefore = JSON.stringify(state.benchmark);
   if (usesReferenceRuntime && !state.benchmark?.testTaskId) state = refreshBenchmark(state);
   const refreshedAgent = usesReferenceRuntime ? refreshAgent(state) : { state, changed: false };
@@ -1152,6 +1324,19 @@ function refreshBenchmark(state) {
   return state;
 }
 
+export const isInfrastructureTestFailure = (failure = {}) => {
+  const error = failure.error || failure;
+  const code = String(error?.code || failure.code || '').toUpperCase();
+  const message = [
+    error?.message,
+    failure.message,
+    failure.summary,
+    ...(Array.isArray(failure.logs) ? failure.logs.map((log) => log?.message || log?.detail || '') : []),
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (['REMOTE_UNREACHABLE', 'REMOTE_TIMEOUT', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)) return true;
+  return /remote api unreachable|tls|ssl|socket disconnected|connection refused|connection reset|network timed? ?out|connect timed? ?out|econnreset|econnrefused|etimedout|eai_again|enotfound/.test(message);
+};
+
 export function applyOperatorTestSnapshot(state, snapshot) {
   if (!snapshot || snapshot.taskId !== state.benchmark?.testTaskId) return state;
   const previousStatus = state.benchmark.status;
@@ -1165,7 +1350,7 @@ export function applyOperatorTestSnapshot(state, snapshot) {
     durationMs: Number(snapshot.durationMs || state.benchmark.durationMs || 0),
     result: snapshot.result ? structuredClone(snapshot.result) : state.benchmark.result || null,
     source: { kind: 'operator-test-service', mock: snapshot.result?.environment?.liveHardware === false },
-    lastServiceError: null,
+    lastServiceError: snapshot.error ? structuredClone(snapshot.error) : null,
   };
   if (nextStatus === 'cancelled') {
     state.agent = {
@@ -1184,20 +1369,128 @@ export function applyOperatorTestSnapshot(state, snapshot) {
   if (nextStatus === 'failed') {
     // 测试提交/执行失败：恢复 test.plan 动作，操作员可直接重试（否则 guard 拦死，流程卡在 validation）
     if (previousStatus !== 'failed') {
-      state.agent = {
-        ...state.agent,
-        status: 'awaiting_action',
-        phase: '异构验证待重试',
-        currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '重新提交测试矩阵', reason: '本次测试提交/执行失败，候选仍保留在隔离工作区，可重试。', expectedOutput: 'Correctness · Benchmark · Tracer · Profiler', risk: 'medium', approvalRequired: false },
-      };
-      addAuditEvent(state, '算子测试失败', `Queue ${snapshot.taskId} · ${snapshot.error?.message || '执行失败'}`, 'error', 'XCircle');
-      appendRuntimeEvent(state, 'operator_test.failed', { taskId: snapshot.taskId, runId: state.benchmark.runId, error: snapshot.error?.message || null }, { kind: 'operator-test-queue', mode: 'client' });
+      const candidateId = state.appliedCandidateId || state.benchmark?.candidate?.id || null;
+      const failedSummary = snapshot.error?.message || snapshot.result?.summary || '执行失败';
+      const infraFailure = isInfrastructureTestFailure(snapshot);
+      if (state.agent?.runtimeKind === 'codex-cli' && state.benchmark?.purpose === 'candidate' && !infraFailure) {
+        state.stage = 'diagnosis';
+        state.decisionReview = {
+          ...(state.decisionReview || createDecisionReviewState('resolved')),
+          status: 'resolved',
+          candidateId,
+          recommendation: 'reject',
+          requiresApproval: false,
+          resolution: { outcome: 'reject', source: 'operator_test', note: failedSummary, resolvedAt: snapshot.completedAt || new Date().toISOString() },
+          resolvedAt: snapshot.completedAt || new Date().toISOString(),
+        };
+        state.failureRecords = [{
+          id: `fail.${Date.now()}`,
+          title: `候选测试失败：${candidateId || 'candidate'}`,
+          candidateId,
+          failure: { code: snapshot.error?.code || 'OPERATOR_TEST_FAILED', message: failedSummary },
+          decisionReason: failedSummary,
+          extractedExperience: { status: 'extracted', summary: failedSummary },
+          createdAt: snapshot.completedAt || new Date().toISOString(),
+        }, ...(state.failureRecords || [])].slice(0, 20);
+        state.candidateEvaluations = (state.candidateEvaluations || []).map((candidate) => candidate.id === candidateId
+          ? { ...candidate, classification: 'rejected', status: '测试失败', decision: 'reject', decisionReason: failedSummary, tone: 'red' }
+          : candidate);
+        state.agent = {
+          ...state.agent,
+          status: 'completed',
+          phase: '候选测试失败，继续优化',
+          currentAction: null,
+        };
+      } else {
+        state.agent = {
+          ...state.agent,
+          status: 'awaiting_action',
+          phase: infraFailure ? '远端测试基础设施待恢复' : '异构验证待重试',
+          currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '重新提交测试矩阵', reason: infraFailure ? '远端 API / runner 基础设施暂不可达，候选未被判定失败，恢复后可重试同一候选。' : '本次测试提交/执行失败，候选仍保留在隔离工作区，可重试。', expectedOutput: 'Correctness · Benchmark · Tracer · Profiler', risk: infraFailure ? 'low' : 'medium', approvalRequired: false },
+        };
+      }
+      addAuditEvent(state, infraFailure ? '远端测试基础设施不可达' : '算子测试失败', `Queue ${snapshot.taskId} · ${snapshot.error?.message || '执行失败'}`, infraFailure ? 'warning' : 'error', infraFailure ? 'RefreshCw' : 'XCircle');
+      appendRuntimeEvent(state, infraFailure ? 'operator_test.infra_failed' : 'operator_test.failed', { taskId: snapshot.taskId, runId: state.benchmark.runId, error: snapshot.error?.message || null, errorCode: snapshot.error?.code || null }, { kind: 'operator-test-queue', mode: 'client' });
     }
     return state;
   }
   if (nextStatus !== 'complete') return state;
 
   state.stage = 'evidence';
+  if (state.benchmark?.purpose === 'baseline') {
+    const evidence = buildBaselineEvidence(state, snapshot.result || {});
+    const baselineKind = normalizeBaselineKind(evidence.kind);
+    const baselineLabel = baselineKind === 'naive_v0' ? 'naive v0 baseline' : 'PyTorch reference baseline';
+    const previousKind = normalizeBaselineKind(state.baseline?.kind);
+    state.baseline = {
+      ...(state.baseline || createBaselineRequirementState()),
+      sourcePolicy: createBaselineSourcePolicy(baselineKind, previousKind === baselineKind ? state.baseline?.sourcePolicy : undefined),
+      kind: evidence.kind,
+      status: 'complete',
+      source: evidence.source || state.baseline?.source || null,
+      evidence,
+      resolution: {
+        ...(state.baseline?.resolution || createBaselineResolutionState({}, baselineKind)),
+        status: 'resolved',
+        strategy: baselineKind === 'naive_v0' ? 'fallback_naive_v0' : 'authoritative_first',
+        kind: baselineKind,
+        attemptedAuthority: baselineKind !== 'pytorch_reference',
+        reused: false,
+        reason: baselineKind === 'naive_v0'
+          ? '权威算子库 baseline 不可用，已使用基于 v0 的 naive 单文件 baseline。'
+          : '已使用权威算子库 reference 的单文件展开版本建立 baseline。',
+        resolvedAt: evidence.completedAt,
+        previousEvidenceRunId: evidence.runId || null,
+      },
+    };
+    if (previousStatus !== 'complete') {
+      addAuditEvent(state, `${baselineLabel} completed`, `${evidence.environment} ${evidence.value}${evidence.unit}`, 'green', 'Baseline');
+      appendRuntimeEvent(state, 'baseline.completed', {
+        taskId: snapshot.taskId,
+        runId: state.benchmark.runId,
+        baseline: structuredClone(evidence),
+      }, { kind: 'operator-test-service', mode: snapshot.result?.environment?.liveHardware ? 'live' : 'mock' });
+    }
+    const completedBaselineRun = structuredClone(state.benchmark);
+    state.stage = state.patchApplied ? 'validation' : 'candidate';
+    state.benchmark = {
+      status: 'idle',
+      progress: 0,
+      runId: null,
+      startedAt: null,
+      completedAt: null,
+      durationMs: completedBaselineRun.durationMs || 0,
+      logs: [{ sequence: 1, progress: 100, message: `${baselineLabel} 已完成：${evidence.environment} ${evidence.value}${evidence.unit}` }],
+      matrix: structuredClone(completedBaselineRun.matrix || state.testMatrix || {}),
+      purpose: null,
+      baselineKind: null,
+      candidate: null,
+      testTaskId: null,
+      result: null,
+      source: completedBaselineRun.source || null,
+      lastServiceError: null,
+    };
+    state.decisionReview = {
+      ...(state.decisionReview || createDecisionReviewState('resolved')),
+      status: 'resolved',
+      recommendation: 'baseline',
+      requiresApproval: false,
+      resolution: { outcome: 'baseline', source: 'baseline_gate', note: `${baselineLabel} 已建立，后续优化候选可进入 Accept Gate。`, resolvedAt: evidence.completedAt },
+    };
+    state.agent = {
+      ...state.agent,
+      status: 'awaiting_action',
+      phase: 'Baseline 已建立',
+      runId: state.agent?.runId || null,
+      runtimeKind: null,
+      result: null,
+      currentAction: state.patchApplied
+        ? { id: 'action.validation-after-baseline', type: 'test.plan', title: '提交优化候选测试', reason: `同 runner / 同 shape 的 ${baselineLabel} 已完成，且候选补丁已应用。`, expectedOutput: 'Candidate Benchmark · Accept Gate compare', risk: 'medium', approvalRequired: false }
+        : { id: 'action.optimize-after-baseline', type: 'candidate.plan', title: '生成或提交优化候选', reason: `同 runner / 同 shape 的 ${baselineLabel} 已完成。`, expectedOutput: 'Candidate Patch · optimized run.py · benchmark compare', risk: 'medium', approvalRequired: false },
+    };
+    return state;
+  }
+
   if (previousStatus !== 'complete') {
     const measurements = snapshot.result?.benchmark || [];
     const summary = measurements.map((item) => `${item.environment} ${item.value}${item.unit}`).join(' / ') || 'Benchmark completed';
@@ -1256,8 +1549,102 @@ export function applyOperatorTestSnapshot(state, snapshot) {
 
 const parsePerformanceThreshold = (mission = {}) => {
   const text = `${mission.goal || ''} ${mission.metric || ''}`;
-  const match = text.match(/(?:<|<=|≤|低于|不高于|控制在)\s*(\d+(?:\.\d+)?)\s*(?:μs|us|ms)?/i);
+  const match = text.match(/(?:<|<=|≤|低于|不高于|控制在)\s*(\d+(?:\.\d+)?)\s*(?:μs|us|ms)\b/i)
+    || text.match(/(?:<|<=|≤)\s*(\d+(?:\.\d+)?)(?![\d.]|\s*%)/i);
   return match ? Number(match[1]) : null;
+};
+
+const parseRelativeImprovementTarget = (mission = {}) => {
+  const explicit = Number(mission.objective?.targetRelativeImprovement);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit > 1 ? explicit / 100 : explicit;
+  const text = `${mission.goal || ''} ${mission.metric || ''}`;
+  const match = text.match(/(?:相对\s*(?:baseline|基线)\s*)?(?:至少\s*)?(?:提升|改善|改进|improv(?:e|ement)?)\s*(?:至少\s*)?(\d+(?:\.\d+)?)\s*%/i)
+    || text.match(/(\d+(?:\.\d+)?)\s*%\s*(?:以上|或以上|的)?\s*(?:提升|改善|改进|improv(?:e|ement)?)/i);
+  return match ? Number(match[1]) / 100 : null;
+};
+
+const parseMeasurementValue = (value) => {
+  if (Number.isFinite(Number(value))) return Number(value);
+  const match = String(value || '').match(/(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : null;
+};
+
+const stableShapeValue = (value) => {
+  if (Array.isArray(value)) return value.map(stableShapeValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableShapeValue(value[key])]));
+  }
+  return value;
+};
+
+const normalizeShapeKey = (shapeKeyOrValue) => {
+  if (typeof shapeKeyOrValue === 'string') {
+    try { return JSON.stringify(stableShapeValue(JSON.parse(shapeKeyOrValue))); } catch { return shapeKeyOrValue; }
+  }
+  return JSON.stringify(stableShapeValue(shapeKeyOrValue || {}));
+};
+
+const shapeKeyFor = (mission = {}, matrix = {}) => normalizeShapeKey(mission.upstream?.case || matrix?.shape || {
+  correctnessCases: matrix?.correctnessCases || 24,
+});
+
+const primaryMeasurementFor = (mission = {}, measurements = []) => {
+  const primaryHardware = mission.hardware?.[0] || measurements[0]?.environment || '';
+  return measurements.find((item) => runnerMatches(item.environment, primaryHardware)) || measurements[0];
+};
+
+const baselineEvidenceFor = (state, mission) => {
+  const baseline = state.baseline || mission.baseline || createBaselineRequirementState();
+  return baseline.evidence || null;
+};
+
+const baselineMatchesRun = (baselineEvidence, mission, matrix, primary) => {
+  if (!baselineEvidence) return false;
+  const sameRunner = runnerMatches(baselineEvidence.environment, primary?.environment);
+  const sameShape = normalizeShapeKey(baselineEvidence.shapeKey) === shapeKeyFor(mission, matrix);
+  return sameRunner && sameShape;
+};
+
+const baselineSourceTrusted = (baseline = {}, baselineEvidence = {}) => {
+  if (baseline.required === false) return true;
+  const policy = baseline.sourcePolicy || createBaselineSourcePolicy(baseline.kind);
+  const baselineKind = normalizeBaselineKind(baselineEvidence.kind || baseline.kind);
+  const source = baselineEvidence.source || baseline.source || null;
+  if (!source || typeof source !== 'object') return false;
+  const singleFileExpanded = source.expandedSingleFile === true;
+  if (baselineKind === 'naive_v0' || source.kind === 'naive_v0' || source.type === 'naive_v0' || source.authority === 'generated' || source.authority === 'synthetic') {
+    const basis = String(source.basedOn || source.basis || source.version || source.commit || '').trim().toLowerCase();
+    const generatedMarker = Boolean(source.authority === 'generated' || source.type === 'naive_v0' || source.kind === 'naive_v0');
+    const basisMatch = ['v0', 'naive_v0', 'baseline-v0'].includes(basis);
+    return generatedMarker && basisMatch && (policy.requireSingleFileExpansion === false || singleFileExpanded);
+  }
+  if (policy.requireAuthority === false && policy.allowGeneratedV0 === true) return singleFileExpanded;
+  const hasAuthority = Boolean(source.repository && source.commit && source.path) && source.authority !== 'generated' && source.authority !== 'synthetic' && source.type !== 'generated';
+  return (policy.requireAuthority === false || hasAuthority) && (policy.requireSingleFileExpansion === false || singleFileExpanded);
+};
+
+const buildBaselineEvidence = (state, result = {}) => {
+  const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+  const measurements = Array.isArray(result.benchmark) ? result.benchmark : [];
+  const primary = primaryMeasurementFor(mission, measurements);
+  const baselineSource = state.benchmark?.baselineSource || state.baseline?.source || mission.baseline?.source || null;
+  return {
+    kind: state.benchmark?.baselineKind || 'pytorch_reference',
+    status: 'complete',
+    environment: primary?.environment || result.environment?.requested?.[0] || mission.hardware?.[0] || null,
+    value: primary?.value ?? null,
+    unit: primary?.unit || 'us',
+    metric: primary?.metric || mission.metric || null,
+    shapeKey: shapeKeyFor(mission, state.benchmark?.matrix || state.testMatrix || {}),
+    runId: state.benchmark?.runId || null,
+    testTaskId: state.benchmark?.testTaskId || null,
+    packageId: result.environment?.packageId || null,
+    entryMode: result.environment?.entryMode || result.profiler?.metrics?.entry_mode || null,
+    liveHardware: result.environment?.liveHardware === true,
+    source: baselineSource ? structuredClone(baselineSource) : null,
+    materialization: state.benchmark?.baselineMaterialization ? structuredClone(state.benchmark.baselineMaterialization) : null,
+    completedAt: state.benchmark?.completedAt || new Date().toISOString(),
+  };
 };
 
 export function evaluateAcceptGate(state, result = {}) {
@@ -1270,24 +1657,67 @@ export function evaluateAcceptGate(state, result = {}) {
     && Array.isArray(result.tracer?.events)
     && result.profiler?.format === 'operator-profile/v1'
     && result.profiler?.metrics && typeof result.profiler.metrics === 'object';
+  const localC500Evidence = result.environment?.service === 'local-c500-adapter';
+  const localC500ToolsCompleted = !localC500Evidence
+    || (result.tracer?.status === 'completed' && result.profiler?.status === 'completed');
+  const completeEvidence = Boolean(evidencePassed && localC500ToolsCompleted);
   const liveEvidence = result.environment?.liveHardware === true;
-  const threshold = parsePerformanceThreshold(mission);
-  const primaryHardware = String(mission.hardware?.[0] || measurements[0]?.environment || '').toLowerCase();
-  const primary = measurements.find((item) => String(item.environment || '').toLowerCase().includes(primaryHardware)) || measurements[0];
+  const absoluteThreshold = parsePerformanceThreshold(mission);
+  const relativeTarget = parseRelativeImprovementTarget(mission);
+  const primary = primaryMeasurementFor(mission, measurements);
   const minimizesMetric = !String(mission.metric || '').toLowerCase().includes('throughput');
-  const performanceApplicable = Number.isFinite(threshold) && Number.isFinite(Number(primary?.value));
-  const performancePassed = performanceApplicable && (minimizesMetric ? Number(primary.value) <= threshold : Number(primary.value) >= threshold);
+  const primaryValue = parseMeasurementValue(primary?.value);
+  const baseline = state.baseline || mission.baseline || createBaselineRequirementState();
+  const baselineEvidence = baselineEvidenceFor(state, mission);
+  const baselineKind = normalizeBaselineKind(baselineEvidence?.kind || baseline.kind || 'pytorch_reference');
+  const baselineValue = parseMeasurementValue(baselineEvidence?.value);
+  const baselineReady = !baseline.required
+    || (baseline.status === 'complete'
+      && baselineEvidence?.kind === baselineKind
+      && Number.isFinite(baselineValue)
+      && baselineSourceTrusted(baseline, baselineEvidence)
+      && baselineMatchesRun(baselineEvidence, mission, state.benchmark?.matrix || state.testMatrix || {}, primary));
+  const currentBestValue = parseMeasurementValue(state.currentBest?.value);
+  const relativeThreshold = Number.isFinite(relativeTarget) && Number.isFinite(baselineValue)
+    ? baselineValue * (minimizesMetric ? 1 - relativeTarget : 1 + relativeTarget)
+    : null;
+  const threshold = Number.isFinite(absoluteThreshold) ? absoluteThreshold : relativeThreshold;
+  const hasThreshold = Number.isFinite(threshold);
+  const hasComparableBest = Boolean(state.currentBest?.candidateId) && Number.isFinite(currentBestValue);
+  const hasBaseline = baselineReady && Number.isFinite(baselineValue);
+  const performanceApplicable = Number.isFinite(primaryValue) && (hasThreshold || hasComparableBest || hasBaseline);
+  const performancePassed = performanceApplicable && (
+    hasThreshold
+      ? (minimizesMetric ? primaryValue <= threshold : primaryValue >= threshold)
+      : hasComparableBest
+        ? (minimizesMetric ? primaryValue <= currentBestValue : primaryValue >= currentBestValue)
+        : (minimizesMetric ? primaryValue <= baselineValue : primaryValue >= baselineValue)
+  );
+  const performanceExpected = hasThreshold
+    ? Number.isFinite(absoluteThreshold)
+      ? `${minimizesMetric ? '≤' : '≥'} ${threshold}${primary?.unit || ''}`
+      : `相对 baseline 至少提升 ${(relativeTarget * 100).toFixed(Number.isInteger(relativeTarget * 100) ? 0 : 1)}%（${minimizesMetric ? '≤' : '≥'} ${Number(threshold.toFixed(6))}${primary?.unit || baselineEvidence?.unit || ''}）`
+    : hasComparableBest
+      ? `${minimizesMetric ? '≤' : '≥'} current best ${currentBestValue}${primary?.unit || ''}`
+      : hasBaseline
+        ? `${minimizesMetric ? '≤' : '≥'} ${baselineKind === 'naive_v0' ? 'naive v0 baseline' : 'PyTorch reference baseline'} ${baselineValue}${baselineEvidence?.unit || primary?.unit || ''}`
+        : `必须先运行 ${baselineKind === 'naive_v0' ? 'naive v0' : 'PyTorch reference'} 单文件 baseline（同 runner、同输入 shape）`;
+  const baselineLabel = baselineKind === 'naive_v0' ? 'naive v0 baseline 已建立' : 'PyTorch reference baseline 已建立';
+  const baselineExpected = baselineKind === 'naive_v0'
+    ? '同 runner · 同输入 shape · v0 派生的单文件 baseline'
+    : '同 runner · 同输入 shape · 上游权威来源 · PyTorch reference 单文件展开版本';
   const rules = [
     { id: 'correctness.complete', label: 'Correctness 用例全部通过', required: true, passed: correctnessPassed, actual: measurements.map((item) => `${item.environment} ${item.correctness?.passed ? item.correctness.total : 0}/${item.correctness?.total || expectedCases}`).join(' · '), expected: `${expectedCases}/${expectedCases}` },
-    { id: 'evidence.complete', label: 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: Boolean(evidencePassed), actual: evidencePassed ? '三类证据齐全' : '证据缺失或格式不匹配', expected: 'operator benchmark + trace/v1 + profile/v1' },
-    { id: 'performance.target', label: '达到 Mission 性能目标', required: true, passed: performancePassed, skipped: false, actual: primary ? `${primary.environment} ${primary.value}${primary.unit}` : '无测量值', expected: Number.isFinite(threshold) ? `${minimizesMetric ? '≤' : '≥'} ${threshold}${primary?.unit || ''}` : 'Mission 必须配置数值阈值' },
+    { id: 'evidence.complete', label: 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: completeEvidence, actual: completeEvidence ? '三类证据齐全' : localC500Evidence && !localC500ToolsCompleted ? '本地 C500 Tracer / Profiler 未完成' : '证据缺失或格式不匹配', expected: 'operator benchmark + trace/v1 + profile/v1' },
+    { id: 'baseline.current_reference', label: baselineLabel, required: Boolean(baseline.required), passed: baselineReady, skipped: !baseline.required, actual: baselineReady ? `${baselineEvidence?.environment} ${baselineEvidence?.value}${baselineEvidence?.unit}${baselineKind === 'naive_v0' ? ' · v0' : ''}` : (baselineEvidence ? 'baseline 与当前 runner/shape/source 不匹配' : '缺少 baseline 证据'), expected: baselineExpected },
+    { id: 'performance.target', label: hasThreshold ? '达到 Mission 性能目标' : '达到 Mission 性能策略', required: true, passed: performancePassed, skipped: false, actual: primary ? `${primary.environment} ${primary.value}${primary.unit}` : '无测量值', expected: performanceExpected },
     { id: 'cross_platform.regression', label: '跨平台相对 current best 无回归', required: false, passed: null, skipped: true, actual: '未配置逐平台 current best 基线', expected: '为各平台登记可比较基线后评估' },
     { id: 'evidence.provenance', label: '真实硬件证据可用于正式发布', required: false, passed: liveEvidence, skipped: false, actual: liveEvidence ? '真实测试服务' : 'Mock 测试服务', expected: 'liveHardware=true' },
   ];
   const requiredRules = rules.filter((rule) => rule.required);
   const failedRules = requiredRules.filter((rule) => !rule.passed).map((rule) => rule.id);
   const passedRules = requiredRules.filter((rule) => rule.passed).map((rule) => rule.id);
-  const hardFailure = !correctnessPassed || !evidencePassed;
+  const hardFailure = !correctnessPassed || !completeEvidence;
   const passed = failedRules.length === 0;
   const resultKind = passed ? 'eligible' : hardFailure ? 'failed' : 'reference';
   return {
@@ -1464,6 +1894,8 @@ export function resetMissionRunState(state, goal, { referenceFixture = false } =
         runtimeKind: state.agent.runtimeKind || null,
         goal: state.agent.goal,
         stage: state.stage,
+        candidateId: state.appliedCandidateId || state.decisionReview?.candidateId || state.benchmark?.candidate?.id || null,
+        candidateDigest: state.benchmark?.candidate?.digest || (state.candidateEvaluations || []).find((candidate) => candidate.id === (state.appliedCandidateId || state.decisionReview?.candidateId))?.patchDigest || null,
         benchmark: structuredClone(state.benchmark),
         decisionReview: structuredClone(state.decisionReview),
         currentBest: structuredClone(state.currentBest),
@@ -1564,6 +1996,7 @@ export async function applyCandidatePatch(missionId) {
 export async function createWorkspaceCheckpoint(missionId, stage = 'candidate', candidateId = null) {
   await ensureStorage();
   const activeWorkspace = await ensureMissionWorkspace(missionId);
+  const stableDiff = await workspaceManager.captureDiff(activeWorkspace);
   const safeMissionId = String(missionId || 'mission').replace(/[^a-zA-Z0-9._-]/g, '_');
   const checkpointId = `cp_${randomUUID().slice(0, 12).toUpperCase()}`;
   const checkpointPath = path.join(workspaceCheckpointRoot, safeMissionId, checkpointId);
@@ -1582,6 +2015,8 @@ export async function createWorkspaceCheckpoint(missionId, stage = 'candidate', 
     path: checkpointPath,
     createdAt: new Date().toISOString(),
     label: candidateId ? `${candidateId} 应用前` : `${stage} 工作区基线`,
+    stableDigest: stableDiff.digest,
+    stableChangedFiles: stableDiff.changedFiles,
   };
 }
 
@@ -1631,6 +2066,7 @@ export async function rebuildMissionWorkspaceFromRepository(mission) {
   await mkdir(path.dirname(target), { recursive: true });
   await recoverWorkspaceSwap(target);
   await replaceWorkspaceFrom(mission.repository, target);
+  await workspaceManager.git(['config', 'core.longpaths', 'true'], target);
   await workspaceManager.git(['config', 'user.name', 'Operator Studio'], target);
   await workspaceManager.git(['config', 'user.email', 'operator-studio@local.invalid'], target);
   await workspaceManager.git(['add', '-A'], target);
@@ -1670,5 +2106,10 @@ export async function restoreWorkspaceCheckpoint(checkpoint, missionId = checkpo
   }
   const target = await ensureMissionWorkspace(missionId || checkpoint.missionId);
   await replaceWorkspaceFrom(checkpointPath, target);
+  // captureDiff uses intent-to-add for new files. Restore the index as well as
+  // the filesystem so a rejected untracked candidate cannot survive as a
+  // staged empty entry in the next round.
+  await workspaceManager.git(['reset', '--mixed', 'HEAD'], target);
+  await workspaceManager.inspect(target, { refresh: true });
   return { checkpointId: checkpoint.id, workspace: path.relative(rootDir, target).replaceAll('\\', '/'), restoredAt: new Date().toISOString() };
 }

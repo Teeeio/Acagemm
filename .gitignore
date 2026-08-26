@@ -1,9 +1,16 @@
 node_modules/
+.npm-cache/
+.local-c500-tester/
+.local-c500-*/
+.operator-studio-local/
+.tmp-real-agent/
 dist/
 data/
 runtime/
 release/
 *.log
+__pycache__/
+*.pyc
 # 交付/评审产物，不入库
 for_operator_studio_handoff_*.tar.gz
 handoff_review_*/

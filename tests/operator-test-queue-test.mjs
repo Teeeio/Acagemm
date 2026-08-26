@@ -50,6 +50,32 @@ try {
   const persisted = JSON.parse(`[${(await readFile(queuePath, 'utf8')).trim().split(/\r?\n/).join(',')}]`);
   assert.equal(persisted.length, 2);
   assert.equal(persisted.find((task) => task.taskId === second.taskId).cancelRequested, true);
+
+  const remoteCancelledRoot = await mkdtemp(path.join(os.tmpdir(), 'operator-test-queue-remote-cancelled-'));
+  const remoteCancelledPath = path.join(remoteCancelledRoot, 'queue.jsonl');
+  try {
+    let remoteCancelledPolls = 0;
+    const remoteCancelledQueue = createOperatorTestQueue({
+      serviceClient: {
+        async submit() { return { taskId: 'remote-cancelled', status: 'queued' }; },
+        async get(taskId) {
+          remoteCancelledPolls += 1;
+          if (remoteCancelledPolls === 1) return { taskId, status: 'running', progress: 50 };
+          return { taskId, status: 'cancelled', progress: 100, completedAt: new Date().toISOString() };
+        },
+      },
+      filePath: remoteCancelledPath,
+    });
+    const remoteCancelled = await remoteCancelledQueue.submit(payload);
+    assert.equal((await remoteCancelledQueue.get(remoteCancelled.taskId)).status, 'running');
+    assert.equal((await remoteCancelledQueue.get(remoteCancelled.taskId)).status, 'running');
+    const cancelledByRemote = await remoteCancelledQueue.get(remoteCancelled.taskId);
+    assert.equal(cancelledByRemote.status, 'cancelled');
+    assert.equal(cancelledByRemote.progress, 100);
+  } finally {
+    await rm(remoteCancelledRoot, { recursive: true, force: true });
+  }
+
   console.log('[operator-test-queue] submit, serial processing, persistence, and cancellation passed');
 } finally {
   await rm(root, { recursive: true, force: true });

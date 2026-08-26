@@ -13,6 +13,8 @@
     "demo:reset": "node client-runtime/reset-data.mjs",
     "test:runtime": "node tests/agent-runtime-test.mjs",
     "test:queue": "node tests/operator-test-queue-test.mjs",
+    "test:workflow-kernel": "node tests/workflow-kernel-test.mjs",
+    "test:operator-test-resilience": "node tests/operator-test-resilience-test.mjs",
     "test:smoke": "node tests/client-runtime-smoke-test.mjs",
     "test:release": "node tests/release-guard-test.mjs",
     "test:test-service": "node test-service/contract-test.mjs",
@@ -27,6 +29,32 @@
     "test:loop": "node tests/loop-test.mjs",
     "test:journal": "node tests/command-journal-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
+    "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",
+    "test:local-c500-launch-mode": "node tests/local-c500-launch-mode-test.mjs",
+    "test:local-c500-production-tui": "node tests/local-c500-production-tui-test.mjs",
+    "test:local-c500-tui-logic": "node tests/local-c500-tui-logic-test.mjs",
+    "test:local-c500-tui-spinner": "node tests/local-c500-tui-spinner-test.mjs",
+    "test:local-c500-tui-viewport": "node tests/local-c500-tui-viewport-test.mjs",
+    "test:local-c500-terminal-screen": "node tests/local-c500-terminal-screen-test.mjs",
+    "test:local-c500-tester": "node tests/local-c500-tester-test.mjs",
+    "test:local-c500-no-fallback": "node tests/local-c500-no-fallback-test.mjs",
+    "test:local-c500-adapter": "node tests/local-c500-adapter-contract-test.mjs",
+    "test:local-c500-mock": "node tests/local-c500-mock-boundary-test.mjs",
+    "test:local-c500-mock-sequence": "node tests/local-c500-mock-sequence-test.mjs",
+    "test:strict-zero-source": "node tests/strict-zero-source-test.mjs",
+    "test:local-c500-diff": "node tests/local-c500-candidate-diff-test.mjs",
+    "test:local-c500-workflow": "node tests/local-c500-workflow-parity-test.mjs",
+    "test:local-c500-discovery": "node tests/local-c500-discovery-materialization-test.mjs",
+    "test:local-c500-agent": "node tests/local-c500-candidate-agent-test.mjs",
+    "test:local-c500-generation": "node tests/local-c500-candidate-generation-test.mjs",
+    "test:local-c500-gate": "node tests/local-c500-accept-gate-test.mjs",
+    "test:local-c500-adoption": "node tests/local-c500-adoption-test.mjs",
+    "test:local-c500-e2e": "node tests/local-c500-e2e-test.mjs",
+    "tester:c500": "node tools/local-c500-tester/tui.mjs",
+    "tester:c500:doctor": "node tools/local-c500-tester/tui.mjs doctor --json",
+    "e2e:local-c500-production": "node scripts/e2e-local-c500-production.mjs",
+    "e2e:local-c500-cold-start": "node scripts/e2e-local-c500-cold-start.mjs",
+    "verify:local-c500-release": "node scripts/verify-local-c500-release.mjs",
     "opencode:serve": "opencode serve --hostname 127.0.0.1 --port 4096",
     "research:smoke": "node scripts/research-network-smoke.mjs",
     "verify:researcher-source": "node scripts/verify-researcher-source.mjs",
@@ -34,11 +62,13 @@
     "demo:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-exhibition-package.ps1"
   },
   "dependencies": {
+    "ink": "5.2.1",
+    "react": "18.3.1"
+  },
+  "devDependencies": {
     "@vitejs/plugin-react": "4.3.4",
     "lucide-react": "0.468.0",
-    "vite": "5.4.14",
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
-  "devDependencies": {}
+    "react-dom": "18.3.1",
+    "vite": "5.4.21"
+  }
 }

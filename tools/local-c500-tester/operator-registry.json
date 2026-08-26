@@ -1,0 +1,13 @@
+{
+  "active_operator": "vector_add",
+  "operators": [
+    {
+      "id": "vector_add",
+      "name": "Vector Add Smoke",
+      "backend": "triton",
+      "template": "operator-templates/vector_add",
+      "hardware": ["C500"],
+      "metricDefaults": ["latency p50", "latency p95"]
+    }
+  ]
+}

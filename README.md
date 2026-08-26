@@ -1,5 +1,7 @@
 # Operator Studio
 
+> Local C500 生产工作流测试版入口为 `npm run tester:c500`。部署、TUI 操作、真实 C500 runner 和 mock 边界见 `tools/local-c500-tester/README.md`。
+
 Operator Studio 是面向异构算子优化的本地 Agentic IDE。Agent 推理、工具调用、候选生成、代码工作区、流程状态、效果决策和知识维护都属于客户端；远端测试服务只接收算子测试任务并返回 Benchmark、Tracer 和 Profiler。
 
 ## 产品边界

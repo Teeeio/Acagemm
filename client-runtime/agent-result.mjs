@@ -107,7 +107,18 @@ export function parseResearchResult(events = []) {
     url: String(source?.url || source?.link || source?.repository || '').trim(),
     type: String(source?.type || 'reference').trim(),
   })).filter((source) => source.title || source.url) : [];
-  const structured = parsed || notes.length || findings.length || suggestedDirections.length || sources.length;
+  const baselineSources = Array.isArray(parsed?.baselineSources) ? parsed.baselineSources.map((source) => ({
+    authority: String(source?.authority || source?.type || 'upstream').trim(),
+    repository: String(source?.repository || source?.repo || source?.url || '').trim(),
+    commit: String(source?.commit || source?.revision || source?.ref || '').trim(),
+    path: String(source?.path || source?.file || source?.entry || '').trim(),
+    operator: String(source?.operator || '').trim(),
+    license: source?.license || null,
+    expandedSingleFile: source?.expandedSingleFile === true || source?.singleFileExpanded === true,
+    confidence: String(source?.confidence || '').trim(),
+    reason: String(source?.reason || source?.rationale || '').trim(),
+  })).filter((source) => source.repository && source.commit && source.path) : [];
+  const structured = parsed || notes.length || findings.length || suggestedDirections.length || sources.length || baselineSources.length;
   return {
     schemaVersion: parsed?.schemaVersion || 'operator-studio.research-notes/v1',
     format: structured ? 'structured-json' : 'text-fallback',
@@ -115,7 +126,24 @@ export function parseResearchResult(events = []) {
     findings,
     suggestedDirections,
     sources,
+    baselineSources,
     notes: notes.map(String),
+    rawText: finalText.slice(0, 8_000),
+  };
+}
+
+export function parseBaselineMaterializerResult(events = []) {
+  const messages = agentMessages(events);
+  const finalText = messages.at(-1) || '';
+  const parsed = tryParseJson(finalText);
+  const report = parsed && typeof parsed.report === 'object' && !Array.isArray(parsed.report) ? parsed.report : null;
+  const runPy = typeof parsed?.runPy === 'string' ? parsed.runPy : '';
+  return {
+    schemaVersion: parsed?.schemaVersion || parsed?.schema_version || 'operator-studio.baseline-materializer-result/v1',
+    format: parsed ? 'structured-json' : 'text-fallback',
+    summary: parsed?.summary || report?.summary || finalText || 'Baseline materializer 未返回摘要。',
+    runPy,
+    report,
     rawText: finalText.slice(0, 8_000),
   };
 }

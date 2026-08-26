@@ -34,6 +34,14 @@ const normalizePath = async (value) => {
 const normalizeRepositoryIdentity = (value = '') => String(value).trim().replaceAll('\\', '/').replace(/\.git$/i, '').replace(/\/$/, '').toLowerCase();
 const excludedSnapshotEntries = new Set(['.git', '.operator-studio']);
 const isExcludedSnapshotEntry = (source) => excludedSnapshotEntries.has(path.basename(source).toLowerCase());
+export const isGeneratedWorkspaceArtifact = (file) => {
+  const normalized = String(file || '').replaceAll('\\', '/');
+  const basename = path.posix.basename(normalized).toLowerCase();
+  if (!normalized || normalized === '.') return false;
+  if (normalized.split('/').some((part) => part === '__pycache__' || part === '.pytest_cache')) return true;
+  if (/\.py[cod]$/i.test(basename)) return true;
+  return false;
+};
 const validateGitArgument = (value, label) => {
   const trimmed = String(value || '').trim();
   if (!trimmed) {
@@ -100,6 +108,7 @@ export function createWorkspaceManager(options = {}) {
     await copyWorkspaceSnapshot(source, target);
     try {
       await git(['init'], target);
+      await git(['config', 'core.longpaths', 'true'], target);
       await git(['config', 'user.name', 'Operator Studio'], target);
       await git(['config', 'user.email', 'operator-studio@local.invalid'], target);
       await git(['add', '-A'], target);
@@ -256,6 +265,7 @@ export function createWorkspaceManager(options = {}) {
       const source = repository && path.isAbsolute(repository) && await exists(repository) ? repository : template;
       try {
         await git(['init'], target);
+        await git(['config', 'core.longpaths', 'true'], target);
         await git(['config', 'user.name', 'Operator Studio'], target);
         await git(['config', 'user.email', 'operator-studio@local.invalid'], target);
         await git(['add', '-A'], target);
@@ -290,15 +300,18 @@ export function createWorkspaceManager(options = {}) {
     // without staging their contents or changing the candidate commit.
     await git(['add', '-N', '--', '.'], target).catch(() => {});
     const nameOutput = (await git(['diff', '--name-only', '-z', '--no-ext-diff', 'HEAD'], target)).stdout;
-    const changedFiles = nameOutput.split('\0').map((file) => file.replaceAll('\\', '/')).filter(Boolean);
-    const unsafeFiles = changedFiles.filter((file) => path.isAbsolute(file) || file.split('/').includes('..') || file === '.git' || file.startsWith('.git/'));
+    const rawChangedFiles = nameOutput.split('\0').map((file) => file.replaceAll('\\', '/')).filter(Boolean);
+    const unsafeFiles = rawChangedFiles.filter((file) => path.isAbsolute(file) || file.split('/').includes('..') || file === '.git' || file.startsWith('.git/'));
     if (unsafeFiles.length) {
       const error = new Error(`候选 Diff 包含工作区边界外路径：${unsafeFiles.join(', ')}`);
       error.code = 'WORKSPACE_DIFF_PATH_INVALID';
       error.status = 409;
       throw error;
     }
-    const diff = (await git(['diff', '--binary', '--no-ext-diff', 'HEAD'], target)).stdout;
+    const changedFiles = rawChangedFiles.filter((file) => !isGeneratedWorkspaceArtifact(file));
+    const diff = changedFiles.length
+      ? (await git(['diff', '--binary', '--no-ext-diff', 'HEAD', '--', ...changedFiles], target)).stdout
+      : '';
     return {
       workspace: target,
       changedFiles,
@@ -401,14 +414,22 @@ export function createWorkspaceManager(options = {}) {
       error.status = 409;
       throw error;
     }
+    let applied = false;
     try {
+      const alreadyApplied = await git(['apply', '--reverse', '--check', '--binary', patchPath], repository)
+        .then(() => true)
+        .catch(() => false);
+      if (alreadyApplied) {
+        return { repository, candidateId, previousHead: head, commit: head, adoptedAt: new Date().toISOString(), alreadyApplied: true };
+      }
       await git(['apply', '--check', '--binary', patchPath], repository);
       await git(['apply', '--binary', patchPath], repository);
+      applied = true;
       await git(['add', '-A'], repository);
       await git(['commit', '-m', `Operator Studio adopt ${candidateId}`], repository);
     } catch (cause) {
       await git(['reset'], repository).catch(() => {});
-      await git(['apply', '--reverse', '--binary', patchPath], repository).catch(() => {});
+      if (applied) await git(['apply', '--reverse', '--binary', patchPath], repository).catch(() => {});
       const error = new Error(`Candidate Patch 无法安全应用到 Iteration Repository：${cause.stderr?.trim() || cause.message}`);
       error.code = 'ITERATION_REPOSITORY_PATCH_REJECTED';
       error.status = 409;

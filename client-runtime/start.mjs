@@ -29,11 +29,11 @@ const env = {
   OPERATOR_TEST_SERVICE_URL: `http://127.0.0.1:${testServicePort}`,
   OPERATOR_RUNTIME_MODE: 'codex-cli',
   // 远程模式（mock 模式忽略）：真实 operator-iteration-platform 连接
-  OPERATOR_API_BASE_URL: inheritedEnv.OPERATOR_API_BASE_URL || 'https://frp-act.com:61110',
+  OPERATOR_API_BASE_URL: inheritedEnv.OPERATOR_API_BASE_URL || 'https://frp-cat.com:58637',
   OPERATOR_API_USERNAME: inheritedEnv.OPERATOR_API_USERNAME || 'demo_admin',
   OPERATOR_API_PASSWORD: inheritedEnv.OPERATOR_API_PASSWORD || 'demo123',
   OPERATOR_API_SYSTEM_ID: inheritedEnv.OPERATOR_API_SYSTEM_ID || 'system-demo',
-  OPERATOR_TEST_TARGET_PLATFORMS: inheritedEnv.OPERATOR_TEST_TARGET_PLATFORMS || 'gpu-iluvatar-mainstream',
+  OPERATOR_TEST_TARGET_PLATFORMS: inheritedEnv.OPERATOR_TEST_TARGET_PLATFORMS || 'gpu-iluvatar-mainstream,npu-ascend-910',
   OPERATOR_TLS_ALLOW_SELF_SIGNED: inheritedEnv.OPERATOR_TLS_ALLOW_SELF_SIGNED || '1',
 };
 

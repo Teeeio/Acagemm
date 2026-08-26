@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createCodexClient } from '../client-runtime/codex-client.mjs';
-import { createAgentRuntime } from '../client-runtime/agent-runtime.mjs';
+import { createAgentRuntime, isMainAgentActive, isResearchAgentActive } from '../client-runtime/agent-runtime.mjs';
 import { parseResearchResult } from '../client-runtime/agent-result.mjs';
 
 // ---- parseResearchResult 契约 ----
@@ -17,11 +17,13 @@ const structured = parseResearchResult([{
     findings: ['async dispatch 减少同步等待'],
     suggestedDirections: ['尝试 async plan descriptor cache'],
     sources: [{ title: 'Kernel Dispatch 论文', url: 'https://example.invalid/paper', type: 'paper' }],
+    baselineSources: [{ authority: 'upstream', repository: 'https://github.com/flashinfer-ai/flashinfer.git', commit: 'ee3fda10', path: 'flashinfer/decode.py', operator: 'paged_attention', confidence: 'high', reason: '官方实现' }],
   }) },
 }]);
 assert.equal(structured.format, 'structured-json');
 assert.equal(structured.findings[0], 'async dispatch 减少同步等待');
 assert.equal(structured.sources[0].url, 'https://example.invalid/paper');
+assert.equal(structured.baselineSources[0].repository, 'https://github.com/flashinfer-ai/flashinfer.git');
 assert.equal(structured.suggestedDirections[0], '尝试 async plan descriptor cache');
 const fallback = parseResearchResult([{ type: 'item.completed', item: { type: 'agent_message', text: 'plain research notes' } }]);
 assert.equal(fallback.format, 'text-fallback');
@@ -75,15 +77,16 @@ try {
   assert.equal(started.state.researchAgent.budgetMs, 30 * 60 * 1000, 'acquire phase uses generous budget');
   assert.equal(started.state.researchAgent.runPhase, 'acquire');
   assert.equal(started.state.researchAgent.synchronous, false, 'manual research defaults to asynchronous (parallel)');
-  // 沙箱开放 + 只读边界
-  assert.match(spawnCalls[0].args.join(' '), /--sandbox danger-full-access/);
-  assert.match(spawnCalls[0].args.join(' '), /--skip-git-repo-check/);
+  // 采集阶段只暴露 research；Source 由 Agent 选定后交给固定工作流拉取。
+  assert.match(spawnCalls[0].args.join(' '), /--sandbox workspace-write/);
+  assert.doesNotMatch(spawnCalls[0].args.join(' '), /--skip-git-repo-check/);
   assert.match(spawnCalls[0].args.join(' '), /--cd .*research/);
-  assert.match(spawnCalls[0].args.join(' '), /--add-dir .*sources/);
+  assert.doesNotMatch(spawnCalls[0].args.join(' '), /--add-dir/);
   assert.match(spawnCalls[0].stdin, /Research Agent/);
-  // mission 配置了 sourceRoot → 采集阶段 prompt（拉资料进 Source Registry，不写笔记）
+  // mission 配置了 sourceRoot → 采集阶段只选择来源，不自行拉取或写笔记。
   assert.match(spawnCalls[0].stdin, /ACQUISITION phase/);
   assert.match(spawnCalls[0].stdin, /Source Registry/);
+  assert.match(spawnCalls[0].stdin, /fixed workflow validates and clones/i);
   assert.doesNotMatch(spawnCalls[0].stdin, /research-notes\/v1/, 'acquire phase must not ask for the note JSON');
   assert.doesNotMatch(spawnCalls[0].stdin, /do not produce a "candidates" field/i, 'acquire phase must not require the note schema');
   // 无 sourceRoot 的 mission → 单阶段（检索 + 产笔记），不含 ACQUISITION 指令
@@ -106,6 +109,11 @@ try {
     runtime.startResearch({ state: structuredClone(busyState), mission, direction: 'x', workspace: researchDir, synchronous: true }),
     (error) => error.code === 'RESEARCH_SERIAL_BUSY',
   );
+  assert.equal(isMainAgentActive({ status: 'completed', runId: 'codex_DONE' }), false);
+  const completedMainState = { activeMissionId: 'MIS_DONE_MAIN', runtimeEvents: [], agent: { status: 'completed', runId: 'codex_DONE' }, researchAgent: null, researchNotes: [] };
+  const syncAfterCompleted = await runtime.startResearch({ state: completedMainState, mission, direction: '停滞后调研', workspace: researchDir, synchronous: true });
+  assert.equal(syncAfterCompleted.state.researchAgent.status, 'running');
+  assert.equal(syncAfterCompleted.state.researchAgent.synchronous, true);
   // 异步研究（操作员触发）在主线程运行时允许并行启动
   const asyncStarted = await runtime.startResearch({ state: structuredClone(busyState), mission, direction: '并行调研', workspace: researchDir });
   assert.equal(asyncStarted.state.researchAgent.status, 'running');
@@ -120,6 +128,10 @@ try {
     runtime.startRun({ state: syncResearchState, mission, goal: 'inspect', workspace: researchDir }),
     (error) => error.code === 'RESEARCH_SERIAL_BUSY',
   );
+  assert.equal(isResearchAgentActive({ status: 'timed_out', runId: 'codex_research_DONE', synchronous: true }), false);
+  const timedOutResearchState = { activeMissionId: 'MIS_RESEARCH_DONE', runtimeEvents: [], agent: { status: 'idle' }, researchAgent: { status: 'timed_out', runId: 'codex_research_DONE', synchronous: true } };
+  await runtime.startRun({ state: timedOutResearchState, mission, goal: 'inspect after research', workspace: researchDir });
+  assert.equal(timedOutResearchState.agent.status, 'running', 'terminal synchronous research must not block main thread start');
   // 非 codex-cli 模式 → 503
   const fixtureRuntime = createAgentRuntime({ mode: 'reference-fixture' });
   await assert.rejects(
@@ -134,7 +146,7 @@ try {
     readRun: async () => ({ runId: 'codex_research_DONE', status: 'completed', completedAt: new Date().toISOString(), threadId: 'thread-research', error: null }),
     readEvents: async () => [
       { type: 'thread.started', thread_id: 'thread-research' },
-      { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ schemaVersion: 'operator-studio.research-notes/v1', summary: 'found async dispatch', findings: ['async dispatch reduces host overhead'], suggestedDirections: ['try async dispatch cache'], sources: [{ title: 'Paper X', url: 'https://example.invalid/paper' }] }) } },
+      { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ schemaVersion: 'operator-studio.research-notes/v1', summary: 'found async dispatch', findings: ['async dispatch reduces host overhead'], suggestedDirections: ['try async dispatch cache'], sources: [{ title: 'Paper X', url: 'https://example.invalid/paper' }], baselineSources: [{ authority: 'upstream', repository: 'https://github.com/flashinfer-ai/flashinfer.git', commit: 'ee3fda10', path: 'flashinfer/decode.py', operator: 'paged_attention', confidence: 'high' }] }) } },
       { type: 'turn.completed' },
     ],
     eventText: (event) => event.item?.text || '',
@@ -152,6 +164,7 @@ try {
   assert.equal(projected.state.researchAgent.phase, '研究员笔记完成');
   assert.equal(projected.state.researchNotes.length, 1);
   assert.equal(projected.state.researchNotes[0].findings[0], 'async dispatch reduces host overhead');
+  assert.equal(projected.state.researchNotes[0].baselineSources[0].repository, 'https://github.com/flashinfer-ai/flashinfer.git');
   assert.equal(projected.state.researchAgent.notes.length, 1);
   // 主线程 stage / candidateEvaluations / patchApplied 不变
   assert.equal(projected.state.stage, 'candidate');
@@ -189,6 +202,37 @@ try {
     completedRuntime.cancelRun({ state: cancelState, runId: 'codex_OTHER' }),
     (error) => error.code === 'AGENT_RUN_MISMATCH',
   );
+
+  // ---- projectState 主分支：cancel_requested 不被 running 覆盖（B2） ----
+  // 取消后 codex 进程未必立即死透（run.status 仍为 running），投影必须保留 cancel_requested，
+  // 直到进程真正终结为 cancelled，否则 UI"正在取消"状态被覆盖丢失。
+  const cancelMainClient = {
+    describe: async () => ({ installed: true, loggedIn: true, version: 'codex-cli delegated' }),
+    readRun: async () => ({ runId: 'codex_MAIN', status: 'running', threadId: 'thread-main', error: null }),
+    readEvents: async () => [{ type: 'turn.completed' }],
+    eventText: () => '',
+    cancel: async () => ({ status: 'cancel_requested' }),
+  };
+  const cancelMainRuntime = createAgentRuntime({ mode: 'codex-cli', codexClient: cancelMainClient, codexWorkspace: root });
+  const cancelMainState = {
+    activeMissionId: 'MIS_CM', runtimeEvents: [], stage: 'diagnosis', patchApplied: false, candidateEvaluations: [],
+    agent: { status: 'cancel_requested', runtimeKind: 'codex-cli', runId: 'codex_MAIN', phase: '正在取消 Codex', messages: [], artifacts: [], toolCalls: [] },
+    researchAgent: { status: 'idle' },
+  };
+  const cancelMainProjected = await cancelMainRuntime.projectState(cancelMainState);
+  assert.equal(cancelMainProjected.state.agent.status, 'cancel_requested', 'cancel_requested 必须在进程未死透时保持，不被覆盖回 running');
+  assert.equal(cancelMainProjected.state.agent.phase, '正在取消 Codex');
+  // 进程真正终结（run.status='cancelled'）后收敛为 cancelled
+  const cancelDeadClient = {
+    describe: async () => ({ installed: true, loggedIn: true, version: 'codex-cli delegated' }),
+    readRun: async () => ({ runId: 'codex_MAIN', status: 'cancelled', threadId: 'thread-main', error: null }),
+    readEvents: async () => [{ type: 'turn.completed' }],
+    eventText: () => '',
+    cancel: async () => ({ status: 'cancel_requested' }),
+  };
+  const cancelDeadRuntime = createAgentRuntime({ mode: 'codex-cli', codexClient: cancelDeadClient, codexWorkspace: root });
+  const cancelDeadProjected = await cancelDeadRuntime.projectState(structuredClone(cancelMainState));
+  assert.equal(cancelDeadProjected.state.agent.status, 'cancelled', '进程终结后收敛为 cancelled');
 
   console.log('[research] researcher sub-agent run lifecycle passed');
 } finally {

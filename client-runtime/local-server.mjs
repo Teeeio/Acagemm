@@ -17,6 +17,7 @@ import {
   ensureMissionWorkspace,
   ensureProjectLayout,
   artifactDirForMission,
+  baselineDirForMission,
   ensureStorage,
   buildBenchmarkLogsForMatrix,
   loadState,
@@ -26,6 +27,7 @@ import {
   restoreWorkspaceCheckpoint,
   runAutomaticAdoption,
   markCandidateAccepted,
+  normalizeMissionBudgetMs,
   resetMissionRunState,
   runKnowledgeMaintenance,
   deleteProject,
@@ -45,9 +47,21 @@ import { advanceIteration, selectResearchDirection } from './iteration-loop.mjs'
 import { createCommandJournal, executeCommand, hashKey } from './command-journal.mjs';
 import { testServiceClient } from './test-service-client.mjs';
 import { createOperatorTestQueue } from './operator-test-queue.mjs';
+import { consumeWorkflowRecoveryBudget, reconcileWorkflowState } from './workflow-kernel.mjs';
+import { createLocalC500ServiceClient, localC500Config } from './local-c500-service-client.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
 import { assertMissionIntent } from './mission-intent.mjs';
 import { nativeDirectoryPicker } from './native-directory-picker.mjs';
+import { dataDir } from './storage-paths.mjs';
+import {
+  baselineMatchesMatrix,
+  inferAuthoritativeBaselineSource,
+  isStrictZeroSourceMission,
+  missionShapeKeyFor,
+  normalizeBaselineKind,
+  resolveBaselineRunPlan,
+  selectResearchBaselineSource,
+} from './baseline-resolver.mjs';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(serverDir, '..');
@@ -55,8 +69,48 @@ const distDir = path.join(rootDir, 'dist');
 const serverPidPath = path.join(runtimeDir, 'operator-studio.pid');
 const port = Number(process.env.API_PORT || process.env.PORT || 4173);
 const serveWeb = process.env.SERVE_WEB !== 'false';
-const operatorTestQueue = createOperatorTestQueue({ serviceClient: testServiceClient });
+const startedAt = new Date().toISOString();
+const bridge = {
+  schemaVersion: 1,
+  service: 'operator-studio-client-runtime',
+  pid: process.pid,
+  port,
+  apiUrl: `http://127.0.0.1:${port}`,
+  serveWeb,
+  dataDir,
+  runtimeDir,
+  startedAt,
+};
+const activeTestServiceClient = localC500Config.enabled
+  ? createLocalC500ServiceClient()
+  : testServiceClient;
+const operatorTestQueue = createOperatorTestQueue({ serviceClient: activeTestServiceClient });
 const commandJournal = createCommandJournal({ filePath: path.join(runtimeDir, 'command-journal.jsonl') });
+
+const inferMissionMatrix = (mission = {}, fallback = {}) => {
+  const text = `${mission.title || ''} ${mission.goal || ''} ${(mission.hardware || []).join(' ')}`.toLowerCase();
+  const environments = /iluvatar|天数|mr-v100|gpu-iluvatar-mainstream/.test(text)
+    ? ['gpu-iluvatar-mainstream']
+    : /ascend|昇腾|910/.test(text)
+      ? ['npu-ascend-910']
+      : Array.isArray(fallback.environments) && fallback.environments.length
+        ? fallback.environments
+        : Array.isArray(mission.hardware) && mission.hardware.length
+          ? mission.hardware
+          : ['gpu-iluvatar-mainstream'];
+  const shape = !isStrictZeroSourceMission(mission) && /paged[_\s-]*attention|paged attention/i.test(`${mission.title || ''} ${mission.goal || ''}`)
+    ? { batch: 1, num_heads: 4, seq_len: 128, head_dim: 1024 }
+    : fallback.shape || mission.upstream?.case || undefined;
+  return {
+    ...structuredClone(fallback || {}),
+    environments,
+    stages: Array.isArray(fallback.stages) && fallback.stages.length ? fallback.stages : ['Correctness', 'Full Benchmark'],
+    warmup: Number(fallback.warmup || 50),
+    repeats: Number(fallback.repeats || 200),
+    correctnessCases: Number(fallback.correctnessCases || 24),
+    ...(shape ? { shape } : {}),
+  };
+};
 
 const hasSourceContent = async (sourceRoot) => {
   if (!sourceRoot) return false;
@@ -66,17 +120,38 @@ const hasSourceContent = async (sourceRoot) => {
   } catch { return false; }
 };
 
+const readMissionRunPy = async (missionId, repository, projectRoot = null) => {
+  const workspace = await ensureMissionWorkspace(missionId, repository, { projectRoot });
+  const candidates = [
+    path.join(workspace, 'run.py'),
+    path.join(workspace, 'operator', 'run.py'),
+  ];
+  for (const filePath of candidates) {
+    try {
+      return { content: await readFile(filePath, 'utf8'), source: path.relative(workspace, filePath).replaceAll('\\', '/') };
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  return { content: null, source: null };
+};
+
 const buildRuntimePreflight = async (mission) => {
-  const workspace = await ensureMissionWorkspace(mission.id, mission.repository);
+  const workspace = await ensureMissionWorkspace(mission.id, mission.repository, { projectRoot: mission.projectRoot, sourceRoot: mission.sourceRoot });
   let [workspaceCheck, agentCheck] = await Promise.all([
-    workspaceManager.inspect(workspace),
+    workspaceManager.inspect(workspace, { refresh: true }),
     agentRuntime.preflight({ workspace }),
   ]);
   // 空基线：若 sources/（Source Registry）已有参考资料（研究员已拉取），视为"从参考迁移"场景，
   // 允许主 agent 从空工作区起步、从 sources/ 参考资料构建迁移对象；否则阻断。
   // 注意：inspect 返回的是缓存对象，绝不能原地改（会污染 inspectionCache，导致后续 loadState 抛错）；
   // 用副本标记 ready:false。
-  const migrationFromSource = workspaceCheck.baselineEmpty && await hasSourceContent(mission.sourceRoot);
+  const sourceInspection = isStrictZeroSourceMission(mission)
+    ? await workspaceManager.inspectSources(mission.sourceRoot)
+    : null;
+  const migrationFromSource = workspaceCheck.baselineEmpty && (isStrictZeroSourceMission(mission)
+    ? sourceInspection?.ready === true && sourceInspection.sources.length > 0
+    : await hasSourceContent(mission.sourceRoot));
   if (workspaceCheck.ready && workspaceCheck.baselineEmpty && !migrationFromSource) {
     workspaceCheck = { ...workspaceCheck, ready: false, code: 'WORKSPACE_BASELINE_EMPTY', detail: 'Iteration Repository 基线为空，Mission 工作区没有可供 Agent 检查的源码或测试文件。请先把项目文件放入 repository，或重新选择包含代码的 Git 仓库。' };
   }
@@ -91,6 +166,7 @@ const buildRuntimePreflight = async (mission) => {
       artifacts: artifactDirForMission(mission.id, mission.repository, mission.projectRoot),
     },
     workspaceCheck,
+    sourceInspection,
     agentCheck,
     checkedAt: new Date().toISOString(),
   };
@@ -100,8 +176,9 @@ const json = (response, status, payload) => {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    'X-Operator-Studio-Bridge': `${bridge.pid}:${bridge.port}`,
   });
-  response.end(JSON.stringify(payload));
+  response.end(JSON.stringify({ ...payload, __bridge: bridge }));
 };
 
 const directoryExists = async (target) => {
@@ -233,6 +310,49 @@ const guardMutation = (state) => {
     error.status = 409;
     throw error;
   }
+  const budgetMs = normalizeMissionBudgetMs(state.missionBudgetMs);
+  state.missionBudgetMs = budgetMs;
+  if (!budgetMs) {
+    state.missionBudgetStartedAt = null;
+    return;
+  }
+  if (!state.missionBudgetStartedAt) {
+    state.missionBudgetStartedAt = new Date().toISOString();
+    return;
+  }
+  const startedAtMs = Date.parse(state.missionBudgetStartedAt);
+  if (!Number.isFinite(startedAtMs)) {
+    state.missionBudgetStartedAt = new Date().toISOString();
+    return;
+  }
+  const elapsedMs = Date.now() - startedAtMs;
+  if (elapsedMs >= budgetMs) {
+    const error = new Error('Mission 时间预算已耗尽，请调整预算后继续。');
+    error.status = 409;
+    error.code = 'MISSION_BUDGET_EXCEEDED';
+    error.details = { budgetMs, elapsedMs, startedAt: state.missionBudgetStartedAt };
+    throw error;
+  }
+};
+
+const missionBudgetRawValue = (valueOrInput) => {
+  if (!valueOrInput || typeof valueOrInput !== 'object' || Array.isArray(valueOrInput)) return valueOrInput;
+  if (Object.hasOwn(valueOrInput, 'missionBudgetMs')) return valueOrInput.missionBudgetMs;
+  if (Object.hasOwn(valueOrInput, 'timeBudgetMs')) return valueOrInput.timeBudgetMs;
+  if (Object.hasOwn(valueOrInput, 'missionBudgetHours')) return Number(valueOrInput.missionBudgetHours) * 60 * 60 * 1000;
+  if (Object.hasOwn(valueOrInput, 'timeBudgetHours')) return Number(valueOrInput.timeBudgetHours) * 60 * 60 * 1000;
+  return null;
+};
+const hasMissionBudgetInput = (valueOrInput) => Boolean(valueOrInput && typeof valueOrInput === 'object' && !Array.isArray(valueOrInput) && ['missionBudgetMs', 'timeBudgetMs', 'missionBudgetHours', 'timeBudgetHours'].some((key) => Object.hasOwn(valueOrInput, key)));
+const isMissionBudgetDisableValue = (valueOrInput) => {
+  if (!hasMissionBudgetInput(valueOrInput) && valueOrInput && typeof valueOrInput === 'object' && !Array.isArray(valueOrInput)) return true;
+  const raw = missionBudgetRawValue(valueOrInput);
+  return raw === null || raw === undefined || raw === '' || raw === false || Number(raw) === 0;
+};
+const validateMissionBudgetInput = (valueOrInput) => {
+  if (isMissionBudgetDisableValue(valueOrInput)) return { ok: true, value: null };
+  const normalized = normalizeMissionBudgetMs(valueOrInput);
+  return normalized ? { ok: true, value: normalized } : { ok: false, value: null };
 };
 
 const guardSupportedRuntimeAction = async (action) => {
@@ -384,31 +504,62 @@ const commandRegistry = {
     },
   },
   'start-benchmark': {
-    keyFor: (state, body) => `benchmark:${state.activeMissionId}:${body?.candidate || state.appliedCandidateId}:${body?.candidateDigest || (state.candidateEvaluations || []).find((c) => c.id === (body?.candidate || state.appliedCandidateId))?.patchDigest}:${hashKey(JSON.stringify(body?.matrix || state.testMatrix))}`,
-    isApplied: (state, payload) => state.benchmark?.status === 'running' && state.appliedCandidateId === payload?.candidateId && JSON.stringify(state.benchmark?.matrix || {}) === JSON.stringify(payload?.matrix || {}),
+    keyFor: (state, body) => `benchmark:${state.activeMissionId}:${body?.purpose || body?.testPurpose || 'candidate'}:${body?.candidate || state.appliedCandidateId}:${body?.candidateDigest || (state.candidateEvaluations || []).find((c) => c.id === (body?.candidate || state.appliedCandidateId))?.patchDigest}:${hashKey(JSON.stringify(body?.matrix || state.testMatrix))}`,
+    isApplied: (state, payload) => state.benchmark?.status === 'running'
+      && state.benchmark?.purpose === payload?.purpose
+      && (payload?.purpose === 'baseline' || state.appliedCandidateId === payload?.candidateId)
+      && JSON.stringify(state.benchmark?.matrix || {}) === JSON.stringify(payload?.matrix || {}),
     prepare: async ({ state, body }) => {
       const matrix = body.matrix || state.testMatrix;
       const runId = `run_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
       const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const candidateId = body.candidate || state.appliedCandidateId;
+      const purpose = body.purpose === 'baseline' || body.testPurpose === 'baseline' ? 'baseline' : 'candidate';
+      const normalizedMatrix = { ...structuredClone(matrix), warmup: Number(body.warmup || 50), repeats: Number(body.repeats || 200), correctnessCases: Number(body.correctnessCases || 24) };
+      const baselinePlan = purpose === 'baseline'
+        ? await resolveBaselineRunPlan({ state, mission, body, matrix: normalizedMatrix, readMissionRunPy })
+        : null;
+      const baselineKind = baselinePlan?.baselineKind || null;
+      const baselineSource = baselinePlan?.baselineSource || null;
+      const candidateId = purpose === 'baseline' ? baselinePlan.candidateId : (body.candidate || state.appliedCandidateId);
       const appliedCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === candidateId);
-      const candidateDigest = body.candidateDigest || appliedCandidate?.patchDigest || null;
+      const baselineDigestSeed = baselinePlan?.digestSeed || '';
+      const candidateDigest = body.candidateDigest || appliedCandidate?.patchDigest || (purpose === 'baseline' ? `sha256:baseline-${hashKey(String(baselineDigestSeed))}` : null);
       if (!candidateDigest) {
         const error = new Error('候选缺少由真实工作区 Diff 生成的 digest，不能提交测试。');
         error.status = 409;
         error.code = 'TEST_CANDIDATE_DIGEST_MISSING';
         throw error;
       }
-      const normalizedMatrix = { ...structuredClone(matrix), warmup: Number(body.warmup || 50), repeats: Number(body.repeats || 200), correctnessCases: Number(body.correctnessCases || 24) };
+      if (purpose !== 'baseline' && !baselineMatchesMatrix(state.baseline || mission.baseline || {}, mission, normalizedMatrix)) {
+        const error = new Error('优化候选测试前必须先完成当前有效 baseline：同一 runner、同一输入 shape、单文件 run.py。');
+        error.status = 409;
+        error.code = 'BASELINE_REQUIRED_BEFORE_CANDIDATE';
+        error.details = {
+          baselineStatus: state.baseline?.status || mission.baseline?.status || 'missing',
+          expectedKind: state.baseline?.kind || mission.baseline?.kind || 'pytorch_reference',
+          expectedShapeKey: missionShapeKeyFor(mission, normalizedMatrix),
+          requestedEnvironments: normalizedMatrix.environments || mission.hardware || [],
+        };
+        throw error;
+      }
+      const missionRunPy = purpose === 'baseline'
+        ? { content: baselinePlan.runPy, source: baselinePlan.runPySource }
+        : await readMissionRunPy(state.activeMissionId, mission.repository, mission.projectRoot);
       const submitted = await operatorTestQueue.submit({
         schemaVersion: 1, requestId: runId, missionId: state.activeMissionId,
-        operator: body.operator || 'mla_paged_attention', candidate: { id: candidateId, digest: candidateDigest },
+        purpose, baselineKind,
+        operator: body.operator || 'mla_paged_attention', candidate: { id: candidateId, digest: candidateDigest, remoteId: body.remoteCandidateId || null },
         hardware: mission.hardware || matrix.environments, runtime: body.runtime || 'client-managed-runtime', metric: mission.metric || 'latency_p50',
         matrix: normalizedMatrix, tracer: { enabled: true, format: 'operator-trace/v1' }, profiler: { enabled: true, format: 'operator-profile/v1' },
-        limits: { timeoutSeconds: Number(body.timeoutSeconds || 3) },
+        limits: { timeoutSeconds: Number(body.timeoutSeconds || 120) },
+        ...(baselineSource ? { baselineSource } : {}),
+        ...(baselinePlan?.materializationReport ? { baselineMaterialization: baselinePlan.materializationReport } : {}),
+        ...(missionRunPy.content ? { runPy: missionRunPy.content, runPySource: missionRunPy.source } : {}),
+        ...(body.packageId ? { packageId: body.packageId } : {}),
+        ...(body.remoteCandidateId ? { remoteCandidateId: body.remoteCandidateId } : {}),
       });
       return {
-        payload: { runId, taskId: submitted.taskId, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages, submittedAt: submitted.submittedAt },
+        payload: { runId, taskId: submitted.taskId, purpose, baselineKind, baselineSource, baselineResolution: baselinePlan?.resolution || null, baselineMaterialization: baselinePlan?.materializationReport || null, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages, submittedAt: submitted.submittedAt },
         result: { runId, taskId: submitted.taskId },
       };
     },
@@ -418,12 +569,112 @@ const commandRegistry = {
       state.benchmark = {
         status: 'running', progress: 0, runId: payload.runId, startedAt: payload.submittedAt || new Date().toISOString(), completedAt: null, durationMs: 0,
         logs: [{ sequence: 1, progress: 0, message: `调度器已锁定 ${payload.environments.length} 个环境快照` }], matrix: structuredClone(payload.matrix),
+        purpose: payload.purpose, baselineKind: payload.baselineKind, baselineSource: payload.baselineSource ? structuredClone(payload.baselineSource) : null, baselineMaterialization: payload.baselineMaterialization ? structuredClone(payload.baselineMaterialization) : null,
         candidate: { id: payload.candidateId, digest: payload.candidateDigest }, testTaskId: payload.taskId, result: null,
-        source: { kind: 'operator-test-service', transport: 'local-serial-queue', mock: true }, lastServiceError: null,
+        source: {
+          kind: localC500Config.enabled ? 'local-c500-adapter' : 'operator-test-service',
+          transport: 'local-serial-queue',
+          mock: localC500Config.enabled ? localC500Config.mock : true,
+          liveHardware: localC500Config.enabled ? !localC500Config.mock : false,
+        },
+        lastServiceError: null,
       };
-      state.agent = { ...state.agent, status: 'executing', phase: '异构验证', currentAction: null, messages: [...(state.agent?.messages || []), { id: `test-${payload.runId}`, phase: 'validation', status: 'running', title: 'Validation Agent 已提交测试矩阵', detail: `${payload.runId} 正在两个固定环境中执行。`, time: '刚刚' }] };
-      appendRuntimeEvent(state, 'operator_test.queued', { runId: payload.runId, taskId: payload.taskId, candidate: { id: payload.candidateId, digest: payload.candidateDigest }, environments: payload.environments, stages: payload.stages, matrix: structuredClone(payload.matrix) }, { kind: 'operator-test-queue', mode: 'client' });
-      addAuditEvent(state, 'Full Benchmark 已提交', `${payload.runId} · ${payload.environments.length} environments`, 'blue', 'TestTube2');
+      if (payload.purpose === 'baseline') {
+        state.baseline = {
+          ...(state.baseline || { required: true, status: 'missing', sourcePolicy: { requireAuthority: true, requireSingleFileExpansion: true } }),
+          kind: normalizeBaselineKind(payload.baselineKind),
+          status: 'running',
+          source: payload.baselineSource ? structuredClone(payload.baselineSource) : state.baseline?.source || null,
+          resolution: payload.baselineResolution
+            ? structuredClone(payload.baselineResolution)
+            : {
+              ...(state.baseline?.resolution || {}),
+              status: 'running',
+              strategy: payload.baselineKind === 'naive_v0' ? 'fallback_naive_v0' : 'authoritative_first',
+              kind: normalizeBaselineKind(payload.baselineKind),
+              attemptedAuthority: payload.baselineKind !== 'naive_v0',
+              reused: false,
+              reason: payload.baselineKind === 'naive_v0' ? '权威 baseline 不可用，使用 v0 fallback。' : '正在执行权威 baseline。',
+              resolvedAt: null,
+              previousEvidenceRunId: null,
+            },
+        };
+      }
+      const title = payload.purpose === 'baseline'
+        ? (normalizeBaselineKind(payload.baselineKind) === 'naive_v0' ? 'naive v0 baseline 已提交' : 'PyTorch reference baseline 已提交')
+        : 'Full Benchmark 已提交';
+      state.agent = { ...state.agent, status: 'executing', phase: payload.purpose === 'baseline' ? 'Baseline 验证' : '异构验证', currentAction: null, messages: [...(state.agent?.messages || []), { id: `test-${payload.runId}`, phase: 'validation', status: 'running', title: 'Validation Agent 已提交测试矩阵', detail: `${payload.runId} 正在 ${payload.environments.length} 个固定环境中执行。`, time: '刚刚' }] };
+      appendRuntimeEvent(state, 'operator_test.queued', { runId: payload.runId, taskId: payload.taskId, purpose: payload.purpose, baselineKind: payload.baselineKind, baselineSource: payload.baselineSource, baselineMaterialization: payload.baselineMaterialization, candidate: { id: payload.candidateId, digest: payload.candidateDigest }, environments: payload.environments, stages: payload.stages, matrix: structuredClone(payload.matrix) }, { kind: 'operator-test-queue', mode: 'client' });
+      addAuditEvent(state, title, `${payload.runId} · ${payload.environments.length} environments`, 'blue', 'TestTube2');
+    },
+  },
+  'resume-mission': {
+    keyFor: (state, body) => `resume-mission:${state.activeMissionId}:${state.stage}:${state.candidateEvaluations?.[0]?.patchDigest || 'no-candidate'}:${body?.missionBudgetMs ?? body?.missionBudgetHours ?? 'keep'}`,
+    isApplied: (state, payload) => state.stage === 'candidate'
+      && state.agent?.status === 'awaiting_action'
+      && state.missionBudgetStartedAt === payload?.missionBudgetStartedAt,
+    prepare: async ({ state, body }) => {
+      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+      const hasCandidate = Array.isArray(state.candidateEvaluations) && state.candidateEvaluations.length > 0;
+      const currentBestEmpty = !state.currentBest?.candidateId && (!state.currentBest?.value || state.currentBest.value === '--' || state.currentBest.value === '—');
+      const budgetEnded = state.stage === 'published'
+        && state.agent?.phase === 'Mission budget 已到，保留 current best'
+        && currentBestEmpty
+        && hasCandidate;
+      if (!budgetEnded) {
+        const error = new Error('当前 Mission 不满足预算兜底恢复条件。');
+        error.status = 409;
+        error.code = 'MISSION_RESUME_NOT_APPLICABLE';
+        error.details = { stage: state.stage, agentPhase: state.agent?.phase || null, currentBest: state.currentBest || null, candidateCount: state.candidateEvaluations?.length || 0 };
+        throw error;
+      }
+      const requestedBudget = hasMissionBudgetInput(body)
+        ? validateMissionBudgetInput(body)
+        : { ok: true, value: normalizeMissionBudgetMs(state.missionBudgetMs) || 5 * 60 * 60 * 1000 };
+      if (!requestedBudget.ok) {
+        const error = new Error('missionBudgetMs 必须是正数毫秒；传 null、空值或 0 表示不启用时间限制。');
+        error.status = 400;
+        error.code = 'INVALID_MISSION_BUDGET';
+        throw error;
+      }
+      return {
+        payload: {
+          missionId: state.activeMissionId,
+          missionTitle: mission.title || state.activeMissionId,
+          candidateId: state.candidateEvaluations[0].id || 'candidate-01',
+          candidateDigest: state.candidateEvaluations[0].patchDigest || null,
+          missionBudgetMs: requestedBudget.value,
+          missionBudgetStartedAt: new Date().toISOString(),
+        },
+      };
+    },
+    apply: (state, payload) => {
+      state.stage = 'candidate';
+      state.patchApplied = false;
+      state.missionPaused = false;
+      state.missionBudgetMs = payload.missionBudgetMs;
+      state.missionBudgetStartedAt = payload.missionBudgetStartedAt;
+      state.benchmark = { ...(state.benchmark || {}), status: 'idle', progress: 0, runId: null, testTaskId: null, startedAt: null, completedAt: null, durationMs: 0, logs: [], result: null, lastServiceError: null };
+      state.decisionReview = createDecisionReviewState('idle');
+      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'running', loopStatusReason: null };
+      state.agent = {
+        ...(state.agent || {}),
+        status: 'awaiting_action',
+        phase: 'Candidate Plan 已生成',
+        progress: 100,
+        currentAction: {
+          id: `action.${payload.candidateId}.resume`,
+          type: 'candidate.plan',
+          title: `提交 ${payload.candidateId} 测试`,
+          reason: 'Mission 预算兜底结束后恢复：保留已有单文件候选，刷新预算窗口并继续真实 runner 验证。',
+          expectedOutput: 'Correctness · Benchmark · Tracer · Profiler',
+          risk: 'medium',
+          approvalRequired: false,
+          approvalPolicy: 'client-controlled',
+        },
+      };
+      appendRuntimeEvent(state, 'mission.resumed_after_budget', { missionId: payload.missionId, candidateId: payload.candidateId, candidateDigest: payload.candidateDigest, missionBudgetMs: payload.missionBudgetMs, missionBudgetStartedAt: payload.missionBudgetStartedAt }, { kind: 'mission', mode: 'client' });
+      addAuditEvent(state, 'Mission 已从预算结束态恢复', `${payload.missionTitle} · ${payload.candidateId} · budget ${payload.missionBudgetMs ? `${Math.round(payload.missionBudgetMs / 60 / 60 / 1000)}h` : 'none'}`, 'blue', 'RefreshCw');
     },
   },
   'adopt': {
@@ -689,6 +940,56 @@ const commandRegistry = {
       }
     },
   },
+  'materialize-baseline': {
+    keyFor: (state, body) => {
+      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+      const source = body?.baselineSource || state.baseline?.source || mission.baseline?.source || selectResearchBaselineSource(state.researchNotes, mission, body) || {};
+      return `materialize-baseline:${state.activeMissionId}:${hashKey(JSON.stringify(source))}:${hashKey(JSON.stringify(body?.matrix || state.testMatrix))}`;
+    },
+    isApplied: (state, payload) => state.baseline?.materializer?.runId === payload?.materializer?.runId
+      && ['running', 'completed'].includes(state.baseline?.materializer?.status),
+    prepare: async ({ state, body }) => {
+      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+      const matrix = body.matrix || state.testMatrix;
+      const source = body?.baselineSource || body?.source || state.baseline?.source || mission.baseline?.source || selectResearchBaselineSource(state.researchNotes, mission, body);
+      if (!source) {
+        const error = new Error('Baseline materializer 缺少权威 source；请先让调查员查找 upstream baseline source。');
+        error.status = 409;
+        error.code = 'BASELINE_SOURCE_REQUIRED';
+        throw error;
+      }
+      const materializationDir = isStrictZeroSourceMission(mission)
+        ? baselineDirForMission(state.activeMissionId, mission.repository, mission.projectRoot)
+        : path.join(artifactDirForMission(state.activeMissionId, mission.repository, mission.projectRoot), 'baseline-materialization');
+      const clone = structuredClone(state);
+      await mkdir(materializationDir, { recursive: true });
+      await agentRuntime.startBaselineMaterialization({ state: clone, mission, source, matrix, workspace: materializationDir });
+      return { payload: { materializer: clone.baseline.materializer, baselineSource: source, matrix: structuredClone(matrix) }, result: { runId: clone.baseline.materializer.runId } };
+    },
+    apply: (state, payload) => {
+      state.baseline = {
+        ...(state.baseline || { required: true, status: 'missing' }),
+        kind: 'pytorch_reference',
+        source: payload.baselineSource ? structuredClone(payload.baselineSource) : state.baseline?.source || null,
+        materializer: structuredClone(payload.materializer),
+        resolution: {
+          ...(state.baseline?.resolution || {}),
+          status: 'materializing',
+          strategy: 'agent_assisted_materializer',
+          kind: 'pytorch_reference',
+          attemptedAuthority: true,
+          reused: false,
+          reason: '正在将权威 upstream baseline 展开为单文件 run.py。',
+          resolvedAt: null,
+          previousEvidenceRunId: null,
+        },
+      };
+      if (!state.runtimeEvents?.some((e) => e.type === 'baseline.materializer_started' && e.payload?.runId === payload.materializer.runId)) {
+        appendRuntimeEvent(state, 'baseline.materializer_started', { runId: payload.materializer.runId, source: payload.baselineSource, materializationDir: payload.materializer.materializationDir }, { kind: 'baseline-materializer', mode: 'codex-cli' });
+      }
+      addAuditEvent(state, 'Baseline materializer 已启动', `${payload.materializer.runId} · authoritative source → single-file run.py`, 'blue', 'Baseline');
+    },
+  },
 };
 
 // 循环驱动依赖：advanceIteration 编排器通过 deps 拿到 agentRuntime 能力与目录函数。
@@ -722,7 +1023,7 @@ const iterationDeps = {
       if (references.length) {
         await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot, missionId: state.activeMissionId, references });
       }
-      return { count: repos.length, references };
+      return { count: references.length, references };
     } catch (error) {
       return { count: 0, errors: [error.message] };
     }
@@ -740,7 +1041,42 @@ const iterationDeps = {
     const preflight = await buildRuntimePreflight(mission);
     if (!preflight.ready) return state;
     const workspace = preflight.workspace;
+    const previousCheckpoint = state.workflowRecovery?.checkpoints?.at(-1) || null;
+    const previousGate = state.decisionReview?.gate || null;
+    const previousCandidateId = state.appliedCandidateId || state.decisionReview?.candidateId || state.benchmark?.candidate?.id || null;
+    const previousCandidateDigest = state.benchmark?.candidate?.digest
+      || (state.candidateEvaluations || []).find((item) => item.id === previousCandidateId)?.patchDigest
+      || null;
+    const shouldRestoreRejectedRound = runtimeDescriptor.mode === 'codex-cli'
+      && previousCheckpoint
+      && (previousGate?.passed === false || state.decisionReview?.resolution?.outcome === 'reject');
+    let rollback = null;
+    if (shouldRestoreRejectedRound) {
+      const recovery = await restoreWorkspaceCheckpoint(previousCheckpoint, state.activeMissionId);
+      const restoredDiff = await workspaceManager.captureDiff(workspace);
+      if (!previousCheckpoint.stableDigest || restoredDiff.digest !== previousCheckpoint.stableDigest) {
+        const error = new Error('上一轮候选恢复后工作区未回到 baseline checkpoint，已阻止下一轮 Agent。');
+        error.status = 409;
+        error.code = 'ROUND_ROLLBACK_WORKSPACE_DIRTY';
+        throw error;
+      }
+      rollback = { checkpointId: previousCheckpoint.id, candidateId: previousCandidateId, candidateDigest: previousCandidateDigest, workspaceClean: true, restoredAt: recovery.restoredAt };
+    }
+    if (isStrictZeroSourceMission(mission)) {
+      const baselineRunPy = state.baseline?.materializer?.result?.runPy;
+      if (!baselineRunPy) {
+        const error = new Error('Iteration Agent 启动前缺少本轮 Materializer 生成的 baseline run.py。');
+        error.status = 409;
+        error.code = 'ITERATION_BASELINE_ARTIFACT_MISSING';
+        throw error;
+      }
+    }
     resetMissionRunState(state, goal, { referenceFixture: runtimeDescriptor.mode === 'reference-fixture' });
+    if (rollback) {
+      state.workflowRecovery = { ...(state.workflowRecovery || {}), lastRecovery: { type: 'round_rollback', ...rollback } };
+      appendRuntimeEvent(state, 'workflow.round_rolled_back', rollback, { kind: 'recovery', mode: 'client' });
+      addAuditEvent(state, '未采纳候选已回退', `${rollback.candidateId || 'candidate'} · ${rollback.checkpointId} · workspace clean`, 'warning', 'History');
+    }
     if (runtimeDescriptor.mode === 'reference-fixture') await resetMissionWorkspace(state.activeMissionId);
     if (runtimeDescriptor.mode === 'codex-cli') {
       const baselineCheckpoint = await createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline');
@@ -753,7 +1089,196 @@ const iterationDeps = {
     }
     return runtimeRun.state || state;
   },
+  startBaseline: async ({ state, mission, reason }) => {
+    const matrix = inferMissionMatrix(mission, state.testMatrix || mission.testMatrix || {});
+    const strictZeroSource = isStrictZeroSourceMission(mission);
+    if (state.benchmark?.purpose === 'baseline' && ['queued', 'running'].includes(state.benchmark.status)) return state;
+    if (state.benchmark?.purpose === 'baseline' && state.benchmark.status === 'failed') {
+      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_test_failed' };
+      return state;
+    }
+    const baselineSource = strictZeroSource
+      ? selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources })
+      : state.baseline?.source
+      || mission.baseline?.source
+      || selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title })
+      || inferAuthoritativeBaselineSource(mission, { operator: mission.operator || mission.title, reason });
+    if (!baselineSource) return state;
+    if (strictZeroSource) {
+      const inspection = await workspaceManager.inspectSources(mission.sourceRoot, [baselineSource]);
+      if (!inspection.ready || inspection.references.some((reference) => !reference.verified)) {
+        state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unverified' };
+        appendRuntimeEvent(state, 'baseline.source_unverified', { missionId: state.activeMissionId, errors: inspection.errors }, { kind: 'baseline', mode: 'client' });
+        return state;
+      }
+      const materializer = state.baseline?.materializer || {};
+      if (materializer.status !== 'completed' || !materializer.result?.runPy) {
+        if (['running', 'cancel_requested'].includes(materializer.status)) return state;
+        if (['failed', 'cancelled', 'timed_out'].includes(materializer.status)) {
+          const recovery = consumeWorkflowRecoveryBudget(state, { component: 'baseline-materializer', limit: 1 });
+          if (recovery.allowed && materializer.status !== 'cancelled') {
+            const rejectedSource = {
+              ...(materializer.source || baselineSource),
+              errorCode: materializer.error?.code || 'BASELINE_MATERIALIZER_FAILED',
+              reason: materializer.error?.details?.summary || materializer.error?.message || 'Materializer could not construct the required artifact.',
+            };
+            state.baseline = {
+              ...(state.baseline || {}),
+              source: null,
+              rejectedSources: [...(state.baseline?.rejectedSources || []), rejectedSource],
+              materializer: { ...materializer, status: 'redirected', phase: '返回 Source 调研', recoveryAttempt: recovery.attempt },
+            };
+            const unsupported = Array.isArray(materializer.error?.details?.unsupported)
+              ? materializer.error.details.unsupported.slice(0, 6).join('；')
+              : materializer.error?.message || 'source evidence was insufficient';
+            const direction = [
+              `上一权威 Source 无法物化为 ${mission.title || mission.operator || '目标算子'} baseline，必须选择不同的 source path 或补齐真正定义数学语义的实现文件。`,
+              `已拒绝 Source：${rejectedSource.repository}@${rejectedSource.commit}:${rejectedSource.path}。`,
+              `Materializer 反馈：${unsupported}。`,
+              '重新从官方上游中固定 repository、commit、path 和 operator；不要再次选择已拒绝的包装层。',
+            ].join('\n');
+            const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
+            const redirected = await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true });
+            appendRuntimeEvent(redirected, 'workflow.recovery_redirected', { component: recovery.component, attempt: recovery.attempt, limit: recovery.limit, from: 'materializer', to: 'research', rejectedSource }, { kind: 'workflow-kernel', mode: 'client' });
+            return redirected;
+          }
+          state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_materializer_failed' };
+          return state;
+        }
+        const materialized = await executeCommand({
+          journal: commandJournal,
+          saveState,
+          registry: commandRegistry,
+          state,
+          type: 'materialize-baseline',
+          body: { baselineSource, matrix },
+          expectedVersion: state.stateVersion,
+        });
+        return materialized.state || state;
+      }
+    }
+    const result = await executeCommand({
+      journal: commandJournal,
+      saveState,
+      registry: commandRegistry,
+      state,
+      type: 'start-benchmark',
+      body: {
+        purpose: 'baseline',
+        operator: mission.operator || mission.title || 'operator',
+        baselineSource,
+        ...(strictZeroSource ? { strictZeroSource: true, materializerResult: state.baseline.materializer.result } : {}),
+        matrix,
+        warmup: matrix.warmup,
+        repeats: matrix.repeats,
+        correctnessCases: matrix.correctnessCases,
+        timeoutSeconds: 120,
+      },
+      expectedVersion: state.stateVersion,
+    });
+    return result.state || state;
+  },
   researchDirForMission,
+};
+
+const advanceTesterAutopilot = async (state) => {
+  if (process.env.OPERATOR_AUTO_TICK !== '1' || state.missionPaused) return { state, action: 'none' };
+  const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+  const actionType = state.agent?.currentAction?.type;
+  const candidate = (state.candidateEvaluations || []).find((item) => item.patchDigest)
+    || (state.candidateEvaluations || [])[0];
+
+  if (isStrictZeroSourceMission(mission)) {
+    const source = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources });
+    const research = state.researchAgent || {};
+    if (state.baseline?.status !== 'complete' && !source) {
+      if (!research.runId) {
+        const direction = `从零研究 ${mission.title || mission.goal}：在官方上游仓库中固定可验证的 MLA paged attention baseline source，记录 repository、commit、path 和 operator；不得生成候选代码。`;
+        const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
+        return { state: await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true }), action: 'baseline_research_started' };
+      }
+      if (['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status)) {
+        if (research.runPhase === 'acquire' && research.acquireHandled !== true) return { state, action: 'none' };
+        state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unresolved' };
+        return { state, action: 'needs_human' };
+      }
+      return { state, action: 'wait_research' };
+    }
+    if (state.baseline?.status !== 'complete') {
+      const nextState = await iterationDeps.startBaseline({ state, mission, reason: 'strict zero-source workflow' });
+      const materializerStatus = nextState.baseline?.materializer?.status;
+      const action = materializerStatus === 'running' ? 'baseline_materializer_started' : nextState.baseline?.status === 'running' ? 'baseline_started' : 'none';
+      return { state: nextState, action };
+    }
+    if (!candidate
+        && !state.agent?.runId
+        && ['idle', 'ready', 'awaiting_action', 'completed'].includes(state.agent?.status)) {
+      return { state: await iterationDeps.startMainRound({ state, goal: mission.goal }), action: 'candidate_agent_started' };
+    }
+  }
+
+  if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status !== 'complete') {
+    const nextState = await iterationDeps.startBaseline({ state, mission, reason: state.agent?.currentAction?.reason || state.agent?.result?.summary || '' });
+    if (nextState.benchmark?.status === 'running' || nextState.baseline?.status === 'running') return { state: nextState, action: 'baseline_started' };
+    const runtime = await agentRuntime.describe();
+    const research = state.researchAgent || {};
+    if (runtime.mode === 'codex-cli' && !research.runId && research.status !== 'running') {
+      const direction = [
+        `为 Mission ${mission.id} 查找可验证的权威 baseline：${mission.goal}`,
+        '优先检查本地 Source Registry，再检索上游官方仓库、测试和 benchmark。',
+        '必须在研究笔记的 baselineSources 中记录 repository、固定 commit、path、operator、confidence 和语义依据。',
+        '不能用无关算子、smoke template 或没有固定版本的网页片段代替。',
+      ].join('\n');
+      const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
+      return { state: await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true }), action: 'baseline_research_started' };
+    }
+    const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
+    if (runtime.mode === 'codex-cli' && research.runId && researchTerminal && research.runPhase !== 'acquire') {
+      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unresolved' };
+      appendRuntimeEvent(state, 'baseline.source_unresolved', { missionId: state.activeMissionId, researchRunId: research.runId }, { kind: 'baseline', mode: 'client' });
+      addAuditEvent(state, 'Baseline 来源需要人工确认', 'Research Agent 未找到可固定版本且语义可验证的权威 baseline。', 'warning', 'UserRound');
+      return { state, action: 'needs_human' };
+    }
+  }
+
+  if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status === 'complete') {
+    if (candidate?.patchDigest && actionType === 'candidate.plan') {
+      const result = await executeCommand({
+        journal: commandJournal,
+        saveState,
+        registry: commandRegistry,
+        state,
+        type: 'apply-patch',
+        body: { candidate: candidate.id },
+        expectedVersion: state.stateVersion,
+      });
+      return { state: result.state || state, action: 'candidate_applied' };
+    }
+    if (!candidate?.patchDigest) {
+      const goal = `${mission.goal || state.agent?.goal || ''}\n【系统恢复】同 runner / 同 shape baseline 已完成，请生成一个有真实工作区 Diff 的 run.py 优化候选。`;
+      return { state: await iterationDeps.startMainRound({ state, goal }), action: 'candidate_resumed' };
+    }
+  }
+
+  if (state.stage === 'validation'
+      && state.patchApplied
+      && state.baseline?.status === 'complete'
+      && state.agent?.status === 'awaiting_action'
+      && actionType === 'test.plan') {
+    const matrix = inferMissionMatrix(mission, state.testMatrix || mission.testMatrix || {});
+    const result = await executeCommand({
+      journal: commandJournal,
+      saveState,
+      registry: commandRegistry,
+      state,
+      type: 'start-benchmark',
+      body: { purpose: 'candidate', candidate: state.appliedCandidateId, matrix },
+      expectedVersion: state.stateVersion,
+    });
+    return { state: result.state || state, action: 'candidate_test_started' };
+  }
+
+  return { state, action: 'none' };
 };
 
 let runtimeStateInFlight = null;
@@ -762,8 +1287,9 @@ const loadRuntimeState = async () => {
   runtimeStateInFlight = (async () => {
   const runtime = await agentRuntime.describe();
   const state = await loadState({ runtimeMode: runtime.mode, commandJournal, applyRegistry: commandRegistry });
-  const projection = await agentRuntime.projectState({ ...state, runtime });
-  let changed = projection.changed;
+  const initialReconciliation = reconcileWorkflowState(state);
+  const projection = await agentRuntime.projectState({ ...initialReconciliation.state, runtime });
+  let changed = projection.changed || initialReconciliation.changed;
   if (projection.state.benchmark?.status === 'running' && projection.state.benchmark?.testTaskId) {
     try {
       const before = JSON.stringify(projection.state.benchmark);
@@ -827,9 +1353,14 @@ const loadRuntimeState = async () => {
       changed = true;
     }
   }
+  const autopilot = await advanceTesterAutopilot(projection.state);
+  projection.state = autopilot.state;
+  if (autopilot.action !== 'none') changed = true;
   const looped = await advanceIteration(projection.state, iterationDeps);
-  if (['research_timeout', 'research_injected', 'research_noted', 'round_counted', 'resumed_agent', 'research_escalated'].includes(looped.action)) changed = true;
-  return changed ? saveState(projection.state) : projection.state;
+  if (['research_timeout', 'research_injected', 'research_noted', 'round_counted', 'resumed_agent', 'research_escalated', 'baseline_started', 'resumed_after_baseline', 'failed_candidate_recorded'].includes(looped.action)) changed = true;
+  const finalReconciliation = reconcileWorkflowState(looped.state);
+  changed ||= finalReconciliation.changed;
+  return changed ? saveState(finalReconciliation.state) : finalReconciliation.state;
   })().finally(() => { runtimeStateInFlight = null; });
   return structuredClone(await runtimeStateInFlight);
 };
@@ -842,11 +1373,11 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === 'GET' && url.pathname === '/api/health') {
-    json(response, 200, { status: 'ok', service: 'operator-studio-client-runtime', persistence: 'local-disk', runtime: await agentRuntime.describe(), time: new Date().toISOString() });
+    json(response, 200, { status: 'ok', service: 'operator-studio-client-runtime', persistence: 'local-disk', runtime: await agentRuntime.describe(), testBackend: localC500Config.enabled ? localC500Config : { kind: 'operator-test-service', liveHardware: false }, time: new Date().toISOString() });
     return;
   }
   if (request.method === 'GET' && url.pathname === '/api/runtime') {
-    json(response, 200, { runtime: await agentRuntime.describe() });
+    json(response, 200, { runtime: await agentRuntime.describe(), testBackend: localC500Config.enabled ? localC500Config : { kind: 'operator-test-service', liveHardware: false } });
     return;
   }
   if (request.method === 'GET' && url.pathname === '/api/runtime/preflight') {
@@ -868,7 +1399,7 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/workspace') {
     const state = await loadRuntimeState();
     const mission = state.missions.find((item) => item.id === state.activeMissionId);
-    const activeWorkspace = await ensureMissionWorkspace(state.activeMissionId, mission?.repository);
+    const activeWorkspace = await ensureMissionWorkspace(state.activeMissionId, mission?.repository, { projectRoot: mission?.projectRoot, sourceRoot: mission?.sourceRoot });
     const hasDeclaredPatch = (state.candidateEvaluations || []).some((candidate) => String(candidate.files || '').trim());
     json(response, 200, { patchApplied: state.patchApplied, workspace: path.relative(rootDir, activeWorkspace).replaceAll('\\', '/'), files: hasDeclaredPatch ? workspaceFiles : [] });
     return;
@@ -1067,7 +1598,7 @@ async function handleApi(request, response, url) {
     }
     addAuditEvent(state, '项目已重新初始化为三层结构', `${project.name} · repository / sources / Mission Snapshot`, 'green', 'Layers3');
     const saved = await saveState(state);
-    for (const mission of linkedMissions) await ensureMissionWorkspace(mission.id, inspection.gitRoot);
+    for (const mission of linkedMissions) await ensureMissionWorkspace(mission.id, inspection.gitRoot, { projectRoot: mission.projectRoot, sourceRoot: mission.sourceRoot });
     json(response, 200, { state: saved, project, backupRuntime: await directoryExists(backupRuntime) ? backupRuntime : null });
     return;
   }
@@ -1153,9 +1684,14 @@ async function handleApi(request, response, url) {
       json(response, 400, { error: '请输入一个可执行的优化目标。' });
       return;
     }
+    const budgetInput = validateMissionBudgetInput(body);
+    if (!budgetInput.ok) {
+      json(response, 400, { error: 'missionBudgetMs 必须是正数毫秒；传 null、空值或 0 表示不启用时间限制。', code: 'INVALID_MISSION_BUDGET' });
+      return;
+    }
     const nextState = createMission(state, body);
     const mission = nextState.missions.find((item) => item.id === nextState.activeMissionId);
-    await ensureMissionWorkspace(mission.id, mission.repository);
+    await ensureMissionWorkspace(mission.id, mission.repository, { projectRoot: mission.projectRoot, sourceRoot: mission.sourceRoot });
     json(response, 201, { state: await saveState(nextState) });
     return;
   }
@@ -1175,6 +1711,20 @@ async function handleApi(request, response, url) {
     // 操作员手动启动 run = 人工接管：恢复循环自动流转（若此前命中全局兜底标记）
     if (state.iterationStats) {
       state.iterationStats = { ...state.iterationStats, loopStatus: 'running', loopStatusReason: null };
+    }
+    if (isStrictZeroSourceMission(mission)
+        && state.baseline?.status !== 'complete'
+        && !selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title })) {
+      assertMissionIntent(goal, mission);
+      if (state.researchAgent?.runId && ['running', 'cancel_requested'].includes(state.researchAgent?.status)) {
+        json(response, 202, { state, research: state.researchAgent, runId: state.researchAgent.runId, idempotent: true });
+        return;
+      }
+      const direction = `从零研究 ${mission.title || mission.goal}：在官方上游仓库中固定可验证的 MLA paged attention baseline source，记录 repository、commit、path 和 operator；不得生成候选代码。`;
+      const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'research', body: { direction, synchronous: true }, expectedVersion: state.stateVersion });
+      if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+      json(response, 202, { state: result.state, research: result.state.researchAgent, runId: result.result?.runId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
+      return;
     }
     const runtimeDescriptor = await agentRuntime.describe();
     const preflight = await buildRuntimePreflight(mission);
@@ -1271,6 +1821,15 @@ async function handleApi(request, response, url) {
     await streamMissionEvents(request, response, decodeURIComponent(missionEventsStreamMatch[1]), Number(url.searchParams.get('after') || 0));
     return;
   }
+  if (request.method === 'POST' && url.pathname === '/api/actions/resume-mission') {
+    await guardSupportedRuntimeAction('Mission Resume');
+    const state = await loadRuntimeState();
+    const body = await readJson(request);
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'resume-mission', body, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 200, { state: result.state, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
+    return;
+  }
   if (request.method === 'POST' && url.pathname === '/api/actions/apply-patch') {
     await guardSupportedRuntimeAction('Patch');
     const state = await loadRuntimeState();
@@ -1288,22 +1847,37 @@ async function handleApi(request, response, url) {
     json(response, 200, { state: result.state, workspace: result.result?.workspace, policyChecks: result.result?.policyChecks, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
+  if (request.method === 'POST' && url.pathname === '/api/actions/materialize-baseline') {
+    const state = await loadRuntimeState();
+    guardMutation(state);
+    guardWorkflowTransition(state, { stages: ['diagnosis', 'candidate', 'validation'], label: 'Baseline 单文件展开' });
+    const body = await readJson(request);
+    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'materialize-baseline', body, expectedVersion: state.stateVersion });
+    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
+    json(response, 202, { state: result.state, materializer: result.state.baseline?.materializer, runId: result.result?.runId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
+    return;
+  }
   if (request.method === 'POST' && url.pathname === '/api/actions/start-benchmark') {
     const state = await loadRuntimeState();
     guardMutation(state);
-    guardWorkflowTransition(state, { stages: ['validation'], actionType: 'test.plan', label: 'Benchmark 提交' });
-    if (!state.patchApplied) {
-      json(response, 409, { error: '请先应用候选补丁。' });
-      return;
-    }
     const body = await readJson(request);
+    const purpose = body.purpose === 'baseline' || body.testPurpose === 'baseline' ? 'baseline' : 'candidate';
+    if (purpose === 'baseline') {
+      guardWorkflowTransition(state, { stages: ['diagnosis', 'candidate', 'validation'], label: 'Baseline 提交' });
+    } else {
+      guardWorkflowTransition(state, { stages: ['validation'], actionType: 'test.plan', label: 'Benchmark 提交' });
+      if (!state.patchApplied) {
+        json(response, 409, { error: '请先应用候选补丁。', code: 'PATCH_REQUIRED_BEFORE_CANDIDATE_BENCHMARK' });
+        return;
+      }
+    }
     const matrix = body.matrix || state.testMatrix;
     if (!Array.isArray(matrix?.environments) || !matrix.environments.length || !Array.isArray(matrix?.stages) || !matrix.stages.length) {
       json(response, 400, { error: '本次测试矩阵至少需要一个环境和一个验证阶段。', code: 'TEST_MATRIX_INVALID' });
       return;
     }
     const candidateId = body.candidate || state.appliedCandidateId;
-    if (!candidateId) {
+    if (purpose !== 'baseline' && !candidateId) {
       json(response, 409, { error: '无法确定本次测试对应的候选，请重新应用候选 Patch。', code: 'TEST_CANDIDATE_MISSING' });
       return;
     }
@@ -1495,6 +2069,62 @@ async function handleApi(request, response, url) {
     json(response, 200, { state: await saveState(state), reference });
     return;
   }
+  if (request.method === 'POST' && url.pathname === '/api/actions/human-feedback') {
+    const state = await loadRuntimeState();
+    const body = await readJson(request);
+    const note = String(body.note || '').trim();
+    if (note.length < 2) {
+      json(response, 400, { error: '人工意见至少需要 2 个字符。', code: 'HUMAN_FEEDBACK_REQUIRED' });
+      return;
+    }
+    const feedback = {
+      id: `feedback_${Date.now().toString(36)}`,
+      note,
+      submittedAt: new Date().toISOString(),
+      source: 'local-c500-tui',
+    };
+    state.missionPaused = false;
+    state.iterationStats = {
+      ...(state.iterationStats || {}),
+      loopStatus: 'running',
+      loopStatusReason: null,
+      pendingInjection: {
+        noteId: feedback.id,
+        direction: 'human_feedback',
+        briefing: `人工意见：${note}`,
+        value: 'high',
+      },
+    };
+    const activeMission = state.missions?.find((item) => item.id === state.activeMissionId);
+    if (activeMission) activeMission.status = 'running';
+    appendRuntimeEvent(state, 'mission.human_feedback_added', feedback, { kind: 'human-feedback', mode: 'client' });
+    addAuditEvent(state, '已添加人工意见', note, 'blue', 'UserRound');
+    json(response, 202, { state: await saveState(state), feedback });
+    return;
+  }
+  if (request.method === 'POST' && url.pathname === '/api/actions/stop-mission') {
+    const state = await loadRuntimeState();
+    const mission = state.missions?.find((item) => item.id === state.activeMissionId);
+    if (!mission) {
+      json(response, 404, { error: '当前没有可停止的 Mission。', code: 'MISSION_NOT_FOUND' });
+      return;
+    }
+    if (state.benchmark?.status === 'running' && state.benchmark?.testTaskId) {
+      await operatorTestQueue.cancel(state.benchmark.testTaskId).catch(() => null);
+    }
+    if (state.agent?.runId && ['running', 'executing', 'awaiting_action', 'cancel_requested'].includes(state.agent.status)) {
+      const cancelled = await agentRuntime.cancelRun({ state, runId: state.agent.runId }).catch(() => null);
+      if (cancelled?.state) Object.assign(state, cancelled.state);
+    }
+    state.missionPaused = true;
+    state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'stopped', loopStatusReason: 'stopped_by_tester', stoppedAt: new Date().toISOString() };
+    const activeMission = state.missions?.find((item) => item.id === state.activeMissionId) || mission;
+    activeMission.status = 'stopped';
+    appendRuntimeEvent(state, 'mission.stopped', { missionId: activeMission.id, source: 'local-c500-tui' }, { kind: 'mission', mode: 'client' });
+    addAuditEvent(state, 'Mission 已停止', `${activeMission.id} · 测试人员停止`, 'warning', 'Square');
+    json(response, 200, { state: await saveState(state) });
+    return;
+  }
   if (request.method === 'PATCH' && url.pathname === '/api/state') {
     const state = await loadRuntimeState();
     const body = await readJson(request);
@@ -1502,8 +2132,23 @@ async function handleApi(request, response, url) {
       json(response, 400, { error: '测试矩阵至少需要一个环境和一个验证阶段。' });
       return;
     }
+    if (hasMissionBudgetInput(body)) {
+      const budgetInput = validateMissionBudgetInput(body);
+      if (!budgetInput.ok) {
+        json(response, 400, { error: 'missionBudgetMs 必须是正数毫秒；传 null、空值或 0 表示不启用时间限制。', code: 'INVALID_MISSION_BUDGET' });
+        return;
+      }
+      state.missionBudgetMs = budgetInput.value;
+      if (!budgetInput.value) state.missionBudgetStartedAt = null;
+    }
     for (const key of ['testMatrix', 'workspace', 'unreadCount', 'missionPaused']) {
       if (Object.hasOwn(body, key)) state[key] = body[key];
+    }
+    if (body.missionPaused === false && state.iterationStats?.loopStatus === 'stopped') {
+      state.iterationStats = { ...state.iterationStats, loopStatus: 'running', loopStatusReason: null, stoppedAt: null };
+      const activeMission = state.missions?.find((item) => item.id === state.activeMissionId);
+      if (activeMission) activeMission.status = 'running';
+      appendRuntimeEvent(state, 'mission.resumed', { missionId: state.activeMissionId, source: 'local-c500-tui' }, { kind: 'mission', mode: 'client' });
     }
     json(response, 200, { state: await saveState(state) });
     return;
@@ -1564,10 +2209,15 @@ server.listen(port, '127.0.0.1', () => {
   console.log(`[client-runtime] ${serveWeb ? 'web + local api' : 'local api'} listening on http://127.0.0.1:${port}`);
 });
 
+const autoTick = process.env.OPERATOR_AUTO_TICK === '1'
+  ? setInterval(() => loadRuntimeState().catch((error) => console.error('[client-runtime:auto-tick]', error)), 750)
+  : null;
+
 let shuttingDown = false;
 const shutdown = () => {
   if (shuttingDown) return;
   shuttingDown = true;
+  if (autoTick) clearInterval(autoTick);
   server.close(() => process.exit(0));
 };
 process.on('SIGINT', shutdown);

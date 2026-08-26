@@ -1,0 +1,92 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { renderDashboardSnapshot } from '../tools/local-c500-tester/tui-state.mjs';
+import { Dashboard } from '../tools/local-c500-tester/components/Dashboard.mjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const read = (relative) => readFile(path.join(root, relative), 'utf8');
+
+const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, backend, packageJson] = await Promise.all([
+  read('tools/local-c500-tester/tui.mjs'),
+  read('tools/local-c500-tester/tui-state.mjs'),
+  read('tools/local-c500-tester/components/WorkflowTopology.mjs'),
+  read('tools/local-c500-tester/components/WorkflowActivityIndicator.mjs'),
+  read('tools/local-c500-tester/terminal-screen.mjs'),
+  read('tools/local-c500-tester/production-api.mjs'),
+  read('client-runtime/local-server.mjs'),
+  read('client-runtime/local-c500-service-client.mjs'),
+  read('package.json').then(JSON.parse),
+]);
+
+for (const source of [tui, tuiState, productionApi]) {
+  assert.doesNotMatch(source, /workflow-entry\.mjs|candidate-agent\.mjs|local-c500-adapter\.mjs/);
+}
+assert.doesNotMatch(tui, /cli\.mjs|runIterationLoop|mission['"]\s*,\s*['"]loop/);
+assert.doesNotMatch(tui, /input === 'q' \|\| key\.escape/);
+assert.match(tui, /resolveDashboardCommand/);
+assert.match(tuiState, /deriveWorkflowTopology/);
+assert.match(topologyComponent, /TopologyNode/);
+assert.match(topologyComponent, /borderStyle:\s*current \? 'double' : 'round'/);
+assert.match(topologyComponent, /Recent Candidates/);
+assert.doesNotMatch(topologyComponent, /WORKFLOW_SPINNER_FRAMES|setInterval/);
+assert.match(activityComponent, /WORKFLOW_SPINNER_FRAMES/);
+assert.match(activityComponent, /WORKFLOW_SPINNER_INTERVAL_MS = 160/);
+assert.match(activityComponent, /clearInterval/);
+assert.match(activityComponent, /FLOW ACTIVE/);
+assert.match(tui, /createTerminalScreenSession/);
+assert.match(tui, /waitUntilExit/);
+assert.match(tui, /restoreScreen/);
+assert.match(tui, /patchConsole:\s*false/);
+assert.match(terminalScreen, /\?1049h/);
+assert.match(terminalScreen, /\?1049l/);
+assert.match(productionApi, /\/api\/projects/);
+assert.match(productionApi, /\/api\/missions/);
+assert.match(productionApi, /\/runs/);
+assert.match(productionApi, /MISSION\.md/);
+assert.match(productionApi, /await stopMission\(\)/);
+assert.match(productionApi, /Do not substitute an unrelated operator or a smoke template/);
+assert.doesNotMatch(productionApi, /def get_inputs|vector_add/);
+assert.match(productionApi, /OPERATOR_TEST_BACKEND:\s*'local-c500'/);
+assert.match(productionApi, /OPERATOR_AUTO_TICK:\s*'1'/);
+assert.match(productionApi, /resolveLocalC500LaunchMode/);
+assert.doesNotMatch(productionApi, /OPERATOR_LOCAL_C500_MOCK:\s*'1'/);
+assert.match(server, /createLocalC500ServiceClient/);
+assert.match(server, /createOperatorTestQueue\(\{ serviceClient: activeTestServiceClient \}\)/);
+assert.match(server, /advanceIteration\(projection\.state, iterationDeps\)/);
+assert.match(server, /advanceTesterAutopilot/);
+assert.match(server, /type:\s*'apply-patch'/);
+assert.match(server, /type:\s*'start-benchmark'/);
+assert.match(server, /baseline_research_started/);
+assert.match(server, /baseline_source_unresolved/);
+assert.match(backend, /kind:\s*'local-c500'/);
+assert.equal(packageJson.scripts['tester:c500'], 'node tools/local-c500-tester/tui.mjs');
+
+const rendered = renderDashboardSnapshot({
+  mission: { id: 'MIS_PRODUCTION', title: 'C500 operator optimization', goal: 'minimize latency', status: 'running' },
+  state: {
+    stage: 'validation',
+    missionPaused: false,
+    agent: { status: 'executing', phase: '异构验证' },
+    iterationStats: { loopStatus: 'running', round: 2 },
+    baseline: { status: 'complete', kind: 'pytorch_reference' },
+    benchmark: { status: 'running', progress: 50, testTaskId: 'local_c500_TASK' },
+    currentBest: { candidateId: 'candidate-01', value: '42 us', improvement: '1.2x' },
+    runtimeEvents: [{ id: 'event-1', createdAt: 'now', type: 'operator_test.queued' }],
+  },
+  health: { testBackend: { kind: 'local-c500', mock: false }, __bridge: { apiUrl: 'http://127.0.0.1:4275' } },
+  tasks: [{ taskId: 'local_c500_TASK', status: 'running' }],
+});
+assert.match(rendered, /C500 Production Workflow Tester/);
+assert.match(rendered, /MIS_PRODUCTION/);
+assert.match(rendered, /local_c500_TASK/);
+assert.match(rendered, /pytorch_reference/);
+assert.match(rendered, /rounds\s+3/);
+
+assert.doesNotThrow(() => Dashboard({
+  snapshot: { state: {}, mission: null, health: null, tasks: null },
+  message: 'Connecting to production runtime...',
+}));
+
+console.log('local-c500 production TUI architecture test passed');
