@@ -1,6 +1,6 @@
 # Local C500 Production Workflow Tester
 
-这是 Operator Studio 生产工作流的 TUI 测试入口。它复用生产 Mission、Codex Agent、baseline、Mission Workspace、operator-test queue、Accept Gate、adoption 和连续迭代逻辑，只把 queue 后面的执行服务切换为本机沐曦 C500 backend。
+这是 Operator Studio 生产工作流的 TUI 测试入口。它复用生产 Mission、受管理 Agent、baseline、Mission Workspace、operator-test queue、Accept Gate、adoption 和连续迭代逻辑，只把 queue 后面的执行服务切换为本机沐曦 C500 backend。
 
 ## 启动
 
@@ -20,7 +20,7 @@ bash scripts/with-bundled-node.sh npm run tester:c500
 
 未设置 `OPERATOR_LOCAL_C500_MOCK` 时默认使用真实 C500 runner。真机部署、验收项目和结果回传见 [`docs/local-c500-real-hardware-test.md`](../../docs/local-c500-real-hardware-test.md)。
 
-Agent Runtime 默认使用 Codex CLI。测试人员使用 Claude Code 时，在启动 doctor/runtime 之前设置：
+`TUI` 分支默认使用 Claude Code。测试人员在启动 doctor/runtime 之前确认：
 
 ```bash
 export OPERATOR_RUNTIME_MODE=claude-code
@@ -50,7 +50,7 @@ runtime 内部继续执行生产链路：
 ```text
 Mission intent
 -> source research / baseline resolution and materialization
--> Codex Agent candidate in isolated Mission Workspace
+-> Claude Code Agent candidate in isolated Mission Workspace
 -> Git diff admission
 -> production operator-test queue
 -> local C500 runner
@@ -66,7 +66,7 @@ Mission intent
 - `P`: 发布并立即启动 Mission
 - `Space`: 暂停或恢复 Mission
 - `N`: 添加人工意见，意见会进入生产迭代上下文
-- `D`: 检查 runtime、Python、`ixsmi`、`mctracer`、`mcProfiler`
+- `D`: 检查 runtime、Python、`mx-smi`、`mctracer`、`mcProfiler`
 - `S`: 停止 Agent、测试任务和自动循环
 - `E`: 导出生产 state、queue task 和 backend 信息
 - `Q`: 退出 TUI；API runtime 保持运行
@@ -81,9 +81,9 @@ Mission intent
 - MACA `3.3.0.15`
 - vLLM `0.13.0`
 - vLLM MetaX `0.13.0+g181dc3.d20260129.maca3.3.0.15.torch2.8`
-- `ixsmi`, `mctracer`, `mcProfiler`
+- `mx-smi`, `mctracer`, `mcProfiler`
 
-默认真实执行命令是 `python tools/local-c500-runner.py`。Runner 加载生产 Mission Workspace 生成的 `run.py`，验证 `get_inputs()`、`run(inputs)`、`reference(inputs)`，执行 correctness、GPU event benchmark、mctracer 和 mcProfiler。只有全部成功才会写出 `environment.liveHardware=true`。
+默认真实执行命令是 `python tools/local-c500-runner.py`。Runner 加载生产 Mission Workspace 生成的 `run.py`，通过 `mx-smi` 确认沐曦 C500 来源，验证 `get_inputs()`、`run(inputs)`、`reference(inputs)`，执行 correctness、GPU event benchmark、mctracer 和 mcProfiler。只有全部成功才会写出 `environment.liveHardware=true`。
 
 现场工具参数不同可设置：
 
@@ -128,4 +128,4 @@ npm run test:queue
 npm run build
 ```
 
-`npm run e2e:local-c500-production -- <API port>` 会使用真实 Codex Agent 生成候选，并通过生产 API和本地 backend 完成闭环。它需要可用的 Codex 网络访问；未设置 mock 时还需要实际 C500 及分析工具。
+`npm run e2e:local-c500-production -- <API port>` 会使用当前配置的真实 Agent（TUI 默认 Claude Code）生成候选，并通过生产 API 和本地 backend 完成闭环。它需要可用的 Claude Code 服务；未设置 mock 时还需要实际 C500 及分析工具。

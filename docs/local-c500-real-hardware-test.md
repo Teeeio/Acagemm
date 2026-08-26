@@ -5,12 +5,12 @@
 ## 1. 环境要求
 
 - Git、Node.js 20+、npm
-- 已安装并登录的 Codex CLI 或 Claude Code；Claude 模式要求 `claude --version` 和 `claude auth status` 可执行
+- 已安装并登录 Claude Code，且 `claude --version` 和 `claude auth status` 可执行
 - Python 3.12（现场目标版本 3.12.11）
 - PyTorch `2.8.0+metax3.3.0.2`，且 `torch.cuda.is_available()` 为 `True`
 - MACA、Triton 和 C500 驱动环境已生效
-- `ixsmi`、`mctracer`、`mcProfiler` 可执行
-- 机器能够访问 Research Agent 所需的公开网络和 Codex 服务
+- `mx-smi`、`mctracer`、`mcProfiler` 可执行
+- 机器能够访问 Research Agent 所需的公开网络和 Claude Code 服务
 
 ## 2. 拉取与安装
 
@@ -95,7 +95,7 @@ $env:OPERATOR_SOURCE_MIRROR_CONFIG = (Resolve-Path '.\source-mirrors.json')
 
 ## 3. 真机预检
 
-使用 Claude Code 时必须在启动任何 doctor/runtime 进程之前设置：
+`TUI` 分支默认使用 Claude Code，启动任何 doctor/runtime 进程之前确认：
 
 ```bash
 export OPERATOR_RUNTIME_MODE=claude-code
@@ -111,7 +111,7 @@ node --version
 claude --version
 claude auth status
 python --version
-ixsmi
+mx-smi
 python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
 ```
 
@@ -135,7 +135,7 @@ Remove-Item Env:OPERATOR_LOCAL_C500_MOCK_SCENARIO -ErrorAction SilentlyContinue
 npm run tester:c500:doctor
 ```
 
-预期 backend 为 `local-c500` 且不是 simulation，Python、`ixsmi`、`mctracer`、`mcProfiler` 均为 `ok`。
+预期 backend 为 `local-c500` 且不是 simulation，Python、`mx-smi`、`mctracer`、`mcProfiler` 均为 `ok`。
 
 Claude 模式还应看到 runtime mode 为 `claude-code`、status 为 `connected`，并显示本机 Claude Code 版本。
 
@@ -191,7 +191,7 @@ Source Research -> Source Verify -> Materializer -> Baseline Test
 - 失败任务对应的 `.local-c500-real-*/local-c500-tasks/<task-id>/`
 - TUI 终态截图及失败发生的阶段
 
-回传前检查文件中不包含访问 token、Codex 凭据或其他密钥。
+回传前检查文件中不包含访问 token、Claude Code 凭据或其他密钥。
 
 ## 7. 模拟复现
 
@@ -211,6 +211,6 @@ npm run tester:c500
 
 - 端口提示模式冲突：旧 runtime 仍在运行。停止旧进程，或更换端口和状态目录。
 - `torch.cuda is unavailable`：当前 Python 未加载 MetaX PyTorch/驱动环境。
-- `ixsmi is unavailable`：runner 无法确认 C500 来源，会拒绝生成真机证据。
+- `mx-smi is unavailable`：runner 无法确认沐曦 C500 来源，会拒绝生成真机证据。
 - `mctracer` 或 `mcProfiler` 失败：任务按失败闭环记录，不会伪造 completed 工件。
-- Agent 无进展：检查 Codex 登录和网络；不要用手工候选绕过 Research、Diff admission 或 Gate。
+- Agent 无进展：检查 Claude Code 登录、额度和网络；不要用手工候选绕过 Research、Diff admission 或 Gate。

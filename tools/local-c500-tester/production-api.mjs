@@ -11,6 +11,7 @@ export const projectHome = path.join(testerHome, 'projects');
 export const exportHome = path.join(testerHome, 'exports');
 export const apiPort = Number(process.env.LOCAL_C500_API_PORT || 4275);
 export const apiBaseUrl = process.env.LOCAL_C500_API_URL || `http://127.0.0.1:${apiPort}`;
+export const resolveAgentRuntimeMode = (environment = process.env) => environment.OPERATOR_RUNTIME_MODE || 'claude-code';
 
 export const resolveLocalC500LaunchMode = (environment = process.env) => {
   const mock = environment.OPERATOR_LOCAL_C500_MOCK === '1';
@@ -22,6 +23,7 @@ export const resolveLocalC500LaunchMode = (environment = process.env) => {
 };
 
 const launchMode = resolveLocalC500LaunchMode();
+const agentRuntimeMode = resolveAgentRuntimeMode();
 
 const sleep = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
@@ -70,6 +72,9 @@ export const ensureProductionRuntime = async () => {
     if (current.testBackend?.mock !== launchMode.mock || (launchMode.mock && current.testBackend?.scenario !== launchMode.scenario)) {
       throw new Error(`${apiBaseUrl} is already running in ${current.testBackend?.mock ? 'simulation' : 'real hardware'} mode; requested ${launchMode.label} mode. Use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME or stop the existing runtime.`);
     }
+    if (current.runtime?.mode !== agentRuntimeMode) {
+      throw new Error(`${apiBaseUrl} is already running with Agent Runtime ${current.runtime?.mode || 'unknown'}; requested ${agentRuntimeMode}. Use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME or stop the existing runtime.`);
+    }
     return current;
   }
 
@@ -85,7 +90,9 @@ export const ensureProductionRuntime = async () => {
       ...process.env,
       API_PORT: String(apiPort),
       SERVE_WEB: 'false',
-      OPERATOR_RUNTIME_MODE: process.env.OPERATOR_RUNTIME_MODE || 'codex-cli',
+      OPERATOR_RUNTIME_MODE: agentRuntimeMode,
+      CLAUDE_COMMAND: process.env.CLAUDE_COMMAND || 'claude',
+      OPERATOR_CLAUDE_PERMISSION_MODE: 'acceptEdits',
       OPERATOR_TEST_BACKEND: 'local-c500',
       OPERATOR_AUTO_TICK: '1',
       OPERATOR_DATA_DIR: path.join(testerHome, 'data'),
@@ -103,6 +110,7 @@ export const ensureProductionRuntime = async () => {
     const started = await health();
     if (started?.testBackend?.kind === 'local-c500'
       && started.testBackend?.mock === launchMode.mock
+      && started.runtime?.mode === agentRuntimeMode
       && (!launchMode.mock || started.testBackend?.scenario === launchMode.scenario)) return started;
   }
   throw new Error(`Production runtime did not start. See ${logPath}`);
@@ -256,7 +264,7 @@ export const runDoctor = async () => {
     mock: runtime.testBackend?.mock === true,
     checks: {
       python: checkCommand(process.env.PYTHON || 'python', ['--version']),
-      ixsmi: checkCommand('ixsmi'),
+      mxSmi: checkCommand('mx-smi', []),
       mctracer: checkCommand('mctracer'),
       mcProfiler: checkCommand('mcProfiler'),
       sourceMirror,

@@ -358,7 +358,7 @@ const buildEnvironment = ({ mock = false } = {}) => {
       actual: { ...expectedEnvironment, c500_device: 'MetaX C500', torch_cuda: true },
       checks: Object.fromEntries(Object.entries(expectedEnvironment).map(([key, value]) => [key, { status: 'ok', expected: value, actual: value }])),
       tools: {
-        ixsmi: { status: 'ok', command: 'ixsmi' },
+        mxSmi: { status: 'ok', command: 'mx-smi' },
         mctracer: { status: 'ok', command: 'mctracer' },
         mcProfiler: { status: 'ok', command: 'mcProfiler' },
       },
@@ -386,7 +386,7 @@ const buildEnvironment = ({ mock = false } = {}) => {
       c500: { status: actual.torch_cuda ? 'ok' : 'missing', expected: 'visible', actual: actual.torch_cuda ? 'visible' : 'not visible' },
     },
     tools: {
-      ixsmi: { status: commandExists('ixsmi') ? 'ok' : 'missing', command: 'ixsmi' },
+      mxSmi: { status: commandExists('mx-smi') ? 'ok' : 'missing', command: 'mx-smi' },
       mctracer: { status: commandExists('mctracer') ? 'ok' : 'missing', command: 'mctracer' },
       mcProfiler: { status: commandExists('mcProfiler') ? 'ok' : 'missing', command: 'mcProfiler' },
     },

@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { resolveLocalC500LaunchMode } from '../tools/local-c500-tester/production-api.mjs';
+import { resolveAgentRuntimeMode, resolveLocalC500LaunchMode } from '../tools/local-c500-tester/production-api.mjs';
+
+assert.equal(resolveAgentRuntimeMode({}), 'claude-code');
+assert.equal(resolveAgentRuntimeMode({ OPERATOR_RUNTIME_MODE: 'codex-cli' }), 'codex-cli');
 
 assert.deepEqual(resolveLocalC500LaunchMode({}), {
   mock: false,

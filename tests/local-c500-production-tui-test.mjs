@@ -8,7 +8,7 @@ import { Dashboard } from '../tools/local-c500-tester/components/Dashboard.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(path.join(root, relative), 'utf8');
 
-const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, backend, packageJson] = await Promise.all([
+const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, backend, runner, packageJson] = await Promise.all([
   read('tools/local-c500-tester/tui.mjs'),
   read('tools/local-c500-tester/tui-state.mjs'),
   read('tools/local-c500-tester/components/WorkflowTopology.mjs'),
@@ -17,6 +17,7 @@ const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, prod
   read('tools/local-c500-tester/production-api.mjs'),
   read('client-runtime/local-server.mjs'),
   read('client-runtime/local-c500-service-client.mjs'),
+  read('tools/local-c500-runner.py'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -50,6 +51,11 @@ assert.match(productionApi, /Do not substitute an unrelated operator or a smoke 
 assert.doesNotMatch(productionApi, /def get_inputs|vector_add/);
 assert.match(productionApi, /OPERATOR_TEST_BACKEND:\s*'local-c500'/);
 assert.match(productionApi, /OPERATOR_AUTO_TICK:\s*'1'/);
+assert.match(productionApi, /OPERATOR_RUNTIME_MODE:\s*agentRuntimeMode/);
+assert.match(productionApi, /OPERATOR_CLAUDE_PERMISSION_MODE:\s*'acceptEdits'/);
+assert.match(productionApi, /environment\.OPERATOR_RUNTIME_MODE \|\| 'claude-code'/);
+assert.match(productionApi, /mxSmi:\s*checkCommand\('mx-smi', \[\]\)/);
+assert.doesNotMatch(productionApi, /ixsmi/i);
 assert.match(productionApi, /resolveLocalC500LaunchMode/);
 assert.doesNotMatch(productionApi, /OPERATOR_LOCAL_C500_MOCK:\s*'1'/);
 assert.match(server, /createLocalC500ServiceClient/);
@@ -61,6 +67,8 @@ assert.match(server, /type:\s*'start-benchmark'/);
 assert.match(server, /baseline_research_started/);
 assert.match(server, /baseline_source_unresolved/);
 assert.match(backend, /kind:\s*'local-c500'/);
+assert.match(runner, /shutil\.which\("mx-smi"\)/);
+assert.doesNotMatch(runner, /ixsmi/i);
 assert.equal(packageJson.scripts['tester:c500'], 'node tools/local-c500-tester/launcher.cjs');
 
 const rendered = renderDashboardSnapshot({

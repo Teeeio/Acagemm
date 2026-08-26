@@ -59,6 +59,8 @@ npm start
 
 完整生产工作流也支持 Claude Code CLI。Claude 使用本机账号、模型和网关配置，客户端通过非交互 `stream-json` 启动或恢复 session，并继续复用 Research、Baseline Materializer、Candidate Diff、测试和 Gate：
 
+`TUI` 分支的 `npm run tester:c500` 已默认选择 `claude-code`；以下环境变量仅用于其他入口或显式确认配置：
+
 ```bash
 export OPERATOR_RUNTIME_MODE=claude-code
 export CLAUDE_COMMAND=claude

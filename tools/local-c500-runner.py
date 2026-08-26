@@ -36,18 +36,18 @@ def _torch_and_device():
 
 
 def _probe_c500(torch, device):
-    ixsmi = shutil.which("ixsmi")
-    if not ixsmi:
-        raise RuntimeError("ixsmi is unavailable; local C500 hardware provenance cannot be established")
-    probe = subprocess.run([ixsmi], capture_output=True, text=True, timeout=20, check=False)
+    mx_smi = shutil.which("mx-smi")
+    if not mx_smi:
+        raise RuntimeError("mx-smi is unavailable; local C500 hardware provenance cannot be established")
+    probe = subprocess.run([mx_smi], capture_output=True, text=True, timeout=20, check=False)
     if probe.returncode != 0:
-        raise RuntimeError(f"ixsmi failed: {(probe.stderr or probe.stdout).strip()}")
+        raise RuntimeError(f"mx-smi failed: {(probe.stderr or probe.stdout).strip()}")
     return {
-        "tool": ixsmi,
+        "tool": mx_smi,
         "deviceIndex": int(device),
         "deviceName": torch.cuda.get_device_name(device),
         "torchVersion": torch.__version__,
-        "ixsmi": (probe.stdout or "").strip()[:4000],
+        "mxSmi": (probe.stdout or "").strip()[:4000],
     }
 
 
