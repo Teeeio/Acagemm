@@ -134,7 +134,9 @@ try {
     iterationStats: { round: 0 },
   };
   const runtime = createAgentRuntime({ mode: 'claude-code', claudeClient, codexWorkspace: root });
-  assert.equal((await runtime.describe()).connected, true);
+  const descriptor = await runtime.describe();
+  assert.equal(descriptor.connected, true);
+  assert.equal(descriptor.stallTimeoutMs, 5 * 60 * 1000);
   assert.equal((await runtime.preflight({ workspace })).ready, true);
 
   await runtime.startResearch({ state, mission, direction: 'synthesize verified MLA evidence', workspace: researchDir, synchronous: true, runPhase: 'synthesize' });
@@ -157,6 +159,8 @@ try {
   assert.match(state.candidateEvaluations[0].patchDigest, /^sha256:[a-f0-9]{64}$/);
   assert.equal(state.agent.candidateValidation.code, 'CLAUDE_CANDIDATE_DIFF_VERIFIED');
   assert.deepEqual([...runs.values()].map((run) => run.role), ['research-synthesize', 'materializer', 'iteration']);
+  await runtime.projectState(state);
+  assert.equal(state.runtimeEvents.filter((event) => event.type === 'claude.run_completed' && event.payload?.runId === state.agent.runId).length, 1);
 
   console.log('[claude-workflow-compat] research, materializer, and candidate diff loop passed');
 } finally {

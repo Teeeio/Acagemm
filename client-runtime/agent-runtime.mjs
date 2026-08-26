@@ -283,7 +283,8 @@ const ACTIVE_MAIN_AGENT_STATUSES = new Set(['running', 'executing', 'awaiting_ac
 const ACTIVE_RESEARCH_AGENT_STATUSES = new Set(['running', 'cancel_requested']);
 const ACTIVE_BASELINE_MATERIALIZER_STATUSES = new Set(['running', 'cancel_requested']);
 const MAIN_AGENT_BUDGET_MS = 10 * 60 * 1000;
-const MAIN_AGENT_STALL_MS = 2 * 60 * 1000;
+const DEFAULT_MAIN_AGENT_STALL_MS = 2 * 60 * 1000;
+const CLAUDE_MAIN_AGENT_STALL_MS = 5 * 60 * 1000;
 
 export const isMainAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_MAIN_AGENT_STATUSES.has(agent?.status));
 export const isResearchAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_RESEARCH_AGENT_STATUSES.has(agent?.status));
@@ -324,6 +325,11 @@ export function createAgentRuntime(options = {}) {
   const managedMeta = mode === 'claude-code'
     ? { name: 'Claude Code', slug: 'claude', unavailableCode: 'CLAUDE_RUNTIME_UNAVAILABLE' }
     : { name: 'Codex', slug: 'codex', unavailableCode: 'CODEX_RUNTIME_UNAVAILABLE' };
+  const defaultMainAgentStallMs = mode === 'claude-code' ? CLAUDE_MAIN_AGENT_STALL_MS : DEFAULT_MAIN_AGENT_STALL_MS;
+  const configuredMainAgentStallMs = Number(options.mainAgentStallMs ?? process.env.OPERATOR_MAIN_AGENT_STALL_MS ?? defaultMainAgentStallMs);
+  const mainAgentStallMs = Number.isFinite(configuredMainAgentStallMs) && configuredMainAgentStallMs > 0
+    ? configuredMainAgentStallMs
+    : defaultMainAgentStallMs;
   let sourceMirrorPolicyPromise = null;
   const sourceMirrorPolicy = async () => {
     if (options.sourceMirrorPolicy) return options.sourceMirrorPolicy;
@@ -408,6 +414,7 @@ export function createAgentRuntime(options = {}) {
       projection: 'thread-events-tools-artifacts',
       version: probe.version || null,
       workspace: codexWorkspace,
+      stallTimeoutMs: mainAgentStallMs,
       capabilities: connected ? ['mission.run', 'mission.resume', 'event.read', 'tool.read', 'candidate.observe', 'workflow.decide', 'workflow.intervene', 'workflow.rollback'] : [],
       hint,
       configurationAuthority: 'local-codex',
@@ -434,6 +441,7 @@ export function createAgentRuntime(options = {}) {
       projection: 'session-events-tools-artifacts',
       version: probe.version || null,
       workspace: codexWorkspace,
+      stallTimeoutMs: mainAgentStallMs,
       capabilities: connected ? ['mission.run', 'mission.resume', 'research.run', 'materializer.run', 'event.read', 'tool.read', 'candidate.observe', 'workflow.decide', 'workflow.intervene', 'workflow.rollback'] : [],
       hint: connected
         ? 'Claude Code CLI 已就绪；模型、网关与认证沿用测试机的 Claude Code 配置。'
@@ -1275,7 +1283,7 @@ export function createAgentRuntime(options = {}) {
         const eventCount = events.length;
         const lastEventAt = eventCount > (state.agent.eventCount || 0) ? Date.now() : (state.agent.lastEventAt || Date.now());
         const elapsed = state.agent.startedAt ? Date.now() - new Date(state.agent.startedAt).getTime() : 0;
-        const stalled = !completed && !failed && run.status !== 'cancelled' && lastEventAt && Date.now() - lastEventAt >= MAIN_AGENT_STALL_MS;
+        const stalled = !completed && !failed && run.status !== 'cancelled' && lastEventAt && Date.now() - lastEventAt >= mainAgentStallMs;
         const budgetExceeded = !completed && !failed && run.status !== 'cancelled' && elapsed >= (state.agent.budgetMs || MAIN_AGENT_BUDGET_MS);
         if ((stalled || budgetExceeded) && state.agent.status !== 'cancel_requested') {
           try { await managedClient.cancel(state.agent.runId); } catch { /* 下一 tick 收敛 */ }
@@ -1443,7 +1451,9 @@ export function createAgentRuntime(options = {}) {
         const changed = runtimeChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
         state.agent = nextAgent;
         if (nextStatus === 'completed' && verifiedCandidates.length && !workflowAdvanced) state.stage = 'candidate';
-        if (nextStatus !== previousStatus) appendRuntimeEvent(state, `${managedMeta.slug}.run_${nextStatus}`, { runId: state.agent.runId, threadId: nextAgent.threadId, eventCount: events.length, errorCode: failure?.code || null }, { kind: 'agent', mode });
+        const lifecycleEventType = `${managedMeta.slug}.run_${nextStatus}`;
+        const lifecycleEventRecorded = state.runtimeEvents?.some((event) => event.type === lifecycleEventType && event.payload?.runId === state.agent.runId);
+        if (nextStatus !== previousStatus && !lifecycleEventRecorded) appendRuntimeEvent(state, lifecycleEventType, { runId: state.agent.runId, threadId: nextAgent.threadId, eventCount: events.length, errorCode: failure?.code || null }, { kind: 'agent', mode });
         return { state, changed };
       } catch (error) {
         const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }] };

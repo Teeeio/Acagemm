@@ -32,6 +32,7 @@ assert.equal(billingFailure.code, 'CLAUDE_BILLING_UNAVAILABLE');
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'operator-claude-runtime-'));
 const spawnCalls = [];
+const terminatedPids = [];
 const execFileImpl = (command, args, options, callback) => {
   if (args[0] === '--version') return callback(null, '2.1.0 (Claude Code)\n', '');
   if (args[0] === 'auth' && args[1] === 'status') return callback(null, 'Logged in\n', '');
@@ -49,6 +50,7 @@ const spawnImpl = (command, args, options) => {
   child.killed = false;
   child.kill = () => { child.killed = true; child.emit('close', null, 'SIGTERM'); };
   child.stdin.on('finish', () => {
+    if (call.stdin === 'hold\n') return;
     child.stdout.write(`${JSON.stringify({ type: 'system', subtype: 'init', session_id: 'session-test' })}\n`);
     child.stdout.write(`${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: '{"summary":"ok"}' }] } })}\n`);
     child.stdout.write(`${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 'session-test', result: '{"summary":"ok"}' })}\n`);
@@ -59,7 +61,16 @@ const spawnImpl = (command, args, options) => {
 };
 
 try {
-  const client = createClaudeClient({ command: 'claude-test', bridgeDir: path.join(root, 'bridge'), execFileImpl, spawnImpl });
+  const client = createClaudeClient({
+    command: 'claude-test',
+    bridgeDir: path.join(root, 'bridge'),
+    execFileImpl,
+    spawnImpl,
+    terminateProcessTreeImpl: async (child) => {
+      terminatedPids.push(child.pid);
+      child.kill();
+    },
+  });
   const descriptor = await client.describe();
   assert.equal(descriptor.installed, true);
   assert.equal(descriptor.loggedIn, true);
@@ -107,6 +118,19 @@ try {
   assert.ok(spawnCalls[1].args.includes('--resume'));
   assert.ok(spawnCalls[1].args.includes('session-test'));
   assert.equal(spawnCalls[1].args[spawnCalls[1].args.indexOf('--allowedTools') + 1], 'Read,Write,Edit,WebSearch,WebFetch');
+
+  await client.start({
+    runId: 'claude_CANCEL',
+    missionId: 'MIS_CLAUDE',
+    goal: 'hold',
+    workspace: root,
+    environment: { OPERATOR_AGENT_ROLE: 'iteration', OPERATOR_AGENT_ROOTS: JSON.stringify({ workspace: root }) },
+  });
+  const cancelResult = await client.cancel('claude_CANCEL');
+  assert.equal(cancelResult.status, 'cancel_requested');
+  assert.deepEqual(terminatedPids, [7182]);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal((await client.readRun('claude_CANCEL')).status, 'cancelled');
 
   console.log('[claude-runtime] CLI lifecycle and normalized event contract passed');
 } finally {

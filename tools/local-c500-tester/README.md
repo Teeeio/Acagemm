@@ -31,6 +31,8 @@ claude auth status
 
 Claude Code 复用相同的 Research、Baseline Materializer、Candidate、Workspace Diff、回退和采用工作流。Runtime 使用非交互 `stream-json`，只向各阶段暴露受控的 Read/Write/Edit 工具；Research acquisition 额外允许 WebSearch/WebFetch，Bash 始终禁用。不要设置 `--dangerously-skip-permissions`。
 
+Claude Candidate 默认允许 5 分钟无事件窗口，Codex 保持 2 分钟；现场网关确实更慢时可通过 `OPERATOR_MAIN_AGENT_STALL_MS` 调整。Windows 本地路径若被 Claude 转成包含 `~1` 一类片段的 8.3 短路径，可能触发其路径安全拦截；真机 Linux 不受影响，本地验证应使用不触发短路径转换的工作目录。
+
 目标机无法访问 GitHub 时，设置 `OPERATOR_SOURCE_MIRROR_CONFIG` 指向管理员维护的 source mirror JSON。Research Agent 仍记录官方 canonical source，固定工作流从配置的 Gitee transport 获取并校验完整 commit/tree。示例见 [`docs/source-mirrors.example.json`](../../docs/source-mirrors.example.json)。
 
 TUI 会在 `http://127.0.0.1:4275` 启动 API-only 生产 runtime。端口可通过 `LOCAL_C500_API_PORT` 覆盖。状态、Mission Workspace、测试任务和导出文件默认写入 `.local-c500-production/`，可通过 `LOCAL_C500_TESTER_HOME` 覆盖。

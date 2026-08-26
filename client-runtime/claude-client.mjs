@@ -148,6 +148,17 @@ export const createClaudeClient = (options = {}) => {
   const runsDir = path.join(bridgeDir, 'claude-runs');
   const emptyMcpConfigPath = path.join(bridgeDir, 'claude-empty-mcp.json');
   const children = new Map();
+  const cancellationRequested = new Set();
+  const terminateProcessTree = options.terminateProcessTreeImpl || (async (child) => {
+    if (!child) return;
+    if (process.platform === 'win32' && child.pid) {
+      try {
+        await execFileAsync(execFileImpl, 'taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { timeout: 15_000 });
+        return;
+      } catch { /* Fall back to signalling the wrapper process below. */ }
+    }
+    if (!child.killed) child.kill('SIGTERM');
+  });
   const descriptorTtlMs = Number(options.descriptorTtlMs ?? 60_000);
   let descriptorCache = null;
   let descriptorCachedAt = 0;
@@ -284,6 +295,7 @@ export const createClaudeClient = (options = {}) => {
     });
     child.on('close', async (code, signal) => {
       children.delete(runId);
+      const cancelled = cancellationRequested.delete(runId);
       await appendChain;
       const rawEvents = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
       const session = rawEvents.find((event) => event.session_id)?.session_id || null;
@@ -292,8 +304,8 @@ export const createClaudeClient = (options = {}) => {
       const result = [...rawEvents].reverse().find((event) => event.type === 'result');
       const completed = result && result.is_error !== true && (!result.subtype || result.subtype === 'success');
       const failedResult = result && !completed;
-      record.status = completed ? 'completed' : signal ? 'cancelled' : 'failed';
-      record.error = completed || signal
+      record.status = completed ? 'completed' : cancelled || signal ? 'cancelled' : 'failed';
+      record.error = completed || cancelled || signal
         ? null
         : failedResult
           ? { code: 'CLAUDE_RESULT_ERROR', message: sanitizeClaudeDiagnostic(result.result || result.subtype) }
@@ -309,7 +321,10 @@ export const createClaudeClient = (options = {}) => {
   const readEvents = async (runId) => normalizeClaudeEvents(parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => '')));
   const cancel = async (runId) => {
     const child = children.get(runId);
-    if (child && !child.killed) child.kill('SIGTERM');
+    if (child) {
+      cancellationRequested.add(runId);
+      await terminateProcessTree(child);
+    }
     const record = await readRun(runId);
     return { ...record, status: child ? 'cancel_requested' : record.status };
   };
