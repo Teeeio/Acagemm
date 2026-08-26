@@ -117,7 +117,7 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 80));
   assert.ok(spawnCalls[1].args.includes('--resume'));
   assert.ok(spawnCalls[1].args.includes('session-test'));
-  assert.equal(spawnCalls[1].args[spawnCalls[1].args.indexOf('--allowedTools') + 1], 'Read,Write,Edit,WebSearch,WebFetch');
+  assert.equal(spawnCalls[1].args[spawnCalls[1].args.indexOf('--allowedTools') + 1], 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch');
 
   await client.start({
     runId: 'claude_CANCEL',

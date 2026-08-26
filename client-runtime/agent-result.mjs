@@ -118,7 +118,28 @@ export function parseResearchResult(events = []) {
     expandedSingleFile: source?.expandedSingleFile === true || source?.singleFileExpanded === true,
     confidence: String(source?.confidence || '').trim(),
     reason: String(source?.reason || source?.rationale || '').trim(),
+    semanticFallback: source?.semanticFallback === true,
+    semanticSpec: source?.semanticSpec || null,
   })).filter((source) => source.repository && source.commit && source.path) : [];
+  const semanticSpec = parsed?.semanticBaseline && typeof parsed.semanticBaseline === 'object' && !Array.isArray(parsed.semanticBaseline)
+    ? parsed.semanticBaseline
+    : null;
+  if (!baselineSources.length && semanticSpec) {
+    baselineSources.push({
+      authority: 'agent-semantic',
+      kind: 'pytorch_reference',
+      repository: 'mission-semantic-baseline',
+      commit: 'agent-semantic-v1',
+      path: 'generated/semantic-reference/run.py',
+      operator: String(semanticSpec.operator || '').trim(),
+      license: null,
+      expandedSingleFile: false,
+      confidence: 'low',
+      reason: String(semanticSpec.reason || 'No usable local or remote source was available; derive a baseline from Mission semantics.').trim(),
+      semanticFallback: true,
+      semanticSpec,
+    });
+  }
   const structured = parsed || notes.length || findings.length || suggestedDirections.length || sources.length || baselineSources.length;
   return {
     schemaVersion: parsed?.schemaVersion || 'operator-studio.research-notes/v1',

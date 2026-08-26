@@ -110,6 +110,42 @@ try {
   assert.equal(plan.runPySource, 'agent_assisted');
   assert.equal(plan.baselineSource.expandedSingleFile, true);
 
+  const semanticMission = {
+    ...mission,
+    id: 'MIS_MAT_SEMANTIC',
+    sourcePolicy: { mode: 'agent-flexible', strictZeroSource: true, allowSemanticFallback: true },
+  };
+  const semanticSource = {
+    authority: 'agent-semantic',
+    kind: 'pytorch_reference',
+    repository: 'mission-semantic-baseline',
+    commit: 'agent-semantic-v1',
+    path: 'generated/semantic-reference/run.py',
+    operator: 'paged_attention',
+    expandedSingleFile: false,
+    semanticFallback: true,
+    semanticSpec: { inputSemantics: ['paged KV cache'], correctnessInvariants: ['causal masking'] },
+    reason: 'No usable source repository was available.',
+  };
+  const semanticState = {
+    activeMissionId: semanticMission.id,
+    runtimeEvents: [],
+    missions: [semanticMission],
+    agent: { status: 'idle' },
+    baseline: { required: true, status: 'missing', kind: 'pytorch_reference', sourcePolicy: { requireAuthority: false, requireSingleFileExpansion: true, allowAgentSemantic: true } },
+    testMatrix: matrix,
+  };
+  const semanticMaterializationDir = path.join(root, 'artifacts', 'semantic-baseline');
+  await runtime.startBaselineMaterialization({ state: semanticState, mission: semanticMission, source: semanticSource, matrix, workspace: semanticMaterializationDir });
+  assert.match(startArgs.goal, /No usable source code was available/);
+  assert.match(startArgs.goal, /paged KV cache/);
+  const semanticProjected = await runtime.projectState(semanticState);
+  assert.equal(semanticProjected.state.baseline.materializer.status, 'completed');
+  assert.equal(semanticProjected.state.baseline.materializer.result.source.semanticFallback, true);
+  const semanticPlan = await resolveBaselineRunPlan({ state: semanticProjected.state, mission: semanticMission, body: { purpose: 'baseline' }, matrix });
+  assert.equal(semanticPlan.runPySource, 'agent_assisted');
+  assert.equal(semanticPlan.baselineSource.semanticFallback, true);
+
   const cancelState = {
     activeMissionId: mission.id,
     runtimeEvents: [],

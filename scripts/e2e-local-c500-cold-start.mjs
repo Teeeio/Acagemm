@@ -99,21 +99,24 @@ const auditAgentIsolation = async ({ runRoot: activeRunRoot, workspaceRoot }) =>
     const events = await readFile(record.eventPath, 'utf8');
     const eventRecords = events.split(/\r?\n/).filter(Boolean).map(JSON.parse);
     assert.equal(eventRecords.some((event) => event.item?.type === 'command_execution'), false, `${record.runId} exposed local command execution`);
-    assert.deepEqual(record.additionalDirectories, [], `${record.runId} must not receive add-dir`);
-    assert.deepEqual(Object.keys(record.boundary.roots), ['workspace']);
     const referencedRuns = [...events.matchAll(/cold-start-\d{4}-\d{2}-\d{2}T[\d-]+Z/g)].map((match) => match[0]);
     assert.ok(referencedRuns.every((name) => name === path.basename(activeRunRoot)), `${record.runId} accessed another cold-start run`);
   }
   for (const record of researchRuns.filter((entry) => entry.boundary.role === 'research-acquire')) {
     assert.equal(path.resolve(record.workspace), path.join(workspaceRoot, 'research'));
-    assert.deepEqual(record.additionalDirectories, []);
-    assert.deepEqual(Object.keys(record.boundary.roots), ['workspace']);
+    assert.deepEqual(record.additionalDirectories.map((directory) => path.resolve(directory)), [path.join(workspaceRoot, 'sources')]);
+    assert.deepEqual(Object.keys(record.boundary.roots).sort(), ['sourceRoot', 'workspace']);
+    assert.equal(path.resolve(record.boundary.roots.sourceRoot), path.join(workspaceRoot, 'sources'));
   }
   for (const record of researchRuns.filter((entry) => entry.boundary.role === 'research-synthesize')) {
     assert.equal(path.resolve(record.workspace), path.join(workspaceRoot, 'research'));
+    assert.deepEqual(record.additionalDirectories, []);
+    assert.deepEqual(Object.keys(record.boundary.roots), ['workspace']);
   }
   for (const record of materializerRuns) {
     assert.equal(path.resolve(record.workspace), path.join(workspaceRoot, 'baseline'));
+    assert.deepEqual(record.additionalDirectories, []);
+    assert.deepEqual(Object.keys(record.boundary.roots), ['workspace']);
   }
   for (const record of iterationRuns) {
     assert.equal(path.resolve(record.workspace), path.join(workspaceRoot, 'repository'));
@@ -170,7 +173,7 @@ try {
       projectId: project.id,
       hardware: ['C500'],
       metric: 'latency p50',
-      sourcePolicy: { mode: 'agent-research-only', strictZeroSource: true },
+      sourcePolicy: { mode: 'agent-flexible', strictZeroSource: true, localFirst: true, allowDiscoveredSources: true, allowSemanticFallback: true },
       testScenario: { id: 'mla-three-round', hardwareMockOnly: true },
       objective: { mode: 'threshold', metric: 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.2 },
       testMatrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'], warmup: 50, repeats: 200, correctnessCases: 24 },

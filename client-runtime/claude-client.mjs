@@ -254,7 +254,7 @@ export const createClaudeClient = (options = {}) => {
     };
     await persistRun(runId, record);
     const allowedTools = role === 'research-acquire'
-      ? 'Read,Write,Edit,WebSearch,WebFetch'
+      ? 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch'
       : 'Read,Write,Edit';
     const args = [
       '-p',

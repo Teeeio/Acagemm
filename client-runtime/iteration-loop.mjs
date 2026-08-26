@@ -410,13 +410,16 @@ export async function advanceIteration(state, deps = {}) {
   if (researchAgent.runId && researchAgent.runPhase === 'acquire' && researchAgent.sourceRoot && !researchAgent.acquireHandled
       && ['completed', 'failed', 'cancelled', 'timed_out'].includes(researchAgent.status)) {
     state.researchAgent = { ...researchAgent, acquireHandled: true };
-    if (researchAgent.status !== 'completed') {
+    const allowSemanticFallback = mission.sourcePolicy?.allowSemanticFallback === true;
+    if (researchAgent.status !== 'completed' && !allowSemanticFallback) {
       addAuditEvent(state, '研究员采集失败', `Run ${researchAgent.runId} 未完成，禁止进入综合阶段`, 'warning', 'Search');
       return { state, action: 'research_no_material' };
     }
-    const registered = deps.registerSources ? await deps.registerSources({ state, mission }) : { count: 0 };
+    const registered = researchAgent.status === 'completed' && deps.registerSources
+      ? await deps.registerSources({ state, mission })
+      : { count: 0 };
     const materialCount = registered?.count ?? 0;
-    if (materialCount > 0 && deps.startResearch) {
+    if ((materialCount > 0 || allowSemanticFallback) && deps.startResearch) {
       const nextState = await deps.startResearch({
         state, mission,
         direction: selectResearchDirection(state),
@@ -425,7 +428,7 @@ export async function advanceIteration(state, deps = {}) {
         runPhase: 'synthesize',
       });
       if (nextState.researchAgent?.synthesizeRunId) {
-        addAuditEvent(nextState, '研究员进入综合阶段', `已采集 ${materialCount} 项资料，开始整理笔记`, 'blue', 'Search');
+        addAuditEvent(nextState, '研究员进入综合阶段', materialCount > 0 ? `已采集 ${materialCount} 项资料，开始整理笔记` : '未获得可用源码，开始整理 Mission 语义 baseline', 'blue', 'Search');
         return { state: nextState, action: 'research_synthesizing' };
       }
       return { state: nextState, action: 'none' };

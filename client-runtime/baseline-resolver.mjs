@@ -5,6 +5,11 @@ export const normalizeBaselineKind = (kind = 'pytorch_reference') => (
   String(kind || '').trim() === 'naive_v0' ? 'naive_v0' : 'pytorch_reference'
 );
 
+export const isSemanticBaselineSource = (source = null) => Boolean(
+  source && typeof source === 'object'
+  && (source.semanticFallback === true || source.authority === 'agent-semantic'),
+);
+
 export const isStrictZeroSourceMission = (mission = {}, body = {}) => (
   body.strictZeroSource === true
   || mission.sourcePolicy?.mode === 'agent-research-only'
@@ -32,10 +37,30 @@ export const missionShapeKeyFor = (mission = {}, matrix = {}) => normalizeShapeK
 
 export const baselineKindForSource = (source = null) => {
   if (!source || typeof source !== 'object') return 'pytorch_reference';
-  return source.authority === 'generated' || source.type === 'naive_v0' || source.kind === 'naive_v0'
+  return source.type === 'naive_v0' || source.kind === 'naive_v0'
     ? 'naive_v0'
     : 'pytorch_reference';
 };
+
+export const buildSemanticBaselineSource = (mission = {}, research = {}) => ({
+  authority: 'agent-semantic',
+  kind: 'pytorch_reference',
+  repository: 'mission-semantic-baseline',
+  commit: 'agent-semantic-v1',
+  path: 'generated/semantic-reference/run.py',
+  operator: mission.operator || mission.title || 'operator',
+  expandedSingleFile: false,
+  confidence: 'low',
+  semanticFallback: true,
+  semanticSpec: {
+    missionId: mission.id || null,
+    title: mission.title || null,
+    goal: mission.goal || null,
+    hardware: mission.hardware || [],
+    metric: mission.metric || null,
+  },
+  reason: research.error?.message || research.phase || 'Research could not acquire a usable local or remote source; continue from Mission semantics.',
+});
 
 export const selectResearchBaselineSource = (researchNotes = [], mission = {}, body = {}) => {
   const requestedOperator = String(body.operator || mission.operator || mission.title || mission.goal || '').trim().toLowerCase();
@@ -141,6 +166,10 @@ export const normalizeBaselineSource = (input = {}, body = {}) => {
     operator: operator || null,
     license: source.license || null,
     expandedSingleFile,
+    semanticFallback: source.semanticFallback === true,
+    semanticSpec: source.semanticSpec || null,
+    confidence: source.confidence || null,
+    reason: source.reason || null,
   };
 };
 
@@ -161,6 +190,15 @@ export const requireTrustedBaselineSource = (body = {}, mission = {}) => {
   }
 
   const baselineKind = normalizeBaselineKind(body.baselineKind || body.kind || source.kind);
+  if (isSemanticBaselineSource(source)) {
+    if (mission.sourcePolicy?.allowSemanticFallback !== true) {
+      const error = new Error('当前 Mission 未允许基于语义生成 baseline。');
+      error.status = 400;
+      error.code = 'BASELINE_SEMANTIC_FALLBACK_FORBIDDEN';
+      throw error;
+    }
+    return source;
+  }
   if (baselineKind === 'naive_v0') {
     if (source.authority !== 'generated' || source.basedOn !== 'v0' || source.expandedSingleFile !== true) {
       const error = new Error('naive_v0 baseline 必须显式标注为 generated，并声明基于 v0 的单文件展开版本。');
@@ -193,6 +231,10 @@ export const baselineSourceTrusted = (baseline = {}, baselineEvidence = {}) => {
   if (!source) return policy.requireAuthority === false && policy.requireSingleFileExpansion === false;
 
   const singleFileExpanded = source.expandedSingleFile === true;
+  if (isSemanticBaselineSource(source)) {
+    return policy.allowAgentSemantic === true
+      && (policy.requireSingleFileExpansion === false || singleFileExpanded);
+  }
   const baselineKind = normalizeBaselineKind(baselineEvidence.kind || baseline.kind);
   if (baselineKind === 'naive_v0' || source.kind === 'naive_v0' || source.type === 'naive_v0' || source.authority === 'generated' || source.authority === 'synthetic') {
     const basis = String(source.basedOn || source.basis || source.version || source.commit || '').trim().toLowerCase();

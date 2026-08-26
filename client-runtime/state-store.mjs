@@ -1630,6 +1630,10 @@ const baselineSourceTrusted = (baseline = {}, baselineEvidence = {}) => {
   const source = baselineEvidence.source || baseline.source || null;
   if (!source || typeof source !== 'object') return false;
   const singleFileExpanded = source.expandedSingleFile === true;
+  if (source.semanticFallback === true || source.authority === 'agent-semantic') {
+    return policy.allowAgentSemantic === true
+      && (policy.requireSingleFileExpansion === false || singleFileExpanded);
+  }
   if (baselineKind === 'naive_v0' || source.kind === 'naive_v0' || source.type === 'naive_v0' || source.authority === 'generated' || source.authority === 'synthetic') {
     const basis = String(source.basedOn || source.basis || source.version || source.commit || '').trim().toLowerCase();
     const generatedMarker = Boolean(source.authority === 'generated' || source.type === 'naive_v0' || source.kind === 'naive_v0');

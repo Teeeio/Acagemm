@@ -13,6 +13,7 @@ const checks = [
   'test:operator-test-resilience',
   'test:intent',
   'test:research',
+  'test:baseline-materializer-agent',
   'test:claude',
   'test:claude-workflow',
   'test:loop',

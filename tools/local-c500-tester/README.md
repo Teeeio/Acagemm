@@ -33,7 +33,7 @@ Claude Code 复用相同的 Research、Baseline Materializer、Candidate、Works
 
 Claude Candidate 默认允许 5 分钟无事件窗口，Codex 保持 2 分钟；现场网关确实更慢时可通过 `OPERATOR_MAIN_AGENT_STALL_MS` 调整。Windows 本地路径若被 Claude 转成包含 `~1` 一类片段的 8.3 短路径，可能触发其路径安全拦截；真机 Linux 不受影响，本地验证应使用不触发短路径转换的工作目录。
 
-目标机无法访问 GitHub 时，设置 `OPERATOR_SOURCE_MIRROR_CONFIG` 指向管理员维护的 source mirror JSON。Research Agent 仍记录官方 canonical source，固定工作流从配置的 Gitee transport 获取并校验完整 commit/tree。示例见 [`docs/source-mirrors.example.json`](../../docs/source-mirrors.example.json)。
+Source 调研默认采用灵活的本地优先策略：Research Agent 先读取当前 Mission 的 Source Registry，再搜索可访问的 HTTPS Git 来源（包括 Gitee、GitHub 和 GitLab）；固定工作流在 clone 后自动记录 origin、commit 和 tree。没有可用源码时，Research Agent 会整理 Mission 语义规格，由 Baseline Materializer 生成带 `semanticFallback` 标记的 reference，流程继续进入真机测试。`OPERATOR_SOURCE_MIRROR_CONFIG` 仅用于后续需要 canonical/mirror pin 的严格来源模式，不再是实机闭环前置条件。
 
 TUI 会在 `http://127.0.0.1:4275` 启动 API-only 生产 runtime。端口可通过 `LOCAL_C500_API_PORT` 覆盖。状态、Mission Workspace、测试任务和导出文件默认写入 `.local-c500-production/`，可通过 `LOCAL_C500_TESTER_HOME` 覆盖。
 

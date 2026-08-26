@@ -56,7 +56,9 @@ import { nativeDirectoryPicker } from './native-directory-picker.mjs';
 import { dataDir } from './storage-paths.mjs';
 import {
   baselineMatchesMatrix,
+  buildSemanticBaselineSource,
   inferAuthoritativeBaselineSource,
+  isSemanticBaselineSource,
   isStrictZeroSourceMission,
   missionShapeKeyFor,
   normalizeBaselineKind,
@@ -1114,19 +1116,41 @@ const iterationDeps = {
       state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_test_failed' };
       return state;
     }
+    const research = state.researchAgent || {};
+    const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
+    const researchedSource = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources });
+    const semanticSource = mission.sourcePolicy?.allowSemanticFallback === true && researchTerminal
+      ? buildSemanticBaselineSource(mission, research)
+      : null;
     const baselineSource = strictZeroSource
-      ? selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources })
+      ? researchedSource || semanticSource
       : state.baseline?.source
       || mission.baseline?.source
-      || selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title })
+      || researchedSource
       || inferAuthoritativeBaselineSource(mission, { operator: mission.operator || mission.title, reason });
     if (!baselineSource) return state;
+    const semanticFallback = isSemanticBaselineSource(baselineSource);
+    if (semanticFallback) {
+      state.baseline = {
+        ...(state.baseline || {}),
+        source: baselineSource,
+        sourcePolicy: {
+          ...(state.baseline?.sourcePolicy || {}),
+          requireAuthority: false,
+          requireSingleFileExpansion: true,
+          allowAgentSemantic: true,
+        },
+      };
+      appendRuntimeEvent(state, 'baseline.semantic_fallback_selected', { missionId: state.activeMissionId, reason: baselineSource.reason }, { kind: 'baseline', mode: 'agent-semantic' });
+    }
     if (strictZeroSource) {
-      const inspection = await workspaceManager.inspectSources(mission.sourceRoot, [baselineSource]);
-      if (!inspection.ready || inspection.references.some((reference) => !reference.verified)) {
-        state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unverified' };
-        appendRuntimeEvent(state, 'baseline.source_unverified', { missionId: state.activeMissionId, errors: inspection.errors }, { kind: 'baseline', mode: 'client' });
-        return state;
+      if (!semanticFallback) {
+        const inspection = await workspaceManager.inspectSources(mission.sourceRoot, [baselineSource]);
+        if (!inspection.ready || inspection.references.some((reference) => !reference.verified)) {
+          state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unverified' };
+          appendRuntimeEvent(state, 'baseline.source_unverified', { missionId: state.activeMissionId, errors: inspection.errors }, { kind: 'baseline', mode: 'client' });
+          return state;
+        }
       }
       const materializer = state.baseline?.materializer || {};
       if (materializer.status !== 'completed' || !materializer.result?.runPy) {
@@ -1206,15 +1230,19 @@ const advanceTesterAutopilot = async (state) => {
     || (state.candidateEvaluations || [])[0];
 
   if (isStrictZeroSourceMission(mission)) {
-    const source = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources });
     const research = state.researchAgent || {};
+    const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
+    const source = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources })
+      || (mission.sourcePolicy?.allowSemanticFallback === true && researchTerminal && (research.runPhase === 'synthesize' || research.acquireHandled === true)
+        ? buildSemanticBaselineSource(mission, research)
+        : null);
     if (state.baseline?.status !== 'complete' && !source) {
       if (!research.runId) {
         const direction = `从零研究 ${mission.title || mission.goal}：在官方上游仓库中固定可验证的 MLA paged attention baseline source，记录 repository、commit、path 和 operator；不得生成候选代码。`;
         const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
         return { state: await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true }), action: 'baseline_research_started' };
       }
-      if (['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status)) {
+      if (researchTerminal) {
         if (research.runPhase === 'acquire' && research.acquireHandled !== true) return { state, action: 'none' };
         state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unresolved' };
         return { state, action: 'needs_human' };

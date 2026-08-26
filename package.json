@@ -28,6 +28,7 @@
     "test:three-layer": "node tests/three-layer-model-test.mjs",
     "test:intent": "node tests/mission-intent-test.mjs",
     "test:research": "node tests/research-test.mjs",
+    "test:baseline-materializer-agent": "node tests/baseline-materializer-agent-test.mjs",
     "test:loop": "node tests/loop-test.mjs",
     "test:journal": "node tests/command-journal-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",

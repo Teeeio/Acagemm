@@ -53,11 +53,16 @@ npm ci --omit=dev
 
 不要把 GitHub token 写入 `.env`、命令脚本或项目文件。私有仓库认证使用系统凭据管理器或一次性环境变量。
 
-### GitHub 不可达时的 Source mirror
+### Source 发现与可选严格 mirror
 
-测试项目迁移到 Gitee 只能解决测试版拉取。严格从零流程仍需要获得 FlashInfer 官方 Source，因此还必须由管理员配置 canonical source 到 Gitee transport 的固定映射。
+默认实机测试不要求管理员预先填写 FlashInfer commit/tree。Research Agent 按以下顺序工作：
 
-在一台能够访问 GitHub 和 Gitee 的中转机上建立镜像：
+1. 检查当前 Mission 的本地 Source Registry。
+2. 本地没有合适来源时搜索可访问的 HTTPS Git 仓库，包括 Gitee、GitHub 和 GitLab。
+3. clone 后由固定工作流自动记录实际 origin、commit 和 tree。
+4. 本地和联网来源均不可用时，根据 Mission 生成语义 baseline 规格并继续 Materializer；导出结果会明确标记 `semanticFallback=true`。
+
+如果后续需要严格验证 Gitee 镜像与官方 GitHub snapshot 的一致性，可选配置 pinned Source mirror。在一台能够访问 GitHub 和 Gitee 的中转机上建立镜像：
 
 ```bash
 git clone --mirror https://github.com/flashinfer-ai/flashinfer.git
@@ -85,9 +90,9 @@ PowerShell：
 $env:OPERATOR_SOURCE_MIRROR_CONFIG = (Resolve-Path '.\source-mirrors.json')
 ```
 
-安全模型如下：
+严格 mirror 模式如下：
 
-- Research Agent 只能声明 GitHub/GitLab 官方 canonical source，不能选择 Gitee transport。
+- 管理员显式声明 GitHub/GitLab canonical source 和 Gitee transport。
 - 固定工作流根据管理员配置从 Gitee clone。
 - clone 后必须严格匹配完整 commit；配置 tree 时也必须严格匹配 tree。
 - Source Registry 和最终 baseline 对外仍记录官方 canonical URL，同时单独记录 Gitee transport。
@@ -139,7 +144,7 @@ npm run tester:c500:doctor
 
 Claude 模式还应看到 runtime mode 为 `claude-code`、status 为 `connected`，并显示本机 Claude Code 版本。
 
-使用镜像时还应看到 `sourceMirror=ok`、映射数量以及 `required`。`sourceMirror=invalid` 时不要发布 Mission；先修复配置文件。
+使用可选严格镜像时还应看到 `sourceMirror=ok`、映射数量以及 `required`。未设置 mirror 时显示 `direct canonical access` 是正常状态，Research Agent 仍可选择 Gitee 或进入语义 fallback。`sourceMirror=invalid` 表示显式配置有误，应先取消该环境变量或修复配置文件。
 
 ## 4. 启动真机测试
 
@@ -176,7 +181,7 @@ Source Research -> Source Verify -> Materializer -> Baseline Test
 - `environment.liveHardware=true`
 - correctness 通过后才产生 benchmark
 - tracer 和 profiler 会被主动调用；不可用或失败时记录状态和诊断，但不阻塞 Gate
-- Source Verify 显示 mirror pin，导出结果同时包含 canonical、transport、commit 和 tree
+- 有可用源码时导出结果记录 repository、transport、commit 和 tree；无源码时记录 `semanticFallback=true`、语义规格和降级原因
 - 未达 Gate 的 Candidate 回退后，下一轮从稳定 workspace 开始
 - 达标 Candidate 被提交到 Iteration Repository，循环正常终止
 

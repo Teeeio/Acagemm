@@ -460,6 +460,17 @@ const acquireEmptyState = makeState({
 let empty = await advanceIteration(acquireEmptyState, { ...deps, registerSources: async () => ({ count: 0 }) });
 assert.equal(empty.action, 'research_no_material');
 assert.equal(startResearchCalls, 0);
+// 灵活来源策略：本地和远程均无资料，仍进入综合阶段生成 Mission 语义 baseline
+resetCounters();
+const flexibleMission = { id: 'MIS', goal: '优化 C500 MLA paged attention', hardware: ['C500'], metric: 'latency_p50', sourcePolicy: { strictZeroSource: true, allowSemanticFallback: true } };
+const flexibleEmptyState = makeState({
+  missions: [flexibleMission],
+  researchAgent: { status: 'failed', runPhase: 'acquire', runId: 'codex_research_fallback', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_fallback', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research', error: { code: 'NETWORK_FAILED', message: 'remote unavailable' } },
+});
+const semanticSynthesis = await advanceIteration(flexibleEmptyState, { ...deps, registerSources: async () => ({ count: 0 }) });
+assert.equal(semanticSynthesis.action, 'research_synthesizing');
+assert.equal(lastResearchRunPhase, 'synthesize');
+assert.equal(semanticSynthesis.state.researchAgent.synthesizeRunId, 'codex_research_syn');
 // 无 sourceRoot 的 mission（单阶段）：采集终态不触发转移（projectState 已直接产笔记）
 resetCounters();
 const singlePhaseState = makeState({

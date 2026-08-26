@@ -46,6 +46,11 @@ export const validateCanonicalRepository = (value) => {
   return String(value).trim();
 };
 
+export const validateDiscoveredRepository = (value) => {
+  parseHttpsRepository(value, 'Discovered Source');
+  return String(value).trim();
+};
+
 const validateTransportRepository = (value) => {
   parseHttpsRepository(value, 'Transport Source');
   return String(value).trim();
@@ -107,8 +112,14 @@ export const loadSourceMirrorPolicy = async ({ configPath = process.env.OPERATOR
   return parseSourceMirrorPolicy(document, { configPath: resolvedPath });
 };
 
-export const resolveSourceTransport = (canonical, policy) => {
-  const validatedCanonical = validateCanonicalRepository(canonical);
+export const resolveSourceTransport = (canonical, policy, { allowDiscoveredSources = false } = {}) => {
+  let validatedCanonical;
+  try {
+    validatedCanonical = validateCanonicalRepository(canonical);
+  } catch (error) {
+    if (!allowDiscoveredSources || error.code !== 'RESEARCH_SOURCE_SELECTION_UNSAFE') throw error;
+    validatedCanonical = validateDiscoveredRepository(canonical);
+  }
   const canonicalIdentity = normalizeRepositoryIdentity(validatedCanonical);
   const mirror = policy?.mirrors?.find((entry) => entry.canonicalIdentity === canonicalIdentity) || null;
   if (!mirror && policy?.requireMirror) {
@@ -123,7 +134,7 @@ export const resolveSourceTransport = (canonical, policy) => {
     requiredTree: mirror.requiredTree,
     configPath: policy.configPath,
   } : {
-    mode: 'canonical',
+    mode: canonicalHosts.has(new URL(validatedCanonical).hostname.toLowerCase()) ? 'canonical' : 'discovered',
     canonical: validatedCanonical,
     canonicalIdentity,
     transport: validatedCanonical,

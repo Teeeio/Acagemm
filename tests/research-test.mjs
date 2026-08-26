@@ -77,16 +77,18 @@ try {
   assert.equal(started.state.researchAgent.budgetMs, 30 * 60 * 1000, 'acquire phase uses generous budget');
   assert.equal(started.state.researchAgent.runPhase, 'acquire');
   assert.equal(started.state.researchAgent.synchronous, false, 'manual research defaults to asynchronous (parallel)');
-  // 采集阶段只暴露 research；Source 由 Agent 选定后交给固定工作流拉取。
+  // 采集阶段暴露隔离 research 目录和本地 Source Registry；固定工作流仍负责远程 clone 和快照记录。
   assert.match(spawnCalls[0].args.join(' '), /--sandbox workspace-write/);
   assert.doesNotMatch(spawnCalls[0].args.join(' '), /--skip-git-repo-check/);
   assert.match(spawnCalls[0].args.join(' '), /--cd .*research/);
-  assert.doesNotMatch(spawnCalls[0].args.join(' '), /--add-dir/);
+  assert.ok(spawnCalls[0].args.join(' ').includes(`--add-dir ${sourceRoot}`));
   assert.match(spawnCalls[0].stdin, /Research Agent/);
-  // mission 配置了 sourceRoot → 采集阶段只选择来源，不自行拉取或写笔记。
+  // mission 配置了 sourceRoot → 先检查本地，再选择可访问远程来源或语义 fallback。
   assert.match(spawnCalls[0].stdin, /ACQUISITION phase/);
   assert.match(spawnCalls[0].stdin, /Source Registry/);
-  assert.match(spawnCalls[0].stdin, /fixed workflow validates and clones/i);
+  assert.match(spawnCalls[0].stdin, /First inspect the local Source Registry/i);
+  assert.match(spawnCalls[0].stdin, /Gitee, GitHub, GitLab/i);
+  assert.match(spawnCalls[0].stdin, /semanticFallback/);
   assert.doesNotMatch(spawnCalls[0].stdin, /research-notes\/v1/, 'acquire phase must not ask for the note JSON');
   assert.doesNotMatch(spawnCalls[0].stdin, /do not produce a "candidates" field/i, 'acquire phase must not require the note schema');
   // 无 sourceRoot 的 mission → 单阶段（检索 + 产笔记），不含 ACQUISITION 指令
