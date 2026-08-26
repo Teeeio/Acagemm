@@ -1,6 +1,13 @@
 import { spawnSync } from 'node:child_process';
+import path from 'node:path';
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmCli = process.env.npm_execpath || null;
+const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'PATH';
+const childEnvironment = {
+  ...process.env,
+  [pathKey]: `${path.dirname(process.execPath)}${path.delimiter}${process.env[pathKey] || ''}`,
+};
 const checks = [
   'test:workflow-kernel',
   'test:operator-test-resilience',
@@ -37,11 +44,12 @@ const checks = [
   'build',
 ];
 
+console.log(`[release-check] runtime ${process.version}`);
 for (const check of checks) {
   console.log(`\n[release-check] ${check}`);
-  const result = spawnSync(npm, ['run', check], {
+  const result = spawnSync(npmCli ? process.execPath : npm, npmCli ? [npmCli, 'run', check] : ['run', check], {
     cwd: process.cwd(),
-    env: process.env,
+    env: childEnvironment,
     stdio: 'inherit',
     windowsHide: true,
   });

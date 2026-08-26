@@ -37,8 +37,9 @@ const renderAt = async (rows, columns = 120, tasks = []) => {
     patchConsole: false,
   });
   await new Promise((resolve) => setTimeout(resolve, 420));
+  const exitPromise = instance.waitUntilExit();
   instance.unmount();
-  await instance.waitUntilExit();
+  await exitPromise;
   return writes;
 };
 

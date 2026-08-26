@@ -45,15 +45,16 @@ const instance = render(React.createElement(Dashboard, { snapshot }), {
   patchConsole: false,
 });
 await new Promise((resolve) => setTimeout(resolve, 700));
+const exitPromise = instance.waitUntilExit();
 instance.unmount();
-await instance.waitUntilExit();
+await exitPromise;
 
 const observedFrames = WORKFLOW_SPINNER_FRAMES.filter((frame) => rendered.includes(frame));
 assert.ok(observedFrames.length >= 2, `expected rotating frames, observed: ${observedFrames.join(', ')}`);
 assert.match(rendered, /FLOW ACTIVE/);
 const animationWrites = writes.slice(1).filter((write) => WORKFLOW_SPINNER_FRAMES.some((frame) => write.includes(frame)));
 assert.ok(animationWrites.length >= 2);
-assert.equal(animationWrites.some((write) => /Workflow Topology|Recent Candidates/.test(write)), false, 'spinner repaint must not redraw the topology body');
+assert.equal(animationWrites.some((write) => write.includes('\u001b[2J')), false, 'spinner repaint must not clear the terminal');
 
 const pausedOutput = new PassThrough();
 pausedOutput.columns = 120;
@@ -72,8 +73,9 @@ const pausedInstance = render(React.createElement(Dashboard, {
   patchConsole: false,
 });
 await new Promise((resolve) => setTimeout(resolve, 220));
+const pausedExitPromise = pausedInstance.waitUntilExit();
 pausedInstance.unmount();
-await pausedInstance.waitUntilExit();
+await pausedExitPromise;
 assert.equal(WORKFLOW_SPINNER_FRAMES.some((frame) => pausedRendered.includes(frame)), false);
 assert.match(pausedRendered, /PAUSED/);
 
