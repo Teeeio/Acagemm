@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,7 @@ import { runtimeDir } from './storage-paths.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
 import { materializeBaselineSource } from './baseline-materializer.mjs';
 import { prepareAgentBoundary } from './agent-boundary.mjs';
+import { loadSourceMirrorPolicy, resolveSourceTransport, verifySourceTransportSnapshot } from './source-mirror-policy.mjs';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(serverDir, '..');
@@ -24,6 +25,20 @@ const directoryExists = async (target) => {
 
 const readJson = async (target) => JSON.parse(await readFile(target, 'utf8'));
 
+const summarizeAcquiredSources = (sources = []) => sources.map((source) => ({
+  name: source.name,
+  repository: source.repository,
+  canonicalRepository: source.canonicalRepository,
+  transportRepository: source.transportRepository,
+  transportMode: source.transportMode,
+  mirrorVerified: source.mirrorVerified,
+  pin: source.pin,
+  commit: source.commit,
+  tree: source.tree,
+  evidencePaths: (source.evidence || []).map((entry) => entry.path),
+  evidenceCount: (source.evidence || []).length,
+}));
+
 const finalAgentJson = (events = []) => {
   const texts = events.map((event) => event?.item?.text || event?.text || '').filter(Boolean).reverse();
   for (const text of texts) {
@@ -32,7 +47,7 @@ const finalAgentJson = (events = []) => {
   return null;
 };
 
-const acquireSelectedSources = async ({ events, sourceRoot, researchDir }) => {
+export const acquireSelectedSources = async ({ events, sourceRoot, researchDir, mirrorPolicy }) => {
   const result = finalAgentJson(events);
   const repositories = result?.sourceAcquisition?.repositories;
   if (!Array.isArray(repositories) || repositories.length < 1 || repositories.length > 3) {
@@ -45,24 +60,31 @@ const acquireSelectedSources = async ({ events, sourceRoot, researchDir }) => {
   for (const repository of repositories) {
     const url = String(repository.url || '').trim();
     const name = String(repository.name || '').trim();
-    if (!/^https:\/\/(?:github\.com|gitlab\.com)\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/i.test(url) || !/^[A-Za-z0-9_.-]+$/.test(name)) {
+    if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
       const error = new Error(`Research Agent 返回了不受支持的来源：${url || name}`);
       error.code = 'RESEARCH_SOURCE_SELECTION_UNSAFE';
       throw error;
     }
+    const transport = resolveSourceTransport(url, mirrorPolicy);
     const destination = path.resolve(sourceRoot, name);
     if (!destination.startsWith(`${path.resolve(sourceRoot)}${path.sep}`)) throw new Error('Research source destination escaped Source Registry.');
+    if (await stat(destination).catch(() => null)) {
+      const error = new Error(`Source Registry 已存在同名来源：${name}`);
+      error.code = 'RESEARCH_SOURCE_DESTINATION_EXISTS';
+      throw error;
+    }
+    const acquisitionDirectory = `${destination}.acquiring-${randomUUID()}`;
     let cloneError = null;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        await workspaceManager.git(['-c', 'core.longpaths=true', 'clone', '--depth=1', '--filter=blob:none', url, destination], sourceRoot, { timeout: 180_000 });
+        await workspaceManager.git(['-c', 'core.longpaths=true', 'clone', '--depth=1', '--filter=blob:none', transport.transport, acquisitionDirectory], sourceRoot, { timeout: 180_000 });
         cloneError = null;
         break;
       } catch (error) {
         cloneError = error;
         for (let cleanupAttempt = 1; cleanupAttempt <= 5; cleanupAttempt += 1) {
           try {
-            await rm(destination, { recursive: true, force: true });
+            await rm(acquisitionDirectory, { recursive: true, force: true });
             break;
           } catch (cleanupError) {
             if (cleanupAttempt === 5) throw cleanupError;
@@ -76,27 +98,54 @@ const acquireSelectedSources = async ({ events, sourceRoot, researchDir }) => {
       cloneError.code = cloneError.code || 'RESEARCH_SOURCE_CLONE_FAILED';
       throw cloneError;
     }
-    const [head, origin] = await Promise.all([
-      workspaceManager.git(['rev-parse', 'HEAD'], destination).then((entry) => entry.stdout.trim()),
-      workspaceManager.git(['remote', 'get-url', 'origin'], destination).then((entry) => entry.stdout.trim()),
+    const clonedHead = await workspaceManager.git(['rev-parse', 'HEAD'], acquisitionDirectory).then((entry) => entry.stdout.trim());
+    if (transport.requiredCommit && clonedHead.toLowerCase() !== transport.requiredCommit) {
+      try {
+        await workspaceManager.git(['fetch', '--depth=1', 'origin', transport.requiredCommit], acquisitionDirectory, { timeout: 180_000 });
+        await workspaceManager.git(['checkout', '--detach', transport.requiredCommit], acquisitionDirectory, { timeout: 60_000 });
+      } catch (error) {
+        await rm(acquisitionDirectory, { recursive: true, force: true }).catch(() => {});
+        error.code = 'SOURCE_MIRROR_COMMIT_UNAVAILABLE';
+        throw error;
+      }
+    }
+    const [head, tree, origin] = await Promise.all([
+      workspaceManager.git(['rev-parse', 'HEAD'], acquisitionDirectory).then((entry) => entry.stdout.trim()),
+      workspaceManager.git(['rev-parse', 'HEAD^{tree}'], acquisitionDirectory).then((entry) => entry.stdout.trim()),
+      workspaceManager.git(['config', '--get', 'remote.origin.url'], acquisitionDirectory).then((entry) => entry.stdout.trim()),
     ]);
+    let snapshot;
+    try {
+      snapshot = verifySourceTransportSnapshot({ resolution: transport, commit: head, tree });
+      await workspaceManager.git(['config', 'operatorStudio.canonicalRepository', snapshot.canonicalRepository], acquisitionDirectory);
+      await workspaceManager.git(['config', 'operatorStudio.transportRepository', origin], acquisitionDirectory);
+      await workspaceManager.git(['config', 'operatorStudio.sourceTree', snapshot.tree], acquisitionDirectory);
+    } catch (error) {
+      await rm(acquisitionDirectory, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
     const requestedPaths = [...new Set((repository.evidencePaths || []).map((value) => String(value || '').replaceAll('\\', '/').replace(/^\.\//, '')).filter(Boolean))].slice(0, 8);
     const evidence = [];
     const collectEvidence = async (paths, discovery) => {
       for (const relativePath of paths) {
         if (evidence.length >= 8 || evidence.reduce((total, item) => total + item.content.length, 0) >= 120_000) break;
         if (path.isAbsolute(relativePath) || relativePath.split('/').includes('..')) continue;
-        const target = path.resolve(destination, relativePath);
-        if (!target.startsWith(`${destination}${path.sep}`)) continue;
-        const info = await stat(target).catch(() => null);
-        if (!info?.isFile() || info.size > 2_000_000) continue;
+        const target = path.resolve(acquisitionDirectory, relativePath);
+        if (!target.startsWith(`${acquisitionDirectory}${path.sep}`)) continue;
+        const [info, resolvedTarget, resolvedRoot] = await Promise.all([
+          lstat(target).catch(() => null),
+          realpath(target).catch(() => null),
+          realpath(acquisitionDirectory),
+        ]);
+        if (!info?.isFile() || info.isSymbolicLink() || info.size > 2_000_000) continue;
+        if (!resolvedTarget || !(resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`))) continue;
         const content = await readFile(target, 'utf8').catch(() => '');
         if (content) evidence.push({ path: relativePath, content: content.slice(0, 40_000), truncated: content.length > 40_000, discovery });
       }
     };
     await collectEvidence(requestedPaths, 'agent-selected');
     if (!evidence.length) {
-      const trackedFiles = (await workspaceManager.git(['ls-files'], destination)).stdout.split(/\r?\n/).filter(Boolean);
+      const trackedFiles = (await workspaceManager.git(['ls-files'], acquisitionDirectory)).stdout.split(/\r?\n/).filter(Boolean);
       const candidates = trackedFiles
         .filter((file) => /\.(?:py|cu|cuh|cc|cpp|h|hpp|md|rst)$/i.test(file))
         .map((file) => {
@@ -113,18 +162,39 @@ const acquireSelectedSources = async ({ events, sourceRoot, researchDir }) => {
         .slice(0, 24);
       const semanticallyRelevant = [];
       for (const candidate of candidates) {
-        const content = await readFile(path.join(destination, candidate.file), 'utf8').catch(() => '');
+        const content = await readFile(path.join(acquisitionDirectory, candidate.file), 'utf8').catch(() => '');
         if (/mla/i.test(content) && /pag(?:e|ed|ing)|kv.?cache/i.test(content)) semanticallyRelevant.push(candidate.file);
         if (semanticallyRelevant.length >= 8) break;
       }
       await collectEvidence(semanticallyRelevant, 'fixed-workflow-discovery');
     }
     if (!evidence.length) {
+      await rm(acquisitionDirectory, { recursive: true, force: true }).catch(() => {});
       const error = new Error(`Research Agent 没有为 ${name} 提供可验证的源码证据路径。`);
       error.code = 'RESEARCH_SOURCE_EVIDENCE_MISSING';
       throw error;
     }
-    acquired.push({ name, repository: origin, commit: head, reason: String(repository.reason || ''), requestedEvidencePaths: requestedPaths, evidence });
+    try {
+      await rename(acquisitionDirectory, destination);
+    } catch (error) {
+      await rm(acquisitionDirectory, { recursive: true, force: true }).catch(() => {});
+      error.code = 'RESEARCH_SOURCE_REGISTRATION_FAILED';
+      throw error;
+    }
+    acquired.push({
+      name,
+      repository: snapshot.canonicalRepository,
+      canonicalRepository: snapshot.canonicalRepository,
+      transportRepository: snapshot.transportRepository,
+      transportMode: snapshot.mode,
+      mirrorVerified: snapshot.mirrorVerified,
+      pin: snapshot.pin,
+      commit: snapshot.commit,
+      tree: snapshot.tree,
+      reason: String(repository.reason || ''),
+      requestedEvidencePaths: requestedPaths,
+      evidence,
+    });
   }
   const manifestPath = path.join(researchDir, 'acquisition-result.json');
   await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, acquired }, null, 2)}\n`, 'utf8');
@@ -142,8 +212,13 @@ const loadMaterializerSourceEvidence = async ({ sourceRoot, source }) => {
   const registered = inspection.sources.find((entry) => entry.id === reference.sourceId);
   const relativePath = String(source.path || '').replaceAll('\\', '/').replace(/^\.\//, '');
   const target = path.resolve(registered.path, relativePath);
-  const info = await stat(target).catch(() => null);
-  if (!info?.isFile() || info.size > 4_000_000) {
+  const [info, resolvedTarget, resolvedRoot] = await Promise.all([
+    lstat(target).catch(() => null),
+    realpath(target).catch(() => null),
+    realpath(registered.path).catch(() => null),
+  ]);
+  const contained = resolvedTarget && resolvedRoot && (resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`));
+  if (!info?.isFile() || info.isSymbolicLink() || !contained || info.size > 4_000_000) {
     const error = new Error('Authoritative baseline reference must resolve to a bounded source file.');
     error.code = 'BASELINE_SOURCE_FILE_INVALID';
     throw error;
@@ -151,7 +226,12 @@ const loadMaterializerSourceEvidence = async ({ sourceRoot, source }) => {
   const content = await readFile(target, 'utf8');
   return {
     repository: registered.repository,
+    canonicalRepository: registered.canonicalRepository,
+    transportRepository: registered.transportRepository,
+    transportMode: registered.transportMode,
+    mirrorVerified: registered.mirrorVerified,
     commit: registered.commit,
+    tree: registered.tree,
     path: relativePath,
     content: content.slice(0, 240_000),
     truncated: content.length > 240_000,
@@ -236,6 +316,12 @@ export function createAgentRuntime(options = {}) {
   const openCodeModel = options.openCodeModel || process.env.OPENCODE_MODEL || '';
   const codex = options.codexClient || defaultCodexClient;
   const codexWorkspace = options.codexWorkspace || process.env.OPERATOR_CODEX_WORKSPACE || rootDir;
+  let sourceMirrorPolicyPromise = null;
+  const sourceMirrorPolicy = async () => {
+    if (options.sourceMirrorPolicy) return options.sourceMirrorPolicy;
+    sourceMirrorPolicyPromise ||= loadSourceMirrorPolicy({ configPath: options.sourceMirrorConfigPath ?? process.env.OPERATOR_SOURCE_MIRROR_CONFIG });
+    return sourceMirrorPolicyPromise;
+  };
   const codexDescriptorTtlMs = Number(options.codexDescriptorTtlMs ?? 60_000);
   let codexDescriptorCache = null;
   let codexDescriptorCachedAt = 0;
@@ -666,13 +752,23 @@ export function createAgentRuntime(options = {}) {
     }
     await mkdir(workspace, { recursive: true });
     const sourceEvidence = await loadMaterializerSourceEvidence({ sourceRoot: mission.sourceRoot, source });
+    const verifiedSource = {
+      ...source,
+      repository: sourceEvidence.canonicalRepository || sourceEvidence.repository,
+      canonicalRepository: sourceEvidence.canonicalRepository || sourceEvidence.repository,
+      transportRepository: sourceEvidence.transportRepository || null,
+      transportMode: sourceEvidence.transportMode || 'canonical',
+      mirrorVerified: sourceEvidence.mirrorVerified === true,
+      commit: sourceEvidence.commit,
+      tree: sourceEvidence.tree,
+    };
     const runId = `codex_materializer_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
     const boundary = await prepareAgentBoundary({
       workspace,
       role: 'materializer',
       roots: { workspace },
     });
-    const prompt = `${buildBaselineMaterializerPrompt({ mission, source, matrix, materializationDir: workspace, sourceEvidence })}\n${boundary.toolInstruction}`;
+    const prompt = `${buildBaselineMaterializerPrompt({ mission, source: verifiedSource, matrix, materializationDir: workspace, sourceEvidence })}\n${boundary.toolInstruction}`;
     const run = await codex.start({
       runId,
       missionId: mission.id,
@@ -685,7 +781,7 @@ export function createAgentRuntime(options = {}) {
     state.baseline = {
       ...(state.baseline || { required: true, status: 'missing' }),
       kind: 'pytorch_reference',
-      source: source || state.baseline?.source || null,
+      source: verifiedSource,
       materializer: {
         status: 'running',
         phase: 'Baseline 单文件展开中',
@@ -694,7 +790,7 @@ export function createAgentRuntime(options = {}) {
         missionId: mission.id,
         runId,
         threadId: run.threadId || null,
-        source: source || null,
+        source: verifiedSource,
         matrix: structuredClone(matrix || {}),
         materializationDir: workspace,
         startedAt: run.startedAt,
@@ -708,7 +804,7 @@ export function createAgentRuntime(options = {}) {
         error: null,
       },
     };
-    appendRuntimeEvent(state, 'baseline.materializer_started', { runId, source, materializationDir: workspace }, { kind: 'baseline-materializer', mode: 'codex-cli' });
+    appendRuntimeEvent(state, 'baseline.materializer_started', { runId, source: verifiedSource, materializationDir: workspace }, { kind: 'baseline-materializer', mode: 'codex-cli' });
     return { handled: true, state };
   };
 
@@ -747,6 +843,7 @@ export function createAgentRuntime(options = {}) {
       error.code = 'RESEARCH_WORKSPACE_REQUIRED';
       throw error;
     }
+    if (runPhase === 'acquire' && mission.sourceRoot) await sourceMirrorPolicy();
     await mkdir(path.join(workspace, 'notes'), { recursive: true });
     await mkdir(path.join(workspace, 'clones'), { recursive: true });
     const prevResearch = state.researchAgent || {};
@@ -1083,14 +1180,16 @@ export function createAgentRuntime(options = {}) {
               events,
               sourceRoot: prev.sourceRoot,
               researchDir: prev.researchDir,
+              mirrorPolicy: await sourceMirrorPolicy(),
             });
-            nextResearchAgent.acquiredSources = acquiredSources;
+            const acquiredSourceSummary = summarizeAcquiredSources(acquiredSources);
+            nextResearchAgent.acquiredSources = acquiredSourceSummary;
             nextResearchAgent.phase = '采集完成，待整理笔记';
             nextResearchAgent.completedAt = new Date().toISOString();
             appendRuntimeEvent(state, 'research.acquire_completed', {
               runId: prev.runId,
               phase: 'acquire',
-              acquiredSources,
+              acquiredSources: acquiredSourceSummary,
             }, { kind: 'research', mode: 'codex-cli' });
           } else {
             appendRuntimeEvent(state, 'research.failed', {
@@ -1104,6 +1203,12 @@ export function createAgentRuntime(options = {}) {
         state.researchAgent = nextResearchAgent;
         return { state, changed };
       } catch (error) {
+        appendRuntimeEvent(state, 'research.acquire_failed', {
+          runId: state.researchAgent?.runId,
+          phase: state.researchAgent?.runPhase,
+          errorCode: error.code || 'RESEARCH_SOURCE_ACQUISITION_FAILED',
+          details: error.details || null,
+        }, { kind: 'research', mode: 'codex-cli' });
         state.researchAgent = { ...state.researchAgent, status: 'failed', phase: '研究员状态读取失败', progress: 100, messages: [...(state.researchAgent.messages || []), { id: `research-projection-error-${state.researchAgent.runId}`, phase: 'research', status: 'waiting', title: '无法读取研究员运行状态', detail: error.message, time: '刚刚' }] };
         return { state, changed: true };
       }

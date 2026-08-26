@@ -172,7 +172,7 @@ const App = () => {
       React.createElement(Text, { color: 'cyan', bold: true }, 'C500 Environment Doctor'),
       React.createElement(Text, null, `runtime      ${doctorResult?.runtime?.runtime?.mode || doctorResult?.status || 'unknown'}`),
       React.createElement(Text, null, `backend      ${doctorResult?.runtime?.testBackend?.kind || '--'}${doctorResult?.mock ? ' / simulation' : ''}`),
-      ...['python', 'ixsmi', 'mctracer', 'mcProfiler'].map((name) => React.createElement(Text, { key: name }, `${name.padEnd(12)} ${checks[name]?.status || '--'}${checks[name]?.detail ? ` / ${checks[name].detail}` : ''}`)),
+      ...['python', 'ixsmi', 'mctracer', 'mcProfiler', 'sourceMirror'].map((name) => React.createElement(Text, { key: name }, `${name.padEnd(12)} ${checks[name]?.status || '--'}${checks[name]?.detail ? ` / ${checks[name].detail}` : ''}`)),
       doctorResult?.error ? React.createElement(Text, { color: 'red' }, doctorResult.error) : null,
       React.createElement(Text, null, ''),
       React.createElement(Text, { inverse: true }, '[Esc] Back'),

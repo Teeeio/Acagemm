@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadSourceMirrorPolicy } from '../../client-runtime/source-mirror-policy.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const testerHome = path.resolve(process.env.LOCAL_C500_TESTER_HOME || path.join(rootDir, '.local-c500-production'));
@@ -235,6 +236,20 @@ const checkCommand = (command, args = ['--version']) => {
 
 export const runDoctor = async () => {
   const runtime = await ensureProductionRuntime();
+  let sourceMirror;
+  try {
+    const policy = await loadSourceMirrorPolicy();
+    sourceMirror = {
+      status: 'ok',
+      configured: policy.configured,
+      requireMirror: policy.requireMirror,
+      mirrors: policy.mirrors.length,
+      detail: policy.configured ? `${policy.mirrors.length} mapping(s)${policy.requireMirror ? ' / required' : ''}` : 'direct canonical access',
+      configPath: policy.configPath,
+    };
+  } catch (error) {
+    sourceMirror = { status: 'invalid', configured: true, detail: `${error.code || 'SOURCE_MIRROR_CONFIG_INVALID'}: ${error.message}` };
+  }
   return {
     status: 'completed',
     runtime,
@@ -244,6 +259,7 @@ export const runDoctor = async () => {
       ixsmi: checkCommand('ixsmi'),
       mctracer: checkCommand('mctracer'),
       mcProfiler: checkCommand('mcProfiler'),
+      sourceMirror,
     },
   };
 };

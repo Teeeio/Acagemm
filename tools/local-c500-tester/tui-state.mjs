@@ -128,9 +128,14 @@ export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] 
   }
 
   const sourceVerified = Boolean(baseline.source?.repository && baseline.source?.commit && baseline.source?.path);
+  const sourceVerifyDetail = sourceVerified
+    ? baseline.source?.transportMode === 'mirror'
+      ? `mirror pin ${String(baseline.source.commit).slice(0, 8)} / tree ${String(baseline.source.tree || '').slice(0, 8)}`
+      : `canonical ${String(baseline.source.commit).slice(0, 8)}`
+    : 'pending';
   const setup = [
     node('research', 'SOURCE RESEARCH', 'Agent', normalizedStatus(research.status), research.status === 'completed' ? 'source found' : research.phase || 'waiting'),
-    node('verify', 'SOURCE VERIFY', 'Fixed', sourceVerified ? 'completed' : research.status === 'completed' ? 'running' : 'pending', sourceVerified ? 'registry clean' : 'pending'),
+    node('verify', 'SOURCE VERIFY', 'Fixed', sourceVerified ? 'completed' : research.status === 'completed' ? 'running' : 'pending', sourceVerifyDetail),
     node('materializer', 'MATERIALIZER', 'Agent', normalizedStatus(materializer.status), materializer.status === 'completed' ? 'run.py ready' : materializer.phase || 'pending'),
     node('baseline', 'BASELINE TEST', 'Fixed', normalizedStatus(baselineTask?.status || (baseline.status === 'complete' ? 'completed' : baseline.status)), baselineMeasurement ? `${baselineMeasurement.value} ${baselineMeasurement.unit || 'us'}` : baseline.status || 'pending'),
   ];

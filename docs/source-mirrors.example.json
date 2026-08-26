@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "requireMirror": true,
+  "mirrors": [
+    {
+      "canonical": "https://github.com/flashinfer-ai/flashinfer.git",
+      "transport": "https://gitee.com/YOUR_ORG/flashinfer-mirror.git",
+      "requiredCommit": "REPLACE_WITH_40_CHARACTER_COMMIT_ID",
+      "requiredTree": "REPLACE_WITH_40_CHARACTER_TREE_ID"
+    }
+  ]
+}

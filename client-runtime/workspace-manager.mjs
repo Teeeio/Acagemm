@@ -1,6 +1,6 @@
 import { execFile as nodeExecFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createScopedGitEnvironment } from './git-environment.mjs';
 
@@ -341,10 +341,33 @@ export function createWorkspaceManager(options = {}) {
       try {
         const gitRoot = (await git(['rev-parse', '--show-toplevel'], sourcePath)).stdout.trim();
         if (await normalizePath(gitRoot) !== canonicalSource) throw new Error('来源目录不是独立 Git 根目录。');
-        const head = (await git(['rev-parse', 'HEAD'], sourcePath)).stdout.trim();
+        const [head, tree] = await Promise.all([
+          git(['rev-parse', 'HEAD'], sourcePath).then((result) => result.stdout.trim()),
+          git(['rev-parse', 'HEAD^{tree}'], sourcePath).then((result) => result.stdout.trim()),
+        ]);
         const status = (await git(['status', '--porcelain=v1'], sourcePath)).stdout.split(/\r?\n/).filter(Boolean);
-        const repository = await git(['remote', 'get-url', 'origin'], sourcePath).then((result) => result.stdout.trim()).catch(() => '');
-        sources.push({ id: entry.name, path: sourcePath, repository, commit: head, clean: status.length === 0, changedFiles: status.map((line) => line.slice(3).trim()) });
+        const transportRepository = await git(['config', '--get', 'remote.origin.url'], sourcePath).then((result) => result.stdout.trim()).catch(() => '');
+        const configuredTransport = await git(['config', '--get', 'operatorStudio.transportRepository'], sourcePath).then((result) => result.stdout.trim()).catch(() => '');
+        const canonicalRepository = await git(['config', '--get', 'operatorStudio.canonicalRepository'], sourcePath).then((result) => result.stdout.trim()).catch(() => transportRepository);
+        const recordedTree = await git(['config', '--get', 'operatorStudio.sourceTree'], sourcePath).then((result) => result.stdout.trim()).catch(() => tree);
+        if (configuredTransport && normalizeRepositoryIdentity(configuredTransport) !== normalizeRepositoryIdentity(transportRepository)) {
+          throw new Error('Source transport metadata 与 Git origin 不一致。');
+        }
+        if (recordedTree && recordedTree !== tree) throw new Error('Source tree metadata 与当前 HEAD tree 不一致。');
+        const transportMode = normalizeRepositoryIdentity(canonicalRepository) === normalizeRepositoryIdentity(transportRepository) ? 'canonical' : 'mirror';
+        sources.push({
+          id: entry.name,
+          path: sourcePath,
+          repository: canonicalRepository,
+          canonicalRepository,
+          transportRepository,
+          transportMode,
+          mirrorVerified: transportMode === 'mirror',
+          commit: head,
+          tree,
+          clean: status.length === 0,
+          changedFiles: status.map((line) => line.slice(3).trim()),
+        });
         if (status.length) errors.push({ code: 'SOURCE_REPOSITORY_DIRTY', source: entry.name, detail: `第三方来源包含 ${status.length} 个未提交变更，不能作为固定引用。`, changedFiles: status.map((line) => line.slice(3).trim()) });
       } catch (cause) {
         errors.push({ code: 'SOURCE_REPOSITORY_INVALID', source: entry.name, detail: cause.stderr?.trim() || cause.message });
@@ -354,23 +377,44 @@ export function createWorkspaceManager(options = {}) {
       const repositoryIdentity = normalizeRepositoryIdentity(reference.repository);
       const source = sources.find((item) => repositoryIdentity && normalizeRepositoryIdentity(item.repository) === repositoryIdentity);
       if (!source) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_REPOSITORY_MISSING', detail: '引用的上游仓库未登记在 Source Registry。' };
-      if (!reference.commit || !(source.commit === reference.commit || source.commit.startsWith(reference.commit))) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_COMMIT_MISMATCH', detail: `引用 Commit 与 Source Registry 当前 HEAD 不一致（${source.commit.slice(0, 12)}）。` };
+      const referenceCommit = String(reference.commit || '').trim().toLowerCase();
+      const fullCommit = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(referenceCommit);
+      const commitMatches = source.transportMode === 'mirror'
+        ? fullCommit && source.commit.toLowerCase() === referenceCommit
+        : Boolean(referenceCommit) && (source.commit.toLowerCase() === referenceCommit || source.commit.toLowerCase().startsWith(referenceCommit));
+      if (!commitMatches) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_COMMIT_MISMATCH', detail: `引用 Commit 与 Source Registry 当前 HEAD 不一致（${source.commit.slice(0, 12)}）。` };
       const relativePath = String(reference.path || '').replaceAll('\\', '/').replace(/^\.\//, '');
       if (!relativePath || path.isAbsolute(relativePath) || relativePath.split('/').includes('..')) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_PATH_INVALID', detail: '来源引用必须使用仓库内相对路径。' };
       const referencedPath = path.resolve(source.path, relativePath);
       const contained = referencedPath === path.resolve(source.path) || referencedPath.startsWith(`${path.resolve(source.path)}${path.sep}`);
-      if (!contained || !await exists(referencedPath)) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_PATH_MISSING', detail: '来源引用路径不存在或超出仓库边界。' };
-      return { ...reference, verified: true, sourceId: source.id, resolvedCommit: source.commit };
+      const [referenceInfo, resolvedReference, resolvedSource] = await Promise.all([
+        lstat(referencedPath).catch(() => null),
+        realpath(referencedPath).catch(() => null),
+        realpath(source.path).catch(() => null),
+      ]);
+      const realContained = resolvedReference && resolvedSource && (resolvedReference === resolvedSource || resolvedReference.startsWith(`${resolvedSource}${path.sep}`));
+      if (!contained || !referenceInfo?.isFile() || referenceInfo.isSymbolicLink() || !realContained) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_PATH_MISSING', detail: '来源引用路径不存在、是符号链接或超出仓库边界。' };
+      return {
+        ...reference,
+        verified: true,
+        sourceId: source.id,
+        resolvedCommit: source.commit,
+        resolvedTree: source.tree,
+        canonicalRepository: source.canonicalRepository,
+        transportRepository: source.transportRepository,
+        transportMode: source.transportMode,
+        mirrorVerified: source.mirrorVerified,
+      };
     }));
     errors.push(...verifiedReferences.filter((reference) => !reference.verified).map((reference) => ({ code: reference.code, source: reference.repository, detail: reference.detail })));
     return { ready: errors.length === 0, sourceRoot, sources, references: verifiedReferences, errors };
   };
 
   const updateSourceRegistry = async ({ sourceRoot, runtimeRoot, missionId, references = [] }) => {
-    if (!sourceRoot || !runtimeRoot) return { schemaVersion: 1, sources: [] };
+    if (!sourceRoot || !runtimeRoot) return { schemaVersion: 2, sources: [] };
     const inspection = await inspectSources(sourceRoot, references);
     const registryPath = path.join(runtimeRoot, 'source-registry.json');
-    let registry = { schemaVersion: 1, sources: [] };
+    let registry = { schemaVersion: 2, sources: [] };
     try { registry = JSON.parse(await readFile(registryPath, 'utf8')); } catch { /* initialize below */ }
     const byKey = new Map((registry.sources || []).map((source) => [`${source.repository || source.id}@${source.commit || ''}`, source]));
     for (const source of inspection.sources) {
@@ -381,7 +425,7 @@ export function createWorkspaceManager(options = {}) {
       const key = `${reference.repository}@${reference.resolvedCommit || reference.commit}`;
       byKey.set(key, { ...byKey.get(key), repository: reference.repository, commit: reference.resolvedCommit || reference.commit, lastUsedByMission: missionId || null, referencedPaths: [...new Set([...(byKey.get(key)?.referencedPaths || []), reference.path].filter(Boolean))], updatedAt: new Date().toISOString() });
     }
-    const next = { schemaVersion: 1, sources: [...byKey.values()] };
+    const next = { schemaVersion: 2, sources: [...byKey.values()] };
     await mkdir(runtimeRoot, { recursive: true });
     await writeFile(registryPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
     return next;

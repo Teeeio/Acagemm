@@ -15,7 +15,7 @@
 ## 2. 拉取与安装
 
 ```bash
-git clone <repository-url>
+git clone --branch TUI --single-branch https://gitee.com/<组织>/operator-studio-c500-tester.git
 cd <repository-directory>
 npm ci
 npm run verify:local-c500-release
@@ -30,6 +30,46 @@ npm ci --omit=dev
 ```
 
 不要把 GitHub token 写入 `.env`、命令脚本或项目文件。私有仓库认证使用系统凭据管理器或一次性环境变量。
+
+### GitHub 不可达时的 Source mirror
+
+测试项目迁移到 Gitee 只能解决测试版拉取。严格从零流程仍需要获得 FlashInfer 官方 Source，因此还必须由管理员配置 canonical source 到 Gitee transport 的固定映射。
+
+在一台能够访问 GitHub 和 Gitee 的中转机上建立镜像：
+
+```bash
+git clone --mirror https://github.com/flashinfer-ai/flashinfer.git
+cd flashinfer.git
+git push --mirror https://gitee.com/<组织>/flashinfer-mirror.git
+```
+
+在目标机上从 Gitee 读取要固定的 snapshot identity：
+
+```bash
+git clone https://gitee.com/<组织>/flashinfer-mirror.git .source-pin-check
+git -C .source-pin-check rev-parse HEAD
+git -C .source-pin-check rev-parse 'HEAD^{tree}'
+```
+
+复制 `docs/source-mirrors.example.json` 为测试目录之外或本次状态目录内的配置文件，替换 Gitee 地址、完整 commit 和完整 tree。然后在启动 doctor/runtime 前设置：
+
+```bash
+export OPERATOR_SOURCE_MIRROR_CONFIG="$PWD/source-mirrors.json"
+```
+
+PowerShell：
+
+```powershell
+$env:OPERATOR_SOURCE_MIRROR_CONFIG = (Resolve-Path '.\source-mirrors.json')
+```
+
+安全模型如下：
+
+- Research Agent 只能声明 GitHub/GitLab 官方 canonical source，不能选择 Gitee transport。
+- 固定工作流根据管理员配置从 Gitee clone。
+- clone 后必须严格匹配完整 commit；配置 tree 时也必须严格匹配 tree。
+- Source Registry 和最终 baseline 对外仍记录官方 canonical URL，同时单独记录 Gitee transport。
+- Gitee 凭据必须由 Git credential helper 提供，禁止写进 transport URL 或配置文件。
 
 ## 3. 真机预检
 
@@ -62,6 +102,8 @@ npm run tester:c500:doctor
 ```
 
 预期 backend 为 `local-c500` 且不是 simulation，Python、`ixsmi`、`mctracer`、`mcProfiler` 均为 `ok`。
+
+使用镜像时还应看到 `sourceMirror=ok`、映射数量以及 `required`。`sourceMirror=invalid` 时不要发布 Mission；先修复配置文件。
 
 ## 4. 启动真机测试
 
@@ -98,6 +140,7 @@ Source Research -> Source Verify -> Materializer -> Baseline Test
 - `environment.liveHardware=true`
 - correctness 通过后才产生 benchmark
 - tracer 和 profiler 状态均为 `completed`
+- Source Verify 显示 mirror pin，导出结果同时包含 canonical、transport、commit 和 tree
 - 未达 Gate 的 Candidate 回退后，下一轮从稳定 workspace 开始
 - 达标 Candidate 被提交到 Iteration Repository，循环正常终止
 
