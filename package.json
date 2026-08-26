@@ -37,6 +37,7 @@
     "test:local-c500-tui-logic": "node tests/local-c500-tui-logic-test.mjs",
     "test:local-c500-tui-spinner": "node tests/local-c500-tui-spinner-test.mjs",
     "test:local-c500-tui-viewport": "node tests/local-c500-tui-viewport-test.mjs",
+    "test:local-c500-tui-refresh": "node tests/local-c500-tui-refresh-test.mjs",
     "test:local-c500-terminal-screen": "node tests/local-c500-terminal-screen-test.mjs",
     "test:local-c500-tester": "node tests/local-c500-tester-test.mjs",
     "test:local-c500-no-fallback": "node tests/local-c500-no-fallback-test.mjs",

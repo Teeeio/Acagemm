@@ -1,4 +1,4 @@
-const ENTER_ALTERNATE_SCREEN = '\u001b[?1049h\u001b[2J\u001b[3J\u001b[H';
+const ENTER_ALTERNATE_SCREEN = '\u001b[?1049h\u001b[?25l\u001b[2J\u001b[3J\u001b[H';
 const LEAVE_ALTERNATE_SCREEN = '\u001b[?25h\u001b[?1049l';
 
 export const createTerminalScreenSession = (output = process.stdout) => {

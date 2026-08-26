@@ -11,6 +11,7 @@ assert.equal(session.active, true);
 assert.equal(session.enter(), false, 'enter must be idempotent');
 assert.deepEqual(writes, [terminalScreenSequences.enter]);
 assert.match(terminalScreenSequences.enter, /^\u001b\[\?1049h/);
+assert.match(terminalScreenSequences.enter, /\u001b\[\?25l/);
 assert.match(terminalScreenSequences.enter, /\u001b\[2J\u001b\[3J\u001b\[H$/);
 assert.equal(session.leave(), true);
 assert.equal(session.active, false);

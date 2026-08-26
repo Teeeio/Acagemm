@@ -61,7 +61,7 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
         ? events.slice(0, 3).map((event) => React.createElement(Text, { key: event.id || `${event.sequence}-${event.type}` }, `${event.createdAt || event.time || '--'} ${event.type || event.title || 'event'}`))
         : React.createElement(Text, null, '--'),
     ) : null,
-    message ? React.createElement(Text, { color: 'yellow' }, message) : null,
+    React.createElement(Text, { color: message ? 'yellow' : undefined }, message || ' '),
     React.createElement(Text, { inverse: true }, view.hotkeys.join('  ')),
     React.createElement(WorkflowActivityIndicator, { snapshot: { state, mission, health, tasks } }),
   );

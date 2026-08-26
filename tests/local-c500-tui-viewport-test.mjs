@@ -43,7 +43,7 @@ const renderAt = async (rows, columns = 120, tasks = []) => {
 };
 
 assert.equal(deriveDashboardLayout({ rows: 40 }).density, 'compact');
-assert.equal(deriveDashboardLayout({ rows: 40 }).height, 39);
+assert.equal(deriveDashboardLayout({ rows: 40 }).height, 38);
 assert.equal(deriveDashboardLayout({ rows: 30 }).density, 'tight');
 
 for (const rows of [40, 30, 24]) {

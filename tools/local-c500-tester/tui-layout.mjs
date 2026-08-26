@@ -10,7 +10,7 @@ export const deriveDashboardLayout = ({ columns, rows } = {}) => {
   return {
     columns: viewportColumns,
     rows: viewportRows,
-    height: Math.max(1, viewportRows - 1),
+    height: Math.max(1, viewportRows - 2),
     density,
     candidateLimit: density === 'full' ? 5 : density === 'compact' ? 4 : viewportRows >= 27 ? 3 : 1,
     showMissionDetail: density === 'full',

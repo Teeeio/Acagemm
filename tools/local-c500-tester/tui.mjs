@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, render, Text, useApp, useInput, useStdout } from 'ink';
 import { Dashboard } from './components/Dashboard.mjs';
 import { CreateMissionForm } from './components/CreateMissionForm.mjs';
 import { deriveTuiViewModel, loadTuiState, renderDashboardSnapshot, renderPublishSnapshot, resolveDashboardCommand } from './tui-state.mjs';
 import { createTerminalScreenSession } from './terminal-screen.mjs';
+import { createLatestRefreshGate, reconcileTuiSnapshot } from './tui-refresh.mjs';
 import {
   addHumanFeedback,
   ensureProductionRuntime,
@@ -35,6 +36,7 @@ const App = () => {
   const [noteDraft, setNoteDraft] = useState('');
   const [doctorResult, setDoctorResult] = useState(null);
   const [busy, setBusy] = useState(false);
+  const refreshGate = useRef(createLatestRefreshGate());
   const fields = ['goal', 'title', 'repository', 'metric', 'timeBudget'];
 
   useEffect(() => {
@@ -43,30 +45,34 @@ const App = () => {
     return () => stdout?.off?.('resize', updateViewport);
   }, [stdout]);
 
-  const refreshNow = async () => {
-    const next = await loadTuiState();
-    setSnapshot(next);
-    return next;
+  const refreshNow = async ({ background = false } = {}) => {
+    const requestId = refreshGate.current.begin();
+    try {
+      const next = await loadTuiState();
+      if (!refreshGate.current.isLatest(requestId)) return null;
+      setSnapshot((current) => reconcileTuiSnapshot(current, next));
+      if (background) {
+        setMessage((current) => current === 'Connecting to production runtime...' || current.startsWith('Runtime refresh:') ? '' : current);
+      }
+      return next;
+    } catch (error) {
+      if (background && refreshGate.current.isLatest(requestId)) setMessage(`Runtime refresh: ${error.message}`);
+      if (!background) throw error;
+      return null;
+    }
   };
 
   useEffect(() => {
     let cancelled = false;
+    let timer = null;
     const refresh = async () => {
-      try {
-        const next = await loadTuiState();
-        if (!cancelled) {
-          setSnapshot(next);
-          setMessage('');
-        }
-      } catch (error) {
-        if (!cancelled) setMessage(error.message);
-      }
+      await refreshNow({ background: true });
+      if (!cancelled) timer = setTimeout(refresh, 1500);
     };
-    refresh();
-    const timer = setInterval(refresh, 1500);
+    void refresh();
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 

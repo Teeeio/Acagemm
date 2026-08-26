@@ -27,6 +27,7 @@ const checks = [
   'test:local-c500-tui-logic',
   'test:local-c500-tui-spinner',
   'test:local-c500-tui-viewport',
+  'test:local-c500-tui-refresh',
   'test:local-c500-terminal-screen',
   'build',
 ];
