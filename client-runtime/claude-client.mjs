@@ -1,5 +1,5 @@
 import { execFile as nodeExecFile, spawn as nodeSpawn } from 'node:child_process';
-import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
@@ -149,6 +149,7 @@ export const createClaudeClient = (options = {}) => {
   const emptyMcpConfigPath = path.join(bridgeDir, 'claude-empty-mcp.json');
   const children = new Map();
   const cancellationRequested = new Set();
+  const runWriteChains = new Map();
   const terminateProcessTree = options.terminateProcessTreeImpl || (async (child) => {
     if (!child) return;
     if (process.platform === 'win32' && child.pid) {
@@ -165,6 +166,21 @@ export const createClaudeClient = (options = {}) => {
 
   const runPath = (runId) => path.join(runsDir, `${runId}.json`);
   const eventsPath = (runId) => path.join(runsDir, `${runId}.jsonl`);
+  const persistRun = (runId, record) => {
+    const snapshot = `${JSON.stringify(record, null, 2)}\n`;
+    const previous = runWriteChains.get(runId) || Promise.resolve();
+    const next = previous.catch(() => {}).then(async () => {
+      const target = runPath(runId);
+      const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+      await writeFile(temporary, snapshot, 'utf8');
+      await rename(temporary, target);
+    });
+    runWriteChains.set(runId, next);
+    next.finally(() => {
+      if (runWriteChains.get(runId) === next) runWriteChains.delete(runId);
+    }).catch(() => {});
+    return next;
+  };
 
   const describe = async ({ refresh = false } = {}) => {
     if (!refresh && descriptorCache && Date.now() - descriptorCachedAt < descriptorTtlMs) return descriptorCache;
@@ -236,7 +252,7 @@ export const createClaudeClient = (options = {}) => {
       boundary: { role, roots, enforcement: 'claude-permissions-and-workflow-diff' },
       error: null,
     };
-    await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+    await persistRun(runId, record);
     const allowedTools = role === 'research-acquire'
       ? 'Read,Write,Edit,WebSearch,WebFetch'
       : 'Read,Write,Edit';
@@ -284,14 +300,14 @@ export const createClaudeClient = (options = {}) => {
         record.status = failed ? 'failed' : 'completed';
         record.error = failed ? { code: 'CLAUDE_RESULT_ERROR', message: sanitizeClaudeDiagnostic(event.result || event.subtype) } : null;
         record.completedAt = new Date().toISOString();
-        appendChain = appendChain.then(() => writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8')).catch(() => {});
+        appendChain = appendChain.then(() => persistRun(runId, record)).catch(() => {});
       }
     });
     child.on('error', async (error) => {
       record.status = 'failed';
       record.error = { code: error.code || 'CLAUDE_SPAWN_FAILED', message: sanitizeClaudeDiagnostic(error.message) };
       record.completedAt = new Date().toISOString();
-      await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8').catch(() => {});
+      await persistRun(runId, record).catch(() => {});
     });
     child.on('close', async (code, signal) => {
       children.delete(runId);
@@ -311,13 +327,16 @@ export const createClaudeClient = (options = {}) => {
           ? { code: 'CLAUDE_RESULT_ERROR', message: sanitizeClaudeDiagnostic(result.result || result.subtype) }
           : { code: code === 0 ? 'CLAUDE_RESULT_MISSING' : `CLAUDE_EXIT_${code}`, message: sanitizeClaudeDiagnostic(stderr) || 'Claude Code exited without a terminal result event.' };
       record.completedAt ||= new Date().toISOString();
-      await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8').catch(() => {});
+      await persistRun(runId, record).catch(() => {});
     });
     child.stdin?.end(`${goal || ''}\n`);
     return { ...record, pid: child.pid || null };
   };
 
-  const readRun = async (runId) => JSON.parse(await readFile(runPath(runId), 'utf8'));
+  const readRun = async (runId) => {
+    await runWriteChains.get(runId)?.catch(() => {});
+    return JSON.parse(await readFile(runPath(runId), 'utf8'));
+  };
   const readEvents = async (runId) => normalizeClaudeEvents(parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => '')));
   const cancel = async (runId) => {
     const child = children.get(runId);
