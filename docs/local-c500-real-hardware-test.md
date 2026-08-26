@@ -36,6 +36,10 @@ bash scripts/with-bundled-node.sh npm run verify:local-c500-release
 bash scripts/with-bundled-node.sh npm run tester:c500
 ```
 
+`npm run tester:c500` 自身也带有旧 Node 兼容启动器：在 Linux x86_64 上检测到
+系统 Node 低于 20 时，会自动转交给已经安装的 bundled Node。安装依赖时仍建议
+使用上述包装器，确保 `npm ci` 使用 npm 11。
+
 安装脚本会先校验官方 SHA-256，并拒绝非 Linux x86_64 平台。归档只解决
 Node 安装；首次 `npm ci` 仍需要可访问的 npm registry 或现场 npm 镜像。
 

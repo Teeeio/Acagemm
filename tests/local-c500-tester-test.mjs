@@ -69,7 +69,7 @@ const waitFor = async (check, timeoutMs = 10_000) => {
 const tempHome = await mkdtemp(path.join(os.tmpdir(), 'local-c500-tester-'));
 
 try {
-  assert.equal(packageJson.scripts['tester:c500'], 'node tools/local-c500-tester/tui.mjs');
+  assert.equal(packageJson.scripts['tester:c500'], 'node tools/local-c500-tester/launcher.cjs');
   assert.equal(packageJson.scripts['test:local-c500-tester'], 'node tests/local-c500-tester-test.mjs');
   assert.ok(packageJson.dependencies.ink);
 

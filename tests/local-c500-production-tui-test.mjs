@@ -61,7 +61,7 @@ assert.match(server, /type:\s*'start-benchmark'/);
 assert.match(server, /baseline_research_started/);
 assert.match(server, /baseline_source_unresolved/);
 assert.match(backend, /kind:\s*'local-c500'/);
-assert.equal(packageJson.scripts['tester:c500'], 'node tools/local-c500-tester/tui.mjs');
+assert.equal(packageJson.scripts['tester:c500'], 'node tools/local-c500-tester/launcher.cjs');
 
 const rendered = renderDashboardSnapshot({
   mission: { id: 'MIS_PRODUCTION', title: 'C500 operator optimization', goal: 'minimize latency', status: 'running' },

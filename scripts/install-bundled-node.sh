@@ -56,7 +56,8 @@ fi
 
 printf 'Bundled Node installed: %s\n' "$INSTALL_DIR"
 printf 'node: %s\n' "$($INSTALL_DIR/bin/node --version)"
-printf 'npm:  %s\n' "$($INSTALL_DIR/bin/npm --version)"
+npm_version="$($INSTALL_DIR/bin/node "$INSTALL_DIR/lib/node_modules/npm/bin/npm-cli.js" --version)"
+printf 'npm:  %s\n' "$npm_version"
 printf '\nUse it without changing the system Node:\n'
 printf '  bash scripts/with-bundled-node.sh npm ci\n'
 printf '  bash scripts/with-bundled-node.sh npm run tester:c500\n'
