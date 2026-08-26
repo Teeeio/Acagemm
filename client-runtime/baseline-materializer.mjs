@@ -1,10 +1,12 @@
 const REQUIRED_FUNCTIONS = ['get_inputs', 'run', 'reference'];
+const GENERATED_TEST_FUNCTIONS = ['get_test_cases', 'get_benchmark_inputs'];
 
 const hasFunction = (runPy, name) => new RegExp(`(^|\\n)def\\s+${name}\\s*\\(`).test(String(runPy || ''));
 
-export function validateBaselineRunPy(runPy, { allowExternalImports = false } = {}) {
+export function validateBaselineRunPy(runPy, { allowExternalImports = false, requireGeneratedTests = false } = {}) {
   const text = String(runPy || '');
-  const missing = REQUIRED_FUNCTIONS.filter((name) => !hasFunction(text, name));
+  const requiredFunctions = requireGeneratedTests ? [...REQUIRED_FUNCTIONS, ...GENERATED_TEST_FUNCTIONS] : REQUIRED_FUNCTIONS;
+  const missing = requiredFunctions.filter((name) => !hasFunction(text, name));
   const banned = [];
   if (/^\s*import\s+flashinfer\b|^\s*from\s+flashinfer\b/m.test(text)) banned.push('flashinfer');
   if (/optimized_candidate|candidate_patch|apply_candidate/i.test(text)) banned.push('candidate');
@@ -118,7 +120,10 @@ export function materializeBaselineSource({ mission = {}, source = {}, matrix = 
     error.code = 'BASELINE_MATERIALIZER_UNSUPPORTED';
     throw error;
   }
-  const validation = validateBaselineRunPy(generatedRunPy, { allowExternalImports: false });
+  const validation = validateBaselineRunPy(generatedRunPy, {
+    allowExternalImports: false,
+    requireGeneratedTests: matrix.testSpec?.schemaVersion === 'operator-studio.test-spec/v1',
+  });
   if (!validation.ok) {
     const error = new Error(`Materialized baseline run.py 未通过结构校验：missing=${validation.missing.join(',') || '-'} banned=${validation.banned.join(',') || '-'}`);
     error.status = 422;
@@ -137,6 +142,9 @@ export function materializeBaselineSource({ mission = {}, source = {}, matrix = 
       mode,
       source: normalizeMaterializedSource(source),
       validation,
+      testSpec: agentResult?.report?.testSpec || matrix.testSpec || null,
+      sourceFiles: agentResult?.report?.sourceFiles || [],
+      unsupported: agentResult?.report?.unsupported || [],
       assumptions: mode === 'template_flashinfer_paged_attention'
         ? ['使用 PyTorch eager attention 表达 upstream paged_attention 的语义基线；不依赖 flashinfer 运行时扩展。']
         : ['使用外部受约束生成结果，并重新执行结构校验。'],

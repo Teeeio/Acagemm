@@ -37,6 +37,8 @@ try {
     metric: 'latency_p50',
     matrix: { environments: ['C500'], stages: ['Correctness'], warmup: 1, repeats: 2, correctnessCases: 1 },
     runPy: generatedRunPy,
+    oracleRunPy: generatedRunPy.replace('return inputs\n\n', 'return inputs\n\n# independent oracle\n'),
+    implementationFiles: { 'operator.cu': '// generated native operator\n' },
     runPySource: 'production-mission-workspace/run.py',
   });
   await queue.get(submitted.taskId);
@@ -47,6 +49,8 @@ try {
   assert.equal(completed.result.tracer.status, 'completed');
   assert.equal(completed.result.profiler.status, 'completed');
   assert.equal(await readFile(path.join(tempRoot, 'tasks', completed.remoteTaskId, 'run.py'), 'utf8'), generatedRunPy);
+  assert.match(await readFile(path.join(tempRoot, 'tasks', completed.remoteTaskId, 'oracle.py'), 'utf8'), /independent oracle/);
+  assert.equal(await readFile(path.join(tempRoot, 'tasks', completed.remoteTaskId, 'operator.cu'), 'utf8'), '// generated native operator\n');
   assert.equal(completed.payload.candidate.digest, 'sha256:generated-artifact');
   console.log('local-c500 production backend test passed');
 } finally {

@@ -4,6 +4,8 @@ import { deriveTuiViewModel } from '../tui-state.mjs';
 import { deriveDashboardLayout } from '../tui-layout.mjs';
 import { WorkflowActivityIndicator } from './WorkflowActivityIndicator.mjs';
 import { WorkflowTopology } from './WorkflowTopology.mjs';
+import { formatTokenCount } from '../../../client-runtime/token-usage.mjs';
+import { normalizeOperatorLanguage } from '../../../client-runtime/operator-language.mjs';
 
 const Panel = ({ title, children, width }) => (
   React.createElement(Box, { flexDirection: 'column', borderStyle: 'round', paddingX: 1, width },
@@ -29,14 +31,17 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
   const events = (state.runtimeEvents || []).slice(-6).reverse();
   const backend = health.testBackend || {};
   const view = deriveTuiViewModel({ state, mission, tasks });
+  const implementation = normalizeOperatorLanguage(mission.implementation);
+  const totalTokens = formatTokenCount(state.tokenUsage?.totalTokens || mission.tokenUsage?.totalTokens || 0);
   return React.createElement(Box, { flexDirection: 'column', height: layout.height, overflow: 'hidden' },
     React.createElement(Box, { justifyContent: 'space-between' },
       React.createElement(Text, { bold: true, color: 'green' }, 'C500 Production Workflow Tester'),
-      React.createElement(Text, null, `${backend.kind || 'connecting'}${backend.mock ? ' / SIMULATION' : ''}`),
+      React.createElement(Text, null, `${backend.kind || 'connecting'}${backend.mock ? ' / SIMULATION' : ''} · Tokens ${totalTokens}`),
     ),
     React.createElement(Text, { color: view.needsHuman ? 'red' : view.paused ? 'yellow' : view.terminal ? 'green' : 'cyan', bold: true }, view.banner),
     React.createElement(Panel, { title: 'Current Mission' },
       React.createElement(Text, null, `${mission.id || '--'} · ${mission.title || 'No mission published'} · ${view.statusLabel} · ${state.stage || mission.stage || '--'}`),
+      React.createElement(Text, null, `Language: ${implementation.label} · Test spec: ${mission.testMatrix?.testSpec?.schemaVersion || '--'} · Tokens: ${totalTokens}`),
       layout.showMissionDetail ? React.createElement(Text, null, `Goal: ${mission.goal || '--'}`) : null,
       layout.showMissionDetail ? React.createElement(Text, null, `Agent: ${state.agent?.status || '--'} / ${state.agent?.phase || '--'} · Loop: ${iteration.loopStatus || '--'}${iteration.loopStatusReason ? ` / ${iteration.loopStatusReason}` : ''}`) : null,
     ),

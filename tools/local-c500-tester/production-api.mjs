@@ -4,6 +4,8 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSourceMirrorPolicy } from '../../client-runtime/source-mirror-policy.mjs';
+import { normalizeOperatorLanguage } from '../../client-runtime/operator-language.mjs';
+import { normalizeMissionTestMatrix } from '../../client-runtime/test-spec.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const testerHome = path.resolve(process.env.LOCAL_C500_TESTER_HOME || path.join(rootDir, '.local-c500-production'));
@@ -124,6 +126,7 @@ const slug = (value) => String(value || 'local-c500-project')
 
 const seedMissionBrief = async (project, draft) => {
   const briefPath = path.join(project.repository, 'MISSION.md');
+  const implementation = normalizeOperatorLanguage(draft.implementationLanguage);
   const content = [
     '# Operator Optimization Mission',
     '',
@@ -134,6 +137,12 @@ const seedMissionBrief = async (project, draft) => {
     '## Goal',
     '',
     draft.goal.trim(),
+    '',
+    '## Implementation',
+    '',
+    `- Language: ${implementation.label} (${implementation.id})`,
+    `- Entry: ${implementation.entry}`,
+    `- Allowed files: ${implementation.allowedFiles.join(', ')}`,
     '',
     '## Execution Contract',
     '',
@@ -188,6 +197,14 @@ export const publishMission = async (draft) => {
   const project = await createFreshManagedProject(draft.repository || 'local-c500-project');
   await seedMissionBrief(project, draft);
   const timeBudget = Number(draft.timeBudget || 0);
+  const implementation = normalizeOperatorLanguage(draft.implementationLanguage);
+  const testMatrix = normalizeMissionTestMatrix({
+    environments: ['C500'],
+    stages: ['Correctness', 'Full Benchmark'],
+    warmup: 50,
+    repeats: 200,
+    correctnessCases: 24,
+  });
   const created = await api.post('/api/missions', {
     goal: draft.goal.trim(),
     title: draft.title.trim(),
@@ -197,10 +214,11 @@ export const publishMission = async (draft) => {
     sourceRoot: project.sourceRoot,
     hardware: ['C500'],
     metric: draft.metric.trim() || 'latency p50',
+    implementation,
     sourcePolicy: { mode: 'agent-research-only', strictZeroSource: true },
     testScenario: { id: 'mla-three-round', hardwareMockOnly: true },
     objective: { mode: 'threshold', metric: draft.metric.trim() || 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.2 },
-    testMatrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'], warmup: 50, repeats: 200, correctnessCases: 24 },
+    testMatrix,
     missionBudgetMs: timeBudget > 0 ? timeBudget : null,
   });
   const missionId = created.state.activeMissionId;

@@ -59,11 +59,36 @@ def _assert_close(torch, actual, expected, atol, rtol):
     torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol)
 
 
-def _run_correctness(module, torch, cases, atol, rtol):
+def _named_cases(module, count, test_spec):
+    provider = getattr(module, "get_test_cases", None)
+    if not callable(provider):
+        return [
+            {"name": f"compat-{index + 1}", "category": "representative", "inputs": module.get_inputs()}
+            for index in range(count)
+        ]
+    generated = list(provider())
+    if len(generated) != count:
+        raise RuntimeError(f"get_test_cases() must return exactly {count} cases; got {len(generated)}")
+    normalized = []
+    for index, item in enumerate(generated):
+        if not isinstance(item, dict) or "inputs" not in item or not item.get("name") or not item.get("category"):
+            raise RuntimeError(f"correctness case {index + 1} must contain name, category, and inputs")
+        normalized.append(item)
+    required = set(((test_spec or {}).get("correctness") or {}).get("requiredCategories") or [])
+    present = {str(item["category"]) for item in normalized}
+    missing = sorted(required - present)
+    if missing:
+        raise RuntimeError(f"get_test_cases() is missing required categories: {', '.join(missing)}")
+    return normalized
+
+
+def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_module=None):
     started = time.perf_counter()
-    for index in range(cases):
-        inputs = module.get_inputs()
-        expected = module.reference(inputs)
+    oracle = oracle_module or module
+    generated_cases = _named_cases(oracle, cases, test_spec)
+    for index, case in enumerate(generated_cases):
+        inputs = case["inputs"]
+        expected = oracle.reference(inputs)
         actual = module.run(inputs)
         _sync(torch)
         try:
@@ -74,6 +99,8 @@ def _run_correctness(module, torch, cases, atol, rtol):
                 "total": cases,
                 "passedCases": index,
                 "failedCase": index + 1,
+                "failedCaseName": case["name"],
+                "failedCaseCategory": case["category"],
                 "error": str(error),
                 "durationMs": round((time.perf_counter() - started) * 1000, 3),
             }
@@ -81,6 +108,8 @@ def _run_correctness(module, torch, cases, atol, rtol):
         "passed": True,
         "total": cases,
         "passedCases": cases,
+        "categories": sorted({str(case["category"]) for case in generated_cases}),
+        "caseNames": [str(case["name"]) for case in generated_cases],
         "durationMs": round((time.perf_counter() - started) * 1000, 3),
     }
 
@@ -93,7 +122,19 @@ def _percentile(samples, fraction):
 
 
 def _benchmark(module, torch, warmup, repeats):
-    inputs = module.get_inputs()
+    return _benchmark_inputs(module, torch, [{"name": "primary", "inputs": module.get_inputs()}], warmup, repeats)[0]
+
+
+def _benchmark_inputs(module, torch, profiles, warmup, repeats):
+    results = []
+    for profile in profiles:
+        inputs = profile["inputs"]
+        result = _benchmark_one(module, torch, inputs, warmup, repeats)
+        results.append({"profile": profile["name"], **result})
+    return results
+
+
+def _benchmark_one(module, torch, inputs, warmup, repeats):
     for _ in range(warmup):
         module.run(inputs)
     _sync(torch)
@@ -114,6 +155,29 @@ def _benchmark(module, torch, warmup, repeats):
         "warmup": warmup,
         "samples": repeats,
     }
+
+
+def _named_benchmark_profiles(module, test_spec):
+    provider = getattr(module, "get_benchmark_inputs", None)
+    if not callable(provider):
+        return [{"name": "primary", "inputs": module.get_inputs()}]
+    generated = list(provider())
+    if not generated:
+        raise RuntimeError("get_benchmark_inputs() returned no profiles")
+    normalized = []
+    for index, item in enumerate(generated):
+        if not isinstance(item, dict) or "inputs" not in item or not item.get("name"):
+            raise RuntimeError(f"benchmark profile {index + 1} must contain name and inputs")
+        normalized.append(item)
+    required = set(((test_spec or {}).get("benchmark") or {}).get("requiredProfiles") or [])
+    present = {str(item["name"]) for item in normalized}
+    missing = sorted(required - present)
+    if missing:
+        raise RuntimeError(f"get_benchmark_inputs() is missing required profiles: {', '.join(missing)}")
+    primary = ((test_spec or {}).get("benchmark") or {}).get("primaryProfile") or "primary"
+    if str(normalized[0]["name"]) != str(primary):
+        raise RuntimeError(f"first benchmark profile must be {primary}")
+    return normalized
 
 
 def _render(template, values):
@@ -159,16 +223,24 @@ def _run(args):
     task_dir = Path(os.environ.get("OPERATOR_LOCAL_C500_TASK_DIR", result_json.parent)).resolve()
     task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     module = _load_operator(run_py)
+    oracle_path = os.environ.get("OPERATOR_LOCAL_C500_ORACLE_RUN_PY")
+    oracle_module = _load_operator(Path(oracle_path).resolve()) if oracle_path else module
     torch, device = _torch_and_device()
     hardware = _probe_c500(torch, device)
     matrix = task.get("matrix") or {}
     correctness_cases = max(1, int(matrix.get("correctnessCases") or 24))
     warmup = max(0, int(matrix.get("warmup") or 50))
     repeats = max(1, int(matrix.get("repeats") or 200))
-    correctness = _run_correctness(module, torch, correctness_cases, args.atol, args.rtol)
+    test_spec = matrix.get("testSpec") or {}
+    correctness_spec = test_spec.get("correctness") or {}
+    atol = float(correctness_spec.get("atol", args.atol))
+    rtol = float(correctness_spec.get("rtol", args.rtol))
+    correctness = _run_correctness(module, torch, correctness_cases, atol, rtol, test_spec, oracle_module)
     if not correctness["passed"]:
         raise RuntimeError(f"correctness failed on case {correctness.get('failedCase')}: {correctness.get('error')}")
-    benchmark = _benchmark(module, torch, warmup, repeats)
+    benchmark_profiles = _named_benchmark_profiles(oracle_module, test_spec)
+    benchmark_results = _benchmark_inputs(module, torch, benchmark_profiles, warmup, repeats)
+    primary_benchmark = benchmark_results[0]
 
     runner = Path(__file__).resolve()
     python = Path(sys.executable).resolve()
@@ -196,13 +268,14 @@ def _run(args):
         "benchmark": [{
             "environment": environment_name,
             "metric": task.get("metric") or "latency_p50",
+            "profile": benchmark["profile"],
             "value": benchmark["p50Us"],
             "unit": "us",
             "samples": benchmark["samples"],
             "warmup": benchmark["warmup"],
             "p95": benchmark["p95Us"],
             "correctness": correctness,
-        }],
+        } for benchmark in benchmark_results],
         "tracer": {
             "format": "operator-trace/v1",
             "status": "completed",
@@ -213,8 +286,8 @@ def _run(args):
             "format": "operator-profile/v1",
             "status": "completed",
             "metrics": {
-                "latencyP50Us": benchmark["p50Us"],
-                "latencyP95Us": benchmark["p95Us"],
+                "latencyP50Us": primary_benchmark["p50Us"],
+                "latencyP95Us": primary_benchmark["p95Us"],
                 "toolDurationMs": profile["durationMs"],
                 "artifactDir": profile["artifactDir"],
             },

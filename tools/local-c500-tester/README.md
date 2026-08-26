@@ -71,6 +71,8 @@ Mission intent
 - `E`: 导出生产 state、queue task 和 backend 信息
 - `Q`: 退出 TUI；API runtime 保持运行
 
+发布表单的 `Language` 使用左右方向键选择。当前 adapter 包括 `PyTorch Python`、`Triton`、`CUDA C++ Extension` 和 `MXMACA C++ Extension`。所有语言都保留 `run.py` 作为固定 Runner 桥；native adapter 会同时生成并随任务携带 `operator.cu` / `operator.cpp`。面板顶部的 `Tokens` 是当前 Mission 的 Research、Materializer 和各轮 Iteration Agent 总消耗，重复刷新不会重复计数。
+
 ## C500 现场环境
 
 目标环境：
@@ -83,7 +85,7 @@ Mission intent
 - vLLM MetaX `0.13.0+g181dc3.d20260129.maca3.3.0.15.torch2.8`
 - `mx-smi`, `mctracer`, `mcProfiler`
 
-默认真实执行命令是 `python tools/local-c500-runner.py`。Runner 加载生产 Mission Workspace 生成的 `run.py`，通过 `mx-smi` 确认沐曦 C500 来源，验证 `get_inputs()`、`run(inputs)`、`reference(inputs)`，执行 correctness、GPU event benchmark、mctracer 和 mcProfiler。只有全部成功才会写出 `environment.liveHardware=true`。
+默认真实执行命令是 `python tools/local-c500-runner.py`。Baseline Materializer 根据权威语义生成具名 `get_test_cases()` 和 `get_benchmark_inputs()`；Runner 使用独立 baseline oracle 产生输入与预期结果，只调用候选的 `run(inputs)`，防止候选通过改写 reference 自证正确。Correctness 覆盖 minimal、representative、boundary、ragged 类别，benchmark 覆盖 primary、small、boundary profile，并继续执行 `mx-smi` 来源确认、GPU event benchmark、mctracer 和 mcProfiler。只有全部成功才会写出 `environment.liveHardware=true`。
 
 现场工具参数不同可设置：
 
@@ -125,6 +127,9 @@ npm run test:loop
 npm run test:gate
 npm run test:workspace
 npm run test:queue
+npm run test:operator-language
+npm run test:test-spec
+npm run test:token-usage
 npm run build
 ```
 

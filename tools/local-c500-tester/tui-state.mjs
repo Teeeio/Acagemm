@@ -1,4 +1,6 @@
 import { loadProductionState, rootDir, testerHome } from './production-api.mjs';
+import { formatTokenCount } from '../../client-runtime/token-usage.mjs';
+import { normalizeOperatorLanguage } from '../../client-runtime/operator-language.mjs';
 
 export { rootDir };
 export const homeDir = testerHome;
@@ -294,11 +296,14 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
   const iteration = state.iterationStats || active.iterationStats || {};
   const events = (state.runtimeEvents || []).slice(-6).reverse();
   const view = deriveTuiViewModel({ state, mission, tasks });
+  const tokens = formatTokenCount(state.tokenUsage?.totalTokens || active.tokenUsage?.totalTokens || 0);
+  const implementation = normalizeOperatorLanguage(active.implementation);
   return [
     'C500 Production Workflow Tester',
     `  backend     ${health.testBackend?.kind || '--'}${health.testBackend?.mock ? ' (simulation)' : ''}`,
     `  api         ${health.__bridge?.apiUrl || '--'}`,
     `  workflow    ${view.banner}`,
+    `  tokens      ${tokens}`,
     '',
     'Current Mission',
     `  id          ${active.id || '--'}`,
@@ -309,6 +314,8 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
     `  agent       ${state.agent?.status || '--'} / ${state.agent?.phase || '--'}`,
     `  loop        ${iteration.loopStatus || '--'}${iteration.loopStatusReason ? ` / ${iteration.loopStatusReason}` : ''}`,
     `  rounds      ${view.displayedRounds}`,
+    `  language    ${implementation.label}`,
+    `  test spec   ${active.testMatrix?.testSpec?.schemaVersion || '--'}`,
     '',
     renderWorkflowTopologySnapshot({ state, mission, tasks }),
     '',
@@ -339,6 +346,7 @@ export const renderPublishSnapshot = () => [
   '  Title         optional',
   '  Project       local-c500-project',
   '  Metric        latency p50',
+  '  Language      Triton (Left/Right to select)',
   '  Time budget   unlimited (milliseconds)',
   '',
   '[Enter] Publish and start  [Tab] Next field  [Esc] Cancel',

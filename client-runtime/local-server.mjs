@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promi
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normalizeOperatorLanguage } from './operator-language.mjs';
 import {
   addAuditEvent,
   applyOperatorTestSnapshot,
@@ -120,7 +121,7 @@ const hasSourceContent = async (sourceRoot) => {
   } catch { return false; }
 };
 
-const readMissionRunPy = async (missionId, repository, projectRoot = null) => {
+const readMissionRunPy = async (missionId, repository, projectRoot = null, implementation = null) => {
   const workspace = await ensureMissionWorkspace(missionId, repository, { projectRoot });
   const candidates = [
     path.join(workspace, 'run.py'),
@@ -128,7 +129,17 @@ const readMissionRunPy = async (missionId, repository, projectRoot = null) => {
   ];
   for (const filePath of candidates) {
     try {
-      return { content: await readFile(filePath, 'utf8'), source: path.relative(workspace, filePath).replaceAll('\\', '/') };
+      const source = path.relative(workspace, filePath).replaceAll('\\', '/');
+      const adapter = normalizeOperatorLanguage(implementation);
+      const implementationFiles = {};
+      for (const relativePath of adapter.allowedFiles.filter((file) => file !== source)) {
+        try {
+          implementationFiles[relativePath] = await readFile(path.join(workspace, relativePath), 'utf8');
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+      }
+      return { content: await readFile(filePath, 'utf8'), source, implementationFiles };
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }
@@ -544,7 +555,7 @@ const commandRegistry = {
       }
       const missionRunPy = purpose === 'baseline'
         ? { content: baselinePlan.runPy, source: baselinePlan.runPySource }
-        : await readMissionRunPy(state.activeMissionId, mission.repository, mission.projectRoot);
+        : await readMissionRunPy(state.activeMissionId, mission.repository, mission.projectRoot, mission.implementation);
       const submitted = await operatorTestQueue.submit({
         schemaVersion: 1, requestId: runId, missionId: state.activeMissionId,
         purpose, baselineKind,
@@ -555,6 +566,8 @@ const commandRegistry = {
         ...(baselineSource ? { baselineSource } : {}),
         ...(baselinePlan?.materializationReport ? { baselineMaterialization: baselinePlan.materializationReport } : {}),
         ...(missionRunPy.content ? { runPy: missionRunPy.content, runPySource: missionRunPy.source } : {}),
+        ...(purpose !== 'baseline' && state.baseline?.materializer?.result?.runPy ? { oracleRunPy: state.baseline.materializer.result.runPy } : {}),
+        ...(Object.keys(missionRunPy.implementationFiles || {}).length ? { implementationFiles: missionRunPy.implementationFiles } : {}),
         ...(body.packageId ? { packageId: body.packageId } : {}),
         ...(body.remoteCandidateId ? { remoteCandidateId: body.remoteCandidateId } : {}),
       });

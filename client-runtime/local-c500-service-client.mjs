@@ -21,6 +21,7 @@ const mockLedgerPath = path.join(taskRoot, 'mock-sequence-ledger.json');
 const now = () => new Date().toISOString();
 const taskPath = (taskId) => path.join(taskRoot, taskId, 'task.json');
 const runPyPath = (taskId) => path.join(taskRoot, taskId, 'run.py');
+const oracleRunPyPath = (taskId) => path.join(taskRoot, taskId, 'oracle.py');
 const resultPath = (taskId) => path.join(taskRoot, taskId, 'result.json');
 
 const fail = (message, code, status = 400) => {
@@ -208,6 +209,7 @@ const executeTask = async (task) => {
             OPERATOR_LOCAL_C500_TASK_ID: task.taskId,
             OPERATOR_LOCAL_C500_TASK_DIR: path.dirname(taskPath(task.taskId)),
             OPERATOR_LOCAL_C500_RUN_PY: runPyPath(task.taskId),
+            ...(task.payload?.oracleRunPy ? { OPERATOR_LOCAL_C500_ORACLE_RUN_PY: oracleRunPyPath(task.taskId) } : {}),
             OPERATOR_LOCAL_C500_RESULT_JSON: resultPath(task.taskId),
           },
         });
@@ -245,8 +247,19 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
         throw fail('Scripted MLA candidates require a real workspace diff digest.', 'LOCAL_C500_SCENARIO_DIFF_DIGEST_REQUIRED', 409);
       }
       const taskId = `local_c500_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`;
+      const implementationFiles = Object.entries(payload.implementationFiles || {});
+      for (const [relativePath, content] of implementationFiles) {
+        if (!relativePath || path.isAbsolute(relativePath) || relativePath.includes('..') || relativePath.includes('/') || relativePath.includes('\\')) {
+          throw fail('Implementation artifact path must be a task-root filename.', 'LOCAL_C500_ARTIFACT_PATH_INVALID', 409);
+        }
+        if (typeof content !== 'string') throw fail('Implementation artifact content must be text.', 'LOCAL_C500_ARTIFACT_INVALID', 409);
+      }
       await mkdir(path.join(taskRoot, taskId), { recursive: true });
       await writeFile(runPyPath(taskId), payload.runPy, 'utf8');
+      if (payload.oracleRunPy) await writeFile(oracleRunPyPath(taskId), payload.oracleRunPy, 'utf8');
+      for (const [relativePath, content] of implementationFiles) {
+        await writeFile(path.join(taskRoot, taskId, relativePath), content, 'utf8');
+      }
       const task = {
         schemaVersion: 1,
         taskId,

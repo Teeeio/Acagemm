@@ -15,6 +15,9 @@ import { copyWorkspaceSnapshot, workspaceManager } from './workspace-manager.mjs
 import { MLA_OPTIMIZATION_TEST_GOAL } from './mission-intent.mjs';
 import { journalPathFor, reconcileCommandJournal } from './command-journal.mjs';
 import { runnerMatches } from './runner-aliases.mjs';
+import { normalizeOperatorLanguage } from './operator-language.mjs';
+import { normalizeMissionTestMatrix } from './test-spec.mjs';
+import { emptyTokenUsage } from './token-usage.mjs';
 
 export { runtimeDir } from './storage-paths.mjs';
 const statePath = path.join(dataDir, 'mock-db.json');
@@ -601,7 +604,8 @@ const createMissionDomainState = (missionId, stage = 'diagnosis') => {
   const published = stage === 'published';
   const state = {
     baseline: createBaselineRequirementState(),
-    testMatrix: { environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] },
+    testMatrix: normalizeMissionTestMatrix({ environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] }),
+    tokenUsage: emptyTokenUsage(),
     runtimeEvents: [],
     knowledgeDrafts: structuredClone(knowledgeDrafts),
     candidateEvaluations: structuredClone(candidateEvaluations),
@@ -639,7 +643,7 @@ export const createSeedState = () => {
   const missions = createSeedMissions();
   const activeMission = missions[0];
   return {
-  schemaVersion: 6,
+  schemaVersion: 7,
   stateVersion: 0,
   commandJournalSeq: 0,
   updatedAt: new Date().toISOString(),
@@ -655,6 +659,7 @@ export const createSeedState = () => {
   baseline: structuredClone(activeMission.baseline || createBaselineRequirementState()),
   objective: structuredClone(activeMission.objective || normalizeMissionObjective({}, activeMission)),
   testMatrix: structuredClone(activeMission.testMatrix),
+  tokenUsage: structuredClone(activeMission.tokenUsage || emptyTokenUsage()),
   knowledgeDrafts: structuredClone(activeMission.knowledgeDrafts),
   candidateEvaluations: structuredClone(activeMission.candidateEvaluations),
   failureRecords: structuredClone(activeMission.failureRecords),
@@ -913,6 +918,8 @@ function ensureDomainState(state) {
   if (!state.capabilityRegistry) state.capabilityRegistry = structuredClone(capabilityRegistry);
   if (!Array.isArray(state.runtimeEvents)) state.runtimeEvents = [];
   if (!state.testMatrix?.environments?.length || !state.testMatrix?.stages?.length) state.testMatrix = { environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] };
+  state.testMatrix = normalizeMissionTestMatrix(state.testMatrix);
+  if (!state.tokenUsage?.runs) state.tokenUsage = emptyTokenUsage();
   if (!Array.isArray(state.agent?.toolCalls)) state.agent = { ...state.agent, toolCalls: [] };
   const seedDrafts = new Map(knowledgeDrafts.map((draft) => [draft.id, draft]));
   state.knowledgeDrafts = Array.isArray(state.knowledgeDrafts)
@@ -949,13 +956,21 @@ function ensureDomainState(state) {
   if (!state.currentBest || !Object.hasOwn(state.currentBest, 'candidateId')) state.currentBest = createCurrentBestState(state.stage === 'published' ? 'candidate-02' : 'candidate-01');
   state.missions = state.missions.map((mission) => {
     const defaults = createMissionDomainState(mission.id, mission.stage || 'diagnosis');
-    const next = { ...defaults, ...mission, objective: normalizeMissionObjective(mission.objective || defaults.objective, mission) };
+    const next = {
+      ...defaults,
+      ...mission,
+      implementation: normalizeOperatorLanguage(mission.implementation),
+      testMatrix: normalizeMissionTestMatrix(mission.testMatrix || defaults.testMatrix),
+      tokenUsage: mission.tokenUsage?.runs ? mission.tokenUsage : emptyTokenUsage(),
+      objective: normalizeMissionObjective(mission.objective || defaults.objective, mission),
+    };
     if (mission.id !== state.activeMissionId) return next;
     return {
       ...next,
       objective: structuredClone(state.objective),
       baseline: structuredClone(createBaselineRequirementState(state.baseline || next.baseline || createBaselineRequirementState())),
       testMatrix: structuredClone(state.testMatrix),
+      tokenUsage: structuredClone(state.tokenUsage),
       decisionReview: structuredClone(state.decisionReview),
       workflowRecovery: structuredClone(state.workflowRecovery),
       currentBest: structuredClone(state.currentBest),
@@ -977,7 +992,7 @@ function ensureDomainState(state) {
     };
   });
   ensureProjects(state);
-  state.schemaVersion = 6;
+  state.schemaVersion = 7;
   if (!Number.isFinite(Number(state.stateVersion))) state.stateVersion = 0;
   if (!Number.isFinite(Number(state.commandJournalSeq))) state.commandJournalSeq = 0;
   return state;
@@ -1024,6 +1039,7 @@ function projectActiveMission(state) {
     benchmark: structuredClone(state.benchmark),
     baseline: structuredClone(state.baseline || state.missions[index].baseline || createBaselineRequirementState()),
     testMatrix: structuredClone(state.testMatrix),
+    tokenUsage: structuredClone(state.tokenUsage || emptyTokenUsage()),
     decisionReview: structuredClone(state.decisionReview),
     workflowRecovery: structuredClone(state.workflowRecovery),
     currentBest: structuredClone(state.currentBest),
@@ -1066,6 +1082,7 @@ export function selectMission(state, missionId) {
   state.baseline = createBaselineRequirementState(mission.baseline || defaults.baseline || createBaselineRequirementState());
   state.objective = normalizeMissionObjective(mission.objective || defaults.objective, mission);
   state.testMatrix = structuredClone(mission.testMatrix || defaults.testMatrix);
+  state.tokenUsage = structuredClone(mission.tokenUsage || defaults.tokenUsage || emptyTokenUsage());
   state.decisionReview = structuredClone(mission.decisionReview || defaults.decisionReview);
   state.workflowRecovery = structuredClone(mission.workflowRecovery || defaults.workflowRecovery);
   state.currentBest = structuredClone(mission.currentBest || defaults.currentBest);
@@ -1128,7 +1145,8 @@ export function createMission(state, input) {
     runtimeRoot: project?.runtimeRoot || input.runtimeRoot || null,
     hardware,
     metric: input.metric?.trim() || 'latency p50',
-    testMatrix: input.testMatrix ? structuredClone(input.testMatrix) : undefined,
+    implementation: normalizeOperatorLanguage(input.implementation),
+    testMatrix: normalizeMissionTestMatrix(input.testMatrix || {}),
     sourcePolicy,
     testScenario: input.testScenario ? structuredClone(input.testScenario) : null,
     objective: normalizeMissionObjective(input.objective || {}, { ...input, metric: input.metric?.trim() || 'latency p50' }),
@@ -1202,7 +1220,7 @@ export function deleteProject(state, projectId) {
 export async function loadState({ runtimeMode, ensureWorkspace = true, commandJournal = null, applyRegistry = null } = {}) {
   await ensureStorage({ ensureWorkspace });
   let state = JSON.parse(await readFile(statePath, 'utf8'));
-  const needsMigration = state.schemaVersion !== 6 || !Array.isArray(state.projects) || !Array.isArray(state.missions) || !state.capabilityRegistry || !Array.isArray(state.agent?.toolCalls) || !Array.isArray(state.knowledgeReferences) || !state.knowledgeMaintenance?.policy || !state.decisionReview?.policy || !Array.isArray(state.candidateEvaluations) || !Array.isArray(state.failureRecords) || state.missions.some((mission) => !mission.workflowRecovery || !mission.testMatrix || !Array.isArray(mission.knowledgeDrafts) || !Array.isArray(mission.candidateEvaluations) || !Array.isArray(mission.failureRecords) || !Array.isArray(mission.publishedAssets) || !mission.knowledgeMaintenance?.policy || !mission.decisionReview?.policy || !Array.isArray(mission.runtimeEvents) || !Array.isArray(mission.runHistory) || !Object.hasOwn(mission, 'missionBudgetMs'));
+  const needsMigration = state.schemaVersion !== 7 || !Array.isArray(state.projects) || !Array.isArray(state.missions) || !state.capabilityRegistry || !Array.isArray(state.agent?.toolCalls) || !Array.isArray(state.knowledgeReferences) || !state.knowledgeMaintenance?.policy || !state.decisionReview?.policy || !Array.isArray(state.candidateEvaluations) || !Array.isArray(state.failureRecords) || state.missions.some((mission) => !mission.workflowRecovery || !mission.testMatrix?.testSpec || !mission.implementation || !mission.tokenUsage?.runs || !Array.isArray(mission.knowledgeDrafts) || !Array.isArray(mission.candidateEvaluations) || !Array.isArray(mission.failureRecords) || !Array.isArray(mission.publishedAssets) || !mission.knowledgeMaintenance?.policy || !mission.decisionReview?.policy || !Array.isArray(mission.runtimeEvents) || !Array.isArray(mission.runHistory) || !Object.hasOwn(mission, 'missionBudgetMs'));
   state = ensureDomainState(state);
   // 耐久命令日志崩溃恢复：重放 journal 中 seq > commandJournalSeq 的 applied 条目追上快照。
   let recoveryReplayed = false;

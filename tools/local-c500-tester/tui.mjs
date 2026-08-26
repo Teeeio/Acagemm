@@ -5,6 +5,7 @@ import { CreateMissionForm } from './components/CreateMissionForm.mjs';
 import { deriveTuiViewModel, loadTuiState, renderDashboardSnapshot, renderPublishSnapshot, resolveDashboardCommand } from './tui-state.mjs';
 import { createTerminalScreenSession } from './terminal-screen.mjs';
 import { createLatestRefreshGate, reconcileTuiSnapshot } from './tui-refresh.mjs';
+import { operatorLanguageOptions } from '../../client-runtime/operator-language.mjs';
 import {
   addHumanFeedback,
   ensureProductionRuntime,
@@ -29,6 +30,7 @@ const App = () => {
     title: 'FlashInfer MLA Paged Attention',
     repository: 'flashinfer-mla-c500',
     metric: 'latency p50',
+    implementationLanguage: 'triton',
     timeBudget: '',
   });
   const [fieldIndex, setFieldIndex] = useState(0);
@@ -37,7 +39,13 @@ const App = () => {
   const [doctorResult, setDoctorResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const refreshGate = useRef(createLatestRefreshGate());
-  const fields = ['goal', 'title', 'repository', 'metric', 'timeBudget'];
+  const fields = ['goal', 'title', 'repository', 'metric', 'implementationLanguage', 'timeBudget'];
+
+  const cycleLanguage = (direction = 1) => setDraft((current) => {
+    const index = operatorLanguageOptions.findIndex((item) => item.id === current.implementationLanguage);
+    const next = (Math.max(0, index) + direction + operatorLanguageOptions.length) % operatorLanguageOptions.length;
+    return { ...current, implementationLanguage: operatorLanguageOptions[next].id };
+  });
 
   useEffect(() => {
     const updateViewport = () => setViewport({ columns: stdout?.columns, rows: stdout?.rows });
@@ -137,7 +145,10 @@ const App = () => {
       if (busy) return;
       if (key.tab || key.downArrow) return setFieldIndex((current) => (current + 1) % fields.length);
       if (key.upArrow) return setFieldIndex((current) => (current + fields.length - 1) % fields.length);
+      if (keyName === 'implementationLanguage' && (key.leftArrow || input === '[')) return cycleLanguage(-1);
+      if (keyName === 'implementationLanguage' && (key.rightArrow || input === ' ' || input === ']')) return cycleLanguage(1);
       if (key.return) return void submitPublish();
+      if (keyName === 'implementationLanguage') return;
       if (key.backspace || key.delete) return setDraft((current) => ({ ...current, [keyName]: String(current[keyName] || '').slice(0, -1) }));
       if (input && !key.ctrl && !key.meta) setDraft((current) => ({ ...current, [keyName]: `${current[keyName] || ''}${input}` }));
       return;
