@@ -14,6 +14,7 @@ const checks = [
   'test:local-c500-production-backend',
   'test:local-c500-launch-mode',
   'test:source-mirror-policy',
+  'test:bundled-node-package',
   'test:local-c500-mock-sequence',
   'test:local-c500-diff',
   'test:local-c500-workflow',

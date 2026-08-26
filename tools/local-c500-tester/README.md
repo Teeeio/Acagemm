@@ -10,6 +10,14 @@
 npm run tester:c500
 ```
 
+目标机无法访问 Node/nvm 下载服务时，可使用仓库内置的 Linux x64 Node：
+
+```bash
+bash scripts/install-bundled-node.sh
+bash scripts/with-bundled-node.sh npm ci
+bash scripts/with-bundled-node.sh npm run tester:c500
+```
+
 未设置 `OPERATOR_LOCAL_C500_MOCK` 时默认使用真实 C500 runner。真机部署、验收项目和结果回传见 [`docs/local-c500-real-hardware-test.md`](../../docs/local-c500-real-hardware-test.md)。
 
 目标机无法访问 GitHub 时，设置 `OPERATOR_SOURCE_MIRROR_CONFIG` 指向管理员维护的 source mirror JSON。Research Agent 仍记录官方 canonical source，固定工作流从配置的 Gitee transport 获取并校验完整 commit/tree。示例见 [`docs/source-mirrors.example.json`](../../docs/source-mirrors.example.json)。

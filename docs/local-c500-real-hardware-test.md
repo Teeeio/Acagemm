@@ -21,6 +21,24 @@ npm ci
 npm run verify:local-c500-release
 ```
 
+如果目标机无法下载 Node/nvm，`TUI` 分支已包含官方 Node.js `v24.19.0`
+Linux x64 归档。使用项目内隔离安装，不覆盖系统 Node：
+
+```bash
+bash scripts/install-bundled-node.sh
+bash scripts/with-bundled-node.sh npm ci
+bash scripts/with-bundled-node.sh npm run verify:local-c500-release
+```
+
+之后启动 TUI 也通过包装器执行：
+
+```bash
+bash scripts/with-bundled-node.sh npm run tester:c500
+```
+
+安装脚本会先校验官方 SHA-256，并拒绝非 Linux x86_64 平台。归档只解决
+Node 安装；首次 `npm ci` 仍需要可访问的 npm registry 或现场 npm 镜像。
+
 仓库内 `.npmrc` 固定使用官方 npm registry，避免全局镜像配置覆盖 lock 中的下载地址。该文件不包含认证信息。
 
 若真机只负责运行已通过发布门禁的 TUI，可使用最小运行时安装，避免安装 Web 开发服务器依赖：
