@@ -30,7 +30,7 @@ export const createMissionTestSpec = (input = {}) => ({
     warmup: positiveInteger(input.warmup ?? input.benchmark?.warmup, 50),
     repeats: positiveInteger(input.repeats ?? input.benchmark?.repeats, 200),
     metrics: ['p50_us', 'p95_us', 'min_us', 'max_us'],
-    primaryProfile: 'primary',
+    primaryProfile: String(input.benchmark?.primaryProfile || 'primary'),
   },
 });
 
@@ -60,7 +60,7 @@ export const testSpecAgentInstruction = (matrix = {}) => {
   return [
     `Executable test specification JSON: ${JSON.stringify(normalized.testSpec)}`,
     `Add get_test_cases() returning exactly ${normalized.testSpec.correctness.requestedCases} named cases as {"name": string, "category": string, "inputs": <get_inputs-compatible value>}. Cover every required category and make generation deterministic.`,
-    'Add get_benchmark_inputs() returning named benchmark profiles as {"name": string, "inputs": <get_inputs-compatible value>}; the first profile must be named primary and is the Accept Gate metric.',
+    `Add get_benchmark_inputs() returning named benchmark profiles as {"name": string, "inputs": <get_inputs-compatible value>}; the first profile must be named ${normalized.testSpec.benchmark.primaryProfile} and is the Accept Gate metric.`,
     'Keep get_inputs() for compatibility. reference(inputs) is the independent correctness oracle; run(inputs) is the implementation under test.',
   ].join('\n');
 };

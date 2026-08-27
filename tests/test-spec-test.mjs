@@ -6,6 +6,21 @@ const spec = createMissionTestSpec({ correctnessCases: 12, warmup: 7, repeats: 3
 assert.equal(spec.correctness.requestedCases, 12);
 assert.deepEqual(spec.correctness.requiredCategories, ['minimal', 'representative', 'boundary', 'ragged']);
 assert.deepEqual(spec.benchmark.requiredProfiles, ['primary', 'small', 'boundary']);
+assert.equal(spec.benchmark.primaryProfile, 'primary');
+
+const fixedLike = normalizeMissionTestMatrix({
+  environments: ['C550'],
+  correctnessCases: 2,
+  warmup: 1,
+  repeats: 2,
+  testSpec: {
+    schemaVersion: 'operator-studio.test-spec/v1',
+    correctness: { requestedCases: 2, requiredCategories: ['fixed-profile'] },
+    benchmark: { requiredProfiles: ['DB1', 'DB2'], primaryProfile: 'DB1', warmup: 1, repeats: 2 },
+  },
+});
+assert.deepEqual(fixedLike.testSpec.benchmark.requiredProfiles, ['DB1', 'DB2']);
+assert.equal(fixedLike.testSpec.benchmark.primaryProfile, 'DB1');
 
 const matrix = normalizeMissionTestMatrix({ environments: ['C500'], correctnessCases: 12, warmup: 7, repeats: 31 });
 assert.equal(matrix.testSpec.schemaVersion, 'operator-studio.test-spec/v1');
