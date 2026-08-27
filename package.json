@@ -36,6 +36,7 @@
     "test:local-c500-launch-mode": "node tests/local-c500-launch-mode-test.mjs",
     "test:local-c500-environment-entry": "node tests/local-c500-environment-entry-test.mjs",
     "test:muxi-device": "node tests/muxi-device-test.mjs",
+    "test:fixed-operator-profile": "node tests/fixed-operator-profile-test.mjs",
     "test:local-c500-state-migration": "node tests/local-c500-state-migration-test.mjs",
     "test:source-mirror-policy": "node tests/source-mirror-policy-test.mjs",
     "test:operator-language": "node tests/operator-language-test.mjs",

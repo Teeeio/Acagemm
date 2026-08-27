@@ -531,7 +531,12 @@ const commandRegistry = {
       const runId = `run_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
       const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
       const purpose = body.purpose === 'baseline' || body.testPurpose === 'baseline' ? 'baseline' : 'candidate';
-      const normalizedMatrix = { ...structuredClone(matrix), warmup: Number(body.warmup || 50), repeats: Number(body.repeats || 200), correctnessCases: Number(body.correctnessCases || 24) };
+      const normalizedMatrix = {
+        ...structuredClone(matrix),
+        warmup: Number(body.warmup ?? matrix.warmup ?? 50),
+        repeats: Number(body.repeats ?? matrix.repeats ?? 200),
+        correctnessCases: Number(body.correctnessCases ?? matrix.correctnessCases ?? matrix.testSpec?.correctness?.requestedCases ?? 24),
+      };
       const baselinePlan = purpose === 'baseline'
         ? await resolveBaselineRunPlan({ state, mission, body, matrix: normalizedMatrix, readMissionRunPy })
         : null;

@@ -25,6 +25,7 @@ const checks = [
   'test:local-c500-launch-mode',
   'test:local-c500-environment-entry',
   'test:muxi-device',
+  'test:fixed-operator-profile',
   'test:local-c500-state-migration',
   'test:source-mirror-policy',
   'test:operator-language',

@@ -22,6 +22,13 @@ assert.equal(projected.baseline.source, 'explicit_smoke_fixture_reference');
 assert.equal(projected.currentCandidate.digest, 'sha256:candidate-001');
 assert.equal(projected.budget.used, 12000);
 assert.equal(projected.evidence.correctness, 'pass');
+
+// Candidate benchmark preparation must preserve the fixed profile's matrix
+// when the caller omits optional warmup/repeat/case overrides. Otherwise the
+// baseline shape key changes from the published profile and every refresh
+// loops on BASELINE_REQUIRED_BEFORE_CANDIDATE.
+const serverSource = await (await import('node:fs/promises')).readFile(new URL('../client-runtime/local-server.mjs', import.meta.url), 'utf8');
+assert.match(serverSource, /body\.correctnessCases \?\? matrix\.correctnessCases \?\? matrix\.testSpec\?\.correctness\?\.requestedCases/);
 assert.equal(decideNextLocalAction(projected), 'poll_test');
 
 const needsHuman = projectMissionState({

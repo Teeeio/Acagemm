@@ -1,5 +1,17 @@
 const dtypeCases = (groups) => groups.flatMap(({ id, dtypes, ...parameters }) => dtypes.map((dtype) => ({ id: `${id}-${dtype}`, group: id, dtype, parameters })));
 
+// Profile metadata is embedded in executable Python artifacts. JSON and Python
+// differ for booleans/null, so serialize structured values as Python literals.
+const pythonLiteral = (value) => {
+  if (value === null) return 'None';
+  if (typeof value === 'boolean') return value ? 'True' : 'False';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'None';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(pythonLiteral).join(', ')}]`;
+  if (value && typeof value === 'object') return `{${Object.entries(value).map(([key, item]) => `${JSON.stringify(key)}: ${pythonLiteral(item)}`).join(', ')}}`;
+  return 'None';
+};
+
 const profiles = [
   {
     id: 'paged-mqa-logits-triton',
@@ -118,7 +130,7 @@ export const fixedOperatorPrompt = (profileOrId) => {
   ].join('\n');
 };
 
-const pythonPreamble = (profile) => `# Generated from immutable Operator Studio profile: ${profile.id}\nimport math\nimport torch\n\nPROFILE_ID = ${JSON.stringify(profile.id)}\nCORRECTNESS_CASES = ${JSON.stringify(profile.correctness)}\nBENCHMARK_CASES = ${JSON.stringify(profile.benchmark)}\n\ndef _dtype(name):\n    return getattr(torch, name)\n\ndef _device():\n    if not torch.cuda.is_available():\n        raise RuntimeError("C500 is unavailable through torch.cuda")\n    return torch.device("cuda")\n\ndef _lengths(count, low, high, device):\n    values = torch.randint(low, high, (count,), dtype=torch.int32, device=device)\n    if high - low > 1:\n        values[0] = high - 1\n    return values\n\ndef _pages(batch, max_len, page_size, device):\n    pages_per_batch = (max_len + page_size - 1) // page_size\n    total_pages = batch * pages_per_batch\n    perm = torch.randperm(total_pages, dtype=torch.int64, device=device).to(torch.int32)\n    indptr = torch.arange(0, total_pages + 1, pages_per_batch, dtype=torch.int32, device=device)\n    return indptr, perm, total_pages\n\ndef _case(item):\n    return {"name": item["id"], "category": "fixed-profile", "make_inputs": lambda item=item: _make_inputs(item)}\n\ndef get_test_cases():\n    return [_case(item) for item in CORRECTNESS_CASES]\n\ndef get_benchmark_inputs():\n    return [{"name": item["group"], "make_inputs": lambda item=item: _make_inputs(item)} for item in BENCHMARK_CASES]\n\ndef get_inputs():\n    return _make_inputs(CORRECTNESS_CASES[0])\n\n`;
+const pythonPreamble = (profile) => `# Generated from immutable Operator Studio profile: ${profile.id}\nimport math\nimport torch\n\nPROFILE_ID = ${pythonLiteral(profile.id)}\nCORRECTNESS_CASES = ${pythonLiteral(profile.correctness)}\nBENCHMARK_CASES = ${pythonLiteral(profile.benchmark)}\n\ndef _dtype(name):\n    return getattr(torch, name)\n\ndef _device():\n    if not torch.cuda.is_available():\n        raise RuntimeError("C500 is unavailable through torch.cuda")\n    return torch.device("cuda")\n\ndef _lengths(count, low, high, device):\n    values = torch.randint(low, high, (count,), dtype=torch.int32, device=device)\n    if high - low > 1:\n        values[0] = high - 1\n    return values\n\ndef _pages(batch, max_len, page_size, device):\n    pages_per_batch = (max_len + page_size - 1) // page_size\n    total_pages = batch * pages_per_batch\n    perm = torch.randperm(total_pages, dtype=torch.int64, device=device).to(torch.int32)\n    indptr = torch.arange(0, total_pages + 1, pages_per_batch, dtype=torch.int32, device=device)\n    return indptr, perm, total_pages\n\ndef _case(item):\n    return {"name": item["id"], "category": "fixed-profile", "make_inputs": lambda item=item: _make_inputs(item)}\n\ndef get_test_cases():\n    return [_case(item) for item in CORRECTNESS_CASES]\n\ndef get_benchmark_inputs():\n    return [{"name": item["group"], "make_inputs": lambda item=item: _make_inputs(item)} for item in BENCHMARK_CASES]\n\ndef get_inputs():\n    return _make_inputs(CORRECTNESS_CASES[0])\n\n`;
 
 const pagedMqaPython = `def _make_inputs(item):
     p, device, dtype = item["parameters"], _device(), _dtype(item["dtype"])
