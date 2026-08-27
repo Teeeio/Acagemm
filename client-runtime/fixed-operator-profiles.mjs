@@ -85,10 +85,11 @@ export const getFixedOperatorProfile = (id) => {
 
 export const isFixedOperatorMission = (mission = {}) => Boolean(mission.operatorProfile?.id && profiles.some((item) => item.id === mission.operatorProfile.id));
 
-export const fixedOperatorTestMatrix = (profileOrId) => {
+export const fixedOperatorTestMatrix = (profileOrId, hardwareName = process.env.OPERATOR_MUXI_DEVICE || 'C500') => {
   const profile = typeof profileOrId === 'string' ? getFixedOperatorProfile(profileOrId) : profileOrId;
+  const environment = String(hardwareName || 'C500').trim() || 'C500';
   return {
-    environments: ['C500'],
+    environments: [environment],
     stages: ['Correctness', 'Full Benchmark'],
     warmup: 20,
     repeats: 100,

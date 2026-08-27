@@ -26,6 +26,14 @@ bash scripts/c500-test.sh doctor
 bash scripts/c500-test.sh start
 ```
 
+如果目标设备是 C550：
+
+```bash
+export OPERATOR_MUXI_DEVICE=C550
+bash scripts/c500-test.sh doctor
+bash scripts/c500-test.sh start
+```
+
 `verify` 不访问 C500，验证代码、Node、工作流、TUI 和 Mock 闭环；`doctor` 验证 Claude 和 C500 环境；`start` 启动 Claude Code + C500 真机 TUI。
 
 ## 运行边界

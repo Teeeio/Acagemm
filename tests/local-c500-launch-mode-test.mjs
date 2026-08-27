@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { resolveAgentRuntimeMode, resolveLocalC500LaunchMode } from '../tools/local-c500-tester/production-api.mjs';
+import { resolveAgentRuntimeMode, resolveLocalC500LaunchMode, resolveMuxiDevice } from '../tools/local-c500-tester/production-api.mjs';
 import { isCurrentLocalC500Runtime, LOCAL_C500_RUNTIME_CONTRACT_VERSION } from '../client-runtime/local-c500-runtime-contract.mjs';
 
 assert.equal(resolveAgentRuntimeMode({}), 'claude-code');
 assert.equal(resolveAgentRuntimeMode({ OPERATOR_RUNTIME_MODE: 'codex-cli' }), 'codex-cli');
+assert.equal(resolveMuxiDevice({}), 'C500');
+assert.equal(resolveMuxiDevice({ OPERATOR_MUXI_DEVICE: 'C550' }), 'C550');
 
 assert.deepEqual(resolveLocalC500LaunchMode({}), {
   mock: false,
@@ -17,6 +19,7 @@ assert.deepEqual(resolveLocalC500LaunchMode({
   scenario: 'mla-three-round',
   label: 'simulation',
 });
+assert.equal(resolveLocalC500LaunchMode({ OPERATOR_MUXI_DEVICE: 'C550' }).label, 'real C550 hardware');
 assert.deepEqual(resolveLocalC500LaunchMode({
   OPERATOR_LOCAL_C500_MOCK: '1',
   OPERATOR_LOCAL_C500_MOCK_SCENARIO: 'custom-scenario',

@@ -15,13 +15,14 @@ export const exportHome = path.join(testerHome, 'exports');
 export const apiPort = Number(process.env.LOCAL_C500_API_PORT || 4275);
 export const apiBaseUrl = process.env.LOCAL_C500_API_URL || `http://127.0.0.1:${apiPort}`;
 export const resolveAgentRuntimeMode = (environment = process.env) => environment.OPERATOR_RUNTIME_MODE || 'claude-code';
+export const resolveMuxiDevice = (environment = process.env) => String(environment.OPERATOR_MUXI_DEVICE || 'C500').trim() || 'C500';
 
 export const resolveLocalC500LaunchMode = (environment = process.env) => {
   const mock = environment.OPERATOR_LOCAL_C500_MOCK === '1';
   return {
     mock,
     scenario: mock ? environment.OPERATOR_LOCAL_C500_MOCK_SCENARIO || 'mla-three-round' : null,
-    label: mock ? 'simulation' : 'real C500 hardware',
+    label: mock ? 'simulation' : `real ${resolveMuxiDevice(environment)} hardware`,
   };
 };
 
@@ -192,12 +193,13 @@ const seedMissionBrief = async (project, draft) => {
     throw new Error(`项目仓库目录不可用，无法写入 Mission brief: ${project.repository} (${error.message})`);
   }
   const profile = getFixedOperatorProfile(draft.profileId);
+  const device = resolveMuxiDevice();
   const implementation = normalizeOperatorLanguage(profile.implementationLanguage);
   const content = [
     '# Operator Optimization Mission',
     '',
     `Title: ${profile.title}`,
-    'Hardware: MetaX C500',
+    `Hardware: MetaX ${device}`,
     'Metric: latency p50',
     '',
     '## Goal',
@@ -262,14 +264,15 @@ export const publishMission = async (draft) => {
     await api.patch('/api/state', { missionPaused: false, missionBudgetMs: null });
   }
   const profile = getFixedOperatorProfile(draft.profileId);
+  const device = resolveMuxiDevice();
   const project = await createFreshManagedProject(profile.id);
   await seedMissionBrief(project, draft);
   const timeBudget = Number(draft.timeBudget || 0);
   const implementation = normalizeOperatorLanguage(profile.implementationLanguage);
-  const testMatrix = fixedOperatorTestMatrix(profile);
+  const testMatrix = fixedOperatorTestMatrix(profile, device);
   const baselineSource = fixedOperatorBaselineSource(profile);
   const baselineRunPy = buildFixedOperatorBaselineRunPy(profile);
-  const goal = `在 MetaX C500 上为 ${profile.title} 生成高性能实现；严格保持内置 Profile 语义，完成三轮独立候选并保留 correctness 通过者中的最优版本。`;
+  const goal = `在 MetaX ${device} 上为 ${profile.title} 生成高性能实现；严格保持内置 Profile 语义，完成三轮独立候选并保留 correctness 通过者中的最优版本。`;
   const created = await api.post('/api/missions', {
     goal,
     title: profile.title,
@@ -277,7 +280,7 @@ export const publishMission = async (draft) => {
     repository: project.repository,
     projectRoot: project.root,
     sourceRoot: project.sourceRoot,
-    hardware: ['C500'],
+    hardware: [device],
     metric: 'latency p50',
     implementation,
     operatorProfile: profile,

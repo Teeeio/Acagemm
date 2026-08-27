@@ -322,6 +322,7 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
 
 export const localC500Config = {
   kind: 'local-c500',
+  device: process.env.OPERATOR_MUXI_DEVICE || 'C500',
   enabled: process.env.OPERATOR_TEST_BACKEND === 'local-c500',
   mock: mockEnabled,
   liveHardware: !mockEnabled,

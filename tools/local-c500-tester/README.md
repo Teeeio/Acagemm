@@ -45,6 +45,14 @@ claude --version
 claude auth status
 ```
 
+默认硬件标签为 C500。使用 C550 时在启动前设置：
+
+```bash
+export OPERATOR_MUXI_DEVICE=C550
+```
+
+`local-c500` 是后端适配器的兼容名称，不代表必须是 C500 型号；Mission、测试矩阵和结果环境标签会使用 `OPERATOR_MUXI_DEVICE` 的值。C550 是否可执行仍由目标机的 PyTorch/MACA 驱动和 `mx-smi` 实际探测决定。
+
 Claude Code 复用相同的 Research、Baseline Materializer、Candidate、Workspace Diff、回退和采用工作流。Runtime 使用非交互 `stream-json`，只向各阶段暴露受控的 Read/Write/Edit 工具；Research acquisition 额外允许 WebSearch/WebFetch，Bash 始终禁用。不要设置 `--dangerously-skip-permissions`。
 
 Claude Candidate 默认允许 5 分钟无事件窗口，Codex 保持 2 分钟；现场网关确实更慢时可通过 `OPERATOR_MAIN_AGENT_STALL_MS` 调整。Windows 本地路径若被 Claude 转成包含 `~1` 一类片段的 8.3 短路径，可能触发其路径安全拦截；真机 Linux 不受影响，本地验证应使用不触发短路径转换的工作目录。
