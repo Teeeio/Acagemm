@@ -43,7 +43,7 @@ import {
   researchDirForMission,
   createResearchAgentState,
 } from './state-store.mjs';
-import { agentRuntime, appendRuntimeEvent, isManagedWorkspaceRuntimeMode } from './agent-runtime.mjs';
+import { agentRuntime, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, isResearchAgentActive } from './agent-runtime.mjs';
 import { advanceIteration, selectResearchDirection } from './iteration-loop.mjs';
 import { createCommandJournal, executeCommand, hashKey } from './command-journal.mjs';
 import { testServiceClient } from './test-service-client.mjs';
@@ -1120,6 +1120,7 @@ const iterationDeps = {
       return state;
     }
     const research = state.researchAgent || {};
+    if (isResearchAgentActive(research)) return state;
     const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
     const researchedSource = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources });
     const semanticSource = mission.sourcePolicy?.allowSemanticFallback === true && researchTerminal
@@ -1234,6 +1235,9 @@ const advanceTesterAutopilot = async (state) => {
 
   if (isStrictZeroSourceMission(mission)) {
     const research = state.researchAgent || {};
+    if (state.baseline?.status !== 'complete' && isResearchAgentActive(research)) {
+      return { state, action: 'wait_research' };
+    }
     const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
     const source = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources })
       || (mission.sourcePolicy?.allowSemanticFallback === true && researchTerminal && (research.runPhase === 'synthesize' || research.acquireHandled === true)
@@ -1338,8 +1342,9 @@ const loadRuntimeState = async () => {
   const sourcePolicyMigration = migrateLocalC500TesterState(state, { enabled: localC500Config.enabled });
   if (sourcePolicyMigration.changed) {
     appendRuntimeEvent(state, 'mission.source_policy_migrated', sourcePolicyMigration.recovery, { kind: 'migration', mode: 'client' });
-    addAuditEvent(state, 'C500 来源策略已升级', sourcePolicyMigration.recovery?.previousBlocker
-      ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，Research 将自动重新执行`
+    const materializerRecovered = sourcePolicyMigration.recovery?.previousBlocker === 'baseline_materializer_failed';
+    addAuditEvent(state, materializerRecovered ? 'C500 Materializer 交付协议已升级' : 'C500 来源策略已升级', sourcePolicyMigration.recovery?.previousBlocker
+      ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，${materializerRecovered ? 'Materializer' : 'Research'} 将自动重新执行`
       : 'Research 将按本地、联网、语义 fallback 顺序执行', 'blue', 'RefreshCw');
   }
   const initialReconciliation = reconcileWorkflowState(state);

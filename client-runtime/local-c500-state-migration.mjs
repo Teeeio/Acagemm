@@ -1,4 +1,5 @@
 const FLEXIBLE_SOURCE_POLICY_REVISION = 'local-c500-flexible-source-v1';
+const MATERIALIZER_DELIVERY_REVISION = 'local-c500-materializer-file-v1';
 const RECOVERABLE_SOURCE_BLOCKERS = new Set([
   'baseline_source_unresolved',
   'baseline_source_unverified',
@@ -18,6 +19,7 @@ const flexibleSourcePolicy = (current = {}) => ({
   allowDiscoveredSources: true,
   allowSemanticFallback: true,
   revision: FLEXIBLE_SOURCE_POLICY_REVISION,
+  materializerRevision: MATERIALIZER_DELIVERY_REVISION,
 });
 
 const recoveredResearchAgent = (current = {}) => ({
@@ -57,21 +59,50 @@ export const migrateLocalC500TesterState = (state, { enabled = true } = {}) => {
     || previousPolicy.localFirst !== true
     || previousPolicy.allowDiscoveredSources !== true
     || previousPolicy.allowSemanticFallback !== true
-    || previousPolicy.revision !== FLEXIBLE_SOURCE_POLICY_REVISION;
+    || previousPolicy.revision !== FLEXIBLE_SOURCE_POLICY_REVISION
+    || previousPolicy.materializerRevision !== MATERIALIZER_DELIVERY_REVISION;
   if (policyChanged) mission.sourcePolicy = flexibleSourcePolicy(previousPolicy);
 
   const blockedReason = state.iterationStats?.loopStatus === 'needs_human'
     ? state.iterationStats?.loopStatusReason
     : null;
   const recoverSourceBlock = RECOVERABLE_SOURCE_BLOCKERS.has(blockedReason);
+  const recoverMaterializerBlock = blockedReason === 'baseline_materializer_failed'
+    && previousPolicy.materializerRevision !== MATERIALIZER_DELIVERY_REVISION;
   let recoveredRunId = null;
-  if (recoverSourceBlock) {
+  if (recoverSourceBlock || recoverMaterializerBlock) {
     state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'running', loopStatusReason: null };
     mission.iterationStats = { ...(mission.iterationStats || {}), loopStatus: 'running', loopStatusReason: null };
-    if (TERMINAL_RESEARCH_STATUSES.has(state.researchAgent?.status) || state.researchAgent?.phase === '研究员状态读取失败') {
+    if (recoverSourceBlock && (TERMINAL_RESEARCH_STATUSES.has(state.researchAgent?.status) || state.researchAgent?.phase === '研究员状态读取失败')) {
       recoveredRunId = state.researchAgent?.runId || null;
       state.researchAgent = recoveredResearchAgent(state.researchAgent);
       mission.researchAgent = structuredClone(state.researchAgent);
+    }
+    if (recoverMaterializerBlock) {
+      const previousMaterializer = state.baseline?.materializer || null;
+      recoveredRunId = previousMaterializer?.runId || recoveredRunId;
+      state.baseline = {
+        ...(state.baseline || {}),
+        materializerHistory: previousMaterializer
+          ? [...(state.baseline?.materializerHistory || []), {
+            runId: previousMaterializer.runId || null,
+            status: previousMaterializer.status || 'failed',
+            error: previousMaterializer.error || null,
+            completedAt: previousMaterializer.completedAt || null,
+          }].slice(-5)
+          : state.baseline?.materializerHistory || [],
+        materializer: {
+          status: 'retry_ready',
+          phase: '使用文件交付协议重新展开',
+          progress: 0,
+          result: null,
+          error: null,
+        },
+      };
+      mission.baseline = structuredClone(state.baseline);
+      const recoveryAttempts = { ...(state.workflowKernel?.recoveryAttempts || {}) };
+      delete recoveryAttempts['baseline-materializer'];
+      state.workflowKernel = { ...(state.workflowKernel || {}), recoveryAttempts };
     }
   }
 
@@ -81,7 +112,7 @@ export const migrateLocalC500TesterState = (state, { enabled = true } = {}) => {
     mission.researchAgent = structuredClone(state.researchAgent);
   }
 
-  const changed = policyChanged || recoverSourceBlock || stalePhase;
+  const changed = policyChanged || recoverSourceBlock || recoverMaterializerBlock || stalePhase;
   return {
     state,
     changed,
@@ -89,10 +120,11 @@ export const migrateLocalC500TesterState = (state, { enabled = true } = {}) => {
       missionId: mission.id,
       previousMode: previousPolicy.mode || null,
       policyRevision: FLEXIBLE_SOURCE_POLICY_REVISION,
+      materializerRevision: MATERIALIZER_DELIVERY_REVISION,
       previousBlocker: blockedReason,
       recoveredRunId,
     } : null,
   };
 };
 
-export { FLEXIBLE_SOURCE_POLICY_REVISION };
+export { FLEXIBLE_SOURCE_POLICY_REVISION, MATERIALIZER_DELIVERY_REVISION };

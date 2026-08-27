@@ -256,6 +256,10 @@ export const createClaudeClient = (options = {}) => {
     const allowedTools = role === 'research-acquire'
       ? 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch'
       : 'Read,Write,Edit';
+    const configuredMaxTurns = Number(environment.OPERATOR_CLAUDE_MAX_TURNS || process.env.OPERATOR_CLAUDE_MATERIALIZER_MAX_TURNS || 6);
+    const maxTurns = role === 'materializer'
+      ? Math.max(1, Math.min(20, Math.trunc(Number.isFinite(configuredMaxTurns) ? configuredMaxTurns : 6)))
+      : null;
     const args = [
       '-p',
       '--output-format', 'stream-json',
@@ -268,6 +272,7 @@ export const createClaudeClient = (options = {}) => {
       '--strict-mcp-config',
       '--mcp-config', emptyMcpConfigPath,
       '--no-chrome',
+      ...(maxTurns ? ['--max-turns', String(maxTurns)] : []),
       ...directories.flatMap((directory) => ['--add-dir', directory]),
       ...(resumeThreadId ? ['--resume', resumeThreadId] : []),
     ];

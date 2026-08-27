@@ -42,6 +42,7 @@ assert.deepEqual(state.missions[0].sourcePolicy, {
   allowDiscoveredSources: true,
   allowSemanticFallback: true,
   revision: 'local-c500-flexible-source-v1',
+  materializerRevision: 'local-c500-materializer-file-v1',
 });
 assert.equal(state.iterationStats.loopStatus, 'running');
 assert.equal(state.iterationStats.loopStatusReason, null);
@@ -49,6 +50,26 @@ assert.equal(state.researchAgent.status, 'idle');
 assert.equal(state.researchAgent.runId, null);
 assert.equal(state.researchAgent.phase, '等待重新调研');
 assert.match(state.researchAgent.messages.at(-1).detail, /本地 Source.*网络来源.*fallback/);
+
+const materializerBlocked = legacyState();
+materializerBlocked.iterationStats.loopStatusReason = 'baseline_materializer_failed';
+materializerBlocked.missions[0].iterationStats.loopStatusReason = 'baseline_materializer_failed';
+materializerBlocked.baseline = {
+  status: 'missing',
+  source: { authority: 'agent-semantic', semanticFallback: true },
+  materializer: { status: 'timed_out', runId: 'claude_materializer_LEGACY', error: { code: 'TIMEOUT', message: 'budget exhausted' } },
+};
+materializerBlocked.workflowKernel = { recoveryAttempts: { 'baseline-materializer': 1 } };
+const materializerMigration = migrateLocalC500TesterState(materializerBlocked, { enabled: true });
+assert.equal(materializerMigration.changed, true);
+assert.equal(materializerMigration.recovery.previousBlocker, 'baseline_materializer_failed');
+assert.equal(materializerBlocked.iterationStats.loopStatus, 'running');
+assert.equal(materializerBlocked.baseline.materializer.status, 'retry_ready');
+assert.equal(materializerBlocked.baseline.materializerHistory[0].runId, 'claude_materializer_LEGACY');
+assert.equal(materializerBlocked.workflowKernel.recoveryAttempts['baseline-materializer'], undefined);
+assert.equal(materializerBlocked.researchAgent.status, 'failed', 'materializer recovery must preserve the completed Research outcome');
+assert.equal(materializerBlocked.researchAgent.runId, 'claude_research_LEGACY');
+assert.equal(migrateLocalC500TesterState(materializerBlocked, { enabled: true }).changed, false);
 
 const second = migrateLocalC500TesterState(state, { enabled: true });
 assert.equal(second.changed, false, 'migration must be idempotent');

@@ -107,6 +107,16 @@ try {
   assert.equal(spawnCalls[0].stdin, 'create run.py\n');
 
   await client.start({
+    runId: 'claude_MATERIALIZER',
+    missionId: 'MIS_CLAUDE',
+    goal: 'materialize baseline',
+    workspace: root,
+    environment: { OPERATOR_AGENT_ROLE: 'materializer', OPERATOR_AGENT_ROOTS: JSON.stringify({ workspace: root }) },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(spawnCalls[1].args[spawnCalls[1].args.indexOf('--max-turns') + 1], '6');
+
+  await client.start({
     runId: 'claude_RESUME',
     missionId: 'MIS_CLAUDE',
     goal: 'continue',
@@ -115,9 +125,9 @@ try {
     environment: { OPERATOR_AGENT_ROLE: 'research-acquire', OPERATOR_AGENT_ROOTS: JSON.stringify({ workspace: root }) },
   });
   await new Promise((resolve) => setTimeout(resolve, 80));
-  assert.ok(spawnCalls[1].args.includes('--resume'));
-  assert.ok(spawnCalls[1].args.includes('session-test'));
-  assert.equal(spawnCalls[1].args[spawnCalls[1].args.indexOf('--allowedTools') + 1], 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch');
+  assert.ok(spawnCalls[2].args.includes('--resume'));
+  assert.ok(spawnCalls[2].args.includes('session-test'));
+  assert.equal(spawnCalls[2].args[spawnCalls[2].args.indexOf('--allowedTools') + 1], 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch');
 
   await client.start({
     runId: 'claude_CANCEL',

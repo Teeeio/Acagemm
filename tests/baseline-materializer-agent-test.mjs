@@ -51,9 +51,11 @@ const codexClient = {
   describe: async () => ({ installed: true, loggedIn: true, version: 'codex-cli test' }),
   start: async (args) => {
     startArgs = args;
+    await writeFile(path.join(args.workspace, 'run.py'), runPy, 'utf8');
+    await writeFile(path.join(args.workspace, 'materializer-report.json'), JSON.stringify({ summary: 'expanded from upstream', sourceFiles: ['flashinfer/decode.py'] }), 'utf8');
     return { runId: args.runId, startedAt: new Date().toISOString(), threadId: 'thread-materializer' };
   },
-  readRun: async () => ({ runId: startArgs.runId, status: 'completed', completedAt: new Date().toISOString(), threadId: 'thread-materializer' }),
+  readRun: async () => ({ runId: startArgs.runId, status: 'running', completedAt: null, threadId: 'thread-materializer' }),
   readEvents: async () => [
     { type: 'thread.started', thread_id: 'thread-materializer' },
     { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ schemaVersion: 'operator-studio.baseline-materializer-result/v1', summary: 'materialized baseline', runPy, report: { summary: 'expanded from upstream', sourceFiles: ['flashinfer/decode.py'], assumptions: ['torch eager semantic reference'] } }) } },
@@ -95,15 +97,18 @@ try {
   assert.equal(startArgs.sandboxMode, 'workspace-write');
   assert.match(startArgs.goal, /Do NOT submit tests/);
   assert.match(startArgs.goal, /must not import flashinfer/i);
-  assert.match(startArgs.goal, /baseline-materializer-result\/v1/);
+  assert.match(startArgs.goal, /FIRST write the complete implementation to run\.py/);
+  assert.match(startArgs.goal, /baseline-materializer-result\/v2/);
   assert.match(startArgs.goal, /paged_attention_reference/);
 
   const projected = await runtime.projectState(state);
   assert.equal(projected.state.baseline.materializer.status, 'completed');
   assert.equal(projected.state.baseline.materializer.result.runPy, runPy);
   assert.equal(projected.state.baseline.materializer.result.source.expandedSingleFile, true);
+  assert.equal(projected.state.baseline.materializer.result.delivery, 'workspace-artifact');
   assert.equal(projected.state.baseline.resolution.status, 'materialized');
   assert.ok(projected.state.runtimeEvents.some((event) => event.type === 'baseline.materializer_completed'));
+  assert.equal(cancelCalled, true, 'validated workspace artifact should stop the still-running Agent');
 
   const plan = await resolveBaselineRunPlan({ state: projected.state, mission, body: { purpose: 'baseline' }, matrix });
   assert.equal(plan.runPy, runPy);

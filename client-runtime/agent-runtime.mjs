@@ -266,8 +266,34 @@ const loadMaterializerSourceEvidence = async ({ sourceRoot, source }) => {
     commit: registered.commit,
     tree: registered.tree,
     path: relativePath,
-    content: content.slice(0, 240_000),
-    truncated: content.length > 240_000,
+    content: content.slice(0, 96_000),
+    truncated: content.length > 96_000,
+  };
+};
+
+const readMaterializerWorkspaceResult = async (materializer = {}, events = []) => {
+  const directory = path.resolve(String(materializer.materializationDir || ''));
+  if (!materializer.materializationDir) return null;
+  const runPyPath = path.join(directory, 'run.py');
+  const runPyInfo = await lstat(runPyPath).catch(() => null);
+  if (!runPyInfo?.isFile() || runPyInfo.isSymbolicLink() || runPyInfo.size === 0 || runPyInfo.size > 1_000_000) return null;
+  const runPy = await readFile(runPyPath, 'utf8');
+  if (!runPy.trim()) return null;
+
+  const reportPath = path.join(directory, 'materializer-report.json');
+  const reportInfo = await lstat(reportPath).catch(() => null);
+  let report = null;
+  if (reportInfo?.isFile() && !reportInfo.isSymbolicLink() && reportInfo.size > 0 && reportInfo.size <= 128_000) {
+    report = JSON.parse(await readFile(reportPath, 'utf8'));
+  }
+  const finalResult = parseBaselineMaterializerResult(events);
+  return {
+    schemaVersion: 'operator-studio.baseline-materializer-result/v2',
+    format: 'workspace-artifact',
+    summary: report?.summary || finalResult.summary || 'Baseline materializer 已写入单文件。',
+    runPy,
+    report: report || finalResult.report || {},
+    rawText: finalResult.rawText,
   };
 };
 
@@ -803,17 +829,20 @@ export function createAgentRuntime(options = {}) {
     '',
     'Hard constraints:',
     source?.semanticFallback ? '- Use the Mission and semantic specification as the baseline authority for this test run.' : '- Use only the captured source evidence embedded in this prompt.',
-    '- Write only inside the Materialization directory if you need scratch files.',
+    '- Write only inside the Materialization directory.',
     '- Do NOT modify the Mission workspace, Iteration Repository, candidate files, project source, or Source Registry.',
     '- Do NOT submit tests, upload packages, call runner APIs, or create optimized candidates.',
     '- The output must be baseline semantics only, not an optimized candidate.',
     '- The run.py must define get_inputs(), get_test_cases(), get_benchmark_inputs(), run(inputs), and reference(inputs).',
     '- The run.py must be single-file Python and must not import flashinfer or candidate implementation modules.',
-    '- Prefer PyTorch eager operations for the reference implementation. If an authoritative implementation cannot be represented faithfully, return runPy as an empty string and explain the blocker in report.',
+    '- Prefer PyTorch eager operations for the reference implementation.',
+    '- FIRST write the complete implementation to run.py in the Materialization directory. Do not wait until the final response to persist it.',
+    '- Then write materializer-report.json with summary, sourceFiles, testSpec, assumptions, and unsupported fields.',
+    '- If the baseline cannot be represented faithfully, write only materializer-report.json and explain the blocker; do not create an invalid run.py.',
     testSpecAgentInstruction(matrix),
     '',
-    'Return one JSON object and no Markdown fences with this shape:',
-    '{"schemaVersion":"operator-studio.baseline-materializer-result/v1","summary":"...","runPy":"<complete single-file run.py content>","report":{"summary":"...","sourceFiles":["..."],"testSpec":{"correctnessCases":[{"id":"...","category":"...","description":"..."}],"benchmarkProfiles":[{"id":"primary","description":"..."}]},"assumptions":["..."],"unsupported":[]}}',
+    'After both files are persisted, return one small JSON object and no Markdown fences. Do not embed run.py source in the response:',
+    '{"schemaVersion":"operator-studio.baseline-materializer-result/v2","summary":"...","runPyPath":"run.py","reportPath":"materializer-report.json"}',
   ].join('\n');
 
   const startBaselineMaterialization = async ({ state, mission, source, matrix = {}, workspace }) => {
@@ -1150,14 +1179,50 @@ export function createAgentRuntime(options = {}) {
         if (nextStatus === 'timed_out') {
           try { await managedClient.cancel(prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
         }
-        const terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
+        let terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
         const eventCount = events.length;
         const lastEventAt = eventCount > (prev.eventCount || 0) ? Date.now() : (prev.lastEventAt || Date.now());
         let result = prev.result || null;
         let materializerError = prev.error || null;
         let finalStatus = nextStatus;
         let finalPhase = failed ? 'Baseline materializer 执行失败' : completed ? 'Baseline 单文件展开完成' : cancelled ? 'Baseline materializer 已取消' : nextStatus === 'timed_out' ? 'Baseline materializer 预算耗尽' : prev.status === 'cancel_requested' ? '正在取消 baseline materializer' : 'Baseline 单文件展开中';
-        if (terminal && completed && !result) {
+        let workspaceArtifact = null;
+        if (!result) {
+          try { workspaceArtifact = await readMaterializerWorkspaceResult(prev, events); } catch { /* Agent may still be replacing its report atomically. */ }
+        }
+        if (workspaceArtifact && !result) {
+          try {
+            const materialized = materializeBaselineSource({
+              mission: activeMission,
+              source: prev.source,
+              matrix: prev.matrix || state.testMatrix || {},
+              body: { materializerResult: workspaceArtifact },
+            });
+            result = {
+              schemaVersion: workspaceArtifact.schemaVersion,
+              summary: workspaceArtifact.summary,
+              runPy: materialized.runPy,
+              runPySource: materialized.runPySource,
+              report: materialized.report,
+              source: materialized.source,
+              rawText: workspaceArtifact.rawText,
+              delivery: 'workspace-artifact',
+            };
+            finalStatus = 'completed';
+            finalPhase = 'Baseline 单文件已落盘并通过校验';
+            terminal = true;
+            materializerError = null;
+            if (!['completed', 'failed', 'cancelled'].includes(run.status)) {
+              try { await managedClient.cancel(prev.runId); } catch { /* Artifact is already authoritative. */ }
+            }
+          } catch (error) {
+            if (terminal) {
+              finalStatus = 'failed';
+              finalPhase = 'Baseline materializer 结果校验失败';
+              materializerError = { code: error.code || 'BASELINE_MATERIALIZER_RESULT_INVALID', message: error.message, details: error.details || null };
+            }
+          }
+        } else if (terminal && completed && !result) {
           try {
             const parsed = parseBaselineMaterializerResult(events);
             const materialized = materializeBaselineSource({
@@ -1174,6 +1239,7 @@ export function createAgentRuntime(options = {}) {
               report: materialized.report,
               source: materialized.source,
               rawText: parsed.rawText,
+              delivery: 'final-response-v1',
             };
           } catch (error) {
             finalStatus = 'failed';
