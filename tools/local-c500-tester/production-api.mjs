@@ -1,5 +1,5 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -169,6 +169,17 @@ const slug = (value) => String(value || 'local-c500-project')
 
 const seedMissionBrief = async (project, draft) => {
   const briefPath = path.join(project.repository, 'MISSION.md');
+  // The API registers the project only after its layout is initialized, but a
+  // fresh container or a stale runtime can still return before the directory
+  // is visible to this client. Make the publish boundary self-healing and
+  // fail with a useful path if the returned repository is invalid.
+  await mkdir(project.repository, { recursive: true });
+  try {
+    const repositoryStat = await stat(project.repository);
+    if (!repositoryStat.isDirectory()) throw new Error('not a directory');
+  } catch (error) {
+    throw new Error(`项目仓库目录不可用，无法写入 Mission brief: ${project.repository} (${error.message})`);
+  }
   const profile = getFixedOperatorProfile(draft.profileId);
   const implementation = normalizeOperatorLanguage(profile.implementationLanguage);
   const content = [
