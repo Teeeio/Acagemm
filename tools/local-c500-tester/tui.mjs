@@ -8,6 +8,7 @@ import { createLatestRefreshGate, reconcileTuiSnapshot } from './tui-refresh.mjs
 import { fixedOperatorProfiles } from '../../client-runtime/fixed-operator-profiles.mjs';
 import {
   addHumanFeedback,
+  assertProductionPreflight,
   ensureProductionRuntime,
   exportMission,
   pauseMission,
@@ -189,7 +190,7 @@ const App = () => {
       React.createElement(Text, { color: 'cyan', bold: true }, 'C500 Environment Doctor'),
       React.createElement(Text, null, `runtime      ${doctorResult?.runtime?.runtime?.mode || doctorResult?.status || 'unknown'}`),
       React.createElement(Text, null, `backend      ${doctorResult?.runtime?.testBackend?.kind || '--'}${doctorResult?.mock ? ' / simulation' : ''}`),
-      ...[['python', 'python'], ['mxSmi', 'mx-smi'], ['mctracer', 'mctracer'], ['mcProfiler', 'mcProfiler'], ['sourceMirror', 'sourceMirror']]
+      ...[['device', 'device'], ['python', 'python'], ['mxSmi', 'mx-smi'], ['mctracer', 'mctracer'], ['mcProfiler', 'mcProfiler'], ['sourceMirror', 'sourceMirror']]
         .map(([key, label]) => React.createElement(Text, { key }, `${label.padEnd(12)} ${checks[key]?.status || '--'}${checks[key]?.detail ? ` / ${checks[key].detail}` : ''}`)),
       doctorResult?.error ? React.createElement(Text, { color: 'red' }, doctorResult.error) : null,
       React.createElement(Text, null, ''),
@@ -218,6 +219,7 @@ const main = async () => {
   }
   if (args.length) throw new Error('The production tester exposes only TUI, panel --once, doctor, and --snapshot commands.');
   await ensureProductionRuntime();
+  assertProductionPreflight(await runDoctor());
   const screen = createTerminalScreenSession(process.stdout);
   const restoreScreen = () => screen.leave();
   screen.enter();

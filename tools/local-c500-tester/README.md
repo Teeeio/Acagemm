@@ -4,6 +4,14 @@
 
 ## 启动
 
+目标机已经完成 Claude Code 登录后，正常测试只需要：
+
+```bash
+npm run tester:c500
+```
+
+该入口固定使用仓库内置 Node 24.19.0 和 Linux x64 依赖包，默认启用 Claude Code、真机 backend、当前 checkout 的独立状态目录，并自动识别 C550/C500。它会安全替换目标端口上的旧 Operator Studio runtime，不读取 shell 中遗留的 Codex、Mock、设备或旧 Tester Home 配置。
+
 在目标机上推荐使用统一环境入口。它会固定当前 checkout 为 Tester Home、安装仓库内置 Node、安装锁定依赖，并在启动前自动停止同一端口上可识别的旧 Operator Studio runtime：
 
 ```bash
@@ -45,13 +53,7 @@ claude --version
 claude auth status
 ```
 
-默认硬件标签为 C500。使用 C550 时在启动前设置：
-
-```bash
-export OPERATOR_MUXI_DEVICE=C550
-```
-
-`local-c500` 是后端适配器的兼容名称，不代表必须是 C500 型号；Mission、测试矩阵和结果环境标签会使用 `OPERATOR_MUXI_DEVICE` 的值。C550 是否可执行仍由目标机的 PyTorch/MACA 驱动和 `mx-smi` 实际探测决定。
+`local-c500` 是后端适配器的兼容名称，不代表必须是 C500 型号。启动器通过 `torch.cuda.get_device_name()` 和 `mx-smi` 自动识别 C550/C500，并将结果写入 Mission、测试矩阵和结果环境标签。无法识别设备时，TUI 在进入交互界面前终止并报告硬件前置检查失败。
 
 Claude Code 复用相同的 Research、Baseline Materializer、Candidate、Workspace Diff、回退和采用工作流。Runtime 使用非交互 `stream-json`，只向各阶段暴露受控的 Read/Write/Edit 工具；Research acquisition 额外允许 WebSearch/WebFetch，Bash 始终禁用。不要设置 `--dangerously-skip-permissions`。
 

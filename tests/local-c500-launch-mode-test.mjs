@@ -4,13 +4,13 @@ import { isCurrentLocalC500Runtime, LOCAL_C500_RUNTIME_CONTRACT_VERSION } from '
 
 assert.equal(resolveAgentRuntimeMode({}), 'claude-code');
 assert.equal(resolveAgentRuntimeMode({ OPERATOR_RUNTIME_MODE: 'codex-cli' }), 'codex-cli');
-assert.equal(resolveMuxiDevice({}), 'C500');
+assert.equal(resolveMuxiDevice({}, () => ({ status: 1, stdout: '', stderr: '' })), 'C550');
 assert.equal(resolveMuxiDevice({ OPERATOR_MUXI_DEVICE: 'C550' }), 'C550');
 
 assert.deepEqual(resolveLocalC500LaunchMode({}), {
   mock: false,
   scenario: null,
-  label: 'real C500 hardware',
+  label: 'real C550 hardware',
 });
 assert.deepEqual(resolveLocalC500LaunchMode({
   OPERATOR_LOCAL_C500_MOCK: '1',

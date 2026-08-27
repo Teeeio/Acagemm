@@ -1,3 +1,4 @@
 *.sh text eol=lf
 vendor/node/*.tar.xz binary
+vendor/node/*.tar.gz binary
 vendor/node/SHASUMS256.txt text eol=lf

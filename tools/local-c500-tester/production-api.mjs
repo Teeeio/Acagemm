@@ -7,6 +7,7 @@ import { loadSourceMirrorPolicy } from '../../client-runtime/source-mirror-polic
 import { normalizeOperatorLanguage } from '../../client-runtime/operator-language.mjs';
 import { buildFixedOperatorBaselineRunPy, fixedOperatorBaselineSource, fixedOperatorPrompt, fixedOperatorTestMatrix, getFixedOperatorProfile } from '../../client-runtime/fixed-operator-profiles.mjs';
 import { isCurrentLocalC500Runtime } from '../../client-runtime/local-c500-runtime-contract.mjs';
+import { detectMuxiDevice } from '../../client-runtime/muxi-device.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const testerHome = path.resolve(process.env.LOCAL_C500_TESTER_HOME || path.join(rootDir, '.local-c500-production'));
@@ -15,7 +16,7 @@ export const exportHome = path.join(testerHome, 'exports');
 export const apiPort = Number(process.env.LOCAL_C500_API_PORT || 4275);
 export const apiBaseUrl = process.env.LOCAL_C500_API_URL || `http://127.0.0.1:${apiPort}`;
 export const resolveAgentRuntimeMode = (environment = process.env) => environment.OPERATOR_RUNTIME_MODE || 'claude-code';
-export const resolveMuxiDevice = (environment = process.env) => String(environment.OPERATOR_MUXI_DEVICE || 'C500').trim() || 'C500';
+export const resolveMuxiDevice = (environment = process.env, spawn = spawnSync) => detectMuxiDevice(environment, spawn).device;
 
 export const resolveLocalC500LaunchMode = (environment = process.env) => {
   const mock = environment.OPERATOR_LOCAL_C500_MOCK === '1';
@@ -28,6 +29,7 @@ export const resolveLocalC500LaunchMode = (environment = process.env) => {
 
 const launchMode = resolveLocalC500LaunchMode();
 const agentRuntimeMode = resolveAgentRuntimeMode();
+const muxiDevice = resolveMuxiDevice();
 
 const sleep = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
@@ -148,6 +150,7 @@ export const ensureProductionRuntime = async () => {
       API_PORT: String(apiPort),
       SERVE_WEB: 'false',
       OPERATOR_RUNTIME_MODE: agentRuntimeMode,
+      OPERATOR_MUXI_DEVICE: muxiDevice,
       CLAUDE_COMMAND: process.env.CLAUDE_COMMAND || 'claude',
       OPERATOR_CLAUDE_PERMISSION_MODE: 'acceptEdits',
       OPERATOR_TEST_BACKEND: 'local-c500',
@@ -342,6 +345,7 @@ const checkCommand = (command, args = ['--version']) => {
 
 export const runDoctor = async () => {
   const runtime = await ensureProductionRuntime();
+  const device = detectMuxiDevice();
   let sourceMirror;
   try {
     const policy = await loadSourceMirrorPolicy();
@@ -363,6 +367,7 @@ export const runDoctor = async () => {
     runtime,
     mock: runtime.testBackend?.mock === true,
     checks: {
+      device: { status: device.source === 'release-default' ? 'assumed' : 'ok', detail: `${device.device || 'unknown'} / ${device.source}` },
       python: checkCommand(process.env.PYTHON || 'python', ['--version']),
       mxSmi: checkCommand('mx-smi', []),
       mctracer: { ...mctracer, required: false, status: mctracer.status === 'ok' ? 'ok' : 'optional-missing' },
@@ -370,6 +375,22 @@ export const runDoctor = async () => {
       sourceMirror,
     },
   };
+};
+
+export const assertProductionPreflight = (doctor) => {
+  const failures = [];
+  if (doctor?.runtime?.runtime?.mode !== 'claude-code' || doctor?.runtime?.runtime?.connected !== true) failures.push('Claude Code 未连接或未登录');
+  if (doctor?.runtime?.testBackend?.mock === true || doctor?.runtime?.testBackend?.liveHardware !== true) failures.push('测试后端不是实机模式');
+  if (doctor?.checks?.python?.status !== 'ok') failures.push('Python 不可用');
+  if (doctor?.checks?.mxSmi?.status !== 'ok') failures.push('mx-smi 不可用');
+  if (!['ok', 'assumed'].includes(doctor?.checks?.device?.status)) failures.push('沐曦设备型号配置无效');
+  if (failures.length) {
+    const error = new Error(`启动前检查失败：${failures.join('；')}`);
+    error.code = 'LOCAL_C500_PREFLIGHT_FAILED';
+    error.details = doctor;
+    throw error;
+  }
+  return doctor;
 };
 
 export const readRuntimePid = () => {

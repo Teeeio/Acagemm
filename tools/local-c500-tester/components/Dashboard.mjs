@@ -35,7 +35,7 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
   const totalTokens = formatTokenCount(state.tokenUsage?.totalTokens || mission.tokenUsage?.totalTokens || 0);
   return React.createElement(Box, { flexDirection: 'column', height: layout.height, overflow: 'hidden' },
     React.createElement(Box, { justifyContent: 'space-between' },
-      React.createElement(Text, { bold: true, color: 'green' }, 'C500 Production Workflow Tester'),
+      React.createElement(Text, { bold: true, color: 'green' }, `${health?.testBackend?.device || 'C500'} Production Workflow Tester`),
       React.createElement(Text, null, `${backend.kind || 'connecting'}${backend.mock ? ' / SIMULATION' : ''} · Tokens ${totalTokens}`),
     ),
     React.createElement(Text, { color: view.needsHuman ? 'red' : view.paused ? 'yellow' : view.terminal ? 'green' : 'cyan', bold: true }, view.banner),
@@ -51,7 +51,7 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
         React.createElement(Text, null, `baseline    ${state.baseline?.status || '--'} / ${state.baseline?.kind || '--'}`),
         React.createElement(Text, null, `benchmark   ${benchmark.status || '--'} ${benchmark.progress ?? 0}%`),
         React.createElement(Text, null, `task        ${benchmark.testTaskId || '--'}`),
-        React.createElement(Text, null, `live C500   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`),
+        React.createElement(Text, null, `live ${health?.testBackend?.device || 'C500'}   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`),
       ),
       React.createElement(Panel, { title: 'Current Best', width: 40 },
         React.createElement(Text, null, `candidate   ${best.candidateId || '--'}`),

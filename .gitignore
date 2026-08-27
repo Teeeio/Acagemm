@@ -8,6 +8,7 @@ dist/
 data/
 runtime/
 release/
+vendor/npm-cache/
 *.log
 __pycache__/
 *.pyc

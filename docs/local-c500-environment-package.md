@@ -5,7 +5,7 @@
 ## 已封装
 
 - Linux x64 Node.js 24.19.0 及 SHA-256 校验
-- 锁定的 `package-lock.json` 依赖安装入口
+- Linux x64 `node_modules` 离线包及 SHA-256 校验
 - Claude Code 默认运行时配置
 - 当前 checkout 派生的 Tester Home、data、runtime 和日志路径
 - 启动前识别并停止目标端口上的旧 Operator Studio runtime
@@ -21,18 +21,10 @@
 ## 目标机入口
 
 ```bash
-bash scripts/c500-test.sh verify
-bash scripts/c500-test.sh doctor
-bash scripts/c500-test.sh start
+npm run tester:c500
 ```
 
-如果目标设备是 C550：
-
-```bash
-export OPERATOR_MUXI_DEVICE=C550
-bash scripts/c500-test.sh doctor
-bash scripts/c500-test.sh start
-```
+不需要设置 Agent、设备、端口、Tester Home、Mock 或 Node 环境变量。启动器固定使用 Claude Code 和真机模式，并自动识别 C550/C500。
 
 `verify` 不访问 C500，验证代码、Node、工作流、TUI 和 Mock 闭环；`doctor` 验证 Claude 和 C500 环境；`start` 启动 Claude Code + C500 真机 TUI。
 
