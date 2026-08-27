@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createOperatorTestQueue } from '../client-runtime/operator-test-queue.mjs';
@@ -50,6 +50,39 @@ try {
   const persisted = JSON.parse(`[${(await readFile(queuePath, 'utf8')).trim().split(/\r?\n/).join(',')}]`);
   assert.equal(persisted.length, 2);
   assert.equal(persisted.find((task) => task.taskId === second.taskId).cancelRequested, true);
+
+  const concurrentRoot = await mkdtemp(path.join(os.tmpdir(), 'operator-test-queue-concurrent-'));
+  try {
+    const concurrentPath = path.join(concurrentRoot, 'queue.jsonl');
+    let active = 0;
+    let maxActive = 0;
+    const concurrentService = {
+      async submit(payload) {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active -= 1;
+        return { taskId: `concurrent-${payload.candidate.digest}`, status: 'queued' };
+      },
+    };
+    const queueA = createOperatorTestQueue({ serviceClient: concurrentService, filePath: concurrentPath });
+    const queueB = createOperatorTestQueue({ serviceClient: concurrentService, filePath: concurrentPath });
+    await Promise.all([
+      queueA.submit({ ...payload, requestId: 'concurrent-a', candidate: { digest: 'sha256:a' } }),
+      queueB.submit({ ...payload, requestId: 'concurrent-b', candidate: { digest: 'sha256:b' } }),
+    ]);
+    await Promise.all([queueA.list(), queueB.list()]);
+    assert.equal(maxActive, 1, 'queue instances in one runtime must serialize file access');
+
+    await writeFile(`${concurrentPath}.lock`, `${process.pid} 2026-08-28T00:00:00.000Z\n`, 'utf8');
+    await assert.doesNotReject(queueA.list(), 'read-only queue inspection must tolerate an active Runner lock');
+    await rm(`${concurrentPath}.lock`, { force: true });
+    await writeFile(`${concurrentPath}.lock`, '999999 2000-01-01T00:00:00.000Z\n', 'utf8');
+    await queueA.submit({ ...payload, requestId: 'stale-lock', candidate: { digest: 'sha256:stale' } });
+    assert.equal((await queueA.list()).length, 3, 'dead runner lock must be recovered');
+  } finally {
+    await rm(concurrentRoot, { recursive: true, force: true });
+  }
 
   const remoteCancelledRoot = await mkdtemp(path.join(os.tmpdir(), 'operator-test-queue-remote-cancelled-'));
   const remoteCancelledPath = path.join(remoteCancelledRoot, 'queue.jsonl');

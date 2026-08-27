@@ -8,6 +8,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const runtimeDir = process.env.OPERATOR_RUNTIME_DIR ? path.resolve(process.env.OPERATOR_RUNTIME_DIR) : path.join(rootDir, 'runtime');
 const queuePath = process.env.OPERATOR_TEST_QUEUE_FILE ? path.resolve(process.env.OPERATOR_TEST_QUEUE_FILE) : path.join(runtimeDir, 'operator-test-queue.jsonl');
 const lockPath = `${queuePath}.lock`;
+const localLockTails = new Map();
 
 const now = () => new Date().toISOString();
 
@@ -28,27 +29,57 @@ const writeTasks = async (tasks) => {
   await rename(temporaryPath, queuePath);
 };
 
-const withLock = async (operation) => {
-  await mkdir(path.dirname(lockPath), { recursive: true });
-  let handle;
-  try {
-    handle = await writeFile(lockPath, `${process.pid} ${now()}\n`, { flag: 'wx' });
-  } catch (error) {
-    if (error.code === 'EEXIST') {
-      const busy = new Error('算子测试队列正在被另一个 Runner 使用。');
+const processAlive = (pid) => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; }
+};
+
+const acquireFileLock = async (target) => {
+  await mkdir(path.dirname(target), { recursive: true });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await writeFile(target, `${process.pid} ${now()}\n`, { flag: 'wx' });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let owner = '';
+      try { owner = await readFile(target, 'utf8'); } catch (readError) { if (readError.code !== 'ENOENT') throw readError; continue; }
+      const [pidText, timestamp] = owner.trim().split(/\s+/, 2);
+      const pid = Number(pidText);
+      const ageMs = Date.now() - Date.parse(timestamp || '');
+      if (!processAlive(pid) || (Number.isFinite(ageMs) && ageMs > 30 * 60 * 1000)) {
+        await rm(target, { force: true });
+        continue;
+      }
+      const busy = new Error(`算子测试队列正在被另一个 Runner 使用 (pid ${pid}, started ${timestamp || 'unknown'}).`);
       busy.code = 'OPERATOR_TEST_QUEUE_BUSY';
       busy.status = 409;
+      busy.details = { ownerPid: pid, ownerStartedAt: timestamp || null };
       throw busy;
     }
-    throw error;
   }
-  try {
-    return await operation();
-  } finally {
-    try { await handle?.close(); } catch { /* the lock file is still removed below */ }
-    await rm(lockPath, { force: true });
+  throw new Error('无法取得算子测试队列锁。');
+};
+
+const withFileLock = async (target, operation) => {
+  const handle = await acquireFileLock(target);
+  try { return await operation(); }
+  finally {
+    try { await handle?.close(); } catch { /* the lock file is removed below */ }
+    await rm(target, { force: true });
   }
 };
+
+const serializeLocal = (target, operation) => {
+  const previous = localLockTails.get(target) || Promise.resolve();
+  const current = previous.then(operation, operation);
+  const tail = current.catch(() => {});
+  localLockTails.set(target, tail);
+  return current.finally(() => {
+    if (localLockTails.get(target) === tail) localLockTails.delete(target);
+  });
+};
+
+const withLock = (operation) => serializeLocal(lockPath, () => withFileLock(lockPath, operation));
 
 const taskView = (task) => ({
   taskId: task.taskId,
@@ -93,26 +124,9 @@ export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath, m
     await writeFile(temporaryPath, `${tasks.map((task) => JSON.stringify(task)).join('\n')}\n`, 'utf8');
     await rename(temporaryPath, pathOverride);
   };
-  const runWithLock = async (operation) => {
-    if (pathOverride === queuePath) return withLock(operation);
-    const localLock = `${pathOverride}.lock`;
-    await mkdir(path.dirname(localLock), { recursive: true });
-    let handle;
-    try {
-      handle = await writeFile(localLock, `${process.pid} ${now()}\n`, { flag: 'wx' });
-    } catch (error) {
-      if (error.code === 'EEXIST') {
-        const busy = new Error('算子测试队列正在被另一个 Runner 使用。');
-        busy.code = 'OPERATOR_TEST_QUEUE_BUSY';
-        busy.status = 409;
-        throw busy;
-      }
-      throw error;
-    }
-    try { return await operation(); } finally {
-      try { await handle?.close(); } catch { /* cleanup below */ }
-      await rm(localLock, { force: true });
-    }
+  const runWithLock = (operation) => {
+    const localLock = pathOverride === queuePath ? lockPath : `${pathOverride}.lock`;
+    return serializeLocal(localLock, () => withFileLock(localLock, operation));
   };
 
   const applyFailure = (task, error, lane) => {
@@ -235,7 +249,13 @@ export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath, m
       return taskView(task);
     }),
     get: async (taskId) => {
-      await process();
+      try { await process(); } catch (error) {
+        if (error.code !== 'OPERATOR_TEST_QUEUE_BUSY') throw error;
+        // A real hardware Runner may hold the cross-process lock while its
+        // synchronous command is executing. Reads remain useful from the
+        // persisted snapshot and must not turn normal contention into a TUI
+        // runtime error.
+      }
       const tasks = await load();
       const task = tasks.find((item) => item.taskId === taskId);
       if (!task) {
@@ -247,7 +267,9 @@ export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath, m
       return taskView(task);
     },
     list: async () => {
-      await process();
+      try { await process(); } catch (error) {
+        if (error.code !== 'OPERATOR_TEST_QUEUE_BUSY') throw error;
+      }
       return (await load()).map(taskView);
     },
     cancel: async (taskId) => runWithLock(async () => {
