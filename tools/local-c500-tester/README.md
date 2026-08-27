@@ -4,6 +4,22 @@
 
 ## 启动
 
+在目标机上推荐使用统一环境入口。它会固定当前 checkout 为 Tester Home、安装仓库内置 Node、安装锁定依赖，并在启动前自动停止同一端口上可识别的旧 Operator Studio runtime：
+
+```bash
+bash scripts/c500-test.sh verify   # 非硬件回归与 mock 闭环
+bash scripts/c500-test.sh doctor   # 真机环境检查，不启动 Mission
+bash scripts/c500-test.sh start    # Claude Code + C500 真机 TUI
+```
+
+需要体验模拟硬件时：
+
+```bash
+bash scripts/c500-test.sh mock
+```
+
+入口默认使用 `claude-code`、当前项目目录下的 `.local-c500-production/` 和端口 `4275`。如果更换容器或 checkout 路径，只需在新目录重新运行上述命令；不要复用旧目录中的 PID 文件或手工复制状态。
+
 在本工作树根目录运行：
 
 ```powershell

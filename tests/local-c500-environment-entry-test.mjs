@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const script = await readFile(new URL('../scripts/c500-test.sh', import.meta.url), 'utf8');
+
+assert.match(script, /OPERATOR_RUNTIME_MODE=.*claude-code/);
+assert.match(script, /OPERATOR_TEST_BACKEND=.*local-c500/);
+assert.match(script, /TESTER_HOME=.*PROJECT_ROOT.*local-c500-production/);
+assert.match(script, /install-bundled-node\.sh/);
+assert.match(script, /with-bundled-node\.sh/);
+assert.match(script, /verify\|doctor\|start\|mock\|stop/);
+assert.match(script, /operator-studio-client-runtime/);
+assert.match(script, /bridge\.port/);
+assert.match(script, /kill \"\$pid\"/);
+assert.doesNotMatch(script, /rm\s+-rf/);
+
+console.log('[local-c500-environment-entry] relocatable bootstrap and scoped runtime replacement passed');
