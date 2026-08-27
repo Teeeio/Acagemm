@@ -8,6 +8,8 @@ assert.match(script, /OPERATOR_TEST_BACKEND=.*local-c500/);
 assert.match(script, /TESTER_HOME=.*PROJECT_ROOT.*local-c500-production/);
 assert.match(script, /install-bundled-node\.sh/);
 assert.match(script, /with-bundled-node\.sh/);
+assert.match(script, /BUNDLED_NODE=/);
+assert.match(script, /BUNDLED_NODE.*--input-type=module/);
 assert.match(script, /verify\|doctor\|start\|mock\|stop/);
 assert.match(script, /operator-studio-client-runtime/);
 assert.match(script, /bridge\.port/);

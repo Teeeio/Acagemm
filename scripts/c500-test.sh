@@ -9,6 +9,8 @@ PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 TESTER_HOME="${LOCAL_C500_TESTER_HOME:-$PROJECT_ROOT/.local-c500-production}"
 API_PORT="${LOCAL_C500_API_PORT:-4275}"
 MODE="${1:-start}"
+NODE_VERSION='24.19.0'
+BUNDLED_NODE="$PROJECT_ROOT/.local-c500-node/node-v${NODE_VERSION}-linux-x64/bin/node"
 
 export LOCAL_C500_TESTER_HOME="$TESTER_HOME"
 export LOCAL_C500_API_PORT="$API_PORT"
@@ -28,14 +30,14 @@ run_npm() {
 
 ensure_dependencies() {
   bash "$PROJECT_ROOT/scripts/install-bundled-node.sh" >/dev/null
-  if [[ ! -f "$PROJECT_ROOT/node_modules/ink/package.json" ]]; then
+  if [[ ! -f "$PROJECT_ROOT/node_modules/ink/package.json" || ! -x "$PROJECT_ROOT/node_modules/@esbuild/linux-x64/bin/esbuild" ]]; then
     printf '[c500-test] Installing locked dependencies...\n'
     run_npm ci
   fi
 }
 
 runtime_identity() {
-  node --input-type=module -e '
+  "$BUNDLED_NODE" --input-type=module -e '
     const port = Number(process.env.LOCAL_C500_API_PORT || 4275);
     try {
       const response = await fetch(`http://127.0.0.1:${port}/api/health`);
