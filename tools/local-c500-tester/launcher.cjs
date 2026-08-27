@@ -23,9 +23,14 @@ function exitFrom(result, label) {
 }
 
 function runNode(executable, environment) {
+  const launchEnvironment = Object.assign({}, environment || process.env, {
+    // Keep the tester usable when launched directly from npm without a shell
+    // profile. An explicit mode still wins for compatibility/testing.
+    OPERATOR_RUNTIME_MODE: (environment || process.env).OPERATOR_RUNTIME_MODE || 'claude-code',
+  });
   const result = childProcess.spawnSync(executable, tuiArgs, {
     cwd: projectRoot,
-    env: environment || process.env,
+    env: launchEnvironment,
     stdio: 'inherit',
   });
   exitFrom(result, 'Unable to start the C500 tester');
@@ -56,6 +61,7 @@ if (!fs.existsSync(bundledNode)) {
 
 const bundledEnvironment = Object.assign({}, process.env, {
   PATH: path.dirname(bundledNode) + path.delimiter + (process.env.PATH || ''),
+  OPERATOR_RUNTIME_MODE: process.env.OPERATOR_RUNTIME_MODE || 'claude-code',
 });
 console.error('[c500-launcher] system ' + process.version + ' -> bundled Node v' + nodeVersion);
 runNode(bundledNode, bundledEnvironment);

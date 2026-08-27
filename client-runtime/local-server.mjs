@@ -2317,6 +2317,16 @@ const server = createServer(async (request, response) => {
   }
 });
 
+server.on('error', (error) => {
+  if (error?.code === 'EADDRINUSE') {
+    console.error(`[client-runtime] port ${port} is already in use; refusing duplicate runtime start (mode=${agentRuntime.mode || 'unknown'}, pid=${process.pid}).`);
+    process.exitCode = 98;
+    return;
+  }
+  console.error('[client-runtime] server error', error);
+  process.exitCode = 1;
+});
+
 server.listen(port, '127.0.0.1', () => {
   console.log(`[client-runtime] ${serveWeb ? 'web + local api' : 'local api'} listening on http://127.0.0.1:${port}`);
 });

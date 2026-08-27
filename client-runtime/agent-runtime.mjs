@@ -367,7 +367,9 @@ export function appendRuntimeEvent(state, type, payload = {}, source = { kind: '
 }
 
 export function createAgentRuntime(options = {}) {
-  const mode = options.mode || process.env.OPERATOR_RUNTIME_MODE || 'codex-cli';
+  // Claude Code is the production tester default. Codex remains available as
+  // an explicit compatibility override via OPERATOR_RUNTIME_MODE=codex-cli.
+  const mode = options.mode || process.env.OPERATOR_RUNTIME_MODE || 'claude-code';
   const cliRoot = options.cliRoot || process.env.OPERATOR_CLI_ROOT || '';
   const bridgeDir = options.bridgeDir || process.env.OPERATOR_BRIDGE_DIR || defaultBridgeDir;
   const statusPath = cliRoot ? path.join(cliRoot, process.env.OPERATOR_CLI_STATUS_FILE || 'results/agent_status_cli_integration.json') : '';

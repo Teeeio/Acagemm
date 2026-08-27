@@ -28,7 +28,7 @@ const env = {
   ...inheritedEnv,
   TEST_SERVICE_PORT: String(testServicePort),
   OPERATOR_TEST_SERVICE_URL: `http://127.0.0.1:${testServicePort}`,
-  OPERATOR_RUNTIME_MODE: 'codex-cli',
+  OPERATOR_RUNTIME_MODE: inheritedEnv.OPERATOR_RUNTIME_MODE || 'claude-code',
   // 远程模式（mock 模式忽略）：真实 operator-iteration-platform 连接
   OPERATOR_API_BASE_URL: inheritedEnv.OPERATOR_API_BASE_URL || 'https://frp-cat.com:58637',
   OPERATOR_API_USERNAME: inheritedEnv.OPERATOR_API_USERNAME || 'demo_admin',

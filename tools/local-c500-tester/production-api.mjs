@@ -91,17 +91,36 @@ const health = async () => {
 export const ensureProductionRuntime = async () => {
   const current = await health();
   if (current) {
-    if (current.testBackend?.kind !== 'local-c500') {
-      throw new Error(`${apiBaseUrl} is occupied by a runtime that is not using the local C500 backend.`);
+    const expectedRuntimeDir = path.join(testerHome, 'runtime');
+    const bridge = current?.__bridge || {};
+    const pid = Number(bridge.pid || 0);
+    const pidFile = path.join(expectedRuntimeDir, 'operator-studio.pid');
+    const recordedPid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'ascii').trim()) : 0;
+    const ownedByThisTester = current?.service === 'operator-studio-client-runtime'
+      && bridge.runtimeDir
+      && path.resolve(bridge.runtimeDir) === path.resolve(expectedRuntimeDir)
+      && Number.isInteger(pid)
+      && pid > 0
+      && recordedPid === pid;
+
+    if (isCurrentLocalC500Runtime(current)
+      && current.testBackend?.mock === launchMode.mock
+      && (!launchMode.mock || current.testBackend?.scenario === launchMode.scenario)
+      && current.runtime?.mode === agentRuntimeMode) return current;
+
+    // A new tester launch may safely replace an older instance only when the
+    // PID/runtime directory prove that it belongs to this tester home. This
+    // covers stale Codex processes after switching the default to Claude Code.
+    if (ownedByThisTester) {
+      await restartStaleProductionRuntime(current);
+    } else {
+      const detail = current.runtime?.mode && current.runtime.mode !== agentRuntimeMode
+        ? `Agent Runtime ${current.runtime.mode} (requested ${agentRuntimeMode})`
+        : current.testBackend?.kind !== 'local-c500'
+          ? 'a non-local-C500 backend'
+          : `${current.testBackend?.mock ? 'simulation' : 'real hardware'} mode`;
+      throw new Error(`${apiBaseUrl} is occupied by ${detail}. Its process identity is not owned by this tester home; stop it manually or use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME.`);
     }
-    if (current.testBackend?.mock !== launchMode.mock || (launchMode.mock && current.testBackend?.scenario !== launchMode.scenario)) {
-      throw new Error(`${apiBaseUrl} is already running in ${current.testBackend?.mock ? 'simulation' : 'real hardware'} mode; requested ${launchMode.label} mode. Use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME or stop the existing runtime.`);
-    }
-    if (current.runtime?.mode !== agentRuntimeMode) {
-      throw new Error(`${apiBaseUrl} is already running with Agent Runtime ${current.runtime?.mode || 'unknown'}; requested ${agentRuntimeMode}. Use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME or stop the existing runtime.`);
-    }
-    if (isCurrentLocalC500Runtime(current)) return current;
-    await restartStaleProductionRuntime(current);
   }
 
   mkdirSync(path.join(testerHome, 'logs'), { recursive: true });
