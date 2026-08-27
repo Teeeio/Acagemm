@@ -39,7 +39,7 @@ const profiles = [
   },
   {
     id: 'paged-decode-attention-maca',
-    title: 'Paged Decode Attention / MACA C++',
+    title: 'FlashInfer Paged Decode',
     operator: 'paged_decode_attention',
     implementationLanguage: 'mxmaca-cpp-extension',
     entrypoint: 'paged_decode_attention',
@@ -57,7 +57,7 @@ const profiles = [
   },
   {
     id: 'mla-paged-decode-attention-maca',
-    title: 'MLA Paged Decode Attention / MACA C++',
+    title: 'FlashInfer MLA Paged Attention',
     operator: 'mla_paged_decode_attention',
     implementationLanguage: 'mxmaca-cpp-extension',
     entrypoint: 'mla_paged_decode_attention',

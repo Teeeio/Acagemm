@@ -1117,6 +1117,12 @@ const iterationDeps = {
     const matrix = inferMissionMatrix(mission, state.testMatrix || mission.testMatrix || {});
     const fixedOperator = isFixedOperatorMission(mission);
     const strictZeroSource = isStrictZeroSourceMission(mission);
+    // A fixed-profile Mission may be resumed from an older failed state. Once a
+    // fresh baseline is being submitted, clear the stale human-block marker.
+    if (fixedOperator && state.iterationStats?.loopStatus === 'needs_human') {
+      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'running', loopStatusReason: null };
+      appendRuntimeEvent(state, 'workflow.stale_block_cleared', { reason: 'fixed-profile baseline restarted' }, { kind: 'workflow-kernel', mode: 'client' });
+    }
     if (state.benchmark?.purpose === 'baseline' && ['queued', 'running'].includes(state.benchmark.status)) return state;
     if (state.benchmark?.purpose === 'baseline' && state.benchmark.status === 'failed') {
       state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_test_failed' };
