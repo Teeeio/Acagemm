@@ -27,6 +27,9 @@ for (const source of [tui, tuiState, productionApi]) {
 assert.doesNotMatch(tui, /cli\.mjs|runIterationLoop|mission['"]\s*,\s*['"]loop/);
 assert.doesNotMatch(tui, /input === 'q' \|\| key\.escape/);
 assert.match(tui, /resolveDashboardCommand/);
+assert.match(tui, /reconcileOperationSnapshot/);
+assert.match(tuiState, /activeMissionId/);
+assert.match(tuiState, /task\.payload\?\.missionId/);
 assert.match(tuiState, /deriveWorkflowTopology/);
 assert.match(topologyComponent, /TopologyNode/);
 assert.match(topologyComponent, /borderStyle:\s*current \? 'double' : 'round'/);

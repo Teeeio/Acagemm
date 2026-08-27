@@ -5,7 +5,18 @@ import { normalizeOperatorLanguage } from '../../client-runtime/operator-languag
 export { rootDir };
 export const homeDir = testerHome;
 
-export const loadTuiState = () => loadProductionState();
+export const loadTuiState = async () => {
+  const snapshot = await loadProductionState();
+  const activeMissionId = snapshot.state?.activeMissionId || snapshot.mission?.id || null;
+  if (!activeMissionId) return { ...snapshot, tasks: [] };
+  return {
+    ...snapshot,
+    tasks: (snapshot.tasks || []).filter((task) => {
+      const taskMissionId = task.payload?.missionId || task.missionId || null;
+      return taskMissionId === activeMissionId;
+    }),
+  };
+};
 
 const value = (input, fallback = '--') => input == null || input === '' ? fallback : input;
 const eventLabel = (event) => `${event.createdAt || event.time || '--'} ${event.type || event.title || 'event'}`;

@@ -2348,7 +2348,7 @@ server.listen(port, '127.0.0.1', () => {
 });
 
 const autoTick = process.env.OPERATOR_AUTO_TICK === '1'
-  ? setInterval(() => loadRuntimeState().catch((error) => console.error('[client-runtime:auto-tick]', error)), 750)
+  ? setInterval(() => enqueueApiRequest(() => loadRuntimeState()).catch((error) => console.error('[client-runtime:auto-tick]', error)), 750)
   : null;
 
 let shuttingDown = false;
