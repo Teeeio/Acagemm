@@ -1376,6 +1376,16 @@ const advanceTesterAutopilot = async (state) => {
 };
 
 let runtimeStateInFlight = null;
+const reconcilePersistedBaselineFailure = (state) => {
+  if (state.benchmark?.purpose !== 'baseline' || state.benchmark?.status !== 'failed' || state.baseline?.status === 'failed') return false;
+  const error = state.benchmark.lastServiceError || { code: 'BASELINE_TEST_FAILED', message: 'Baseline operator test failed.' };
+  state.baseline = { ...(state.baseline || {}), status: 'failed', error: structuredClone(error), failedAt: state.benchmark.completedAt || new Date().toISOString() };
+  if (!(state.runtimeEvents || []).some((event) => event.type === 'baseline.failure_projected')) {
+    appendRuntimeEvent(state, 'baseline.failure_projected', { error }, { kind: 'migration', mode: 'client' });
+  }
+  return true;
+};
+
 const loadRuntimeState = async () => {
   if (runtimeStateInFlight) return structuredClone(await runtimeStateInFlight);
   runtimeStateInFlight = (async () => {
@@ -1389,9 +1399,10 @@ const loadRuntimeState = async () => {
       ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，${materializerRecovered ? 'Materializer' : 'Research'} 将自动重新执行`
       : 'Research 将按本地、联网、语义 fallback 顺序执行', 'blue', 'RefreshCw');
   }
+  const baselineFailureProjected = reconcilePersistedBaselineFailure(state);
   const initialReconciliation = reconcileWorkflowState(state);
   const projection = await agentRuntime.projectState({ ...initialReconciliation.state, runtime });
-  let changed = sourcePolicyMigration.changed || projection.changed || initialReconciliation.changed;
+  let changed = baselineFailureProjected || sourcePolicyMigration.changed || projection.changed || initialReconciliation.changed;
   if (projection.state.benchmark?.status === 'running' && projection.state.benchmark?.testTaskId) {
     try {
       const before = JSON.stringify(projection.state.benchmark);
