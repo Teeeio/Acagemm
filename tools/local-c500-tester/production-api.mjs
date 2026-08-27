@@ -34,22 +34,28 @@ const restartStaleProductionRuntime = async (current) => {
   const expectedRuntimeDir = path.join(testerHome, 'runtime');
   const bridge = current?.__bridge || {};
   const pid = Number(bridge.pid || 0);
+  const bridgePort = Number(bridge.port || 0);
   const pidFile = path.join(expectedRuntimeDir, 'operator-studio.pid');
   const recordedPid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'ascii').trim()) : 0;
   const sameRuntimeDir = bridge.runtimeDir && path.resolve(bridge.runtimeDir) === path.resolve(expectedRuntimeDir);
-  if (current?.service !== 'operator-studio-client-runtime' || !sameRuntimeDir || !Number.isInteger(pid) || pid <= 0 || recordedPid !== pid) {
-    throw new Error(`${apiBaseUrl} is running an outdated runtime contract, but its process identity does not match this tester home. Stop it manually or use a different LOCAL_C500_API_PORT.`);
+  const ownedByThisTester = sameRuntimeDir && recordedPid === pid;
+  const recognizedRuntime = current?.service === 'operator-studio-client-runtime'
+    && Number.isInteger(pid)
+    && pid > 0
+    && bridgePort === apiPort;
+  if (!recognizedRuntime) {
+    throw new Error(`${apiBaseUrl} is occupied by an unrecognized process. Stop it manually or use a different LOCAL_C500_API_PORT.`);
   }
   try {
     process.kill(pid, 'SIGTERM');
   } catch (error) {
-    if (error.code !== 'ESRCH') throw new Error(`Unable to stop outdated runtime PID ${pid}: ${error.message}`);
+    if (error.code !== 'ESRCH') throw new Error(`Unable to stop ${ownedByThisTester ? 'outdated' : 'previous-path'} runtime PID ${pid}: ${error.message}`);
   }
   for (let attempt = 0; attempt < 50; attempt += 1) {
     await sleep(100);
     if (!await health()) return;
   }
-  throw new Error(`Outdated runtime PID ${pid} did not stop. Stop it manually, then restart the tester.`);
+  throw new Error(`Runtime PID ${pid} did not stop. Stop it manually, then restart the tester.`);
 };
 
 const requestJson = async (pathname, options = {}) => {
@@ -108,10 +114,15 @@ export const ensureProductionRuntime = async () => {
       && (!launchMode.mock || current.testBackend?.scenario === launchMode.scenario)
       && current.runtime?.mode === agentRuntimeMode) return current;
 
-    // A new tester launch may safely replace an older instance only when the
-    // PID/runtime directory prove that it belongs to this tester home. This
-    // covers stale Codex processes after switching the default to Claude Code.
-    if (ownedByThisTester) {
+    // The health contract, PID and exact target port identify an Operator
+    // Studio runtime even when the tester was moved to another container path.
+    // Replace that previous-path instance, while never killing an unrelated
+    // process that merely occupies the port.
+    const recognizedRuntime = current?.service === 'operator-studio-client-runtime'
+      && Number.isInteger(pid)
+      && pid > 0
+      && Number(bridge.port || 0) === apiPort;
+    if (recognizedRuntime) {
       await restartStaleProductionRuntime(current);
     } else {
       const detail = current.runtime?.mode && current.runtime.mode !== agentRuntimeMode
@@ -119,7 +130,7 @@ export const ensureProductionRuntime = async () => {
         : current.testBackend?.kind !== 'local-c500'
           ? 'a non-local-C500 backend'
           : `${current.testBackend?.mock ? 'simulation' : 'real hardware'} mode`;
-      throw new Error(`${apiBaseUrl} is occupied by ${detail}. Its process identity is not owned by this tester home; stop it manually or use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME.`);
+      throw new Error(`${apiBaseUrl} is occupied by ${detail}, but it does not expose a valid Operator Studio PID/port identity. Stop it manually or use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME.`);
     }
   }
 
