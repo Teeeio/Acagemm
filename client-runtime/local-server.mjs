@@ -56,6 +56,7 @@ import { workspaceManager } from './workspace-manager.mjs';
 import { assertMissionIntent } from './mission-intent.mjs';
 import { nativeDirectoryPicker } from './native-directory-picker.mjs';
 import { dataDir } from './storage-paths.mjs';
+import { isFixedOperatorMission } from './fixed-operator-profiles.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -572,6 +573,7 @@ const commandRegistry = {
         ...(baselinePlan?.materializationReport ? { baselineMaterialization: baselinePlan.materializationReport } : {}),
         ...(missionRunPy.content ? { runPy: missionRunPy.content, runPySource: missionRunPy.source } : {}),
         ...(purpose !== 'baseline' && state.baseline?.materializer?.result?.runPy ? { oracleRunPy: state.baseline.materializer.result.runPy } : {}),
+        ...(purpose !== 'baseline' && isFixedOperatorMission(mission) && (state.baseline?.source || mission.baseline?.source) ? { baselineSource: state.baseline?.source || mission.baseline?.source } : {}),
         ...(Object.keys(missionRunPy.implementationFiles || {}).length ? { implementationFiles: missionRunPy.implementationFiles } : {}),
         ...(body.packageId ? { packageId: body.packageId } : {}),
         ...(body.remoteCandidateId ? { remoteCandidateId: body.remoteCandidateId } : {}),
@@ -1113,6 +1115,7 @@ const iterationDeps = {
   },
   startBaseline: async ({ state, mission, reason }) => {
     const matrix = inferMissionMatrix(mission, state.testMatrix || mission.testMatrix || {});
+    const fixedOperator = isFixedOperatorMission(mission);
     const strictZeroSource = isStrictZeroSourceMission(mission);
     if (state.benchmark?.purpose === 'baseline' && ['queued', 'running'].includes(state.benchmark.status)) return state;
     if (state.benchmark?.purpose === 'baseline' && state.benchmark.status === 'failed') {
@@ -1120,13 +1123,17 @@ const iterationDeps = {
       return state;
     }
     const research = state.researchAgent || {};
-    if (isResearchAgentActive(research)) return state;
+    // 四算子测试包的 baseline 由发布时冻结的 profile 提供；经验调研只给
+    // 后续候选提示词增益，绝不能阻塞可复现的 reference benchmark。
+    if (!fixedOperator && isResearchAgentActive(research)) return state;
     const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
     const researchedSource = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources });
     const semanticSource = mission.sourcePolicy?.allowSemanticFallback === true && researchTerminal
       ? buildSemanticBaselineSource(mission, research)
       : null;
-    const baselineSource = strictZeroSource
+    const baselineSource = fixedOperator
+      ? state.baseline?.source || mission.baseline?.source
+      : strictZeroSource
       ? researchedSource || semanticSource
       : state.baseline?.source
       || mission.baseline?.source
@@ -1212,7 +1219,7 @@ const iterationDeps = {
         purpose: 'baseline',
         operator: mission.operator || mission.title || 'operator',
         baselineSource,
-        ...(strictZeroSource ? { strictZeroSource: true, materializerResult: state.baseline.materializer.result } : {}),
+        ...((strictZeroSource || fixedOperator) ? { strictZeroSource: strictZeroSource, materializerResult: state.baseline?.materializer?.result } : {}),
         matrix,
         warmup: matrix.warmup,
         repeats: matrix.repeats,
@@ -1232,6 +1239,35 @@ const advanceTesterAutopilot = async (state) => {
   const actionType = state.agent?.currentAction?.type;
   const candidate = (state.candidateEvaluations || []).find((item) => item.patchDigest)
     || (state.candidateEvaluations || [])[0];
+
+  // 专用四算子路径：冻结语义和测试矩阵 -> baseline -> 可选经验调研 -> 三轮候选。
+  // 经验调研的失败被记录，但不会改变 baseline 或使任务进入 needs_human。
+  if (isFixedOperatorMission(mission)) {
+    if (state.baseline?.status !== 'complete') {
+      const nextState = await iterationDeps.startBaseline({ state, mission, reason: 'fixed operator profile baseline' });
+      return { state: nextState, action: nextState.benchmark?.status === 'running' ? 'baseline_started' : 'wait_baseline' };
+    }
+    const research = state.researchAgent || {};
+    const researchEnabled = mission.sourcePolicy?.researchEnabled !== false;
+    let experienceStarted = false;
+    if (researchEnabled && !research.runId) {
+      const direction = `为 ${mission.title || mission.operator} 搜寻 C500 / ${mission.operatorProfile?.language || 'target'} 的实现经验。只输出优化方向与参考；不得修改冻结语义、Correctness 或 Benchmark。`;
+      const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
+      try {
+        const started = await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: false, runPhase: 'experience' });
+        state = started;
+        experienceStarted = true;
+      } catch (error) {
+        state.researchAgent = { ...research, status: 'failed', runPhase: 'experience', phase: '经验调研不可用（不阻塞）', progress: 100, error: { code: error.code || 'EXPERIENCE_RESEARCH_FAILED', message: error.message } };
+        appendRuntimeEvent(state, 'research.experience_unavailable', { missionId: state.activeMissionId, error: error.message }, { kind: 'research', mode: 'client' });
+      }
+    }
+    // Experience research is a side-channel. It is intentionally asynchronous;
+    // a slow or unavailable web agent must never hold up candidate round 1.
+    if (isResearchAgentActive(state.researchAgent || {}) && state.researchAgent?.synchronous) return { state, action: 'wait_experience_research' };    if (!state.agent?.runId && ['idle', 'ready', 'awaiting_action', 'completed', 'failed', 'cancelled'].includes(state.agent?.status)) {
+      return { state: await iterationDeps.startMainRound({ state, goal: mission.goal }), action: 'candidate_agent_started' };
+    }
+  }
 
   if (isStrictZeroSourceMission(mission)) {
     const research = state.researchAgent || {};
@@ -1797,6 +1833,16 @@ async function handleApi(request, response, url) {
       throw error;
     }
     assertMissionIntent(goal, mission);
+    // Fixed operator profiles are driven by the autopilot. The public run
+    // command only arms the mission; starting an iteration here would race
+    // the deterministic baseline and produce a phantom first round.
+    if (isFixedOperatorMission(mission)) {
+      state.agent = { ...(state.agent || {}), runId: null, status: 'idle', phase: '等待固定 baseline', progress: 0, currentAction: null, goal };
+      state.stage = 'candidate';
+      await saveState(state);
+      json(response, 202, { state, runId: null, armed: true });
+      return;
+    }
     const resumeThreadId = body.resume === true
       ? state.agent?.threadId || state.runHistory?.find((run) => run.runtimeKind === runtimeDescriptor.mode && run.threadId)?.threadId || null
       : null;

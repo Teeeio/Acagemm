@@ -5,7 +5,7 @@ import { CreateMissionForm } from './components/CreateMissionForm.mjs';
 import { deriveTuiViewModel, loadTuiState, renderDashboardSnapshot, renderPublishSnapshot, resolveDashboardCommand } from './tui-state.mjs';
 import { createTerminalScreenSession } from './terminal-screen.mjs';
 import { createLatestRefreshGate, reconcileTuiSnapshot } from './tui-refresh.mjs';
-import { operatorLanguageOptions } from '../../client-runtime/operator-language.mjs';
+import { fixedOperatorProfiles } from '../../client-runtime/fixed-operator-profiles.mjs';
 import {
   addHumanFeedback,
   ensureProductionRuntime,
@@ -26,11 +26,9 @@ const App = () => {
   const [mode, setMode] = useState('dashboard');
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [draft, setDraft] = useState({
-    goal: '从零研究并优化 FlashInfer MLA paged attention 在沐曦 C500 上的 latency p50，相对 baseline 至少提升 20%；每轮必须生成真实且独立的 run.py 工作区 Diff。',
-    title: 'FlashInfer MLA Paged Attention',
-    repository: 'flashinfer-mla-c500',
-    metric: 'latency p50',
-    implementationLanguage: 'triton',
+    profileId: fixedOperatorProfiles[0].id,
+    researchEnabled: true,
+    requireAuthority: false,
     timeBudget: '',
   });
   const [fieldIndex, setFieldIndex] = useState(0);
@@ -39,12 +37,12 @@ const App = () => {
   const [doctorResult, setDoctorResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const refreshGate = useRef(createLatestRefreshGate());
-  const fields = ['goal', 'title', 'repository', 'metric', 'implementationLanguage', 'timeBudget'];
+  const fields = ['profileId', 'researchEnabled', 'requireAuthority', 'timeBudget'];
 
-  const cycleLanguage = (direction = 1) => setDraft((current) => {
-    const index = operatorLanguageOptions.findIndex((item) => item.id === current.implementationLanguage);
-    const next = (Math.max(0, index) + direction + operatorLanguageOptions.length) % operatorLanguageOptions.length;
-    return { ...current, implementationLanguage: operatorLanguageOptions[next].id };
+  const cycleProfile = (direction = 1) => setDraft((current) => {
+    const index = fixedOperatorProfiles.findIndex((item) => item.id === current.profileId);
+    const next = (Math.max(0, index) + direction + fixedOperatorProfiles.length) % fixedOperatorProfiles.length;
+    return { ...current, profileId: fixedOperatorProfiles[next].id };
   });
 
   useEffect(() => {
@@ -102,7 +100,6 @@ const App = () => {
   };
 
   const submitPublish = async () => {
-    if (!draft.goal.trim()) return setMessage('Goal is required.');
     if (draft.timeBudget && (!/^\d+$/.test(draft.timeBudget) || Number(draft.timeBudget) <= 0)) return setMessage('Time budget must be positive milliseconds or empty.');
     const result = await perform('Publish production mission', () => publishMission(draft));
     if (result) setMode('dashboard');
@@ -145,10 +142,13 @@ const App = () => {
       if (busy) return;
       if (key.tab || key.downArrow) return setFieldIndex((current) => (current + 1) % fields.length);
       if (key.upArrow) return setFieldIndex((current) => (current + fields.length - 1) % fields.length);
-      if (keyName === 'implementationLanguage' && (key.leftArrow || input === '[')) return cycleLanguage(-1);
-      if (keyName === 'implementationLanguage' && (key.rightArrow || input === ' ' || input === ']')) return cycleLanguage(1);
+      if (keyName === 'profileId' && (key.leftArrow || input === '[')) return cycleProfile(-1);
+      if (keyName === 'profileId' && (key.rightArrow || input === ' ' || input === ']')) return cycleProfile(1);
+      if (['researchEnabled', 'requireAuthority'].includes(keyName) && (key.leftArrow || key.rightArrow || input === ' ' || input === '[' || input === ']')) {
+        return setDraft((current) => ({ ...current, [keyName]: !current[keyName] }));
+      }
       if (key.return) return void submitPublish();
-      if (keyName === 'implementationLanguage') return;
+      if (['profileId', 'researchEnabled', 'requireAuthority'].includes(keyName)) return;
       if (key.backspace || key.delete) return setDraft((current) => ({ ...current, [keyName]: String(current[keyName] || '').slice(0, -1) }));
       if (input && !key.ctrl && !key.meta) setDraft((current) => ({ ...current, [keyName]: `${current[keyName] || ''}${input}` }));
       return;

@@ -253,7 +253,7 @@ export const createClaudeClient = (options = {}) => {
       error: null,
     };
     await persistRun(runId, record);
-    const allowedTools = role === 'research-acquire'
+    const allowedTools = ['research-acquire', 'research-experience'].includes(role)
       ? 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch'
       : 'Read,Write,Edit';
     const configuredMaxTurns = Number(environment.OPERATOR_CLAUDE_MAX_TURNS || process.env.OPERATOR_CLAUDE_MATERIALIZER_MAX_TURNS || 6);

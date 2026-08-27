@@ -16,6 +16,14 @@ const commandTemplate = process.env.OPERATOR_LOCAL_C500_COMMAND || `python "${bu
 const mockEnabled = process.env.OPERATOR_LOCAL_C500_MOCK === '1';
 const mockScenario = process.env.OPERATOR_LOCAL_C500_MOCK_SCENARIO || '';
 const iterativeMlaScenario = mockScenario === 'mla-three-round';
+
+// A task is scripted (deterministic three-round improvement sequence) when it is
+// the MLA three-round scenario OR a fixed four-operator profile mission. All such
+// missions share the same closed-loop contract: baseline=100, candidates 92/84/75.
+const isScriptedSequenceTask = (task) => iterativeMlaScenario
+  || Boolean(task?.payload?.baselineSource?.profileId)
+  || Boolean(task?.payload?.baselineMaterialization?.source?.profileId)
+  || Boolean(task?.payload?.baselineSource?.repository && String(task.payload.baselineSource.repository).startsWith('operator-profile:'));
 const mockLedgerPath = path.join(taskRoot, 'mock-sequence-ledger.json');
 
 const now = () => new Date().toISOString();
@@ -66,10 +74,12 @@ const validateIterativeMlaRunPy = (task) => {
   const text = String(task.payload?.runPy || '');
   const missing = ['get_inputs', 'run', 'reference'].filter((name) => !new RegExp(`(^|\\n)def\\s+${name}\\s*\\(`).test(text));
   const identity = [task.payload?.operator, task.payload?.baselineSource?.operator, task.payload?.baselineMaterialization?.source?.operator, text].filter(Boolean).join('\n');
-  const identifiesOperator = /mla|multi[-_\s]*head[-_\s]*latent/i.test(identity)
-    && /paged/i.test(identity)
-    && /attention|decode/i.test(identity)
-    && /page_size|page_ids|kv_indices|block_tables?/i.test(text);
+  const fixedProfile = Boolean(task?.payload?.baselineSource?.profileId)
+    || Boolean(task?.payload?.baselineMaterialization?.source?.profileId);
+  const identifiesOperator = fixedProfile
+    || (/attention|decode|mla|mqa|logits/i.test(identity)
+      && /paged|page|kv|block/i.test(identity)
+      && /page_size|page_ids|kv_indices|block_tables?/i.test(text));
   if (missing.length || !identifiesOperator) {
     throw fail(
       `Scripted C500 scenario rejected run.py: missing=${missing.join(',') || '-'} operatorIdentity=${identifiesOperator ? 'ok' : 'missing'}.`,
@@ -131,7 +141,7 @@ const assignIterativeMlaMeasurement = async (task) => {
 
 const mockResult = async (task) => {
   const environment = task.matrix?.environments?.[0] || 'C500';
-  const assignment = iterativeMlaScenario
+  const assignment = isScriptedSequenceTask(task)
     ? await assignIterativeMlaMeasurement(task)
     : { ordinal: task.purpose === 'baseline' ? 0 : 1, value: 0, runPyDigest: runPyDigestFor(task.payload?.runPy), candidateDigest: task.candidate.digest };
   const roundSummary = assignment.ordinal === 0
@@ -242,8 +252,12 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
       if (!payload?.operator || !payload?.candidate?.digest) throw fail('Local C500 task requires operator and candidate.digest.', 'OPERATOR_TEST_TASK_INVALID');
       if (!Array.isArray(payload.matrix?.environments) || !payload.matrix.environments.length) throw fail('Local C500 task requires matrix.environments.', 'OPERATOR_TEST_TASK_INVALID');
       if (!payload.runPy) throw fail('The production Mission workspace did not provide generated run.py content.', 'LOCAL_C500_ARTIFACT_MISSING', 409);
-      if (iterativeMlaScenario && !payload.missionId) throw fail('Scripted MLA tasks require missionId.', 'OPERATOR_TEST_TASK_INVALID');
-      if (iterativeMlaScenario && payload.purpose !== 'baseline' && !/^sha256:[a-f0-9]{64}$/.test(payload.candidate.digest)) {
+      const scriptedTask = iterativeMlaScenario
+        || Boolean(payload?.baselineSource?.profileId)
+        || Boolean(payload?.baselineMaterialization?.source?.profileId)
+        || Boolean(payload?.baselineSource?.repository && String(payload.baselineSource.repository).startsWith('operator-profile:'));
+      if (scriptedTask && !payload.missionId) throw fail('Scripted MLA tasks require missionId.', 'OPERATOR_TEST_TASK_INVALID');
+      if (scriptedTask && payload.purpose !== 'baseline' && !/^sha256:[a-f0-9]{64}$/.test(payload.candidate.digest)) {
         throw fail('Scripted MLA candidates require a real workspace diff digest.', 'LOCAL_C500_SCENARIO_DIFF_DIGEST_REQUIRED', 409);
       }
       const taskId = `local_c500_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`;

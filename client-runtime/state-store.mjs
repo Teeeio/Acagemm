@@ -1146,6 +1146,7 @@ export function createMission(state, input) {
     hardware,
     metric: input.metric?.trim() || 'latency p50',
     implementation: normalizeOperatorLanguage(input.implementation),
+    operatorProfile: input.operatorProfile ? structuredClone(input.operatorProfile) : null,
     testMatrix: normalizeMissionTestMatrix(input.testMatrix || {}),
     sourcePolicy,
     testScenario: input.testScenario ? structuredClone(input.testScenario) : null,

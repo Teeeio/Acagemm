@@ -71,8 +71,8 @@ def _named_cases(module, count, test_spec):
         raise RuntimeError(f"get_test_cases() must return exactly {count} cases; got {len(generated)}")
     normalized = []
     for index, item in enumerate(generated):
-        if not isinstance(item, dict) or "inputs" not in item or not item.get("name") or not item.get("category"):
-            raise RuntimeError(f"correctness case {index + 1} must contain name, category, and inputs")
+        if not isinstance(item, dict) or ("inputs" not in item and not callable(item.get("make_inputs"))) or not item.get("name") or not item.get("category"):
+            raise RuntimeError(f"correctness case {index + 1} must contain name, category, and inputs or make_inputs")
         normalized.append(item)
     required = set(((test_spec or {}).get("correctness") or {}).get("requiredCategories") or [])
     present = {str(item["category"]) for item in normalized}
@@ -86,13 +86,35 @@ def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_mo
     started = time.perf_counter()
     oracle = oracle_module or module
     generated_cases = _named_cases(oracle, cases, test_spec)
+    details = []
+    dtype_tolerance = ((test_spec or {}).get("correctness") or {}).get("dtypeTolerance") or {}
+    cos_limit = float(((test_spec or {}).get("correctness") or {}).get("requireCosDiffBelow") or 1e-5)
     for index, case in enumerate(generated_cases):
-        inputs = case["inputs"]
+        inputs = case.get("inputs") if "inputs" in case else case["make_inputs"]()
         expected = oracle.reference(inputs)
         actual = module.run(inputs)
         _sync(torch)
+        tensor_type = getattr(torch, "Tensor", ())
+        floating_inputs = [value for value in inputs.values() if tensor_type and isinstance(value, tensor_type) and value.is_floating_point()]
+        dtype_name = str((floating_inputs[0].dtype if floating_inputs else getattr(actual, "dtype", "unknown"))).replace("torch.", "")
+        tolerance = dtype_tolerance.get(dtype_name) or {}
+        case_atol, case_rtol = float(tolerance.get("atol", atol)), float(tolerance.get("rtol", rtol))
+        if tensor_type and isinstance(actual, tensor_type) and isinstance(expected, tensor_type):
+            actual_float, expected_float = actual.float(), expected.float()
+            delta = actual_float - expected_float
+            max_diff = float(delta.abs().max().item()) if delta.numel() else 0.0
+            rmse = float(torch.sqrt(torch.mean(delta.square())).item()) if delta.numel() else 0.0
+            if delta.numel():
+                cosine = torch.nn.functional.cosine_similarity(actual_float.flatten(), expected_float.flatten(), dim=0)
+                cos_diff = float(1.0 - cosine.abs().item())
+            else:
+                cos_diff = 0.0
+        else:
+            max_diff = rmse = cos_diff = 0.0
         try:
-            _assert_close(torch, actual, expected, atol, rtol)
+            _assert_close(torch, actual, expected, case_atol, case_rtol)
+            if cos_diff >= cos_limit:
+                raise AssertionError(f"cos_diff {cos_diff} is not below {cos_limit}")
         except Exception as error:
             return {
                 "passed": False,
@@ -102,14 +124,17 @@ def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_mo
                 "failedCaseName": case["name"],
                 "failedCaseCategory": case["category"],
                 "error": str(error),
+                "caseResults": details + [{"case": case["name"], "dtype": dtype_name, "maxDiff": max_diff, "rmse": rmse, "cosDiff": cos_diff, "passed": False}],
                 "durationMs": round((time.perf_counter() - started) * 1000, 3),
             }
+        details.append({"case": case["name"], "dtype": dtype_name, "maxDiff": max_diff, "rmse": rmse, "cosDiff": cos_diff, "passed": True})
     return {
         "passed": True,
         "total": cases,
         "passedCases": cases,
         "categories": sorted({str(case["category"]) for case in generated_cases}),
         "caseNames": [str(case["name"]) for case in generated_cases],
+        "caseResults": details,
         "durationMs": round((time.perf_counter() - started) * 1000, 3),
     }
 
@@ -125,33 +150,36 @@ def _benchmark(module, torch, warmup, repeats):
     return _benchmark_inputs(module, torch, [{"name": "primary", "inputs": module.get_inputs()}], warmup, repeats)[0]
 
 
-def _benchmark_inputs(module, torch, profiles, warmup, repeats):
+def _benchmark_inputs(module, torch, profiles, warmup, repeats, oracle_module=None):
     results = []
     for profile in profiles:
-        inputs = profile["inputs"]
+        inputs = profile.get("inputs") if "inputs" in profile else profile["make_inputs"]()
+        reference = _benchmark_one(oracle_module, torch, inputs, warmup, repeats) if oracle_module else None
         result = _benchmark_one(module, torch, inputs, warmup, repeats)
-        results.append({"profile": profile["name"], **result})
+        results.append({
+            "profile": profile["name"],
+            **result,
+            "referenceP50Us": reference["p50Us"] if reference else None,
+            "speedup": (reference["p50Us"] / result["p50Us"]) if reference and result["p50Us"] > 0 else None,
+        })
     return results
 
 
 def _benchmark_one(module, torch, inputs, warmup, repeats):
-    for _ in range(warmup):
-        module.run(inputs)
-    _sync(torch)
-    samples = []
-    for _ in range(repeats):
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
-        start.record()
-        module.run(inputs)
-        end.record()
-        end.synchronize()
-        samples.append(float(start.elapsed_time(end)) * 1000.0)
+    import triton
+
+    measured = triton.testing.do_bench(
+        lambda: module.run(inputs),
+        warmup=max(1, warmup),
+        rep=max(1, repeats),
+        quantiles=[0.5, 0.95, 0.0, 1.0],
+    )
+    values = list(measured) if isinstance(measured, (tuple, list)) else [float(measured)] * 4
     return {
-        "p50Us": statistics.median(samples),
-        "p95Us": _percentile(samples, 0.95),
-        "minUs": min(samples),
-        "maxUs": max(samples),
+        "p50Us": float(values[0]) * 1000.0,
+        "p95Us": float(values[1]) * 1000.0,
+        "minUs": float(values[2]) * 1000.0,
+        "maxUs": float(values[3]) * 1000.0,
         "warmup": warmup,
         "samples": repeats,
     }
@@ -166,8 +194,8 @@ def _named_benchmark_profiles(module, test_spec):
         raise RuntimeError("get_benchmark_inputs() returned no profiles")
     normalized = []
     for index, item in enumerate(generated):
-        if not isinstance(item, dict) or "inputs" not in item or not item.get("name"):
-            raise RuntimeError(f"benchmark profile {index + 1} must contain name and inputs")
+        if not isinstance(item, dict) or ("inputs" not in item and not callable(item.get("make_inputs"))) or not item.get("name"):
+            raise RuntimeError(f"benchmark profile {index + 1} must contain name and inputs or make_inputs")
         normalized.append(item)
     required = set(((test_spec or {}).get("benchmark") or {}).get("requiredProfiles") or [])
     present = {str(item["name"]) for item in normalized}
@@ -273,7 +301,7 @@ def _run(args):
     if not correctness["passed"]:
         raise RuntimeError(f"correctness failed on case {correctness.get('failedCase')}: {correctness.get('error')}")
     benchmark_profiles = _named_benchmark_profiles(oracle_module, test_spec)
-    benchmark_results = _benchmark_inputs(module, torch, benchmark_profiles, warmup, repeats)
+    benchmark_results = _benchmark_inputs(module, torch, benchmark_profiles, warmup, repeats, oracle_module)
     primary_benchmark = benchmark_results[0]
 
     runner = Path(__file__).resolve()
@@ -308,6 +336,8 @@ def _run(args):
             "samples": benchmark["samples"],
             "warmup": benchmark["warmup"],
             "p95": benchmark["p95Us"],
+            "referenceValue": benchmark.get("referenceP50Us"),
+            "speedup": benchmark.get("speedup"),
             "correctness": correctness,
         } for benchmark in benchmark_results],
         "tracer": {

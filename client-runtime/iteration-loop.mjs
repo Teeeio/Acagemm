@@ -257,6 +257,9 @@ const activeMissionBudgetMs = (state = {}) => {
 // 全局兜底：任一上限命中返回原因码；未命中返回 null。命中后循环停止自动流转，但手动操作不受阻。
 export const detectLoopGuard = (state) => {
   const stats = state?.iterationStats || {};
+  const mission = (state?.missions || []).find((item) => item.id === state?.activeMissionId) || {};
+  const fixedRounds = Number(mission?.testScenario?.fixedRounds || 0);
+  if (fixedRounds > 0 && (stats.round || 0) >= fixedRounds) return 'fixed_rounds_complete';
   if (stats.loopStatus === 'needs_human') return stats.loopStatusReason || 'needs_human';
   const missionBudgetMs = activeMissionBudgetMs(state);
   const budgetStartedAt = state?.missionBudgetStartedAt || stats.loopStartedAt;
@@ -308,11 +311,11 @@ const completeMaximizeMission = (state, reason, eventType = 'loop.maximize_compl
   state.agent = {
     ...(state.agent || {}),
     status: 'completed',
-    phase: reason === 'total_budget' ? 'Mission budget 已到，保留 current best' : 'Mission 平台期完成，保留 current best',
+    phase: reason === 'total_budget' ? 'Mission budget 已到，保留 current best' : reason === 'fixed_rounds_complete' ? '固定三轮完成，保留 current best' : 'Mission 平台期完成，保留 current best',
     progress: 100,
     currentAction: null,
   };
-  addAuditEvent(state, reason === 'total_budget' ? 'Mission budget 已到' : 'Mission 平台期完成', `Current best: ${state.currentBest?.value || '—'}`, reason === 'total_budget' ? 'warning' : 'blue', 'Timer');
+  addAuditEvent(state, reason === 'total_budget' ? 'Mission budget 已到' : reason === 'fixed_rounds_complete' ? '固定三轮完成' : 'Mission 平台期完成', `Current best: ${state.currentBest?.value || '—'}`, reason === 'total_budget' ? 'warning' : 'blue', 'Timer');
   appendRuntimeEvent(state, eventType, { reason, currentBest: state.currentBest || null }, { kind: 'policy', mode: 'client' });
   return state;
 };
@@ -328,9 +331,9 @@ export async function advanceIteration(state, deps = {}) {
   if (guardReason) {
     const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
     const maximizeObjective = isMaximizeMission({ ...mission, objective: state.objective || mission.objective, goal: state.agent?.goal || mission.goal });
-    if (guardReason === 'total_budget' && maximizeObjective) {
+    if ((guardReason === 'total_budget' || guardReason === 'fixed_rounds_complete') && maximizeObjective) {
       completeMaximizeMission(state, guardReason, 'loop.budget_completed');
-      return { state, action: 'completed_budget' };
+      return { state, action: guardReason === 'fixed_rounds_complete' ? 'completed_fixed_rounds' : 'completed_budget' };
     }
     state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: guardReason };
     if (!state.runtimeEvents?.some((event) => event.type === 'loop.needs_human' && event.payload?.reason === guardReason)) {

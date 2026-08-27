@@ -5,8 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSourceMirrorPolicy } from '../../client-runtime/source-mirror-policy.mjs';
 import { normalizeOperatorLanguage } from '../../client-runtime/operator-language.mjs';
-import { normalizeMissionTestMatrix } from '../../client-runtime/test-spec.mjs';
-import { FLEXIBLE_SOURCE_POLICY_REVISION } from '../../client-runtime/local-c500-state-migration.mjs';
+import { buildFixedOperatorBaselineRunPy, fixedOperatorBaselineSource, fixedOperatorPrompt, fixedOperatorTestMatrix, getFixedOperatorProfile } from '../../client-runtime/fixed-operator-profiles.mjs';
 import { isCurrentLocalC500Runtime } from '../../client-runtime/local-c500-runtime-contract.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -151,17 +150,18 @@ const slug = (value) => String(value || 'local-c500-project')
 
 const seedMissionBrief = async (project, draft) => {
   const briefPath = path.join(project.repository, 'MISSION.md');
-  const implementation = normalizeOperatorLanguage(draft.implementationLanguage);
+  const profile = getFixedOperatorProfile(draft.profileId);
+  const implementation = normalizeOperatorLanguage(profile.implementationLanguage);
   const content = [
     '# Operator Optimization Mission',
     '',
-    `Title: ${draft.title.trim() || draft.goal.trim().slice(0, 80)}`,
+    `Title: ${profile.title}`,
     'Hardware: MetaX C500',
-    `Metric: ${draft.metric.trim() || 'latency p50'}`,
+    'Metric: latency p50',
     '',
     '## Goal',
     '',
-    draft.goal.trim(),
+    fixedOperatorPrompt(profile),
     '',
     '## Implementation',
     '',
@@ -171,8 +171,9 @@ const seedMissionBrief = async (project, draft) => {
     '',
     '## Execution Contract',
     '',
-    '- Discover and validate local source material first, then authoritative online material when needed.',
-    '- Build the executable operator entry, reference, representative inputs, and candidate in this Mission Workspace.',
+    '- The embedded operator profile is the immutable semantic and test authority.',
+    '- External research supplies optimization experience only and cannot modify the profile.',
+    '- Execute exactly three candidate rounds and retain the fastest correctness-passing candidate.',
     '- Do not substitute an unrelated operator or a smoke template.',
     '- Report a semantic blocker instead of fabricating missing operator behavior.',
     '',
@@ -181,7 +182,7 @@ const seedMissionBrief = async (project, draft) => {
   const runGit = (args) => spawnSync('git', args, { cwd: project.repository, encoding: 'utf8', windowsHide: true });
   const added = runGit(['add', 'MISSION.md']);
   if (added.status !== 0) throw new Error(added.stderr || 'Failed to stage the Mission brief.');
-  const committed = runGit(['commit', '--allow-empty', '-m', `Mission brief: ${slug(draft.title || draft.goal).slice(0, 48)}`]);
+  const committed = runGit(['commit', '--allow-empty', '-m', `Mission brief: ${slug(profile.id).slice(0, 48)}`]);
   if (committed.status !== 0) throw new Error(committed.stderr || 'Failed to commit the Mission brief.');
   return briefPath;
 };
@@ -219,42 +220,45 @@ export const publishMission = async (draft) => {
   if (current.state.missionPaused || activeMission?.status === 'stopped' || stoppedOldMission) {
     await api.patch('/api/state', { missionPaused: false, missionBudgetMs: null });
   }
-  const project = await createFreshManagedProject(draft.repository || 'local-c500-project');
+  const profile = getFixedOperatorProfile(draft.profileId);
+  const project = await createFreshManagedProject(profile.id);
   await seedMissionBrief(project, draft);
   const timeBudget = Number(draft.timeBudget || 0);
-  const implementation = normalizeOperatorLanguage(draft.implementationLanguage);
-  const testMatrix = normalizeMissionTestMatrix({
-    environments: ['C500'],
-    stages: ['Correctness', 'Full Benchmark'],
-    warmup: 50,
-    repeats: 200,
-    correctnessCases: 24,
-  });
+  const implementation = normalizeOperatorLanguage(profile.implementationLanguage);
+  const testMatrix = fixedOperatorTestMatrix(profile);
+  const baselineSource = fixedOperatorBaselineSource(profile);
+  const baselineRunPy = buildFixedOperatorBaselineRunPy(profile);
+  const goal = `在 MetaX C500 上为 ${profile.title} 生成高性能实现；严格保持内置 Profile 语义，完成三轮独立候选并保留 correctness 通过者中的最优版本。`;
   const created = await api.post('/api/missions', {
-    goal: draft.goal.trim(),
-    title: draft.title.trim(),
+    goal,
+    title: profile.title,
     projectId: project.id,
     repository: project.repository,
     projectRoot: project.root,
     sourceRoot: project.sourceRoot,
     hardware: ['C500'],
-    metric: draft.metric.trim() || 'latency p50',
+    metric: 'latency p50',
     implementation,
+    operatorProfile: profile,
     sourcePolicy: {
-      mode: 'agent-flexible',
-      strictZeroSource: true,
-      localFirst: true,
-      allowDiscoveredSources: true,
-      allowSemanticFallback: true,
-      revision: FLEXIBLE_SOURCE_POLICY_REVISION,
+      mode: 'embedded-operator-profile',
+      strictZeroSource: false,
+      requireAuthority: draft.requireAuthority === true,
+      researchEnabled: draft.researchEnabled !== false,
     },
-    testScenario: { id: 'mla-three-round', hardwareMockOnly: true },
-    objective: { mode: 'threshold', metric: draft.metric.trim() || 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.2 },
+    baseline: {
+      kind: 'pytorch_reference',
+      source: baselineSource,
+      sourcePolicy: { requireAuthority: false, requireSingleFileExpansion: true, allowGeneratedV0: true },
+      materializer: { status: 'completed', phase: '内置 Profile baseline 已就绪', progress: 100, result: { schemaVersion: 'operator-studio.fixed-baseline/v1', summary: profile.summary, runPy: baselineRunPy, runPySource: 'embedded-operator-profile', source: baselineSource, report: { mode: 'fixed-operator-profile', profileId: profile.id } } },
+    },
+    testScenario: { id: 'fixed-four-operator-v1', fixedRounds: 3, researchEnabled: draft.researchEnabled !== false },
+    objective: { mode: 'maximize', metric: 'latency p50', direction: 'minimize' },
     testMatrix,
     missionBudgetMs: timeBudget > 0 ? timeBudget : null,
   });
   const missionId = created.state.activeMissionId;
-  const started = await api.post(`/api/missions/${encodeURIComponent(missionId)}/runs`, { goal: draft.goal.trim() });
+  const started = await api.post(`/api/missions/${encodeURIComponent(missionId)}/runs`, { goal });
   return { missionId, state: started.state, runId: started.runId, project };
 };
 
