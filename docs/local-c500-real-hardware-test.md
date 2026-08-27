@@ -148,6 +148,8 @@ Claude 模式还应看到 runtime mode 为 `claude-code`、status 为 `connected
 
 ## 4. 启动真机测试
 
+代码更新后直接重新运行启动命令即可。TUI 会通过 runtime 协议握手识别并重启属于当前 Tester Home 的旧后台服务；旧版本留下的 `baseline_source_unresolved` C500 测试 Mission 会自动解除来源阻塞并重新执行 Research，无需删除 `.local-c500-production`。
+
 建议每次验收使用全新状态目录和独立端口：
 
 ```bash

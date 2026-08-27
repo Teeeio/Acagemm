@@ -34,6 +34,7 @@
     "test:gate": "node tests/accept-gate-test.mjs",
     "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",
     "test:local-c500-launch-mode": "node tests/local-c500-launch-mode-test.mjs",
+    "test:local-c500-state-migration": "node tests/local-c500-state-migration-test.mjs",
     "test:source-mirror-policy": "node tests/source-mirror-policy-test.mjs",
     "test:operator-language": "node tests/operator-language-test.mjs",
     "test:test-spec": "node tests/test-spec-test.mjs && python tests/local-c500-runner-contract-test.py",

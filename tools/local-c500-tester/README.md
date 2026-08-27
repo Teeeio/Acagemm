@@ -37,6 +37,8 @@ Source 调研默认采用灵活的本地优先策略：Research Agent 先读取�
 
 TUI 会在 `http://127.0.0.1:4275` 启动 API-only 生产 runtime。端口可通过 `LOCAL_C500_API_PORT` 覆盖。状态、Mission Workspace、测试任务和导出文件默认写入 `.local-c500-production/`，可通过 `LOCAL_C500_TESTER_HOME` 覆盖。
 
+更新分支后再次启动 TUI 时，启动器会校验后台 runtime 协议版本。仅当服务、运行目录和 PID 文件均属于当前 Tester 时，旧 runtime 才会被自动重启；升级前因 `baseline_source_unresolved` 阻塞的 `mla-three-round` Mission 会保留原数据并自动迁移到灵活来源策略，然后重新开始 Research。
+
 发布操作依次调用：
 
 ```text

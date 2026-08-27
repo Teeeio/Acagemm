@@ -50,6 +50,8 @@ import { testServiceClient } from './test-service-client.mjs';
 import { createOperatorTestQueue } from './operator-test-queue.mjs';
 import { consumeWorkflowRecoveryBudget, reconcileWorkflowState } from './workflow-kernel.mjs';
 import { createLocalC500ServiceClient, localC500Config } from './local-c500-service-client.mjs';
+import { migrateLocalC500TesterState } from './local-c500-state-migration.mjs';
+import { LOCAL_C500_RUNTIME_CONTRACT_VERSION } from './local-c500-runtime-contract.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
 import { assertMissionIntent } from './mission-intent.mjs';
 import { nativeDirectoryPicker } from './native-directory-picker.mjs';
@@ -82,6 +84,7 @@ const bridge = {
   serveWeb,
   dataDir,
   runtimeDir,
+  runtimeContractVersion: LOCAL_C500_RUNTIME_CONTRACT_VERSION,
   startedAt,
 };
 const activeTestServiceClient = localC500Config.enabled
@@ -1332,9 +1335,16 @@ const loadRuntimeState = async () => {
   runtimeStateInFlight = (async () => {
   const runtime = await agentRuntime.describe();
   const state = await loadState({ runtimeMode: runtime.mode, commandJournal, applyRegistry: commandRegistry });
+  const sourcePolicyMigration = migrateLocalC500TesterState(state, { enabled: localC500Config.enabled });
+  if (sourcePolicyMigration.changed) {
+    appendRuntimeEvent(state, 'mission.source_policy_migrated', sourcePolicyMigration.recovery, { kind: 'migration', mode: 'client' });
+    addAuditEvent(state, 'C500 来源策略已升级', sourcePolicyMigration.recovery?.previousBlocker
+      ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，Research 将自动重新执行`
+      : 'Research 将按本地、联网、语义 fallback 顺序执行', 'blue', 'RefreshCw');
+  }
   const initialReconciliation = reconcileWorkflowState(state);
   const projection = await agentRuntime.projectState({ ...initialReconciliation.state, runtime });
-  let changed = projection.changed || initialReconciliation.changed;
+  let changed = sourcePolicyMigration.changed || projection.changed || initialReconciliation.changed;
   if (projection.state.benchmark?.status === 'running' && projection.state.benchmark?.testTaskId) {
     try {
       const before = JSON.stringify(projection.state.benchmark);

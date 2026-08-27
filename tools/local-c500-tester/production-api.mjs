@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { loadSourceMirrorPolicy } from '../../client-runtime/source-mirror-policy.mjs';
 import { normalizeOperatorLanguage } from '../../client-runtime/operator-language.mjs';
 import { normalizeMissionTestMatrix } from '../../client-runtime/test-spec.mjs';
+import { FLEXIBLE_SOURCE_POLICY_REVISION } from '../../client-runtime/local-c500-state-migration.mjs';
+import { isCurrentLocalC500Runtime } from '../../client-runtime/local-c500-runtime-contract.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const testerHome = path.resolve(process.env.LOCAL_C500_TESTER_HOME || path.join(rootDir, '.local-c500-production'));
@@ -28,6 +30,28 @@ const launchMode = resolveLocalC500LaunchMode();
 const agentRuntimeMode = resolveAgentRuntimeMode();
 
 const sleep = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
+
+const restartStaleProductionRuntime = async (current) => {
+  const expectedRuntimeDir = path.join(testerHome, 'runtime');
+  const bridge = current?.__bridge || {};
+  const pid = Number(bridge.pid || 0);
+  const pidFile = path.join(expectedRuntimeDir, 'operator-studio.pid');
+  const recordedPid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'ascii').trim()) : 0;
+  const sameRuntimeDir = bridge.runtimeDir && path.resolve(bridge.runtimeDir) === path.resolve(expectedRuntimeDir);
+  if (current?.service !== 'operator-studio-client-runtime' || !sameRuntimeDir || !Number.isInteger(pid) || pid <= 0 || recordedPid !== pid) {
+    throw new Error(`${apiBaseUrl} is running an outdated runtime contract, but its process identity does not match this tester home. Stop it manually or use a different LOCAL_C500_API_PORT.`);
+  }
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw new Error(`Unable to stop outdated runtime PID ${pid}: ${error.message}`);
+  }
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    await sleep(100);
+    if (!await health()) return;
+  }
+  throw new Error(`Outdated runtime PID ${pid} did not stop. Stop it manually, then restart the tester.`);
+};
 
 const requestJson = async (pathname, options = {}) => {
   const response = await fetch(`${apiBaseUrl}${pathname}`, {
@@ -77,7 +101,8 @@ export const ensureProductionRuntime = async () => {
     if (current.runtime?.mode !== agentRuntimeMode) {
       throw new Error(`${apiBaseUrl} is already running with Agent Runtime ${current.runtime?.mode || 'unknown'}; requested ${agentRuntimeMode}. Use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME or stop the existing runtime.`);
     }
-    return current;
+    if (isCurrentLocalC500Runtime(current)) return current;
+    await restartStaleProductionRuntime(current);
   }
 
   mkdirSync(path.join(testerHome, 'logs'), { recursive: true });
@@ -221,6 +246,7 @@ export const publishMission = async (draft) => {
       localFirst: true,
       allowDiscoveredSources: true,
       allowSemanticFallback: true,
+      revision: FLEXIBLE_SOURCE_POLICY_REVISION,
     },
     testScenario: { id: 'mla-three-round', hardwareMockOnly: true },
     objective: { mode: 'threshold', metric: draft.metric.trim() || 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.2 },

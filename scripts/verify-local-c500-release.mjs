@@ -23,6 +23,7 @@ const checks = [
   'test:strict-zero-source',
   'test:local-c500-production-backend',
   'test:local-c500-launch-mode',
+  'test:local-c500-state-migration',
   'test:source-mirror-policy',
   'test:operator-language',
   'test:test-spec',
