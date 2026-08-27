@@ -103,7 +103,7 @@ export const ensureProductionRuntime = async () => {
       && pid > 0
       && recordedPid === pid;
 
-    if (isCurrentLocalC500Runtime(current)
+    if (ownedByThisTester && isCurrentLocalC500Runtime(current)
       && current.testBackend?.mock === launchMode.mock
       && (!launchMode.mock || current.testBackend?.scenario === launchMode.scenario)
       && current.runtime?.mode === agentRuntimeMode) return current;
