@@ -1386,6 +1386,16 @@ export function applyOperatorTestSnapshot(state, snapshot) {
     return state;
   }
   if (nextStatus === 'failed') {
+    if (state.benchmark?.purpose === 'baseline') {
+      // Keep the baseline projection truthful. Previously only benchmark.status
+      // changed, which rendered as "baseline running · benchmark failed" in TUI.
+      state.baseline = {
+        ...(state.baseline || createBaselineRequirementState()),
+        status: 'failed',
+        error: snapshot.error ? structuredClone(snapshot.error) : { code: 'BASELINE_TEST_FAILED', message: 'Baseline operator test failed.' },
+        failedAt: snapshot.completedAt || new Date().toISOString(),
+      };
+    }
     // 测试提交/执行失败：恢复 test.plan 动作，操作员可直接重试（否则 guard 拦死，流程卡在 validation）
     if (previousStatus !== 'failed') {
       const candidateId = state.appliedCandidateId || state.benchmark?.candidate?.id || null;

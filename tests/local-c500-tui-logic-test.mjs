@@ -63,6 +63,22 @@ assert.equal(needsHuman.actions.feedback, true);
 assert.equal(needsHuman.actions.stop, true);
 assert.match(needsHuman.banner, /ACTION REQUIRED \/ baseline_source_unresolved/);
 
+const failedBaselineSnapshot = {
+  mission: mission({ status: 'needs_human' }),
+  state: {
+    stage: 'candidate',
+    baseline: { status: 'failed', error: { code: 'LOCAL_C500_RUNNER_FAILED', message: 'CUDA out of memory' } },
+    benchmark: { status: 'failed', progress: 100, testTaskId: 'baseline-failed-1', lastServiceError: { code: 'LOCAL_C500_RUNNER_FAILED', message: 'CUDA out of memory' } },
+    iterationStats: { loopStatus: 'needs_human', loopStatusReason: 'baseline_test_failed' },
+  },
+  tasks: [{ ...task('baseline', 'failed'), taskId: 'baseline-failed-1', error: { code: 'LOCAL_C500_RUNNER_FAILED', message: 'CUDA out of memory' } }],
+};
+const failedBaseline = deriveTuiViewModel(failedBaselineSnapshot);
+assert.equal(failedBaseline.failure.code, 'LOCAL_C500_RUNNER_FAILED');
+assert.match(failedBaseline.failure.message, /CUDA out of memory/);
+assert.match(failedBaseline.banner, /LOCAL_C500_RUNNER_FAILED/);
+assert.match(renderDashboardSnapshot(failedBaselineSnapshot), /error       LOCAL_C500_RUNNER_FAILED: CUDA out of memory/);
+
 const stopped = deriveTuiViewModel({
   mission: mission({ status: 'stopped' }),
   state: { missionPaused: true, iterationStats: { loopStatus: 'stopped', loopStatusReason: 'stopped_by_tester' } },

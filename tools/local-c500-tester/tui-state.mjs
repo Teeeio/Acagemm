@@ -216,6 +216,10 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
   const active = mission || {};
   const iteration = state.iterationStats || active.iterationStats || {};
   const benchmark = state.benchmark || active.benchmark || {};
+  const benchmarkTask = benchmark.testTaskId ? tasks.find((task) => (task.taskId || task.id) === benchmark.testTaskId) : null;
+  const failure = benchmark.lastServiceError || benchmarkTask?.error || state.baseline?.error || null;
+  const failureMessage = failure?.message ? String(failure.message) : '';
+  const failureCode = failure?.code ? String(failure.code) : '';
   const best = state.currentBest || active.currentBest || {};
   const loopStatus = iteration.loopStatus || null;
   const missionStatus = active.status || 'idle';
@@ -244,7 +248,7 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
   else if (loopStatus === 'completed') statusLabel = 'completed';
 
   let banner = 'READY / publish a Mission to begin';
-  if (needsHuman) banner = `ACTION REQUIRED / ${iteration.loopStatusReason || 'human input required'}`;
+  if (needsHuman) banner = `ACTION REQUIRED / ${iteration.loopStatusReason || 'human input required'}${failureCode ? ` · ${failureCode}` : ''}`;
   else if (paused) banner = `PAUSED / ${iteration.loopStatusReason || 'operator pause'}`;
   else if (terminal) banner = `${missionStatus === 'failed' || loopStatus === 'failed' ? 'FAILED' : 'COMPLETED'}${simulation ? ' / simulation only' : ''}`;
   else if (benchmark.status === 'running') banner = `TESTING / ${benchmark.progress ?? 0}%`;
@@ -272,7 +276,7 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
     '[Q] Quit',
   ].filter(Boolean);
 
-  return { actions, activeTasks, banner, displayedRounds, hasMission, hotkeys, needsHuman, paused, simulation, statusLabel, terminal };
+  return { actions, activeTasks, banner, displayedRounds, failure: failure ? { code: failureCode || 'TASK_FAILED', message: failureMessage || '任务执行失败' } : null, hasMission, hotkeys, needsHuman, paused, simulation, statusLabel, terminal };
 };
 
 export const resolveDashboardCommand = ({ input = '', key = {}, viewModel, busy = false } = {}) => {
@@ -322,6 +326,7 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
     'Evidence',
     `  baseline    ${state.baseline?.status || '--'} / ${state.baseline?.kind || '--'}`,
     `  benchmark   ${benchmark.status || '--'}${benchmark.progress != null ? ` ${benchmark.progress}%` : ''}`,
+    ...(view.failure ? [`  error       ${view.failure.code}: ${view.failure.message}`] : []),
     `  task        ${benchmark.testTaskId || '--'}`,
     `  queue       ${view.activeTasks} active / ${tasks.length} total`,
     `  live C500   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`,

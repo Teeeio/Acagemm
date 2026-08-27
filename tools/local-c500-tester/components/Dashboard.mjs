@@ -52,6 +52,7 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
         React.createElement(Text, null, `benchmark   ${benchmark.status || '--'} ${benchmark.progress ?? 0}%`),
         React.createElement(Text, null, `task        ${benchmark.testTaskId || '--'}`),
         React.createElement(Text, null, `live ${health?.testBackend?.device || 'C500'}   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`),
+        view.failure ? React.createElement(Text, { color: 'red' }, `error      ${view.failure.code}: ${view.failure.message}`) : null,
       ),
       React.createElement(Panel, { title: 'Current Best', width: 40 },
         React.createElement(Text, null, `candidate   ${best.candidateId || '--'}`),
@@ -60,7 +61,7 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
         React.createElement(Text, null, `rounds      ${view.displayedRounds}`),
       ),
     ) : null,
-    layout.showCompactSummary ? React.createElement(Text, { dimColor: true }, `Evidence: ${state.baseline?.status || '--'} · ${benchmark.status || '--'} ${benchmark.progress ?? 0}% · Best ${best.candidateId || '--'} ${show(best.value)} · Queue ${view.activeTasks}/${tasks.length}`) : null,
+    layout.showCompactSummary ? React.createElement(Text, { color: view.failure ? 'red' : undefined, dimColor: !view.failure }, `Evidence: ${state.baseline?.status || '--'} · ${benchmark.status || '--'} ${benchmark.progress ?? 0}% · Best ${best.candidateId || '--'} ${show(best.value)} · Queue ${view.activeTasks}/${tasks.length}${view.failure ? ` · Error ${view.failure.code}: ${view.failure.message}` : ''}`) : null,
     layout.showEvents ? React.createElement(Panel, { title: `Recent Events / Queue ${view.activeTasks} active / ${tasks.length} total` },
       events.length
         ? events.slice(0, 3).map((event) => React.createElement(Text, { key: event.id || `${event.sequence}-${event.type}` }, `${event.createdAt || event.time || '--'} ${event.type || event.title || 'event'}`))
