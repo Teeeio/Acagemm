@@ -244,6 +244,7 @@ const LOOP_GUARD_TEXT = {
   max_rounds: '已迭代到最大轮数上限，仍未完成采纳，请人工介入',
   total_budget: '累计迭代时长超出预算上限，请人工介入',
   max_research: '研究员已多次升级仍未产生被采纳候选，停止研究员升级但主循环继续',
+  correctness_failed: '固定精度测试在允许的修复轮次内仍未通过',
 };
 
 const activeMissionBudgetMs = (state = {}) => {
@@ -254,10 +255,27 @@ const activeMissionBudgetMs = (state = {}) => {
   return missionBudget > 0 ? missionBudget : null;
 };
 
+const phasedIterationPolicy = (mission = {}) => mission?.testScenario?.iterationPolicy || mission?.operatorProfile?.iterationPolicy || null;
+
+const roundCorrectnessPassed = (round = {}) => {
+  const measurements = round?.benchmark?.result?.benchmark;
+  return round?.benchmark?.status === 'complete'
+    && Array.isArray(measurements)
+    && measurements.length > 0
+    && measurements.every((measurement) => measurement.correctness?.passed === true);
+};
+
 // 全局兜底：任一上限命中返回原因码；未命中返回 null。命中后循环停止自动流转，但手动操作不受阻。
 export const detectLoopGuard = (state) => {
   const stats = state?.iterationStats || {};
   const mission = (state?.missions || []).find((item) => item.id === state?.activeMissionId) || {};
+  const phasedPolicy = phasedIterationPolicy(mission);
+  if (phasedPolicy) {
+    const maxCorrectnessAttempts = Math.max(1, Number(phasedPolicy.maxCorrectnessAttempts || 1));
+    const performanceRounds = Math.max(1, Number(phasedPolicy.performanceRounds || 1));
+    if (!stats.correctnessEstablished && Number(stats.correctnessAttempts || 0) >= maxCorrectnessAttempts) return 'correctness_failed';
+    if (stats.correctnessEstablished && Number(stats.performanceRounds || 0) >= performanceRounds) return 'fixed_rounds_complete';
+  }
   const fixedRounds = Number(mission?.testScenario?.fixedRounds || 0);
   if (fixedRounds > 0 && (stats.round || 0) >= fixedRounds) return 'fixed_rounds_complete';
   // A persisted needs_human marker from an older run must not interrupt a test\n  // that is already queued/running. The active queue operation is authoritative.\n  if (stats.loopStatus === 'needs_human') {\n    const benchmark = state?.benchmark || {};\n    if (['queued', 'running'].includes(benchmark.status)) return null;\n    return stats.loopStatusReason || 'needs_human';\n  }
@@ -308,14 +326,17 @@ const completeMaximizeMission = (state, reason, eventType = 'loop.maximize_compl
     status: 'completed',
     completedAt: state.knowledgeMaintenance?.completedAt || completedAt,
   };
+  const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+  const phasedPolicy = phasedIterationPolicy(mission);
+  const completionLabel = reason === 'fixed_rounds_complete' && phasedPolicy ? '三轮性能优化完成' : reason === 'fixed_rounds_complete' ? '固定三轮完成' : 'Mission 平台期完成';
   state.agent = {
     ...(state.agent || {}),
     status: 'completed',
-    phase: reason === 'total_budget' ? 'Mission budget 已到，保留 current best' : reason === 'fixed_rounds_complete' ? '固定三轮完成，保留 current best' : 'Mission 平台期完成，保留 current best',
+    phase: reason === 'total_budget' ? 'Mission budget 已到，保留 current best' : reason === 'fixed_rounds_complete' ? (phasedPolicy ? '三轮性能优化完成，保留 current best' : '固定三轮完成，保留 current best') : 'Mission 平台期完成，保留 current best',
     progress: 100,
     currentAction: null,
   };
-  addAuditEvent(state, reason === 'total_budget' ? 'Mission budget 已到' : reason === 'fixed_rounds_complete' ? '固定三轮完成' : 'Mission 平台期完成', `Current best: ${state.currentBest?.value || '—'}`, reason === 'total_budget' ? 'warning' : 'blue', 'Timer');
+  addAuditEvent(state, reason === 'total_budget' ? 'Mission budget 已到' : completionLabel, `Current best: ${state.currentBest?.value || '—'}`, reason === 'total_budget' ? 'warning' : 'blue', 'Timer');
   appendRuntimeEvent(state, eventType, { reason, currentBest: state.currentBest || null }, { kind: 'policy', mode: 'client' });
   return state;
 };
@@ -330,6 +351,16 @@ export async function advanceIteration(state, deps = {}) {
   const guardReason = detectLoopGuard(state);
   if (guardReason) {
     const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+    if (guardReason === 'correctness_failed') {
+      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'failed', loopStatusReason: guardReason, completedAt: new Date().toISOString() };
+      state.agent = { ...(state.agent || {}), status: 'failed', phase: 'Correctness Failed', progress: 100, currentAction: null };
+      mission.status = 'failed';
+      if (!state.runtimeEvents?.some((event) => event.type === 'loop.correctness_failed')) {
+        addAuditEvent(state, 'Correctness Failed', '初始实现及允许的修复轮次均未通过固定精度用例。', 'warning', 'ShieldAlert');
+        appendRuntimeEvent(state, 'loop.correctness_failed', { attempts: state.iterationStats.correctnessAttempts || 0 }, { kind: 'policy', mode: 'client' });
+      }
+      return { state, action: 'failed_correctness' };
+    }
     const maximizeObjective = isMaximizeMission({ ...mission, objective: state.objective || mission.objective, goal: state.agent?.goal || mission.goal });
     if ((guardReason === 'total_budget' || guardReason === 'fixed_rounds_complete') && maximizeObjective) {
       completeMaximizeMission(state, guardReason, 'loop.budget_completed');
@@ -587,7 +618,8 @@ export async function advanceIteration(state, deps = {}) {
   const latestRound = currentRound || diagnosticRound || state.runHistory?.[0];
   if (latestRound?.runId && stats.lastCountedRunId !== latestRound.runId) {
     const adopted = isRoundAdopted(latestRound);
-    state.iterationStats = {
+    const phasedPolicy = phasedIterationPolicy(mission);
+    const nextStats = {
       ...stats,
       lastCountedRunId: latestRound.runId,
       round: (stats.round || 0) + 1,
@@ -595,6 +627,20 @@ export async function advanceIteration(state, deps = {}) {
       consecutiveNoAdopt: adopted ? 0 : (stats.consecutiveNoAdopt || 0) + 1,
       loopStartedAt: stats.loopStartedAt || new Date().toISOString(),
     };
+    if (phasedPolicy) {
+      const correctnessPassed = roundCorrectnessPassed(latestRound);
+      if (stats.correctnessEstablished) {
+        nextStats.performanceRounds = Number(stats.performanceRounds || 0) + 1;
+      } else {
+        nextStats.correctnessAttempts = Number(stats.correctnessAttempts || 0) + 1;
+        if (correctnessPassed) {
+          nextStats.correctnessEstablished = true;
+          nextStats.correctnessEstablishedRunId = latestRound.runId;
+          nextStats.performanceRounds = 0;
+        }
+      }
+    }
+    state.iterationStats = nextStats;
     return { state, action: 'round_counted' };
   }
 

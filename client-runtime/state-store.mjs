@@ -479,6 +479,11 @@ export function runAutomaticAdoption(state, note = 'Accept Gate 全部通过，�
     verified: gate.publishable === true,
     liveHardware: gate.publishable === true && state.benchmark?.result?.environment?.liveHardware === true,
     evidenceRunId: state.benchmark?.runId || null,
+    measurements: (state.benchmark?.result?.benchmark || []).map((measurement) => ({
+      profile: measurement.profile || measurement.environment,
+      value: measurement.value,
+      unit: measurement.unit || 'us',
+    })),
   };
   state.decisionReview = {
     ...createDecisionReviewState('resolved'),
@@ -1028,6 +1033,7 @@ function projectActiveMission(state) {
     };
   }
   const deriveMissionStatus = () => {
+    if (state.iterationStats?.loopStatus === 'failed' || state.agent?.status === 'failed') return 'failed';
     if (state.agent?.status === 'awaiting_approval') return 'awaiting_approval';
     if (['running', 'executing', 'cancel_requested'].includes(state.agent?.status)) return 'running';
     if (state.stage === 'published' && state.knowledgeMaintenance?.status === 'completed') return 'completed';
@@ -1715,7 +1721,20 @@ export function evaluateAcceptGate(state, result = {}) {
   const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
   const measurements = Array.isArray(result.benchmark) ? result.benchmark : [];
   const expectedCases = Number(state.benchmark?.matrix?.correctnessCases || state.testMatrix?.correctnessCases || 24);
-  const correctnessPassed = measurements.length > 0 && measurements.every((item) => item.correctness?.passed === true && Number(item.correctness?.total || 0) >= expectedCases);
+  const iterationPolicy = mission.testScenario?.iterationPolicy || mission.operatorProfile?.iterationPolicy || null;
+  const requiredBenchmarkProfiles = state.benchmark?.matrix?.testSpec?.benchmark?.requiredProfiles
+    || state.testMatrix?.testSpec?.benchmark?.requiredProfiles
+    || [];
+  const actualBenchmarkProfiles = measurements.map((item) => String(item.profile || '')).filter(Boolean);
+  const enforceBenchmarkProfiles = requiredBenchmarkProfiles.length > 0
+    && (Boolean(mission.operatorProfile?.id) || iterationPolicy?.requireAllProfilesNoRegression === true);
+  const benchmarkProfilesComplete = !enforceBenchmarkProfiles
+    || (actualBenchmarkProfiles.length === requiredBenchmarkProfiles.length
+      && new Set(actualBenchmarkProfiles).size === actualBenchmarkProfiles.length
+      && requiredBenchmarkProfiles.every((profile) => actualBenchmarkProfiles.includes(profile)));
+  const correctnessPassed = benchmarkProfilesComplete
+    && measurements.length > 0
+    && measurements.every((item) => item.correctness?.passed === true && Number(item.correctness?.total || 0) >= expectedCases);
   const diagnosticEvidenceStructured = result.tracer?.format === 'operator-trace/v1'
     && Array.isArray(result.tracer?.events)
     && result.profiler?.format === 'operator-profile/v1'
@@ -1748,29 +1767,49 @@ export function evaluateAcceptGate(state, result = {}) {
   const hasThreshold = Number.isFinite(threshold);
   const hasComparableBest = Boolean(state.currentBest?.candidateId) && Number.isFinite(currentBestValue);
   const hasBaseline = baselineReady && Number.isFinite(baselineValue);
-  const performanceApplicable = Number.isFinite(primaryValue) && (hasThreshold || hasComparableBest || hasBaseline);
+  const acceptFirstCorrectCandidate = iterationPolicy?.acceptFirstCorrectCandidate === true && !hasComparableBest && correctnessPassed;
+  const bestProfileValues = new Map((state.currentBest?.measurements || []).map((item) => [item.profile, parseMeasurementValue(item.value)]));
+  const profileComparisons = measurements.map((item) => ({ profile: item.profile, candidate: parseMeasurementValue(item.value), best: bestProfileValues.get(item.profile) }));
+  const allProfilesComparable = iterationPolicy?.requireAllProfilesNoRegression === true
+    && profileComparisons.length > 0
+    && profileComparisons.every((item) => Number.isFinite(item.candidate) && Number.isFinite(item.best));
+  const allProfilesNoRegression = allProfilesComparable && profileComparisons.every((item) => minimizesMetric ? item.candidate <= item.best : item.candidate >= item.best);
+  const atLeastOneProfileImproved = allProfilesComparable && profileComparisons.some((item) => minimizesMetric ? item.candidate < item.best : item.candidate > item.best);
+  const suiteImprovementPassed = allProfilesComparable
+    && allProfilesNoRegression
+    && (iterationPolicy?.requireStrictImprovement === true ? atLeastOneProfileImproved : true);
+  const performanceApplicable = Number.isFinite(primaryValue) && (acceptFirstCorrectCandidate || allProfilesComparable || hasThreshold || hasComparableBest || hasBaseline);
   const performancePassed = performanceApplicable && (
-    hasThreshold
-      ? (minimizesMetric ? primaryValue <= threshold : primaryValue >= threshold)
-      : hasComparableBest
-        ? (minimizesMetric ? primaryValue <= currentBestValue : primaryValue >= currentBestValue)
-        : (minimizesMetric ? primaryValue <= baselineValue : primaryValue >= baselineValue)
+    acceptFirstCorrectCandidate
+      ? true
+      : allProfilesComparable
+        ? suiteImprovementPassed
+        : hasThreshold
+          ? (minimizesMetric ? primaryValue <= threshold : primaryValue >= threshold)
+          : hasComparableBest
+            ? (minimizesMetric ? primaryValue <= currentBestValue : primaryValue >= currentBestValue)
+            : (minimizesMetric ? primaryValue <= baselineValue : primaryValue >= baselineValue)
   );
-  const performanceExpected = hasThreshold
-    ? Number.isFinite(absoluteThreshold)
-      ? `${minimizesMetric ? '≤' : '≥'} ${threshold}${primary?.unit || ''}`
-      : `相对 baseline 至少提升 ${(relativeTarget * 100).toFixed(Number.isInteger(relativeTarget * 100) ? 0 : 1)}%（${minimizesMetric ? '≤' : '≥'} ${Number(threshold.toFixed(6))}${primary?.unit || baselineEvidence?.unit || ''}）`
-    : hasComparableBest
-      ? `${minimizesMetric ? '≤' : '≥'} current best ${currentBestValue}${primary?.unit || ''}`
-      : hasBaseline
-        ? `${minimizesMetric ? '≤' : '≥'} ${baselineKind === 'naive_v0' ? 'naive v0 baseline' : 'PyTorch reference baseline'} ${baselineValue}${baselineEvidence?.unit || primary?.unit || ''}`
-        : `必须先运行 ${baselineKind === 'naive_v0' ? 'naive v0' : 'PyTorch reference'} 单文件 baseline（同 runner、同输入 shape）`;
+  const performanceExpected = acceptFirstCorrectCandidate
+    ? '首个通过全部固定 Correctness 的 Triton 版本成为性能 baseline'
+    : allProfilesComparable
+      ? `全部 ${profileComparisons.length} 个固定性能 profile 无回退，且至少一个 profile 严格提升`
+      : hasThreshold
+        ? Number.isFinite(absoluteThreshold)
+          ? `${minimizesMetric ? '≤' : '≥'} ${threshold}${primary?.unit || ''}`
+          : `相对 baseline 至少提升 ${(relativeTarget * 100).toFixed(Number.isInteger(relativeTarget * 100) ? 0 : 1)}%（${minimizesMetric ? '≤' : '≥'} ${Number(threshold.toFixed(6))}${primary?.unit || baselineEvidence?.unit || ''}）`
+        : hasComparableBest
+          ? `${minimizesMetric ? '≤' : '≥'} current best ${currentBestValue}${primary?.unit || ''}`
+          : hasBaseline
+            ? `${minimizesMetric ? '≤' : '≥'} ${baselineKind === 'naive_v0' ? 'naive v0 baseline' : 'PyTorch reference baseline'} ${baselineValue}${baselineEvidence?.unit || primary?.unit || ''}`
+            : `必须先运行 ${baselineKind === 'naive_v0' ? 'naive v0' : 'PyTorch reference'} 单文件 baseline（同 runner、同输入 shape）`;
   const baselineLabel = baselineKind === 'naive_v0' ? 'naive v0 baseline 已建立' : 'PyTorch reference baseline 已建立';
   const baselineExpected = baselineKind === 'naive_v0'
     ? '同 runner · 同输入 shape · v0 派生的单文件 baseline'
     : '同 runner · 同输入 shape · 上游权威来源 · PyTorch reference 单文件展开版本';
   const rules = [
     { id: 'correctness.complete', label: 'Correctness 用例全部通过', required: true, passed: correctnessPassed, actual: measurements.map((item) => `${item.environment} ${item.correctness?.passed ? item.correctness.total : 0}/${item.correctness?.total || expectedCases}`).join(' · '), expected: `${expectedCases}/${expectedCases}` },
+    { id: 'benchmark.profiles_complete', label: '固定 Benchmark Shape 完整', required: enforceBenchmarkProfiles, passed: benchmarkProfilesComplete, skipped: !enforceBenchmarkProfiles, actual: actualBenchmarkProfiles.join(', ') || '无 profile', expected: requiredBenchmarkProfiles.join(', ') || '未配置固定 profile' },
     { id: 'evidence.complete', label: localC500Evidence ? 'Benchmark 核心证据完整' : 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: completeEvidence, actual: completeEvidence ? (localC500Evidence && !localC500ToolsCompleted ? 'Benchmark 完整；可选诊断工具未全部完成' : '证据完整') : 'Benchmark 或证据格式缺失', expected: localC500Evidence ? 'operator benchmark' : 'operator benchmark + trace/v1 + profile/v1' },
     { id: 'diagnostics.mctracer', label: 'mcTracer 可选诊断', required: false, passed: result.tracer?.status === 'completed', skipped: false, actual: result.tracer?.status || 'not_run', expected: 'best effort; failure does not block' },
     { id: 'diagnostics.mcprofiler', label: 'mcProfiler 可选诊断', required: false, passed: result.profiler?.status === 'completed', skipped: false, actual: result.profiler?.status || 'not_run', expected: 'best effort; failure does not block' },

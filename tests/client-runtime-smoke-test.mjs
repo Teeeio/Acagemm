@@ -34,7 +34,10 @@ const child = spawn('node', ['client-runtime/local-server.mjs'], {
 const request = async (pathname, options = {}) => {
   const response = await fetch(`${baseUrl}${pathname}`, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
   const payload = await response.json();
-  if (!response.ok) throw new Error(`${payload.code ? `${payload.code}: ` : ''}${payload.error || `HTTP ${response.status}`}`);
+  if (!response.ok) {
+    const details = payload.details ? ` details=${JSON.stringify(payload.details)}` : '';
+    throw new Error(`${payload.code ? `${payload.code}: ` : ''}${payload.error || `HTTP ${response.status}`}${details}`);
+  }
   return payload;
 };
 
@@ -241,6 +244,7 @@ try {
   assert.equal(state.benchmark.source.kind, 'operator-test-service');
   assert.equal(state.agent.status, 'awaiting_approval');
   assert.equal(state.decisionReview.request.originStage, 'validation');
+  assert.ok(state.candidateEvaluations.some((candidate) => candidate.id === 'candidate-02'), `candidate-02 was removed before redirect: ${JSON.stringify(state.decisionReview.gate || state.failureRecords?.[0] || null)}`);
   const blockedAdoption = await requestFailure('/api/actions/adopt', { method: 'POST', body: JSON.stringify({ note: 'must not bypass review' }) });
   assert.equal(blockedAdoption.status, 409);
   assert.equal(blockedAdoption.payload.code, 'DECISION_REVIEW_PENDING');

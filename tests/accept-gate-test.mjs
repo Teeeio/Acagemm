@@ -192,6 +192,34 @@ const noTargetInitialGate = evaluateAcceptGate(noTargetInitialState, result());
 assert.equal(noTargetInitialGate.passed, true, '无阈值且无 current best 时，应与 PyTorch reference baseline 比较');
 assert.equal(noTargetInitialGate.result, 'eligible');
 
+const suitePolicy = { acceptFirstCorrectCandidate: true, requireStrictImprovement: true, requireAllProfilesNoRegression: true };
+const suiteResult = (profiles, values) => ({
+  ...result({ liveHardware: true }),
+  benchmark: profiles.map((profile, index) => ({ environment: 'C500', profile, value: values[index], unit: 'us', correctness: { passed: true, total: 24 } })),
+});
+const createSuiteState = (profiles, bestValues = null) => {
+  const state = createState({ goal: '建立 Triton baseline 后进行三轮优化', baseline: structuredClone(baselineEvidence) });
+  state.missions[0].testScenario = { iterationPolicy: suitePolicy };
+  state.testMatrix = { correctnessCases: 24, testSpec: { benchmark: { requiredProfiles: profiles, primaryProfile: profiles[0] } } };
+  state.benchmark.matrix = structuredClone(state.testMatrix);
+  state.baseline.evidence.shapeKey = JSON.stringify({ correctnessCases: 24 });
+  if (bestValues) state.currentBest = { candidateId: 'candidate-best', value: `${bestValues[0]} us`, measurements: profiles.map((profile, index) => ({ profile, value: bestValues[index], unit: 'us' })) };
+  return state;
+};
+for (const suiteProfiles of [['MQA Medium', 'MQA Large'], ['MLA Medium', 'MLA Large']]) {
+  const suiteInitialGate = evaluateAcceptGate(createSuiteState(suiteProfiles), suiteResult(suiteProfiles, [120, 130]));
+  assert.equal(suiteInitialGate.passed, true, '首个通过固定 Correctness 的 Triton 版本必须成为性能 baseline，即使暂未快于 PyTorch');
+  assert.match(suiteInitialGate.rules.find((rule) => rule.id === 'performance.target')?.expected || '', /首个通过/);
+
+  const suiteBestState = createSuiteState(suiteProfiles, [120, 130]);
+  assert.equal(evaluateAcceptGate(suiteBestState, suiteResult(suiteProfiles, [119, 130])).passed, true, '至少一项严格提升且另一个固定 profile 无回退时 KEEP');
+  assert.equal(evaluateAcceptGate(suiteBestState, suiteResult(suiteProfiles, [120, 130])).passed, false, '两个 profile 全部持平时 DISCARD');
+  assert.equal(evaluateAcceptGate(suiteBestState, suiteResult(suiteProfiles, [119, 131])).passed, false, '任一固定 profile 回退时 DISCARD');
+  const missingProfileGate = evaluateAcceptGate(suiteBestState, suiteResult([suiteProfiles[0]], [119]));
+  assert.equal(missingProfileGate.passed, false, '缺少任一固定 Benchmark shape 时不得通过 Gate');
+  assert.ok(missingProfileGate.failedRules.includes('benchmark.profiles_complete'));
+}
+
 const researchBriefingState = createState({ goal: '相对 baseline 至少提升 20%；同族方向连续两轮改善低于 3% 时停止。' });
 researchBriefingState.baseline.evidence.value = 100;
 const researchBriefingGate = evaluateAcceptGate(researchBriefingState, result({ value: 75 }));

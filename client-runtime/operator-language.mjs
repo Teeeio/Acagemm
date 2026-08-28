@@ -49,29 +49,39 @@ export const normalizeOperatorLanguage = (input) => {
   return structuredClone(publicAdapter);
 };
 
-export const operatorLanguageInstruction = (input) => {
+export const operatorLanguageInstruction = (input, contract = null) => {
   const adapter = adapters.find((item) => item.id === normalizeOperatorLanguage(input).id) || adapters[0];
+  const allowedFiles = contract?.allowedFiles || adapter.allowedFiles;
+  const requiredWorkspaceFiles = contract?.requiredWorkspaceFiles || adapter.requiredFiles;
   return [
     `Implementation language contract: ${adapter.label} (${adapter.id}).`,
     adapter.agentInstruction,
-    `Allowed candidate files: ${adapter.allowedFiles.join(', ')}.`,
+    `Allowed candidate files: ${allowedFiles.join(', ')}.`,
+    `Files that must exist in every complete candidate workspace: ${requiredWorkspaceFiles.join(', ')}.`,
     `Executable entry: ${adapter.entry}.`,
   ].join('\n');
 };
 
-export const validateOperatorLanguageCandidate = ({ language, changedFiles = [], entryContent = '' } = {}) => {
+export const validateOperatorLanguageCandidate = ({ language, changedFiles = [], workspaceFiles = [], entryContent = '', contract = null } = {}) => {
   const adapter = adapters.find((item) => item.id === normalizeOperatorLanguage(language).id) || adapters[0];
   const files = changedFiles.map((file) => String(file).replaceAll('\\', '/'));
-  const unexpected = files.filter((file) => !adapter.allowedFiles.includes(file));
-  const missing = adapter.requiredFiles.filter((file) => !files.includes(file));
-  const anySatisfied = !adapter.requiredAny?.length || adapter.requiredAny.some((file) => files.includes(file));
+  const available = workspaceFiles.map((file) => String(file).replaceAll('\\', '/'));
+  const allowedFiles = contract?.allowedFiles || adapter.allowedFiles;
+  const requiredChangedFiles = contract?.requiredChangedFiles || adapter.requiredFiles;
+  const requiredChangedAny = contract?.requiredChangedAny || adapter.requiredAny || [];
+  const requiredWorkspaceFiles = contract?.requiredWorkspaceFiles || [];
+  const unexpected = files.filter((file) => !allowedFiles.includes(file));
+  const missing = requiredChangedFiles.filter((file) => !files.includes(file));
+  const missingWorkspace = requiredWorkspaceFiles.filter((file) => !available.includes(file));
+  const anySatisfied = !requiredChangedAny.length || requiredChangedAny.some((file) => files.includes(file));
   const contentMatches = !adapter.requiredContent || adapter.requiredContent.test(String(entryContent || ''));
   return {
-    passed: unexpected.length === 0 && missing.length === 0 && anySatisfied && contentMatches,
+    passed: unexpected.length === 0 && missing.length === 0 && missingWorkspace.length === 0 && anySatisfied && contentMatches,
     language: adapter.id,
     unexpected,
     missing,
-    missingAny: anySatisfied ? [] : adapter.requiredAny,
+    missingWorkspace,
+    missingAny: anySatisfied ? [] : requiredChangedAny,
     contentMismatch: !contentMatches,
   };
 };

@@ -198,6 +198,10 @@ const seedMissionBrief = async (project, draft) => {
   const profile = getFixedOperatorProfile(draft.profileId);
   const device = resolveMuxiDevice();
   const implementation = normalizeOperatorLanguage(profile.implementationLanguage);
+  const candidateFiles = profile.candidateContract?.allowedFiles || implementation.allowedFiles;
+  const iterationDescription = profile.iterationPolicy
+    ? `Establish correctness within at most ${profile.iterationPolicy.maxCorrectnessAttempts} total attempts, then execute exactly ${profile.iterationPolicy.performanceRounds} performance optimization rounds.`
+    : 'Execute exactly three candidate rounds and retain the fastest correctness-passing candidate.';
   const content = [
     '# Operator Optimization Mission',
     '',
@@ -213,13 +217,13 @@ const seedMissionBrief = async (project, draft) => {
     '',
     `- Language: ${implementation.label} (${implementation.id})`,
     `- Entry: ${implementation.entry}`,
-    `- Allowed files: ${implementation.allowedFiles.join(', ')}`,
+    `- Allowed files: ${candidateFiles.join(', ')}`,
     '',
     '## Execution Contract',
     '',
     '- The embedded operator profile is the immutable semantic and test authority.',
     '- External research supplies optimization experience only and cannot modify the profile.',
-    '- Execute exactly three candidate rounds and retain the fastest correctness-passing candidate.',
+    `- ${iterationDescription}`,
     '- Do not substitute an unrelated operator or a smoke template.',
     '- Report a semantic blocker instead of fabricating missing operator behavior.',
     '',
@@ -270,7 +274,9 @@ export const publishMission = async (draft) => {
   const testMatrix = fixedOperatorTestMatrix(profile, device);
   const baselineSource = fixedOperatorBaselineSource(profile);
   const baselineRunPy = buildFixedOperatorBaselineRunPy(profile);
-  const goal = `在 MetaX ${device} 上为 ${profile.title} 生成高性能实现；严格保持内置 Profile 语义，完成三轮独立候选并保留 correctness 通过者中的最优版本。`;
+  const goal = profile.iterationPolicy
+    ? `在 MetaX ${device} 上独立实现并优化 ${profile.entrypoints.join(' 与 ')}；严格保持内置 Profile 语义，先建立正确的 Triton baseline，再完成三轮性能优化并保留全部固定 profile 上无回退的最佳版本。`
+    : `在 MetaX ${device} 上为 ${profile.title} 生成高性能实现；严格保持内置 Profile 语义，完成三轮独立候选并保留 correctness 通过者中的最优版本。`;
   const created = await api.post('/api/missions', {
     goal,
     title: profile.title,
@@ -294,7 +300,9 @@ export const publishMission = async (draft) => {
       sourcePolicy: { requireAuthority: false, requireSingleFileExpansion: true, allowGeneratedV0: true },
       materializer: { status: 'completed', phase: '内置 Profile baseline 已就绪', progress: 100, result: { schemaVersion: 'operator-studio.fixed-baseline/v1', summary: profile.summary, runPy: baselineRunPy, runPySource: 'embedded-operator-profile', source: baselineSource, report: { mode: 'fixed-operator-profile', profileId: profile.id } } },
     },
-    testScenario: { id: 'fixed-four-operator-v1', fixedRounds: 3, researchEnabled: draft.researchEnabled !== false },
+    testScenario: profile.iterationPolicy
+      ? { id: profile.id, iterationPolicy: structuredClone(profile.iterationPolicy), researchEnabled: draft.researchEnabled !== false }
+      : { id: 'fixed-four-operator-v1', fixedRounds: 3, researchEnabled: draft.researchEnabled !== false },
     objective: { mode: 'maximize', metric: 'latency p50', direction: 'minimize' },
     testMatrix,
     missionBudgetMs: timeBudget > 0 ? timeBudget : null,

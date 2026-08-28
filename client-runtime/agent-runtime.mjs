@@ -666,7 +666,7 @@ export function createAgentRuntime(options = {}) {
       const sourceRoot = mission.sourceRoot || null;
       const baseline = state.baseline || mission.baseline || {};
       const baselineRunPy = baseline.materializer?.result?.runPy || '';
-      const implementationInstruction = operatorLanguageInstruction(mission.implementation);
+      const implementationInstruction = operatorLanguageInstruction(mission.implementation, mission.operatorProfile?.candidateContract);
       const executableTestInstruction = testSpecAgentInstruction(mission.testMatrix || state.testMatrix || {});
       const frozenProfileInstruction = mission.operatorProfile ? fixedOperatorPrompt(mission.operatorProfile) : '';
       if (sourceRoot) await mkdir(sourceRoot, { recursive: true });
@@ -694,6 +694,7 @@ export function createAgentRuntime(options = {}) {
         baselineRunPy,
         '----- END CURRENT BASELINE RUN.PY -----',
         'Runner contract: every candidate root run.py MUST remain the executable bridge and define get_inputs(), get_test_cases(), get_benchmark_inputs(), run(inputs), and reference(inputs). Native/Triton implementation files are selected by the language contract. A CLI-only benchmark, main(), or differently named entrypoints is invalid. Keep test inputs and reference semantics aligned with the established baseline, and optimize only the implementation path called by run(inputs).',
+        mission.operatorProfile?.deliveryFiles?.length ? `Create and maintain these human-facing deliverables: ${mission.operatorProfile.deliveryFiles.join(', ')}. Update report.md with correctness, fixed benchmark measurements, the threshold chosen from the first correct Triton version, and each round's KEEP/DISCARD decision. run.py is an additional internal bridge and is not a substitute for any deliverable.` : '',
         executableTestInstruction,
         'Use the Mission baseline and iteration evidence embedded in this prompt. Create one bounded candidate patch inside the isolated Mission workspace. Do not call a remote benchmark service in this turn; Operator Studio owns the serialized test queue.',
         'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.agent-result/v1","summary":"...","diagnosis":{"summary":"...","bottlenecks":[]},"candidates":[{"id":"candidate-01","title":"...","hypothesis":"...","change":"...","files":["relative/path"],"sourceReferences":[],"risks":[]}],"recommendedCandidate":"candidate-01","nextAction":{"type":"candidate.plan","title":"...","reason":"...","expectedOutput":"...","risk":"medium"},"risks":[]}. List only files actually changed in the Mission workspace. If no candidate is justified, do not edit files; return an empty candidates array and explain why in summary.',
@@ -792,7 +793,7 @@ export function createAgentRuntime(options = {}) {
     ];
     if (runPhase === 'experience') {
       return [...base,
-        'This is an EXPERIENCE RESEARCH phase for a frozen four-operator test profile. You may inspect locally available documentation and use hosted web search/fetch for implementation experience, but the profile semantics, correctness cases and benchmark cases are immutable.',
+        'This is an EXPERIENCE RESEARCH phase for a frozen operator test profile. You may inspect locally available documentation and use hosted web search/fetch for implementation experience, but the profile semantics, correctness cases and benchmark cases are immutable.',
         `Frozen operator contract: ${fixedOperatorPrompt(mission.operatorProfile || {})}`,
         `You may write ONLY inside the research directory: ${researchDir}. Do not modify the Mission workspace, baseline, tests, iteration repository, or any candidate implementation.`,
         'Do NOT acquire a baseline source, clone a source tree, create candidate code, submit tests, or assert that an external source is required.',
@@ -1499,13 +1500,17 @@ export function createAgentRuntime(options = {}) {
           const previousDigests = new Set((state.runHistory || []).map((round) => round.candidateDigest).filter(Boolean));
           const nextDigest = verifiedCandidates[0].patchDigest;
           const changedFiles = String(verifiedCandidates[0].files || '').split(',').map((file) => file.trim().replaceAll('\\', '/')).filter(Boolean);
-          const entryContent = await readFile(path.join(run.workspace, 'run.py'), 'utf8').catch(() => '');
-          const languageValidation = validateOperatorLanguageCandidate({ language: activeMission.implementation, changedFiles, entryContent });
+          const candidateContract = activeMission.operatorProfile?.candidateContract || null;
+          const requiredWorkspaceFiles = candidateContract?.requiredWorkspaceFiles || [];
+          const workspaceFiles = (await Promise.all(requiredWorkspaceFiles.map(async (file) => await fileExists(path.join(run.workspace, file)) ? file : null))).filter(Boolean);
+          const contentFiles = candidateContract?.contentFiles || ['run.py'];
+          const entryContent = (await Promise.all(contentFiles.map((file) => readFile(path.join(run.workspace, file), 'utf8').catch(() => '')))).join('\n');
+          const languageValidation = validateOperatorLanguageCandidate({ language: activeMission.implementation, changedFiles, workspaceFiles, entryContent, contract: candidateContract });
           if ((strictZeroSource || activeMission.implementation) && !languageValidation.passed) {
             candidateValidation = {
               passed: false,
               code: 'CANDIDATE_LANGUAGE_CONTRACT_FAILED',
-              detail: `候选不符合 ${languageValidation.language} 文件/语言契约。unexpected=${languageValidation.unexpected.join(',') || '-'} missing=${languageValidation.missing.join(',') || '-'} missingAny=${languageValidation.missingAny.join(',') || '-'} contentMismatch=${languageValidation.contentMismatch}`,
+              detail: `候选不符合 ${languageValidation.language} 文件/语言契约。unexpected=${languageValidation.unexpected.join(',') || '-'} missing=${languageValidation.missing.join(',') || '-'} missingWorkspace=${languageValidation.missingWorkspace.join(',') || '-'} missingAny=${languageValidation.missingAny.join(',') || '-'} contentMismatch=${languageValidation.contentMismatch}`,
               languageValidation,
             };
             verifiedCandidates = [];

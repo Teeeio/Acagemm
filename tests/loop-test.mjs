@@ -145,6 +145,43 @@ assert.equal(fixedRoundComplete.action, 'completed_fixed_rounds');
 assert.equal(fixedRoundComplete.state.iterationStats.loopStatus, 'completed');
 assert.match(fixedRoundComplete.state.agent.phase, /固定三轮完成/);
 
+const phasedMission = {
+  ...fixedRoundMission,
+  testScenario: { iterationPolicy: { maxCorrectnessAttempts: 4, performanceRounds: 3 } },
+};
+const phasedCorrectnessFailed = makeState({ missions: [phasedMission], objective: { mode: 'maximize' }, iterationStats: { ...makeState().iterationStats, correctnessAttempts: 4, correctnessEstablished: false } });
+assert.equal(detectLoopGuard(phasedCorrectnessFailed), 'correctness_failed');
+const phasedFailureResult = await advanceIteration(phasedCorrectnessFailed, {});
+assert.equal(phasedFailureResult.action, 'failed_correctness');
+assert.equal(phasedFailureResult.state.iterationStats.loopStatus, 'failed');
+assert.equal(phasedFailureResult.state.agent.phase, 'Correctness Failed');
+const phasedPerformanceComplete = makeState({ missions: [phasedMission], objective: { mode: 'maximize' }, iterationStats: { ...makeState().iterationStats, correctnessAttempts: 1, correctnessEstablished: true, performanceRounds: 3 }, currentBest: { candidateId: 'candidate-02', value: '50 us' } });
+assert.equal(detectLoopGuard(phasedPerformanceComplete), 'fixed_rounds_complete');
+const phasedCompleteResult = await advanceIteration(phasedPerformanceComplete, {});
+assert.equal(phasedCompleteResult.action, 'completed_fixed_rounds');
+assert.match(phasedCompleteResult.state.agent.phase, /三轮性能优化完成/);
+
+const phasedInitialCorrect = makeState({
+  missions: [phasedMission],
+  stage: 'evidence',
+  agent: { status: 'completed', runId: 'suite_initial' },
+  benchmark: { status: 'complete', result: { benchmark: [{ correctness: { passed: true } }] } },
+  decisionReview: { status: 'resolved', recommendation: 'adopt', resolution: { outcome: 'adopt' } },
+});
+const phasedInitialCounted = await advanceIteration(phasedInitialCorrect, {});
+assert.equal(phasedInitialCounted.action, 'round_counted');
+assert.equal(phasedInitialCounted.state.iterationStats.correctnessEstablished, true);
+assert.equal(phasedInitialCounted.state.iterationStats.performanceRounds, 0);
+const phasedOptimization = {
+  ...phasedInitialCounted.state,
+  agent: { status: 'completed', runId: 'suite_opt_1' },
+  benchmark: { status: 'complete', result: { benchmark: [{ correctness: { passed: false } }] } },
+  decisionReview: { status: 'resolved', recommendation: 'reject', resolution: { outcome: 'reject' } },
+};
+const phasedOptimizationCounted = await advanceIteration(phasedOptimization, {});
+assert.equal(phasedOptimizationCounted.action, 'round_counted');
+assert.equal(phasedOptimizationCounted.state.iterationStats.performanceRounds, 1, 'correctness-regressing optimization still consumes one of the three performance rounds');
+
 let startResearchCalls = 0;
 let startMainRoundCalls = 0;
 let cancelResearchCalls = 0;

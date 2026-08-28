@@ -128,7 +128,7 @@ const hasSourceContent = async (sourceRoot) => {
   } catch { return false; }
 };
 
-const readMissionRunPy = async (missionId, repository, projectRoot = null, implementation = null) => {
+const readMissionRunPy = async (missionId, repository, projectRoot = null, implementation = null, operatorProfile = null) => {
   const workspace = await ensureMissionWorkspace(missionId, repository, { projectRoot });
   const candidates = [
     path.join(workspace, 'run.py'),
@@ -138,8 +138,9 @@ const readMissionRunPy = async (missionId, repository, projectRoot = null, imple
     try {
       const source = path.relative(workspace, filePath).replaceAll('\\', '/');
       const adapter = normalizeOperatorLanguage(implementation);
+      const allowedFiles = operatorProfile?.candidateContract?.allowedFiles || adapter.allowedFiles;
       const implementationFiles = {};
-      for (const relativePath of adapter.allowedFiles.filter((file) => file !== source)) {
+      for (const relativePath of allowedFiles.filter((file) => file !== source)) {
         try {
           implementationFiles[relativePath] = await readFile(path.join(workspace, relativePath), 'utf8');
         } catch (error) {
@@ -567,7 +568,7 @@ const commandRegistry = {
       }
       const missionRunPy = purpose === 'baseline'
         ? { content: baselinePlan.runPy, source: baselinePlan.runPySource }
-        : await readMissionRunPy(state.activeMissionId, mission.repository, mission.projectRoot, mission.implementation);
+        : await readMissionRunPy(state.activeMissionId, mission.repository, mission.projectRoot, mission.implementation, mission.operatorProfile);
       const submitted = await operatorTestQueue.submit({
         schemaVersion: 1, requestId: runId, missionId: state.activeMissionId,
         purpose, baselineKind,

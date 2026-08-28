@@ -85,6 +85,141 @@ const profiles = [
       { id: 'FMB2', dtypes: ['float16'], B: 128, Q: 1, H: 128, ckv_dim: 512, kpe_dim: 64, page_size: 64, causal: false, length_min: 3072, length_max: 4096 },
     ]),
   },
+  {
+    id: 'paged-mqa-logits-triton-v01',
+    title: 'Paged MQA Logits / Triton v0.1',
+    operator: 'paged_mqa_logits',
+    implementationLanguage: 'triton',
+    entrypoint: 'bf16_paged_mqa_logits',
+    entrypoints: ['bf16_paged_mqa_logits'],
+    summary: 'Independent paged MQA logits task: paged K lookup, per-head ReLU(Q dot K), float32 head weighting, and head reduction. No softmax and no V.',
+    interfaceContract: [
+      'def bf16_paged_mqa_logits(q, kv_cache, weights, context_lens, block_table, schedule_metadata, max_context_len, clean_logits=False, logits_dtype=torch.float32)',
+      'q is [B,next_n,H,D] and kv_cache is [num_blocks,block_size,1,D], both with identical float32/float16/bfloat16 dtype',
+      'weights is [B*next_n,H] float32; context_lens and block_table are int32',
+      'output is [B*next_n,max_context_len] float32; schedule_metadata is an ignored compatibility argument',
+    ],
+    implementationRequirements: [
+      'use Triton for the core paged lookup, dot products, ReLU, weighting, and reduction',
+      'handle physical block lookup, tail blocks, zero-length contexts, and invalid-position masking without changing the Oracle',
+      'choose grid, block sizes, num_warps, num_stages, and shape specialization autonomously',
+    ],
+    immutableRules: [
+      'target runtime is the preconfigured MetaX C550 stack; the Agent must not probe, upgrade, repair, or downsize it',
+      'the FlagGems bf16_paged_mqa_logits implementation and its paired tests are forbidden references',
+      'positions at or beyond context_lens are exactly zero and output is float32',
+      'all 24 fixed correctness cases and both fixed BF16 benchmark shapes are mandatory',
+      'fixed shapes, lengths, dtypes, warmup=25, repeats=100, and median timing cannot be weakened or replaced after publication',
+      'an out-of-memory, compile failure, or timeout is a failed fixed case and must never trigger automatic shape reduction',
+    ],
+    forbiddenReferences: ['FlagGems bf16_paged_mqa_logits implementation', 'FlagGems bf16_paged_mqa_logits paired tests'],
+    evaluationProtocol: [
+      'the fixed Oracle owns all 24 correctness inputs; report max absolute error, RMSE, cosine difference, and PASS/FAIL for every case',
+      'all correctness cases must pass before a performance result is valid',
+      'benchmark only the Triton call and PyTorch reference call with triton.testing.do_bench, warmup=25, rep=100, median in milliseconds',
+      'freeze the initial correct Triton baseline, quantitative threshold, shapes, and test standard before three performance rounds',
+    ],
+    reportRequirements: ['implementation approach', 'all correctness results', 'both fixed benchmark results', 'initial Triton and PyTorch baselines', 'frozen quantitative threshold', 'three KEEP/DISCARD decisions', 'final best performance', 'threshold disposition', 'known limitations'],
+    deliveryFiles: ['paged_mqa_logits.py', 'torch_ref.py', 'test_correctness.py', 'bench_perf.py', 'report.md'],
+    candidateContract: {
+      allowedFiles: ['run.py', 'paged_mqa_logits.py', 'torch_ref.py', 'test_correctness.py', 'bench_perf.py', 'report.md'],
+      requiredWorkspaceFiles: ['run.py', 'paged_mqa_logits.py', 'torch_ref.py', 'test_correctness.py', 'bench_perf.py', 'report.md'],
+      requiredChangedFiles: ['run.py'],
+      requiredChangedAny: ['paged_mqa_logits.py'],
+      contentFiles: ['run.py', 'paged_mqa_logits.py'],
+    },
+    iterationPolicy: {
+      maxCorrectnessAttempts: 4,
+      performanceRounds: 3,
+      acceptFirstCorrectCandidate: true,
+      requireStrictImprovement: true,
+      requireAllProfilesNoRegression: true,
+    },
+    testConfig: { warmup: 25, repeats: 100 },
+    correctness: dtypeCases([
+      { id: 'mqa_s1', dtypes: ['float32', 'float16', 'bfloat16'], B: 2, next_n: 1, H: 1, D: 64, block_size: 16, max_context_len: 16, lengths: [3, 16] },
+      { id: 'mqa_s2', dtypes: ['float32', 'float16', 'bfloat16'], B: 1, next_n: 2, H: 8, D: 128, block_size: 32, max_context_len: 33, lengths: [5, 33] },
+      { id: 'mqa_s3', dtypes: ['float32', 'float16', 'bfloat16'], B: 3, next_n: 2, H: 4, D: 96, block_size: 64, max_context_len: 128, lengths: [1, 63, 64, 65, 127, 128] },
+      { id: 'mqa_m1', dtypes: ['float32', 'float16', 'bfloat16'], B: 4, next_n: 2, H: 16, D: 256, block_size: 64, max_context_len: 512, lengths: [100, 200, 333, 500, 1, 64, 512, 299] },
+      { id: 'mqa_m2', dtypes: ['float32', 'float16', 'bfloat16'], B: 2, next_n: 1, H: 32, D: 576, block_size: 64, max_context_len: 1001, lengths: [700, 1001] },
+      { id: 'mqa_l1', dtypes: ['float32', 'float16', 'bfloat16'], B: 8, next_n: 2, H: 64, D: 128, block_size: 32, max_context_len: 2048, lengths: [2048, 2047, 2017, 1984, 1537, 1536, 1501, 1025, 1024, 993, 512, 511, 257, 256, 33, 32] },
+      { id: 'mqa_l2', dtypes: ['float32', 'float16', 'bfloat16'], B: 16, next_n: 1, H: 16, D: 512, block_size: 128, max_context_len: 4096, lengths: [4096, 4095, 3969, 3840, 3073, 3072, 2049, 2048, 1025, 1024, 513, 512, 257, 256, 129, 128] },
+      { id: 'mqa_zero', dtypes: ['float32', 'float16', 'bfloat16'], B: 2, next_n: 2, H: 16, D: 128, block_size: 32, max_context_len: 32, lengths: [0, 1, 0, 32] },
+    ]),
+    benchmark: dtypeCases([
+      { id: 'MQA Medium', dtypes: ['bfloat16'], B: 4, next_n: 2, H: 32, D: 576, block_size: 64, max_context_len: 2048, lengths: [2048, 2017, 1984, 1537, 1536, 1281, 1025, 1024] },
+      { id: 'MQA Large', dtypes: ['bfloat16'], B: 8, next_n: 2, H: 64, D: 576, block_size: 64, max_context_len: 4096, lengths: [4096, 4095, 4033, 3968, 3841, 3584, 3329, 3072, 3001, 2816, 2561, 2560, 2305, 2240, 2049, 2048] },
+    ]),
+  },
+  {
+    id: 'flash-mla-decode-triton-v01',
+    title: 'Flash MLA Decode / Triton v0.1',
+    operator: 'flash_mla_decode',
+    implementationLanguage: 'triton',
+    entrypoint: 'flash_mla_decode',
+    entrypoints: ['flash_mla_decode'],
+    summary: 'Independent latent paged MLA decode task: online softmax((q_nope dot V + q_pe dot K_pe) / sqrt(d)) @ V over every valid cached token.',
+    interfaceContract: [
+      'def flash_mla_decode(q, block_table, blocked_k, max_seqlen_pad, block_size, b, s_q, cache_seqlens, h_q, h_kv, d, dv, causal=True)',
+      'q is [b,s_q,h_q,d], blocked_k is [num_blocks,block_size,1,d], block_table and cache_seqlens are int32, and h_kv is exactly one',
+      'd equals dv+d_rope; q_nope and V use the first dv channels while q_pe and K_pe use the remaining channels',
+      'output is [b,s_q,h_q,dv] float32 for float32/float16/bfloat16 inputs',
+    ],
+    implementationRequirements: [
+      'use Triton for the core computation and use online softmax without writing the complete attention score matrix to device memory',
+      'keep softmax state and output accumulation in float32',
+      'handle physical block lookup, tail blocks, and invalid-token masking without changing the Oracle',
+      'choose kernel structure, block sizes, num_warps, num_stages, and shape specialization autonomously',
+    ],
+    immutableRules: [
+      'target runtime is the preconfigured MetaX C550 stack; the Agent must not probe, upgrade, repair, or downsize it',
+      'the FlagGems flash_mla implementation and its paired tests are forbidden references',
+      'h_kv is one, scale is exactly 1/sqrt(d), and output is float32',
+      'the Triton kernel must use online softmax with float32 state and must not materialize the complete attention score matrix in device memory',
+      'causal=True does not add a query-index-dependent mask; valid tokens are determined by cache_seqlens',
+      'all 24 fixed correctness cases and both fixed BF16 benchmark shapes are mandatory',
+      'fixed shapes, lengths, dtypes, warmup=25, repeats=100, and median timing cannot be weakened or replaced after publication',
+      'an out-of-memory, compile failure, or timeout is a failed fixed case and must never trigger automatic shape reduction',
+    ],
+    forbiddenReferences: ['FlagGems flash_mla implementation', 'FlagGems flash_mla paired tests'],
+    evaluationProtocol: [
+      'the fixed Oracle owns all 24 correctness inputs; report max absolute error, RMSE, cosine difference, and PASS/FAIL for every case',
+      'all correctness cases must pass before a performance result is valid',
+      'benchmark only the Triton call and PyTorch reference call with triton.testing.do_bench, warmup=25, rep=100, median in milliseconds',
+      'freeze the initial correct Triton baseline, quantitative threshold, shapes, and test standard before three performance rounds',
+    ],
+    reportRequirements: ['implementation approach', 'all correctness results', 'both fixed benchmark results', 'initial Triton and PyTorch baselines', 'frozen quantitative threshold', 'three KEEP/DISCARD decisions', 'final best performance', 'threshold disposition', 'known limitations'],
+    deliveryFiles: ['flash_mla.py', 'torch_ref.py', 'test_correctness.py', 'bench_perf.py', 'report.md'],
+    candidateContract: {
+      allowedFiles: ['run.py', 'flash_mla.py', 'torch_ref.py', 'test_correctness.py', 'bench_perf.py', 'report.md'],
+      requiredWorkspaceFiles: ['run.py', 'flash_mla.py', 'torch_ref.py', 'test_correctness.py', 'bench_perf.py', 'report.md'],
+      requiredChangedFiles: ['run.py'],
+      requiredChangedAny: ['flash_mla.py'],
+      contentFiles: ['run.py', 'flash_mla.py'],
+    },
+    iterationPolicy: {
+      maxCorrectnessAttempts: 4,
+      performanceRounds: 3,
+      acceptFirstCorrectCandidate: true,
+      requireStrictImprovement: true,
+      requireAllProfilesNoRegression: true,
+    },
+    testConfig: { warmup: 25, repeats: 100 },
+    correctness: dtypeCases([
+      { id: 'mla_s1', dtypes: ['float32', 'float16', 'bfloat16'], b: 1, s_q: 1, h_q: 16, dv: 128, d_rope: 64, block_size: 32, lengths: [100], causal: true },
+      { id: 'mla_s2', dtypes: ['float32', 'float16', 'bfloat16'], b: 2, s_q: 1, h_q: 8, dv: 64, d_rope: 32, block_size: 16, lengths: [7, 33], causal: true },
+      { id: 'mla_norope', dtypes: ['float32', 'float16', 'bfloat16'], b: 1, s_q: 1, h_q: 8, dv: 128, d_rope: 0, block_size: 32, lengths: [70], causal: true },
+      { id: 'mla_sq4', dtypes: ['float32', 'float16', 'bfloat16'], b: 1, s_q: 4, h_q: 8, dv: 128, d_rope: 64, block_size: 32, lengths: [256], causal: true },
+      { id: 'mla_m1', dtypes: ['float32', 'float16', 'bfloat16'], b: 2, s_q: 1, h_q: 64, dv: 512, d_rope: 64, block_size: 64, lengths: [333, 1024], causal: true },
+      { id: 'mla_m2', dtypes: ['float32', 'float16', 'bfloat16'], b: 1, s_q: 1, h_q: 32, dv: 256, d_rope: 64, block_size: 32, lengths: [2048], causal: true },
+      { id: 'mla_l1', dtypes: ['float32', 'float16', 'bfloat16'], b: 4, s_q: 1, h_q: 64, dv: 512, d_rope: 64, block_size: 64, lengths: [4096, 3000, 129, 4095], causal: true },
+      { id: 'mla_l2', dtypes: ['float32', 'float16', 'bfloat16'], b: 1, s_q: 1, h_q: 8, dv: 128, d_rope: 64, block_size: 64, lengths: [8192], causal: true },
+    ]),
+    benchmark: dtypeCases([
+      { id: 'MLA Medium', dtypes: ['bfloat16'], b: 4, s_q: 1, h_q: 64, dv: 512, d_rope: 64, block_size: 64, lengths: [4096, 4096, 4096, 4096], causal: true },
+      { id: 'MLA Large', dtypes: ['bfloat16'], b: 16, s_q: 1, h_q: 64, dv: 512, d_rope: 64, block_size: 64, lengths: Array(16).fill(16384), causal: true },
+    ]),
+  },
 ];
 
 export const fixedOperatorProfiles = profiles.map((profile) => structuredClone(profile));
@@ -100,17 +235,19 @@ export const isFixedOperatorMission = (mission = {}) => Boolean(mission.operator
 export const fixedOperatorTestMatrix = (profileOrId, hardwareName = 'C500') => {
   const profile = typeof profileOrId === 'string' ? getFixedOperatorProfile(profileOrId) : profileOrId;
   const environment = String(hardwareName || 'C500').trim() || 'C500';
+  const warmup = Number(profile.testConfig?.warmup || 20);
+  const repeats = Number(profile.testConfig?.repeats || 100);
   return {
     environments: [environment],
     stages: ['Correctness', 'Full Benchmark'],
-    warmup: 20,
-    repeats: 100,
+    warmup,
+    repeats,
     correctnessCases: profile.correctness.length,
     testSpec: {
       schemaVersion: 'operator-studio.test-spec/v1',
       generation: { owner: 'fixed-operator-profile', source: profile.id, deterministic: true, seed: 20260827 },
       correctness: { requestedCases: profile.correctness.length, requiredCategories: ['fixed-profile'], atol: 1e-2, rtol: 1e-2, requireNamedCases: true, dtypeTolerance: { float32: { atol: 1e-4, rtol: 1e-4 }, float16: { atol: 1e-3, rtol: 1e-3 }, bfloat16: { atol: 1e-2, rtol: 1e-2 } }, requireCosDiffBelow: 1e-5 },
-      benchmark: { requiredProfiles: profile.benchmark.map((item) => item.group), primaryProfile: profile.benchmark[0].group, warmup: 20, repeats: 100, metrics: ['p50_us', 'reference_p50_us', 'speedup'] },
+      benchmark: { requiredProfiles: profile.benchmark.map((item) => item.group), primaryProfile: profile.benchmark[0].group, warmup, repeats, metrics: ['p50_us', 'reference_p50_us', 'speedup'] },
     },
     profileId: profile.id,
   };
@@ -118,19 +255,29 @@ export const fixedOperatorTestMatrix = (profileOrId, hardwareName = 'C500') => {
 
 export const fixedOperatorPrompt = (profileOrId) => {
   const profile = typeof profileOrId === 'string' ? getFixedOperatorProfile(profileOrId) : profileOrId;
+  const entrypoints = profile.entrypoints || [profile.entrypoint];
   return [
     `Fixed operator profile: ${profile.title} (${profile.id}).`,
-    `Entrypoint: ${profile.entrypoint}. Backend: ${profile.implementationLanguage}.`,
+    `Entrypoints: ${entrypoints.join(', ')}. Backend: ${profile.implementationLanguage}.`,
     `Frozen semantics: ${profile.summary}`,
+    profile.interfaceContract?.length ? `Frozen interface: ${profile.interfaceContract.join('; ')}.` : '',
+    profile.implementationRequirements?.length ? `Implementation requirements: ${profile.implementationRequirements.join('; ')}.` : '',
     `Immutable rules: ${profile.immutableRules.join('; ')}.`,
+    profile.forbiddenReferences?.length ? `Forbidden references: ${profile.forbiddenReferences.join('; ')}.` : '',
     `Correctness cases: ${JSON.stringify(profile.correctness)}.`,
     `Benchmark cases: ${JSON.stringify(profile.benchmark)}.`,
+    profile.evaluationProtocol?.length ? `Evaluation protocol: ${profile.evaluationProtocol.join('; ')}.` : '',
+    profile.deliveryFiles?.length ? `Required deliverables: ${profile.deliveryFiles.join(', ')}. Operator Studio also retains run.py as its internal fixed-runner bridge.` : '',
+    profile.reportRequirements?.length ? `report.md must record: ${profile.reportRequirements.join('; ')}.` : '',
+    profile.iterationPolicy ? `Iteration policy: ${JSON.stringify(profile.iterationPolicy)}.` : '',
     'This embedded profile is the task authority. External research may suggest optimization techniques but must never alter semantics, interfaces, cases, dtype rules, paging, scaling, masking, or output dtype.',
-    'Exactly three candidate rounds are required. Optimize the candidate implementation only; preserve the reference and test factories.',
-  ].join('\n');
+    profile.iterationPolicy
+      ? 'Establish the first correctness-passing Triton version, then execute exactly three performance optimization rounds. Correctness regressions are DISCARD; only strict improvement without fixed-profile regression is KEEP.'
+      : 'Exactly three candidate rounds are required. Optimize the candidate implementation only; preserve the reference and test factories.',
+  ].filter(Boolean).join('\n');
 };
 
-const pythonPreamble = (profile) => `# Generated from immutable Operator Studio profile: ${profile.id}\nimport math\nimport torch\n\nPROFILE_ID = ${pythonLiteral(profile.id)}\nCORRECTNESS_CASES = ${pythonLiteral(profile.correctness)}\nBENCHMARK_CASES = ${pythonLiteral(profile.benchmark)}\n\ndef _dtype(name):\n    return getattr(torch, name)\n\ndef _device():\n    if not torch.cuda.is_available():\n        raise RuntimeError("C500 is unavailable through torch.cuda")\n    return torch.device("cuda")\n\ndef _lengths(count, low, high, device):\n    values = torch.randint(low, high, (count,), dtype=torch.int32, device=device)\n    if high - low > 1:\n        values[0] = high - 1\n    return values\n\ndef _pages(batch, max_len, page_size, device):\n    pages_per_batch = (max_len + page_size - 1) // page_size\n    total_pages = batch * pages_per_batch\n    perm = torch.randperm(total_pages, dtype=torch.int64, device=device).to(torch.int32)\n    indptr = torch.arange(0, total_pages + 1, pages_per_batch, dtype=torch.int32, device=device)\n    return indptr, perm, total_pages\n\ndef _case(item):\n    return {"name": item["id"], "category": "fixed-profile", "make_inputs": lambda item=item: _make_inputs(item)}\n\ndef get_test_cases():\n    return [_case(item) for item in CORRECTNESS_CASES]\n\ndef get_benchmark_inputs():\n    return [{"name": item["group"], "make_inputs": lambda item=item: _make_inputs(item)} for item in BENCHMARK_CASES]\n\ndef get_inputs():\n    return _make_inputs(CORRECTNESS_CASES[0])\n\n`;
+const pythonPreamble = (profile) => `# Generated from immutable Operator Studio profile: ${profile.id}\nimport math\nimport torch\n\nPROFILE_ID = ${pythonLiteral(profile.id)}\nCORRECTNESS_CASES = ${pythonLiteral(profile.correctness)}\nBENCHMARK_CASES = ${pythonLiteral(profile.benchmark)}\n\ndef _dtype(name):\n    return getattr(torch, name)\n\ndef _device():\n    if not torch.cuda.is_available():\n        raise RuntimeError("C500 is unavailable through torch.cuda")\n    return torch.device("cuda")\n\ndef _item_seed(item):\n    return 20260827 + sum((index + 1) * ord(char) for index, char in enumerate(item["id"]))\n\ndef _seeded_inputs(item):\n    torch.manual_seed(_item_seed(item))\n    return _make_inputs(item)\n\ndef _lengths(count, low, high, device):\n    values = torch.randint(low, high, (count,), dtype=torch.int32, device=device)\n    if high - low > 1:\n        values[0] = high - 1\n    return values\n\ndef _pages(batch, max_len, page_size, device):\n    pages_per_batch = (max_len + page_size - 1) // page_size\n    total_pages = batch * pages_per_batch\n    perm = torch.randperm(total_pages, dtype=torch.int64, device=device).to(torch.int32)\n    indptr = torch.arange(0, total_pages + 1, pages_per_batch, dtype=torch.int32, device=device)\n    return indptr, perm, total_pages\n\ndef _case(item):\n    return {"name": item["id"], "category": "fixed-profile", "make_inputs": lambda item=item: _seeded_inputs(item)}\n\ndef get_test_cases():\n    return [_case(item) for item in CORRECTNESS_CASES]\n\ndef get_benchmark_inputs():\n    return [{"name": item["group"], "make_inputs": lambda item=item: _seeded_inputs(item)} for item in BENCHMARK_CASES]\n\ndef get_inputs():\n    return _seeded_inputs(CORRECTNESS_CASES[0])\n\n`;
 
 const pagedMqaPython = `def _make_inputs(item):
     p, device, dtype = item["parameters"], _device(), _dtype(item["dtype"])
@@ -183,6 +330,72 @@ def reference(inputs):
             scores = torch.matmul(q[i, j, :, :dv].float(), vc.T) + torch.matmul(q[i, j, :, dv:].float(), kpe.T)
             probs = torch.softmax(scores * (d ** -0.5), dim=-1)
             out[i, j] = torch.matmul(probs, vc)
+    return out
+
+def run(inputs):
+    return reference(inputs)
+`;
+
+const pagedMqaV01Python = `def _make_inputs(item):
+    p, device, dtype = item["parameters"], _device(), _dtype(item["dtype"])
+    lengths = torch.tensor(p["lengths"], dtype=torch.int32, device=device).view(p["B"], p["next_n"])
+    max_blocks = max(1, (p["max_context_len"] + p["block_size"] - 1) // p["block_size"])
+    num_blocks = p["B"] * max_blocks + 7
+    q = torch.randn((p["B"], p["next_n"], p["H"], p["D"]), device=device, dtype=dtype)
+    kv = torch.randn((num_blocks, p["block_size"], 1, p["D"]), device=device, dtype=dtype)
+    weights = torch.randn((p["B"] * p["next_n"], p["H"]), device=device, dtype=torch.float32)
+    table = torch.randperm(num_blocks, device=device, dtype=torch.int64)[:p["B"] * max_blocks].to(torch.int32).view(p["B"], max_blocks)
+    return {"q": q, "kv_cache": kv, "weights": weights, "context_lens": lengths, "block_table": table, "max_context_len": p["max_context_len"]}
+
+def reference(inputs):
+    q, kv, weights = inputs["q"], inputs["kv_cache"], inputs["weights"]
+    lengths, table, max_ctx = inputs["context_lens"], inputs["block_table"], inputs["max_context_len"]
+    B, next_n, H, D = q.shape
+    out = torch.zeros((B * next_n, max_ctx), device=q.device, dtype=torch.float32)
+    block_size = kv.shape[1]
+    for batch in range(B):
+        for next_index in range(next_n):
+            row, length = batch * next_n + next_index, int(lengths[batch, next_index])
+            if length == 0:
+                continue
+            pos = torch.arange(length, device=q.device)
+            keys = kv[table[batch, pos // block_size].long(), pos % block_size, 0].float()
+            dots = torch.matmul(q[batch, next_index].float(), keys.T)
+            out[row, :length] = (torch.relu(dots) * weights[row].float()[:, None]).sum(0)
+    return out
+
+def run(inputs):
+    return reference(inputs)
+`;
+
+const flashMlaV01Python = `def _make_inputs(item):
+    p, device, dtype = item["parameters"], _device(), _dtype(item["dtype"])
+    lengths = torch.tensor(p["lengths"], dtype=torch.int32, device=device)
+    d = p["dv"] + p["d_rope"]
+    max_len = max(p["lengths"])
+    max_blocks = max(1, (max_len + p["block_size"] - 1) // p["block_size"])
+    num_blocks = p["b"] * max_blocks + 7
+    q = torch.randn((p["b"], p["s_q"], p["h_q"], d), device=device, dtype=dtype)
+    cache = torch.randn((num_blocks, p["block_size"], 1, d), device=device, dtype=dtype)
+    table = torch.randperm(num_blocks, device=device, dtype=torch.int64)[:p["b"] * max_blocks].to(torch.int32).view(p["b"], max_blocks)
+    return {"q": q, "block_table": table, "blocked_k": cache, "cache_seqlens": lengths, "block_size": p["block_size"], "dv": p["dv"], "causal": p.get("causal", True)}
+
+def reference(inputs):
+    q, table, cache = inputs["q"], inputs["block_table"], inputs["blocked_k"]
+    lengths, block_size, dv = inputs["cache_seqlens"], inputs["block_size"], inputs["dv"]
+    batch_size, s_q, h_q, d = q.shape
+    out = torch.empty((batch_size, s_q, h_q, dv), device=q.device, dtype=torch.float32)
+    for batch in range(batch_size):
+        length = int(lengths[batch])
+        pos = torch.arange(length, device=q.device)
+        latent = cache[table[batch, pos // block_size].long(), pos % block_size, 0].float()
+        values, rope_keys = latent[:, :dv], latent[:, dv:]
+        for query_index in range(s_q):
+            scores = torch.matmul(q[batch, query_index, :, :dv].float(), values.T)
+            if d > dv:
+                scores = scores + torch.matmul(q[batch, query_index, :, dv:].float(), rope_keys.T)
+            probabilities = torch.softmax(scores * (d ** -0.5), dim=-1)
+            out[batch, query_index] = torch.matmul(probabilities, values)
     return out
 
 def run(inputs):
@@ -258,6 +471,8 @@ export const buildFixedOperatorBaselineRunPy = (profileOrId) => {
     'flash-mla-decode-triton': flashMlaPython,
     'paged-decode-attention-maca': pagedDecodePython,
     'mla-paged-decode-attention-maca': mlaPagedPython,
+    'paged-mqa-logits-triton-v01': pagedMqaV01Python,
+    'flash-mla-decode-triton-v01': flashMlaV01Python,
   }[profile.id];
   return `${pythonPreamble(profile)}${implementation}`;
 };
