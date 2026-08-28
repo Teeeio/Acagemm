@@ -120,6 +120,16 @@ const makeState = (overrides = {}) => {
   return { ...base, ...overrides };
 };
 
+const fixedRoundMission = { id: 'MIS', goal: '三轮后保留最快候选', hardware: ['C550'], metric: 'latency p50', objective: { mode: 'maximize' }, testScenario: { fixedRounds: 3 } };
+const fixedRoundTwo = makeState({ missions: [fixedRoundMission], objective: { mode: 'maximize' }, iterationStats: { ...makeState().iterationStats, round: 2 } });
+assert.equal(detectLoopGuard(fixedRoundTwo), null, 'fixed-profile mission must continue after two completed rounds');
+const fixedRoundThree = makeState({ missions: [fixedRoundMission], objective: { mode: 'maximize' }, iterationStats: { ...makeState().iterationStats, round: 3 }, currentBest: { candidateId: 'candidate-01', value: '16428 us', verified: true, evidenceSource: 'live' } });
+assert.equal(detectLoopGuard(fixedRoundThree), 'fixed_rounds_complete');
+const fixedRoundComplete = await advanceIteration(fixedRoundThree, {});
+assert.equal(fixedRoundComplete.action, 'completed_fixed_rounds');
+assert.equal(fixedRoundComplete.state.iterationStats.loopStatus, 'completed');
+assert.match(fixedRoundComplete.state.agent.phase, /固定三轮完成/);
+
 let startResearchCalls = 0;
 let startMainRoundCalls = 0;
 let cancelResearchCalls = 0;

@@ -477,6 +477,8 @@ export function runAutomaticAdoption(state, note = 'Accept Gate 全部通过，�
     status: 'active',
     evidenceSource: gate.evidenceSource || 'unknown',
     verified: gate.publishable === true,
+    liveHardware: gate.publishable === true && state.benchmark?.result?.environment?.liveHardware === true,
+    evidenceRunId: state.benchmark?.runId || null,
   };
   state.decisionReview = {
     ...createDecisionReviewState('resolved'),

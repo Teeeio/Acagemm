@@ -61,6 +61,20 @@ assert.deepEqual(violationCodes, [
 ]);
 assert.throws(() => assertWorkflowInvariants(invalid), { code: 'WORKFLOW_INVARIANT_VIOLATION' });
 
+const nextRoundWithLiveBest = baseState();
+nextRoundWithLiveBest.benchmark = { status: 'idle' };
+nextRoundWithLiveBest.currentBest = { candidateId: 'candidate-01', verified: true, evidenceSource: 'live' };
+assert.equal(collectWorkflowInvariantViolations(nextRoundWithLiveBest).length, 0, 'a live current best remains valid after the next round resets benchmark state');
+
+const persistedFalseBlock = structuredClone(nextRoundWithLiveBest);
+persistedFalseBlock.missionPaused = true;
+persistedFalseBlock.iterationStats = { round: 1, loopStatus: 'needs_human', loopStatusReason: 'workflow_invariant:WORKFLOW_SIMULATION_PUBLISH_FORBIDDEN' };
+persistedFalseBlock.workflowKernel = { schemaVersion: 1, status: 'blocked', violationFingerprint: 'old', violations: [{ code: 'WORKFLOW_SIMULATION_PUBLISH_FORBIDDEN' }] };
+const recoveredFalseBlock = reconcileWorkflowState(persistedFalseBlock, { now: '2026-08-26T00:00:00.000Z' });
+assert.equal(recoveredFalseBlock.state.missionPaused, false);
+assert.equal(recoveredFalseBlock.state.iterationStats.loopStatus, 'running');
+assert.equal(recoveredFalseBlock.state.iterationStats.loopStatusReason, null);
+
 const fixedNow = '2026-08-26T00:00:00.000Z';
 const reconciled = reconcileWorkflowState(invalid, { now: fixedNow });
 assert.equal(reconciled.state.missionPaused, true);

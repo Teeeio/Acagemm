@@ -91,6 +91,7 @@ export function collectWorkflowInvariantViolations(state = {}) {
   const baseline = state.baseline || {};
   const gate = state.decisionReview?.gate || null;
   const liveHardware = benchmark.result?.environment?.liveHardware === true;
+  const currentBestLiveHardware = state.currentBest?.liveHardware === true || state.currentBest?.evidenceSource === 'live';
   const terminal = state.stage === 'published' && state.knowledgeMaintenance?.status === 'completed';
 
   if (benchmark.status === 'running' && (!benchmark.runId || !benchmark.testTaskId)) {
@@ -105,7 +106,8 @@ export function collectWorkflowInvariantViolations(state = {}) {
   if (benchmark.purpose === 'candidate' && benchmark.candidate?.id && state.appliedCandidateId && benchmark.candidate.id !== state.appliedCandidateId) {
     push('WORKFLOW_CANDIDATE_EVIDENCE_MISMATCH', 'Benchmark candidate must match the applied candidate.');
   }
-  if ((gate?.publishable === true || state.currentBest?.verified === true) && !liveHardware) {
+  if ((gate?.publishable === true && !liveHardware)
+    || (state.currentBest?.verified === true && !currentBestLiveHardware)) {
     push('WORKFLOW_SIMULATION_PUBLISH_FORBIDDEN', 'Simulation evidence cannot be marked publishable or verified.');
   }
   if (terminal && deriveWorkflowEffect({ ...state, missionPaused: false, iterationStats: { ...(state.iterationStats || {}), loopStatus: 'running' } })) {
@@ -127,6 +129,14 @@ export function reconcileWorkflowState(state = {}, { now = new Date().toISOStrin
   const next = state;
   const before = JSON.stringify({ workflowKernel: next.workflowKernel || null, iterationStats: next.iterationStats || null, missionPaused: next.missionPaused === true });
   const violations = collectWorkflowInvariantViolations(next);
+  const recoveredInvariantBlock = violations.length === 0
+    && next.iterationStats?.loopStatus === 'needs_human'
+    && String(next.iterationStats?.loopStatusReason || '').startsWith('workflow_invariant:')
+    && next.workflowKernel?.status === 'blocked';
+  if (recoveredInvariantBlock) {
+    next.missionPaused = false;
+    next.iterationStats = { ...next.iterationStats, loopStatus: 'running', loopStatusReason: null };
+  }
   const fingerprint = violations.length
     ? createHash('sha256').update(violations.map((item) => item.code).sort().join(':')).digest('hex').slice(0, 16)
     : null;
