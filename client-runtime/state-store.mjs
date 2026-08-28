@@ -337,6 +337,10 @@ export const createResearchAgentState = () => ({
 export const createIterationStats = () => ({
   round: 0, consecutiveNoAdopt: 0, lastRoundOutcome: null,
   lastCountedRunId: null, researchRounds: 0, lastResearchRunId: null,
+  correctnessEstablished: false, correctnessAttempts: 0,
+  currentRoundCorrectnessAttempts: 0, totalCorrectnessAttempts: 0,
+  lastCorrectnessAttemptRunId: null, lastGenerationAttemptRunId: null,
+  performanceRounds: 0,
   pendingInjection: null,
   loopStatus: 'running', loopStatusReason: null, loopStartedAt: null,
 });

@@ -28,7 +28,6 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
   const best = state.currentBest || mission.currentBest || {};
   const benchmark = state.benchmark || {};
   const iteration = state.iterationStats || {};
-  const events = (state.runtimeEvents || []).slice(-6).reverse();
   const backend = health.testBackend || {};
   const view = deriveTuiViewModel({ state, mission, tasks });
   const implementation = normalizeOperatorLanguage(mission.implementation);
@@ -61,11 +60,12 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
         React.createElement(Text, null, `rounds      ${view.displayedRounds}`),
       ),
     ) : null,
-    layout.showCompactSummary ? React.createElement(Text, { color: view.failure ? 'red' : undefined, dimColor: !view.failure }, `Evidence: ${state.baseline?.status || '--'} · ${benchmark.status || '--'} ${benchmark.progress ?? 0}% · Best ${best.candidateId || '--'} ${show(best.value)} · Queue ${view.activeTasks}/${tasks.length}${view.failure ? ` · Error ${view.failure.code}: ${view.failure.message}` : ''}`) : null,
-    layout.showEvents ? React.createElement(Panel, { title: `Recent Events / Queue ${view.activeTasks} active / ${tasks.length} total` },
-      events.length
-        ? events.slice(0, 3).map((event) => React.createElement(Text, { key: event.id || `${event.sequence}-${event.type}` }, `${event.createdAt || event.time || '--'} ${event.type || event.title || 'event'}`))
-        : React.createElement(Text, null, '--'),
+    layout.showCompactSummary ? React.createElement(Text, { color: view.failure ? 'red' : undefined, dimColor: !view.failure }, `Evidence: ${state.baseline?.status || '--'} · ${benchmark.status || '--'} ${benchmark.progress ?? 0}% · Best ${best.candidateId || '--'} ${show(best.value)} · Queue ${view.activeTasks}/${tasks.length}${view.queue[0] ? ` · ${view.queue[0].line}` : ''}${view.failure ? ` · Error ${view.failure.code}: ${view.failure.message}` : ''}`) : null,
+    layout.showEvents ? React.createElement(Panel, { title: `Activity / Queue ${view.activeTasks} active / ${tasks.length} total` },
+      React.createElement(Text, { color: state.agent?.status === 'running' ? 'cyan' : undefined }, `Agent · ${view.currentActivity}`),
+      ...(view.queue.length
+        ? view.queue.slice(0, 3).map((entry) => React.createElement(Text, { key: entry.key, color: entry.status === 'failed' ? 'red' : ['running', 'waiting', 'queued'].includes(entry.status) ? 'cyan' : undefined }, `Queue · ${entry.line}`))
+        : [React.createElement(Text, { key: 'queue-empty', dimColor: true }, 'Queue · empty')]),
     ) : null,
     React.createElement(Text, { color: message ? 'yellow' : undefined }, message || ' '),
     React.createElement(Text, { inverse: true }, view.hotkeys.join('  ')),

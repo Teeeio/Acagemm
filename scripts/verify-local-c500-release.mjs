@@ -22,6 +22,7 @@ const checks = [
   'test:queue',
   'test:strict-zero-source',
   'test:local-c500-production-backend',
+  'test:local-c500-service-async',
   'test:local-c500-launch-mode',
   'test:local-c500-environment-entry',
   'test:muxi-device',

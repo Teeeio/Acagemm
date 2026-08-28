@@ -273,8 +273,8 @@ export const detectLoopGuard = (state) => {
   if (phasedPolicy) {
     const maxCorrectnessAttempts = Math.max(1, Number(phasedPolicy.maxCorrectnessAttempts || 1));
     const performanceRounds = Math.max(1, Number(phasedPolicy.performanceRounds || 1));
-    if (!stats.correctnessEstablished && Number(stats.correctnessAttempts || 0) >= maxCorrectnessAttempts) return 'correctness_failed';
-    if (stats.correctnessEstablished && Number(stats.performanceRounds || 0) >= performanceRounds) return 'fixed_rounds_complete';
+    if (Number(stats.currentRoundCorrectnessAttempts || 0) >= maxCorrectnessAttempts) return 'correctness_failed';
+    if (Number(stats.performanceRounds || 0) >= performanceRounds) return 'fixed_rounds_complete';
   }
   const fixedRounds = Number(mission?.testScenario?.fixedRounds || 0);
   if (fixedRounds > 0 && (stats.round || 0) >= fixedRounds) return 'fixed_rounds_complete';
@@ -363,7 +363,11 @@ export async function advanceIteration(state, deps = {}) {
       mission.status = 'failed';
       if (!state.runtimeEvents?.some((event) => event.type === 'loop.correctness_failed')) {
         addAuditEvent(state, 'Correctness Failed', '初始实现及允许的修复轮次均未通过固定精度用例。', 'warning', 'ShieldAlert');
-        appendRuntimeEvent(state, 'loop.correctness_failed', { attempts: state.iterationStats.correctnessAttempts || 0 }, { kind: 'policy', mode: 'client' });
+        appendRuntimeEvent(state, 'loop.correctness_failed', {
+          round: Number(state.iterationStats.round || 0) + 1,
+          attempts: state.iterationStats.currentRoundCorrectnessAttempts || 0,
+          totalAttempts: state.iterationStats.totalCorrectnessAttempts || 0,
+        }, { kind: 'policy', mode: 'client' });
       }
       return { state, action: 'failed_correctness' };
     }
@@ -385,7 +389,7 @@ export async function advanceIteration(state, deps = {}) {
   const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
   const resolvedEvidenceRound = isResolvedEvidenceRound(state);
   const diagnosticNoCandidateRound = state.stage === 'diagnosis'
-    && state.agent?.status === 'completed'
+    && (state.agent?.status === 'completed' || (state.agent?.status === 'failed' && state.agent?.candidateValidation?.passed === false))
     && state.agent?.runId
     && !state.candidateEvaluations?.length
     && state.baseline?.status === 'complete';
@@ -622,9 +626,57 @@ export async function advanceIteration(state, deps = {}) {
       }
     : null;
   const latestRound = currentRound || diagnosticRound || state.runHistory?.[0];
-  if (latestRound?.runId && stats.lastCountedRunId !== latestRound.runId) {
+  const phasedAttemptAlreadyRecorded = Boolean(phasedIterationPolicy(mission)) && (
+    (diagnosticFailedCandidateRound && stats.lastCorrectnessAttemptRunId === latestRound?.runId)
+    || (diagnosticNoCandidateRound && stats.lastGenerationAttemptRunId === latestRound?.runId)
+  );
+  if (latestRound?.runId && stats.lastCountedRunId !== latestRound.runId && !phasedAttemptAlreadyRecorded) {
     const adopted = isRoundAdopted(latestRound);
     const phasedPolicy = phasedIterationPolicy(mission);
+    const correctnessPassed = roundCorrectnessPassed(latestRound);
+
+    // Fixed-profile rounds are evidence rounds, not Agent invocations. A
+    // correctness failure consumes a bounded repair attempt inside the active
+    // round; a no-candidate result only consumes a generation attempt.
+    if (phasedPolicy && diagnosticFailedCandidateRound) {
+      if (stats.lastCorrectnessAttemptRunId === latestRound.runId) return { state, action: 'none' };
+      const attempt = Number(stats.currentRoundCorrectnessAttempts || 0) + 1;
+      state.iterationStats = {
+        ...stats,
+        correctnessAttempts: Number(stats.correctnessAttempts || 0) + 1,
+        currentRoundCorrectnessAttempts: attempt,
+        totalCorrectnessAttempts: Number(stats.totalCorrectnessAttempts || 0) + 1,
+        lastCorrectnessAttemptRunId: latestRound.runId,
+        lastRoundOutcome: 'correctness_failed',
+        loopStartedAt: stats.loopStartedAt || new Date().toISOString(),
+      };
+      appendRuntimeEvent(state, 'correctness.attempt_failed', {
+        round: Number(stats.round || 0) + 1,
+        candidateId: state.appliedCandidateId || `candidate-${String(Number(stats.round || 0) + 1).padStart(2, '0')}`,
+        attempt,
+        limit: Math.max(1, Number(phasedPolicy.maxCorrectnessAttempts || 1)),
+        runId: latestRound.runId,
+        error: state.benchmark?.lastServiceError || null,
+      }, { kind: 'iteration', mode: 'policy' });
+      return { state, action: 'correctness_attempt_counted' };
+    }
+
+    if (phasedPolicy && diagnosticNoCandidateRound) {
+      if (stats.lastGenerationAttemptRunId === latestRound.runId) return { state, action: 'none' };
+      state.iterationStats = {
+        ...stats,
+        lastGenerationAttemptRunId: latestRound.runId,
+        lastRoundOutcome: 'candidate_generation_failed',
+        loopStartedAt: stats.loopStartedAt || new Date().toISOString(),
+      };
+      appendRuntimeEvent(state, 'candidate.generation_attempt_failed', {
+        round: Number(stats.round || 0) + 1,
+        runId: latestRound.runId,
+      }, { kind: 'iteration', mode: 'policy' });
+      return { state, action: 'generation_attempt_counted' };
+    }
+
+    if (phasedPolicy && (!resolvedEvidenceRound || !correctnessPassed)) return { state, action: 'none' };
     const nextStats = {
       ...stats,
       lastCountedRunId: latestRound.runId,
@@ -634,17 +686,11 @@ export async function advanceIteration(state, deps = {}) {
       loopStartedAt: stats.loopStartedAt || new Date().toISOString(),
     };
     if (phasedPolicy) {
-      const correctnessPassed = roundCorrectnessPassed(latestRound);
-      if (stats.correctnessEstablished) {
-        nextStats.performanceRounds = Number(stats.performanceRounds || 0) + 1;
-      } else {
-        nextStats.correctnessAttempts = Number(stats.correctnessAttempts || 0) + 1;
-        if (correctnessPassed) {
-          nextStats.correctnessEstablished = true;
-          nextStats.correctnessEstablishedRunId = latestRound.runId;
-          nextStats.performanceRounds = 0;
-        }
-      }
+      nextStats.correctnessEstablished = true;
+      nextStats.correctnessEstablishedRunId ||= latestRound.runId;
+      nextStats.performanceRounds = Number(stats.performanceRounds || 0) + 1;
+      nextStats.currentRoundCorrectnessAttempts = 0;
+      nextStats.lastCorrectnessAttemptRunId = null;
     }
     state.iterationStats = nextStats;
     return { state, action: 'round_counted' };
@@ -687,12 +733,20 @@ export async function advanceIteration(state, deps = {}) {
 
   // 普通无采纳轮次后的自动续跑：未达到停滞窗口时继续让主线程生成下一候选。
   // 停滞达到窗口时，上面的升级决策会优先启动研究员。
-  if ((resolvedEvidenceRound || diagnosticNoCandidateRound || diagnosticFailedCandidateRound) && deps.startMainRound && stats.lastCountedRunId === state.agent?.runId) {
+  const phasedPolicy = phasedIterationPolicy(mission);
+  const settledForResume = phasedPolicy
+    ? (resolvedEvidenceRound && stats.lastCountedRunId === state.agent?.runId)
+      || (diagnosticFailedCandidateRound && stats.lastCorrectnessAttemptRunId === state.agent?.runId)
+      || (diagnosticNoCandidateRound && stats.lastGenerationAttemptRunId === state.agent?.runId)
+    : (resolvedEvidenceRound || diagnosticNoCandidateRound || diagnosticFailedCandidateRound) && stats.lastCountedRunId === state.agent?.runId;
+  if (settledForResume && deps.startMainRound) {
+    const activeRound = Number(stats.round || 0) + 1;
+    const correctnessAttempt = Number(stats.currentRoundCorrectnessAttempts || 0);
     const goal = diagnosticNoCandidateRound || diagnosticFailedCandidateRound
-      ? `${mission.goal || state.agent?.goal || ''}\n【系统恢复】上一轮${diagnosticFailedCandidateRound ? `候选测试失败：${state.failureRecords?.[0]?.decisionReason || state.benchmark?.logs?.at(-1)?.message || 'runner correctness failed'}` : '未生成候选'}。baseline 已完成，请换一个有界方向生成单文件 run.py 候选。`
+      ? `${mission.goal || state.agent?.goal || ''}\n【系统恢复】Candidate ${activeRound} ${diagnosticFailedCandidateRound ? `第 ${correctnessAttempt} 次 correctness 未通过：${state.failureRecords?.[0]?.decisionReason || state.benchmark?.lastServiceError?.message || state.benchmark?.logs?.at(-1)?.message || 'runner correctness failed'}。请保持固定 Oracle、shape 和判据，修复实现后重跑全部 correctness；通过后才进入 benchmark。本次仍属于 Round ${activeRound}，不得降低测试标准。` : '本次未生成有效 Diff。请在相同 Round 内生成一个有真实工作区 Diff 的 run.py 候选。'}`
       : `${mission.goal || state.agent?.goal || ''}\n【上一轮证据】${state.appliedCandidateId || 'candidate'} 的实测值为 ${state.benchmark?.result?.benchmark?.[0]?.value ?? 'unknown'}${state.benchmark?.result?.benchmark?.[0]?.unit || ''}，Accept Gate 未达到相对 baseline 目标。系统会先恢复轮前稳定工作区；请换一个有界优化方向并生成内容不同的单文件 run.py 候选。`;
     const nextState = await deps.startMainRound({ state, goal });
-    addAuditEvent(nextState, '自动进入下一轮', diagnosticFailedCandidateRound ? '上一候选测试失败，继续生成下一候选' : diagnosticNoCandidateRound ? '上一轮未生成候选，继续生成候选' : '上一候选未采纳，继续生成下一候选', 'blue', 'RefreshCw');
+    addAuditEvent(nextState, diagnosticFailedCandidateRound ? 'Correctness 修复重试' : diagnosticNoCandidateRound ? '候选生成重试' : '自动进入下一轮', diagnosticFailedCandidateRound ? `Round ${activeRound} · attempt ${correctnessAttempt + 1}` : diagnosticNoCandidateRound ? `Round ${activeRound} · Candidate 编号保持不变` : '上一候选未采纳，继续生成下一候选', 'blue', 'RefreshCw');
     return { state: nextState, action: 'resumed_agent' };
   }
 

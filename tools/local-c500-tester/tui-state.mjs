@@ -37,11 +37,13 @@ const logicalCandidateTasks = (tasks = []) => {
   tasks.forEach((task, index) => {
     if (taskPurpose(task) !== 'candidate') return;
     const identity = candidateTaskIdentity(task, index);
-    latestByCandidate.set(identity, { task, identity });
+    const previous = latestByCandidate.get(identity);
+    const attempts = [...(previous?.attempts || []), task];
+    latestByCandidate.set(identity, { task, identity, attempts });
   });
   return [...latestByCandidate.values()]
     .sort((left, right) => String(left.task.submittedAt || '').localeCompare(String(right.task.submittedAt || '')))
-    .map(({ task }) => task);
+    .map(({ task, attempts }) => ({ ...task, tuiAttemptCount: attempts.length, tuiAttempts: attempts }));
 };
 const normalizedStatus = (status, fallback = 'pending') => {
   const input = String(status || '').toLowerCase();
@@ -53,6 +55,44 @@ const normalizedStatus = (status, fallback = 'pending') => {
 };
 
 const node = (id, title, owner, status = 'pending', detail = '') => ({ id, title, owner, status, detail });
+
+const elapsedLabel = (startedAt) => {
+  const started = startedAt ? new Date(startedAt).getTime() : NaN;
+  if (!Number.isFinite(started)) return '--';
+  const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s`;
+};
+
+const latestAgentActivity = (agent = {}) => {
+  const tools = agent.toolCalls || [];
+  const tool = [...tools].reverse().find((item) => ['running', 'waiting'].includes(item.status)) || tools.at(-1);
+  if (tool) return `${tool.status || 'running'} · ${tool.name || tool.toolId || 'tool'} · ${tool.summary || 'working'}`;
+  const message = (agent.messages || []).at(-1);
+  if (message) return `${message.title || message.phase || 'message'} · ${message.detail || message.status || 'received'}`;
+  return agent.phase || 'waiting for first runtime event';
+};
+
+const queueLine = (task = {}) => {
+  const candidate = taskCandidate(task);
+  const identity = candidate.id || (taskPurpose(task) === 'baseline' ? 'baseline' : '--');
+  const cache = taskMeasurement(task)?.correctness?.referenceCache || task.error?.correctness?.referenceCache;
+  const cacheDetail = cache?.enabled ? ` · ref-cache ${cache.hits}/${cache.hits + cache.misses} hit` : '';
+  const error = task.error?.correctness?.failedCaseName
+    ? ` · FAIL ${task.error.correctness.failedCaseName}`
+    : task.error?.message ? ` · ${task.error.message}` : '';
+  return `${task.taskId || task.id || '--'} · ${taskPurpose(task) || '--'} / ${identity} · ${task.status || 'waiting'} ${Number(task.progress || 0)}%${cacheDetail}${error}`;
+};
+
+const queueEntries = (tasks = []) => [...tasks]
+  .sort((left, right) => {
+    const leftActive = completedTaskStatuses.has(left.status) ? 1 : 0;
+    const rightActive = completedTaskStatuses.has(right.status) ? 1 : 0;
+    return leftActive - rightActive || String(right.submittedAt || '').localeCompare(String(left.submittedAt || ''));
+  })
+  .slice(0, 4)
+  .map((task) => ({ key: task.taskId || task.id, line: queueLine(task), status: task.status }));
 
 export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] } = {}) => {
   const active = mission || {};
@@ -108,6 +148,7 @@ export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] 
       digest: candidate.digest || null,
       taskStatus: task.status || 'pending',
       progress: Number(task.progress || 0),
+      attempt: Number(task.tuiAttemptCount || 1),
       value: Number.isFinite(numericValue) ? `${numericValue} ${measurement?.unit || 'us'}` : '--',
       improvement: improvement == null ? '--' : `${improvement >= 0 ? '+' : ''}${improvement.toFixed(0)}%`,
       gate: gateStatus,
@@ -117,27 +158,34 @@ export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] 
     };
   });
 
-  const agentActive = ['running', 'executing', 'awaiting_action'].includes(state.agent?.status);
+  const agentWorking = ['running'].includes(state.agent?.status);
+  const diffReady = state.agent?.status === 'awaiting_action';
+  const agentActive = agentWorking || diffReady;
   const baselineReady = baseline.status === 'complete' || baselineTask?.status === 'completed';
   const latestTask = candidateTasks.at(-1) || null;
   const latestTaskTerminal = latestTask && completedTaskStatuses.has(latestTask.status);
-  const nextRound = Math.max(candidates.length + 1, Number(state.iterationStats?.round || 0) + 1, 1);
+  const latestCandidateRound = candidates.reduce((maximum, candidate) => Math.max(maximum, Number(candidate.round || 0)), 0);
+  const nextRound = Math.max(latestCandidateRound, Number(state.iterationStats?.round || 0) + 1, 1);
   if (agentActive && baselineReady && (!latestTask || latestTaskTerminal) && !['completed', 'published'].includes(active.status)) {
-    candidates.push({
+    const activeCandidate = {
       key: `generating-${nextRound}`,
       taskId: null,
       round: nextRound,
       id: `candidate-${String(nextRound).padStart(2, '0')}`,
       digest: null,
-      taskStatus: 'generating',
+      taskStatus: diffReady ? 'diff_ready' : 'generating',
       progress: Number(state.agent?.progress || 0),
+      attempt: Math.max(1, Number(state.iterationStats?.currentRoundCorrectnessAttempts || 0) + 1),
       value: '--',
       improvement: '--',
       gate: 'pending',
-      disposition: 'generating Diff',
+      disposition: diffReady ? 'Diff ready' : Number(state.iterationStats?.currentRoundCorrectnessAttempts || 0) > 0 ? 'correctness repair' : 'Agent working',
       rolledBack: false,
       adopted: false,
-    });
+    };
+    const existingIndex = candidates.findIndex((item) => item.round === nextRound);
+    if (existingIndex >= 0) candidates[existingIndex] = { ...candidates[existingIndex], ...activeCandidate, key: candidates[existingIndex].key };
+    else candidates.push(activeCandidate);
   }
 
   const sourceVerified = Boolean(baseline.source?.repository && baseline.source?.commit && baseline.source?.path);
@@ -158,10 +206,10 @@ export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] 
     || candidateTasks.find((task) => taskCandidate(task).id === current.id)
     : null;
   const testStatus = normalizedStatus(currentTask?.status);
-  const candidateStatus = current?.taskStatus === 'generating' ? 'running' : currentTask ? 'completed' : 'pending';
+  const candidateStatus = current?.taskStatus === 'generating' ? 'running' : current?.taskStatus === 'diff_ready' ? 'completed' : currentTask ? 'completed' : 'pending';
   const gateStatus = current?.gate === 'passed' ? 'completed' : current?.gate === 'rejected' || current?.gate === 'hard failure' ? 'rejected' : 'pending';
   const iterationNodes = {
-    candidate: node('candidate', current ? `CANDIDATE ${current.round}` : 'CANDIDATE', 'Agent', candidateStatus, current?.digest ? current.digest.replace('sha256:', '').slice(0, 10) : state.agent?.phase || 'pending'),
+    candidate: node('candidate', current ? `CANDIDATE ${current.round}` : 'CANDIDATE', 'Agent', candidateStatus, current?.digest ? current.digest.replace('sha256:', '').slice(0, 10) : latestAgentActivity(state.agent)),
     test: node('test', 'TEST', 'Fixed', testStatus, currentTask?.status === 'running' ? `queue ${currentTask.progress || 0}%` : current?.value || 'pending'),
     gate: node('gate', 'ACCEPT GATE', 'Fixed', gateStatus, current?.gate || 'target pending'),
     adopt: node('adopt', 'ADOPT', 'Fixed', current?.adopted ? 'completed' : 'pending', current?.adopted ? 'patch committed' : 'pending'),
@@ -172,7 +220,8 @@ export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] 
   if (research.status && research.status !== 'completed') currentNode = { title: 'SOURCE RESEARCH', owner: 'Agent', status: normalizedStatus(research.status), progress: Number(research.progress || 0), detail: research.phase || 'discovering source', meta: research.runPhase || '' };
   else if (materializer.status && materializer.status !== 'completed') currentNode = { title: 'BASELINE MATERIALIZER', owner: 'Agent', status: normalizedStatus(materializer.status), progress: Number(materializer.progress || 0), detail: materializer.phase || 'building run.py', meta: materializer.runId || '' };
   else if (baselineTask && !completedTaskStatuses.has(baselineTask.status)) currentNode = { title: 'BASELINE TEST', owner: 'Fixed', status: normalizedStatus(baselineTask.status), progress: Number(baselineTask.progress || 0), detail: baselineTask.status, meta: baselineTask.taskId || '' };
-  else if (current?.taskStatus === 'generating') currentNode = { title: `CANDIDATE ${current.round}`, owner: 'Agent', status: 'running', progress: Number(state.agent?.progress || 0), detail: state.agent?.phase || 'generating independent Diff', meta: state.workflowRecovery?.checkpointId ? 'checkpoint retained' : 'workspace isolated' };
+  else if (current?.taskStatus === 'generating') currentNode = { title: `AGENT RUN · CANDIDATE ${current.round}`, owner: 'Agent', status: 'running', progress: null, progressMode: 'activity', detail: latestAgentActivity(state.agent), meta: `${state.agent?.runId || 'run pending'} · events ${Number(state.agent?.eventCount || 0)} · elapsed ${elapsedLabel(state.agent?.startedAt)}` };
+  else if (current?.taskStatus === 'diff_ready') currentNode = { title: `DIFF READY · CANDIDATE ${current.round}`, owner: 'Fixed', status: 'completed', progress: 100, detail: state.agent?.candidateValidation?.passed === false ? 'Diff rejected' : 'Diff verified; waiting for patch apply', meta: state.agent?.runId || '' };
   else if (currentTask && !completedTaskStatuses.has(currentTask.status)) currentNode = { title: 'CANDIDATE TEST', owner: 'Fixed', status: testStatus, progress: Number(currentTask.progress || 0), detail: currentTask.status, meta: currentTask.taskId || '' };
   else if (current?.adopted) currentNode = { title: 'ADOPT', owner: 'Fixed', status: 'completed', progress: 100, detail: `${current.id} adopted`, meta: current.value };
   else if (state.iterationStats?.loopStatus === 'needs_human') currentNode = { title: 'ACTION REQUIRED', owner: 'Fixed', status: 'failed', progress: 100, detail: state.iterationStats.loopStatusReason || 'human input required', meta: '' };
@@ -199,6 +248,7 @@ export const renderWorkflowTopologySnapshot = (snapshot = {}) => {
   const rows = topology.recentCandidates.map((candidate) => [
     String(candidate.round).padStart(5),
     fit(candidate.id, 16),
+    String(candidate.attempt || 1).padStart(3),
     fit(candidate.value, 10),
     fit(candidate.improvement, 12),
     fit(candidate.gate, 14),
@@ -213,12 +263,14 @@ export const renderWorkflowTopologySnapshot = (snapshot = {}) => {
     `  ${setup}`,
     '',
     'Recent Candidates',
-    'Round  Candidate         Result      Improvement   Gate            Disposition',
+    'Round  Candidate         Try  Result      Improvement   Gate            Disposition',
     ...(topology.earlierCount ? [`  ...  ${topology.earlierCount} earlier candidates`] : []),
     ...(rows.length ? rows : ['    --  No candidate generated']),
     '',
-    `Current  ${topologyIcon(topology.currentNode.status)} ${topology.currentNode.title} [${topology.currentNode.owner === 'Agent' ? 'A' : 'F'}]  ${progress}%`,
-    `         ${'█'.repeat(filled)}${'░'.repeat(20 - filled)}  ${topology.currentNode.detail}`,
+    `Current  ${topologyIcon(topology.currentNode.status)} ${topology.currentNode.title} [${topology.currentNode.owner === 'Agent' ? 'A' : 'F'}]${topology.currentNode.progressMode === 'activity' ? '' : `  ${progress}%`}`,
+    topology.currentNode.progressMode === 'activity'
+      ? `         ${topology.currentNode.detail} · ${topology.currentNode.meta}`
+      : `         ${'█'.repeat(filled)}${'░'.repeat(20 - filled)}  ${topology.currentNode.detail}`,
     `Flow     ${flow}`,
   ].join('\n');
 };
@@ -243,11 +295,14 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
     || Boolean(best.candidateId)
     || Boolean(benchmark.candidate?.id)
     || Number(iteration.round || 0) > 0;
-  const displayedRounds = Math.max(
-    candidateTasks.length,
-    hasCandidateActivity ? Number(iteration.round || 0) + 1 : 0,
-  );
+  const activeCandidateRound = ['running', 'awaiting_action'].includes(state.agent?.status)
+    || candidateTasks.some((task) => !completedTaskStatuses.has(task.status))
+    || (state.stage === 'validation' && benchmark.status === 'running' && state.baseline?.status === 'complete');
+  const latestCandidateOrdinal = candidateTasks.reduce((maximum, task, index) => Math.max(maximum, candidateNumber(taskCandidate(task).id, index + 1)), 0);
+  const displayedRounds = Math.max(latestCandidateOrdinal, Number(iteration.round || 0) + (activeCandidateRound ? 1 : 0));
   const activeTasks = tasks.filter((task) => !completedTaskStatuses.has(task.status)).length;
+  const queue = queueEntries(tasks);
+  const currentActivity = latestAgentActivity(state.agent || {});
   const simulation = benchmark.result?.environment?.source === 'simulation'
     || tasks.some((task) => task.result?.environment?.source === 'simulation');
 
@@ -287,7 +342,7 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
     '[Q] Quit',
   ].filter(Boolean);
 
-  return { actions, activeTasks, banner, displayedRounds, failure: failure ? { code: failureCode || 'TASK_FAILED', message: failureMessage || '任务执行失败' } : null, hasMission, hotkeys, needsHuman, paused, simulation, statusLabel, terminal };
+  return { actions, activeTasks, banner, currentActivity, displayedRounds, failure: failure ? { code: failureCode || 'TASK_FAILED', message: failureMessage || '任务执行失败' } : null, hasMission, hotkeys, needsHuman, paused, queue, simulation, statusLabel, terminal };
 };
 
 export const resolveDashboardCommand = ({ input = '', key = {}, viewModel, busy = false } = {}) => {
@@ -340,6 +395,7 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
     ...(view.failure ? [`  error       ${view.failure.code}: ${view.failure.message}`] : []),
     `  task        ${benchmark.testTaskId || '--'}`,
     `  queue       ${view.activeTasks} active / ${tasks.length} total`,
+    ...view.queue.map((entry) => `  queue item  ${entry.line}`),
     `  live C500   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`,
     '',
     'Current Best',

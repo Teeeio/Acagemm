@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import importlib.util
 import json
 import math
@@ -82,16 +83,93 @@ def _named_cases(module, count, test_spec):
     return normalized
 
 
-def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_module=None):
+def _json_digest(value):
+    encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _input_signature(value, torch):
+    tensor_type = getattr(torch, "Tensor", ())
+    if tensor_type and isinstance(value, tensor_type):
+        return {"kind": "tensor", "shape": list(value.shape), "dtype": str(value.dtype).replace("torch.", "")}
+    if isinstance(value, dict):
+        return {str(key): _input_signature(item, torch) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
+    if isinstance(value, (list, tuple)):
+        return [_input_signature(item, torch) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return {"kind": type(value).__name__}
+
+
+def _reference_cache_key(case, inputs, torch, context):
+    return _json_digest({
+        "schemaVersion": "operator-studio.correctness-reference-cache/v1",
+        "profileId": context.get("profileId"),
+        "testSpec": context.get("testSpec"),
+        "case": {"name": case.get("name"), "category": case.get("category")},
+        "inputs": _input_signature(inputs, torch),
+        "seed": context.get("seed"),
+        "oracleDigest": context.get("oracleDigest"),
+        "pythonVersion": context.get("pythonVersion"),
+        "torchVersion": context.get("torchVersion"),
+        "deviceName": context.get("deviceName"),
+        "deviceRuntime": context.get("deviceRuntime"),
+    })
+
+
+def _load_reference_cache(torch, cache_file, device):
+    try:
+        expected = torch.load(cache_file, map_location="cpu", weights_only=True)
+        tensor_type = getattr(torch, "Tensor", ())
+        if not tensor_type or not isinstance(expected, tensor_type):
+            return None
+        return expected.to(device=device)
+    except Exception:
+        return None
+
+
+def _save_reference_cache(torch, cache_file, expected):
+    tensor_type = getattr(torch, "Tensor", ())
+    if not tensor_type or not isinstance(expected, tensor_type):
+        return False
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    temporary = cache_file.with_name(f".{cache_file.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        torch.save(expected.detach().cpu(), temporary)
+        os.replace(temporary, cache_file)
+        return True
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_module=None, reference_cache=None):
     started = time.perf_counter()
     oracle = oracle_module or module
     generated_cases = _named_cases(oracle, cases, test_spec)
     details = []
+    cache_stats = {"schemaVersion": "operator-studio.correctness-reference-cache/v1", "enabled": bool(reference_cache), "hits": 0, "misses": 0}
     dtype_tolerance = ((test_spec or {}).get("correctness") or {}).get("dtypeTolerance") or {}
     cos_limit = float(((test_spec or {}).get("correctness") or {}).get("requireCosDiffBelow") or 1e-5)
     for index, case in enumerate(generated_cases):
         inputs = case.get("inputs") if "inputs" in case else case["make_inputs"]()
-        expected = oracle.reference(inputs)
+        expected = None
+        cache_file = None
+        if reference_cache:
+            cache_key = _reference_cache_key(case, inputs, torch, reference_cache)
+            cache_file = Path(reference_cache["root"]) / cache_key[:2] / f"{cache_key}.pt"
+            tensor_type = getattr(torch, "Tensor", ())
+            input_tensor = next((value for value in inputs.values() if tensor_type and isinstance(value, tensor_type)), None)
+            device = input_tensor.device if input_tensor is not None else None
+            if cache_file.exists() and device is not None:
+                expected = _load_reference_cache(torch, cache_file, device)
+            if expected is not None:
+                cache_stats["hits"] += 1
+            else:
+                cache_stats["misses"] += 1
+        if expected is None:
+            expected = oracle.reference(inputs)
+            if cache_file is not None:
+                _save_reference_cache(torch, cache_file, expected)
         actual = module.run(inputs)
         _sync(torch)
         tensor_type = getattr(torch, "Tensor", ())
@@ -125,6 +203,7 @@ def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_mo
                 "failedCaseCategory": case["category"],
                 "error": str(error),
                 "caseResults": details + [{"case": case["name"], "dtype": dtype_name, "maxDiff": max_diff, "rmse": rmse, "cosDiff": cos_diff, "passed": False}],
+                "referenceCache": cache_stats,
                 "durationMs": round((time.perf_counter() - started) * 1000, 3),
             }
         details.append({"case": case["name"], "dtype": dtype_name, "maxDiff": max_diff, "rmse": rmse, "cosDiff": cos_diff, "passed": True})
@@ -135,6 +214,7 @@ def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_mo
         "categories": sorted({str(case["category"]) for case in generated_cases}),
         "caseNames": [str(case["name"]) for case in generated_cases],
         "caseResults": details,
+        "referenceCache": cache_stats,
         "durationMs": round((time.perf_counter() - started) * 1000, 3),
     }
 
@@ -279,6 +359,13 @@ def _trace_target(run_py):
     _sync(torch)
 
 
+def _write_runner_status(task_dir, progress, stage, message):
+    target = task_dir / "runner-status.json"
+    temporary = task_dir / f".runner-status.{os.getpid()}.tmp"
+    temporary.write_text(json.dumps({"progress": progress, "stage": stage, "message": message, "updatedAt": time.time()}, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(temporary, target)
+
+
 def _run(args):
     run_py = Path(args.run_py or os.environ["OPERATOR_LOCAL_C500_RUN_PY"]).resolve()
     result_json = Path(args.result_json or os.environ["OPERATOR_LOCAL_C500_RESULT_JSON"]).resolve()
@@ -297,11 +384,36 @@ def _run(args):
     correctness_spec = test_spec.get("correctness") or {}
     atol = float(correctness_spec.get("atol", args.atol))
     rtol = float(correctness_spec.get("rtol", args.rtol))
-    correctness = _run_correctness(module, torch, correctness_cases, atol, rtol, test_spec, oracle_module)
+    _write_runner_status(task_dir, 15, "correctness", f"Running {correctness_cases} fixed correctness cases.")
+    cache_root = os.environ.get("OPERATOR_LOCAL_C500_REFERENCE_CACHE_DIR")
+    oracle_file = Path(oracle_path).resolve() if oracle_path else run_py
+    reference_cache = None
+    if cache_root and oracle_path:
+        reference_cache = {
+            "root": str(Path(cache_root).resolve()),
+            "profileId": matrix.get("profileId"),
+            "testSpec": test_spec,
+            "seed": (test_spec.get("generation") or {}).get("seed"),
+            "oracleDigest": hashlib.sha256(oracle_file.read_bytes()).hexdigest(),
+            "pythonVersion": sys.version.split()[0],
+            "torchVersion": str(torch.__version__),
+            "deviceName": hardware.get("deviceName"),
+            "deviceRuntime": {
+                "mxSmiVersion": next((line.strip() for line in str(hardware.get("mxSmi") or "").splitlines() if "mx-smi" in line.lower() and "version" in line.lower()), None),
+                "driverVersion": next((part.strip() for line in str(hardware.get("mxSmi") or "").splitlines() if "Driver Version:" in line for part in [line.split("Driver Version:", 1)[1].split()[0]]), None),
+                "macaVersion": next((part.strip() for line in str(hardware.get("mxSmi") or "").splitlines() if "MACA Version:" in line for part in [line.split("MACA Version:", 1)[1].split()[0]]), None),
+            },
+        }
+    correctness = _run_correctness(module, torch, correctness_cases, atol, rtol, test_spec, oracle_module, reference_cache)
+    (task_dir / "correctness.json").write_text(json.dumps(correctness, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if not correctness["passed"]:
+        _write_runner_status(task_dir, 100, "correctness_failed", f"Correctness failed: {correctness.get('failedCaseName') or correctness.get('failedCase')}.")
         raise RuntimeError(f"correctness failed on case {correctness.get('failedCase')}: {correctness.get('error')}")
+    _write_runner_status(task_dir, 55, "correctness_complete", f"All {correctness_cases} correctness cases passed.")
     benchmark_profiles = _named_benchmark_profiles(oracle_module, test_spec)
+    _write_runner_status(task_dir, 60, "benchmark", f"Running {len(benchmark_profiles)} fixed benchmark profiles.")
     benchmark_results = _benchmark_inputs(module, torch, benchmark_profiles, warmup, repeats, oracle_module)
+    _write_runner_status(task_dir, 90, "benchmark_complete", f"Completed {len(benchmark_profiles)} benchmark profiles.")
     primary_benchmark = benchmark_results[0]
 
     runner = Path(__file__).resolve()
@@ -325,6 +437,7 @@ def _run(args):
         values,
         task_dir / "analysis" / "mcProfiler",
     )
+    _write_runner_status(task_dir, 95, "optional_diagnostics", "Optional mcTracer/mcProfiler collection completed or was skipped.")
     environment_name = str((matrix.get("environments") or ["C500"])[0])
     result = {
         "benchmark": [{
@@ -373,6 +486,7 @@ def _run(args):
         },
     }
     result_json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _write_runner_status(task_dir, 100, "complete", "Correctness and benchmark completed.")
 
 
 def main():

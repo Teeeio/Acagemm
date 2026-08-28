@@ -80,6 +80,21 @@ caught = runner._run_correctness(SelfConsistentButWrongCandidate, FakeTorch, 4, 
 assert caught["passed"] is False
 assert caught["failedCaseName"] == "minimal"
 
+cache_context = {
+    "profileId": "paged-mqa-logits-triton-v01",
+    "testSpec": test_spec,
+    "seed": 20260827,
+    "oracleDigest": "a" * 64,
+    "pythonVersion": "3.12.11",
+    "torchVersion": "2.8.0+metax3.3.0.2",
+    "deviceName": "MetaX C550",
+}
+cache_case = {"name": "mqa_s1-float32", "category": "fixed-profile"}
+cache_key = runner._reference_cache_key(cache_case, {"value": 1}, FakeTorch, cache_context)
+assert cache_key == runner._reference_cache_key(cache_case, {"value": 1}, FakeTorch, cache_context)
+assert cache_key != runner._reference_cache_key(cache_case, {"value": 1}, FakeTorch, {**cache_context, "oracleDigest": "b" * 64})
+assert cache_key != runner._reference_cache_key(cache_case, {"value": 1}, FakeTorch, {**cache_context, "deviceName": "MetaX C500"})
+
 with tempfile.TemporaryDirectory() as temporary_directory:
     missing = runner._analysis_tool(
         "definitely-missing-analysis-tool",

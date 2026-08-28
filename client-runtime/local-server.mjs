@@ -1477,7 +1477,7 @@ const loadRuntimeState = async () => {
   projection.state = autopilot.state;
   if (autopilot.action !== 'none') changed = true;
   const looped = await advanceIteration(projection.state, iterationDeps);
-  if (['research_timeout', 'research_injected', 'research_noted', 'round_counted', 'resumed_agent', 'research_escalated', 'baseline_started', 'resumed_after_baseline', 'failed_candidate_recorded'].includes(looped.action)) changed = true;
+  if (['research_timeout', 'research_injected', 'research_noted', 'round_counted', 'correctness_attempt_counted', 'generation_attempt_counted', 'resumed_agent', 'research_escalated', 'baseline_started', 'resumed_after_baseline', 'failed_candidate_recorded'].includes(looped.action)) changed = true;
   const finalReconciliation = reconcileWorkflowState(looped.state);
   changed ||= finalReconciliation.changed;
   return changed ? saveState(finalReconciliation.state) : finalReconciliation.state;

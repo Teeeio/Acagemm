@@ -33,6 +33,7 @@
     "test:journal": "node tests/command-journal-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
     "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",
+    "test:local-c500-service-async": "node tests/local-c500-service-async-test.mjs",
     "test:local-c500-launch-mode": "node tests/local-c500-launch-mode-test.mjs",
     "test:local-c500-environment-entry": "node tests/local-c500-environment-entry-test.mjs",
     "test:muxi-device": "node tests/muxi-device-test.mjs",

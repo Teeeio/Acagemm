@@ -43,18 +43,18 @@ const CandidateTable = ({ topology, width, limit = 5 }) => {
   const candidates = topology.candidates.slice(-limit);
   const earlierCount = Math.max(0, topology.candidates.length - candidates.length);
   const columns = compact
-    ? { candidate: 14, result: 9, gain: 7, gate: 11 }
-    : { candidate: 18, result: 11, gain: 12, gate: 15 };
+    ? { candidate: 12, attempt: 3, result: 9, gain: 7, gate: 11 }
+    : { candidate: 16, attempt: 3, result: 11, gain: 12, gate: 15 };
   return React.createElement(Box, { flexDirection: 'column' },
     React.createElement(Text, { color: 'cyan' }, 'Recent Candidates'),
     React.createElement(Text, { dimColor: true }, compact
-      ? `Rnd  ${fit('Candidate', columns.candidate)} ${fit('Result', columns.result)} ${fit('Gain', columns.gain)} ${fit('Gate', columns.gate)} Disposition`
-      : `Round  ${fit('Candidate', columns.candidate)} ${fit('Result', columns.result)} ${fit('Improvement', columns.gain)} ${fit('Gate', columns.gate)} Disposition`),
+      ? `Rnd  ${fit('Candidate', columns.candidate)} ${fit('Try', columns.attempt)} ${fit('Result', columns.result)} ${fit('Gain', columns.gain)} ${fit('Gate', columns.gate)} Disposition`
+      : `Round  ${fit('Candidate', columns.candidate)} ${fit('Try', columns.attempt)} ${fit('Result', columns.result)} ${fit('Improvement', columns.gain)} ${fit('Gate', columns.gate)} Disposition`),
     earlierCount > 0 ? React.createElement(Text, { dimColor: true }, ` ...   ${earlierCount} earlier candidates`) : null,
     ...(candidates.length ? candidates.map((candidate) => React.createElement(Text, {
       key: candidate.key,
       color: candidate.adopted ? 'green' : candidate.rolledBack ? 'yellow' : candidate.taskStatus === 'generating' || candidate.taskStatus === 'running' ? 'cyan' : undefined,
-    }, `${String(candidate.round).padStart(compact ? 3 : 5)}  ${fit(candidate.id, columns.candidate)} ${fit(candidate.value, columns.result)} ${fit(candidate.improvement, columns.gain)} ${fit(candidate.gate, columns.gate)} ${candidate.disposition}`))
+    }, `${String(candidate.round).padStart(compact ? 3 : 5)}  ${fit(candidate.id, columns.candidate)} ${fit(candidate.attempt, columns.attempt)} ${fit(candidate.value, columns.result)} ${fit(candidate.improvement, columns.gain)} ${fit(candidate.gate, columns.gate)} ${candidate.disposition}`))
       : [React.createElement(Text, { key: 'empty', dimColor: true }, '  --   No candidate generated')]),
   );
 };
@@ -66,7 +66,7 @@ export const WorkflowTopology = ({ snapshot = {}, layout = {} }) => {
   const compact = width < 110;
   const setupWidth = tight ? 15 : compact ? 16 : 21;
   const current = topology.currentNode;
-  const currentItem = { title: current.title, owner: current.owner, status: current.status, detail: `${current.progress}% · ${current.detail}` };
+  const currentItem = { title: current.title, owner: current.owner, status: current.status, detail: current.progressMode === 'activity' ? current.detail : `${current.progress}% · ${current.detail}` };
   const flowNodes = topology.iterationNodes;
   return React.createElement(Box, { flexDirection: 'column', borderStyle: 'round', borderColor: 'cyan', paddingX: 1 },
     React.createElement(Box, { justifyContent: 'space-between' },
@@ -83,7 +83,9 @@ export const WorkflowTopology = ({ snapshot = {}, layout = {} }) => {
     React.createElement(Box, { marginTop: tight ? 0 : 1, flexDirection: tight ? 'row' : compact ? 'column' : 'row', alignItems: tight || !compact ? 'center' : 'flex-start' },
       React.createElement(Box, { flexDirection: 'column' },
         React.createElement(TopologyNode, { item: currentItem, width: tight ? 22 : compact ? Math.min(width - 4, 48) : 42, current: true, oneLine: tight }),
-        React.createElement(Text, { color: current.status === 'failed' ? 'red' : 'cyan' }, `${progressBar(current.progress, tight ? 12 : compact ? 24 : 32)} ${Math.round(current.progress || 0)}%`),
+        current.progressMode === 'activity'
+          ? React.createElement(Text, { color: 'cyan' }, `events ${Number(snapshot.state?.agent?.eventCount || 0)} · elapsed ${String(current.meta || '').split(' · elapsed ')[1] || '--'}`)
+          : React.createElement(Text, { color: current.status === 'failed' ? 'red' : 'cyan' }, `${progressBar(current.progress, tight ? 12 : compact ? 24 : 32)} ${Math.round(current.progress || 0)}%`),
         !tight && current.meta ? React.createElement(Text, { dimColor: true }, fit(current.meta, compact ? 44 : 40)) : null,
       ),
       compact && !tight ? null : React.createElement(Arrow, { label: tight ? '›' : '▶' }),

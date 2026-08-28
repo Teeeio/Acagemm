@@ -1556,7 +1556,16 @@ export function createAgentRuntime(options = {}) {
           state.stage = 'candidate';
           nextAgent.status = 'awaiting_action';
           nextAgent.phase = 'Candidate Plan 已生成';
-          nextAgent.currentAction = agentResult.nextAction;
+          nextAgent.currentAction = agentResult.nextAction || {
+            id: `action.apply-${verifiedCandidates[0].id}`,
+            type: 'candidate.plan',
+            title: `应用 ${verifiedCandidates[0].id}`,
+            reason: 'Agent 已在隔离工作区生成并通过 Diff 边界校验，进入固定测试流程。',
+            expectedOutput: 'Patch applied and ready for correctness validation',
+            risk: 'medium',
+            approvalRequired: false,
+            approvalPolicy: 'client-controlled',
+          };
           nextAgent.artifacts = [
             ...nextAgent.artifacts,
             { id: `agent-result-${state.agent.runId}`, kind: 'Candidate Plan', title: `${verifiedCandidates.length} 个已验证 Agent Candidate`, status: 'awaiting_action', meta: `${agentResult.format} · Git Diff verified` },

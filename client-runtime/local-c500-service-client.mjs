@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,6 +31,10 @@ const taskPath = (taskId) => path.join(taskRoot, taskId, 'task.json');
 const runPyPath = (taskId) => path.join(taskRoot, taskId, 'run.py');
 const oracleRunPyPath = (taskId) => path.join(taskRoot, taskId, 'oracle.py');
 const resultPath = (taskId) => path.join(taskRoot, taskId, 'result.json');
+const correctnessPath = (taskId) => path.join(taskRoot, taskId, 'correctness.json');
+const runnerStatusPath = (taskId) => path.join(taskRoot, taskId, 'runner-status.json');
+const referenceCacheRoot = path.join(taskRoot, 'reference-cache');
+const activeExecutions = new Map();
 
 const fail = (message, code, status = 400) => {
   const error = new Error(message);
@@ -194,53 +198,98 @@ const readRunnerResult = async (task) => {
   return parsed;
 };
 
+const runCommand = (command, task, timeoutMs) => new Promise((resolve, reject) => {
+  const taskId = task.taskId;
+  const child = spawn(command, {
+    cwd: path.dirname(taskPath(taskId)),
+    shell: true,
+    windowsHide: true,
+    timeout: timeoutMs,
+    env: {
+      ...process.env,
+      OPERATOR_LOCAL_C500_TASK_ID: taskId,
+      OPERATOR_LOCAL_C500_TASK_DIR: path.dirname(taskPath(taskId)),
+      OPERATOR_LOCAL_C500_RUN_PY: runPyPath(taskId),
+      ...(task.payload?.oracleRunPy ? { OPERATOR_LOCAL_C500_ORACLE_RUN_PY: oracleRunPyPath(taskId) } : {}),
+      OPERATOR_LOCAL_C500_RESULT_JSON: resultPath(taskId),
+      OPERATOR_LOCAL_C500_REFERENCE_CACHE_DIR: referenceCacheRoot,
+    },
+  });
+  const execution = activeExecutions.get(taskId);
+  if (execution) execution.child = child;
+  let stdout = '';
+  let stderr = '';
+  const append = (current, chunk) => `${current}${chunk}`.slice(-8 * 1024 * 1024);
+  child.stdout?.on('data', (chunk) => { stdout = append(stdout, chunk); });
+  child.stderr?.on('data', (chunk) => { stderr = append(stderr, chunk); });
+  child.once('error', reject);
+  child.once('close', (status, signal) => resolve({ status, signal, stdout, stderr }));
+});
+
 const executeTask = async (task) => {
-  const started = Date.now();
-  task.status = 'running';
-  task.startedAt = now();
-  task.progress = 10;
-  task.logs = [{ sequence: 1, progress: 10, message: 'Local C500 backend started on the production Mission artifact.' }];
-  await saveTask(task);
+  const started = Date.parse(task.startedAt || '') || Date.now();
 
   try {
     const result = mockEnabled
       ? await mockResult(task)
       : await (async () => {
         const command = renderCommand(commandTemplate, task);
-        const processResult = spawnSync(command, {
-          cwd: path.dirname(taskPath(task.taskId)),
-          shell: true,
-          encoding: 'utf8',
-          windowsHide: true,
-          timeout: Math.max(1, Number(task.payload?.limits?.timeoutSeconds || 120)) * 1000,
-          maxBuffer: 8 * 1024 * 1024,
-          env: {
-            ...process.env,
-            OPERATOR_LOCAL_C500_TASK_ID: task.taskId,
-            OPERATOR_LOCAL_C500_TASK_DIR: path.dirname(taskPath(task.taskId)),
-            OPERATOR_LOCAL_C500_RUN_PY: runPyPath(task.taskId),
-            ...(task.payload?.oracleRunPy ? { OPERATOR_LOCAL_C500_ORACLE_RUN_PY: oracleRunPyPath(task.taskId) } : {}),
-            OPERATOR_LOCAL_C500_RESULT_JSON: resultPath(task.taskId),
-          },
-        });
+        const processResult = await runCommand(command, task, Math.max(1, Number(task.payload?.limits?.timeoutSeconds || 120)) * 1000);
         if (processResult.status !== 0) {
           throw fail(processResult.stderr || processResult.stdout || 'Local C500 runner failed.', 'LOCAL_C500_RUNNER_FAILED', 500);
         }
         return readRunnerResult(task);
       })();
+    task = await loadTask(task.taskId);
+    if (task.cancelRequested) return task;
     task.status = 'completed';
     task.progress = 100;
     task.result = result;
     task.logs = [...task.logs, { sequence: 2, progress: 100, message: mockEnabled ? 'Simulation result completed; it is not publishable as hardware evidence.' : 'Local C500 runner completed the generated Mission artifact.' }];
   } catch (error) {
+    task = await loadTask(task.taskId);
+    if (task.cancelRequested) return task;
     task.status = 'failed';
     task.progress = 100;
-    task.error = { code: error.code || 'LOCAL_C500_RUNNER_FAILED', message: error.message };
+    let correctness = null;
+    try { correctness = JSON.parse(await readFile(correctnessPath(task.taskId), 'utf8')); } catch { /* runner may fail before correctness starts */ }
+    task.error = { code: error.code || 'LOCAL_C500_RUNNER_FAILED', message: error.message, ...(correctness ? { correctness } : {}) };
     task.logs = [...task.logs, { sequence: 2, progress: 100, message: task.error.message }];
   }
   task.completedAt = now();
   task.durationMs = Date.now() - started;
   return saveTask(task);
+};
+
+const startTaskExecution = async (task) => {
+  if (activeExecutions.has(task.taskId)) return;
+  task.status = 'running';
+  task.startedAt ||= now();
+  task.progress = Math.max(10, Number(task.progress || 0));
+  task.logs = task.logs?.length ? task.logs : [{ sequence: 1, progress: 10, message: 'Local C500 backend started on the production Mission artifact.' }];
+  await saveTask(task);
+  const execution = { child: null, promise: null };
+  activeExecutions.set(task.taskId, execution);
+  execution.promise = executeTask(task)
+    .catch(async (error) => {
+      const latest = await loadTask(task.taskId);
+      latest.status = 'failed';
+      latest.progress = 100;
+      latest.error = { code: error.code || 'LOCAL_C500_RUNNER_FAILED', message: error.message };
+      latest.completedAt = now();
+      await saveTask(latest);
+    })
+    .finally(() => activeExecutions.delete(task.taskId));
+};
+
+const refreshRunnerProgress = async (task) => {
+  try {
+    const status = JSON.parse(await readFile(runnerStatusPath(task.taskId), 'utf8'));
+    if (Number(status.progress || 0) <= Number(task.progress || 0)) return task;
+    task.progress = Number(status.progress);
+    task.logs = [...(task.logs || []), { sequence: (task.logs || []).length + 1, progress: task.progress, message: status.message || status.stage || 'Runner progress updated.' }];
+    return saveTask(task);
+  } catch { return task; }
 };
 
 export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
@@ -299,7 +348,11 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
     },
     get: async (taskId) => {
       const task = await loadTask(taskId);
-      if (!['completed', 'failed', 'cancelled'].includes(task.status)) await executeTask(task);
+      if (!['completed', 'failed', 'cancelled'].includes(task.status)) {
+        await startTaskExecution(task);
+        if (mockEnabled) await activeExecutions.get(taskId)?.promise;
+        await refreshRunnerProgress(await loadTask(taskId));
+      }
       return taskView(await loadTask(taskId));
     },
     events: async (taskId) => {
@@ -309,6 +362,7 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
     cancel: async (taskId) => {
       const task = await loadTask(taskId);
       if (!['completed', 'failed', 'cancelled'].includes(task.status)) {
+        activeExecutions.get(taskId)?.child?.kill();
         task.status = 'cancelled';
         task.cancelRequested = true;
         task.completedAt = now();

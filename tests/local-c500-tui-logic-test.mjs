@@ -135,9 +135,39 @@ const retrySnapshot = {
 const retryTopology = deriveWorkflowTopology(retrySnapshot);
 assert.equal(retryTopology.candidates.length, 1, '同一 Candidate 的测试重试只能占一行');
 assert.equal(retryTopology.candidates[0].taskId, 'candidate-02-attempt-2');
+assert.equal(retryTopology.candidates[0].attempt, 2);
 assert.equal(retryTopology.candidates[0].value, '84 us');
 assert.equal(retryTopology.candidates[0].gate, 'rejected');
 assert.equal(deriveTuiViewModel(retrySnapshot).displayedRounds, 2, '测试重试不能增加迭代轮数');
+
+const correctnessRepairSnapshot = {
+  mission: mission(),
+  state: {
+    baseline: { status: 'complete', evidence: { value: 100 } },
+    iterationStats: { loopStatus: 'running', round: 0, currentRoundCorrectnessAttempts: 1 },
+    agent: {
+      status: 'running', runId: 'claude-repair-1', startedAt: new Date(Date.now() - 65_000).toISOString(), eventCount: 7,
+      phase: 'Claude Code 正在分析',
+      toolCalls: [{ id: 'tool-1', status: 'running', name: 'Read', summary: 'inspecting paged_mqa_logits.py' }],
+    },
+  },
+  tasks: [
+    task('baseline', 'completed', 100),
+    { ...task('candidate', 'failed'), taskId: 'candidate-01-attempt-1', submittedAt: '2026-08-28T01:00:00Z', payload: { purpose: 'candidate', candidate: { id: 'candidate-01', digest: 'sha256:first' } }, error: { code: 'LOCAL_C500_RUNNER_FAILED', message: 'correctness failed', correctness: { failedCaseName: 'mqa_s2-float16', referenceCache: { enabled: true, hits: 9, misses: 1 } } } },
+  ],
+};
+const repairTopology = deriveWorkflowTopology(correctnessRepairSnapshot);
+assert.equal(repairTopology.candidates.length, 1);
+assert.equal(repairTopology.candidates[0].round, 1, 'correctness repair must retain candidate-01 / round 1');
+assert.equal(repairTopology.candidates[0].attempt, 2);
+assert.equal(repairTopology.candidates[0].disposition, 'correctness repair');
+assert.equal(repairTopology.currentNode.progressMode, 'activity');
+assert.match(repairTopology.currentNode.detail, /Read.*inspecting paged_mqa_logits\.py/);
+assert.match(repairTopology.currentNode.meta, /claude-repair-1.*events 7.*elapsed 1m/);
+assert.doesNotMatch(renderWorkflowTopologySnapshot(correctnessRepairSnapshot), /Current.*8%/);
+const repairView = deriveTuiViewModel(correctnessRepairSnapshot);
+assert.match(repairView.queue[0].line, /FAIL mqa_s2-float16/);
+assert.match(repairView.queue[0].line, /ref-cache 9\/10 hit/);
 
 const preBaselineTopology = deriveWorkflowTopology({
   mission: mission(),
