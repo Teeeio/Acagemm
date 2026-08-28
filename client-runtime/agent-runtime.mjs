@@ -342,6 +342,20 @@ const ACTIVE_MAIN_AGENT_STATUSES = new Set(['running', 'executing', 'awaiting_ac
 const ACTIVE_RESEARCH_AGENT_STATUSES = new Set(['running', 'cancel_requested']);
 const ACTIVE_BASELINE_MATERIALIZER_STATUSES = new Set(['running', 'cancel_requested']);
 const MAIN_AGENT_BUDGET_MS = 10 * 60 * 1000;
+const NON_RECOVERABLE_MANAGED_FAILURE_CODES = new Set([
+  'CLAUDE_AUTH_FAILED',
+  'CLAUDE_ACCESS_DENIED',
+  'CLAUDE_RATE_LIMITED',
+  'CLAUDE_BILLING_UNAVAILABLE',
+  'CLAUDE_NETWORK_FAILED',
+  'CLAUDE_SPAWN_FAILED',
+  'CODEX_AUTH_FAILED',
+  'CODEX_ACCESS_DENIED',
+  'CODEX_RATE_LIMITED',
+  'CODEX_BILLING_UNAVAILABLE',
+  'CODEX_NETWORK_FAILED',
+  'CODEX_SPAWN_FAILED',
+]);
 const DEFAULT_MAIN_AGENT_STALL_MS = 2 * 60 * 1000;
 const CLAUDE_MAIN_AGENT_STALL_MS = 5 * 60 * 1000;
 
@@ -675,6 +689,13 @@ export function createAgentRuntime(options = {}) {
         role: 'iteration',
         roots: { workspace },
       });
+      const workspaceInventory = await workspaceManager.git(
+        ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
+        workspace,
+      ).then((result) => result.stdout.split('\0').map((file) => file.replaceAll('\\', '/')).filter(Boolean).sort());
+      const inventoryText = workspaceInventory.length
+        ? workspaceInventory.map((file) => `- ${file}`).join('\n')
+        : '- (empty workspace)';
       const prompt = [
         'You are the local optimization Agent for Operator Studio.',
         `Mission ID: ${mission.id}`,
@@ -684,7 +705,10 @@ export function createAgentRuntime(options = {}) {
         `Workspace: ${workspace}`,
         'The Workspace is the isolated snapshot of the project-owned Iteration Repository. Only files changed inside this Workspace may become Candidate files.',
         'Read and write boundary: this Iteration Agent may access ONLY the Workspace above. Do not inspect parent directories, Source Registry, research/baseline directories, sibling projects, other test runs, or unrelated filesystem paths. Previous test-run code is forbidden input.',
-        'The first round may start without implementation code; later rounds start from the current stable candidate. Inspect and edit only the configured implementation files. Do not search for another baseline. External references are optional implementation advice, not baseline authority.',
+        'Workspace file inventory at run start (authoritative):',
+        inventoryText,
+        'The first round may start without implementation code. Contract deliverables such as run.py may therefore be absent from the inventory. Do not Read or Edit an absent path: create it directly with a file creation or patch tool. The inline baseline below is prompt evidence and is not guaranteed to exist as workspace/run.py. Later rounds start from the current stable candidate.',
+        'Inspect and edit only the configured implementation files. Do not search for another baseline. External references are optional implementation advice, not baseline authority.',
         implementationInstruction,
         frozenProfileInstruction ? `Frozen operator profile (immutable): ${frozenProfileInstruction}` : '',
         'Hard baseline constraint: before any optimized operator candidate can be adopted, Operator Studio must have a current valid baseline measured on the same runner and the same input shape. Prefer a PyTorch reference baseline expanded into a single-file run.py. If no authoritative upstream implementation exists, use a clearly labeled naive_v0 baseline derived from a v0 version and do not confuse it with an upstream reference.',
@@ -1440,10 +1464,12 @@ export function createAgentRuntime(options = {}) {
         const projectedMessages = assistantEvents.slice(-8).map((event, index) => ({ id: event.id || `${managedMeta.slug}-event-${index}`, phase: event.type || managedMeta.name, status: failed ? 'waiting' : 'completed', title: event.type || `${managedMeta.name} 事件`, detail: managedClient.eventText(event) || `${managedMeta.name} 已产生新的运行事件`, time: event.timestamp || '刚刚' }));
         if (failure) projectedMessages.push({ id: `${managedMeta.slug}-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: failure.title, detail: failure.detail, time: run.completedAt || '刚刚', errorCode: failure.code });
         const terminalCompleted = completed || timedOut;
+        const terminalReached = terminalCompleted || failed;
+        const recoverableGenerationFailure = failed && failure && !NON_RECOVERABLE_MANAGED_FAILURE_CODES.has(failure.code);
         let candidateValidation = null;
         let verifiedCandidates = agentResult.candidates;
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
-        if (terminalCompleted && agentResult.candidates.length) {
+        if (terminalReached && agentResult.candidates.length) {
           const selectedCandidate = agentResult.candidates.find((candidate) => candidate.id === agentResult.recommendedCandidate) || agentResult.candidates[0];
           const declaredFiles = String(selectedCandidate.files || '').split(',').map((file) => file.trim().replaceAll('\\', '/')).filter(Boolean);
           const manifest = await workspaceManager.captureDiff(run.workspace);
@@ -1464,7 +1490,7 @@ export function createAgentRuntime(options = {}) {
             candidateValidation = { passed: true, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_VERIFIED`, digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: '候选自报来源标记，未做固定来源校验（工作区 Diff 为准入权威）' };
             verifiedCandidates = [{ ...selectedCandidate, files: actualFiles.join(', '), sourceReferences: claimedReferences, patchDigest: manifest.digest, sourceRunId: state.agent.runId }];
           }
-        } else if (terminalCompleted && !agentResult.candidates.length && !workflowAdvanced) {
+        } else if (terminalReached && !agentResult.candidates.length && !workflowAdvanced) {
           const manifest = await workspaceManager.captureDiff(run.workspace);
           const stableDigest = state.workflowRecovery?.checkpoints?.at(-1)?.stableDigest || null;
           const actualFiles = manifest.changedFiles.map((file) => file.replaceAll('\\', '/'));
@@ -1495,7 +1521,7 @@ export function createAgentRuntime(options = {}) {
             }];
           }
         }
-        if (terminalCompleted && verifiedCandidates.length && !workflowAdvanced) {
+        if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
           const strictZeroSource = activeMission.sourcePolicy?.mode === 'agent-research-only' || activeMission.sourcePolicy?.strictZeroSource === true;
           const previousDigests = new Set((state.runHistory || []).map((round) => round.candidateDigest).filter(Boolean));
           const nextDigest = verifiedCandidates[0].patchDigest;
@@ -1551,7 +1577,7 @@ export function createAgentRuntime(options = {}) {
           lastEventAt,
           timedOut: timedOut || undefined,
         };
-        if (terminalCompleted && verifiedCandidates.length && !workflowAdvanced) {
+        if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
           state.candidateEvaluations = verifiedCandidates;
           state.stage = 'candidate';
           nextAgent.status = 'awaiting_action';
@@ -1570,20 +1596,26 @@ export function createAgentRuntime(options = {}) {
             ...nextAgent.artifacts,
             { id: `agent-result-${state.agent.runId}`, kind: 'Candidate Plan', title: `${verifiedCandidates.length} 个已验证 Agent Candidate`, status: 'awaiting_action', meta: `${agentResult.format} · Git Diff verified` },
           ];
-        } else if (terminalCompleted && candidateValidation?.passed === false && !workflowAdvanced) {
+        } else if (terminalReached && candidateValidation?.passed === false && !workflowAdvanced) {
           nextAgent.status = 'failed';
           nextAgent.phase = 'Candidate Diff 校验失败';
           nextAgent.currentAction = null;
           nextAgent.messages = [...nextAgent.messages, { id: `candidate-validation-${state.agent.runId}`, phase: 'Candidate', status: 'waiting', title: '候选未进入候选池', detail: candidateValidation.detail, time: '刚刚', errorCode: candidateValidation.code }];
           appendRuntimeEvent(state, 'candidate.diff_rejected', { runId: state.agent.runId, ...candidateValidation }, { kind: 'policy', mode: 'client' });
-        } else if (terminalCompleted && !agentResult.candidates.length && !workflowAdvanced) {
+        } else if (terminalReached && !agentResult.candidates.length && !workflowAdvanced && (!failed || recoverableGenerationFailure)) {
           state.stage = 'diagnosis';
           state.candidateEvaluations = [];
           nextAgent.status = 'completed';
-          nextAgent.phase = `${managedMeta.name} 分析完成，未生成候选`;
+          nextAgent.phase = failed ? `${managedMeta.name} 执行失败，等待同轮重试` : `${managedMeta.name} 分析完成，未生成候选`;
           nextAgent.currentAction = null;
           if (!state.runtimeEvents?.some((event) => event.type === 'candidate.not_proposed' && event.payload?.runId === state.agent.runId)) {
-            appendRuntimeEvent(state, 'candidate.not_proposed', { runId: state.agent.runId, summary: agentResult.summary }, { kind: 'agent', mode });
+            appendRuntimeEvent(state, 'candidate.not_proposed', {
+              runId: state.agent.runId,
+              summary: agentResult.summary,
+              recoverable: recoverableGenerationFailure,
+              errorCode: failure?.code || null,
+              error: failure?.detail || null,
+            }, { kind: 'agent', mode });
           }
         }
         if (workflowAdvanced) {

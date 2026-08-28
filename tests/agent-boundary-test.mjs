@@ -12,8 +12,9 @@ try {
   await writeFile(path.join(workspace, 'MISSION.md'), '# mission\n', 'utf8');
   const boundary = await prepareAgentBoundary({ workspace, role: 'iteration', roots: { workspace } });
   assert.deepEqual(JSON.parse(boundary.environment.OPERATOR_AGENT_ROOTS), { workspace: path.resolve(workspace) });
-  assert.match(boundary.toolInstruction, /No local shell/);
-  assert.match(boundary.toolInstruction, /apply_patch only/);
+  assert.match(boundary.toolInstruction, /Do not use a local shell/);
+  assert.match(boundary.toolInstruction, /Never assume that a requested file already exists/);
+  assert.match(boundary.toolInstruction, /Create missing files/);
   assert.ok((await readdir(workspace)).includes('.git'));
   assert.equal((await readdir(workspace)).includes('.codex'), false);
   console.log('[agent-boundary] isolated cwd contract passed');

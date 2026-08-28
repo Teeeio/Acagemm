@@ -151,6 +151,11 @@ try {
 
   state.baseline.status = 'complete';
   await runtime.startRun({ state, mission, goal: mission.goal, workspace });
+  const iterationRun = [...runs.values()].find((run) => run.role === 'iteration');
+  assert.match(iterationRun.goal, /Workspace file inventory at run start \(authoritative\):/);
+  assert.match(iterationRun.goal, /- MISSION\.md/);
+  assert.match(iterationRun.goal, /run\.py may therefore be absent/);
+  assert.match(iterationRun.goal, /Do not Read or Edit an absent path: create it directly/);
   await runtime.projectState(state);
   assert.equal(state.agent.runtimeKind, 'claude-code');
   assert.equal(state.agent.status, 'awaiting_action');
@@ -161,6 +166,73 @@ try {
   assert.deepEqual([...runs.values()].map((run) => run.role), ['research-synthesize', 'materializer', 'iteration']);
   await runtime.projectState(state);
   assert.equal(state.runtimeEvents.filter((event) => event.type === 'claude.run_completed' && event.payload?.runId === state.agent.runId).length, 1);
+
+  const failedWorkspace = path.join(root, 'failed-workspace');
+  await initializeRepository(failedWorkspace);
+  await writeFile(path.join(failedWorkspace, 'MISSION.md'), '# cold-start failure fixture\n', 'utf8');
+  await execFileAsync('git', ['add', '-A'], { cwd: failedWorkspace, windowsHide: true });
+  await execFileAsync('git', ['commit', '-m', 'cold-start mission'], { cwd: failedWorkspace, windowsHide: true });
+  const failedRunId = 'claude_FILE_MISSING';
+  const failedRuntime = createAgentRuntime({
+    mode: 'claude-code',
+    claudeClient: {
+      describe: async () => ({ installed: true, officialLoginDetected: true, version: 'claude-code failure fixture' }),
+      readRun: async () => ({ runId: failedRunId, status: 'failed', completedAt: new Date().toISOString(), threadId: 'session-file-missing', workspace: failedWorkspace, error: { code: 'CLAUDE_EXEC_FAILED', message: 'File does not exist: run.py' } }),
+      readEvents: async () => [{ type: 'item.completed', item: { type: 'command_execution', status: 'failed', output: 'File does not exist: run.py' } }],
+      eventText: (event) => event.item?.output || '',
+    },
+    codexWorkspace: root,
+  });
+  const failedState = {
+    activeMissionId: mission.id,
+    missions: [mission],
+    runtimeEvents: [],
+    stage: 'diagnosis',
+    patchApplied: false,
+    candidateEvaluations: [],
+    baseline: { status: 'complete' },
+    agent: { status: 'running', runtimeKind: 'claude-code', runId: failedRunId, startedAt: new Date().toISOString(), eventCount: 0, messages: [], toolCalls: [], artifacts: [] },
+  };
+  await failedRuntime.projectState(failedState);
+  assert.equal(failedState.agent.status, 'completed');
+  assert.equal(failedState.stage, 'diagnosis');
+  assert.equal(failedState.candidateEvaluations.length, 0);
+  assert.match(failedState.agent.phase, /等待同轮重试/);
+  assert.equal(failedState.runtimeEvents.find((event) => event.type === 'candidate.not_proposed')?.payload?.recoverable, true);
+
+  const salvagedWorkspace = path.join(root, 'salvaged-workspace');
+  await initializeRepository(salvagedWorkspace);
+  await writeFile(path.join(salvagedWorkspace, 'MISSION.md'), '# salvage fixture\n', 'utf8');
+  await execFileAsync('git', ['add', '-A'], { cwd: salvagedWorkspace, windowsHide: true });
+  await execFileAsync('git', ['commit', '-m', 'salvage mission'], { cwd: salvagedWorkspace, windowsHide: true });
+  await writeFile(path.join(salvagedWorkspace, 'run.py'), runPy.replace('baseline', 'salvaged candidate'), 'utf8');
+  const salvagedRunId = 'claude_FAILED_AFTER_WRITE';
+  const salvagedRuntime = createAgentRuntime({
+    mode: 'claude-code',
+    claudeClient: {
+      describe: async () => ({ installed: true, officialLoginDetected: true, version: 'claude-code salvage fixture' }),
+      readRun: async () => ({ runId: salvagedRunId, status: 'failed', completedAt: new Date().toISOString(), threadId: 'session-failed-after-write', workspace: salvagedWorkspace, error: { code: 'CLAUDE_EXEC_FAILED', message: 'File does not exist: report.md' } }),
+      readEvents: async () => [{ type: 'item.completed', item: { type: 'command_execution', status: 'failed', output: 'File does not exist: report.md' } }],
+      eventText: (event) => event.item?.output || '',
+    },
+    codexWorkspace: root,
+  });
+  const salvagedState = {
+    activeMissionId: 'MIS_SALVAGE',
+    missions: [{ id: 'MIS_SALVAGE', title: 'Salvage candidate', repository: salvagedWorkspace, hardware: ['C500'], metric: 'latency p50' }],
+    runtimeEvents: [],
+    stage: 'diagnosis',
+    patchApplied: false,
+    candidateEvaluations: [],
+    baseline: { status: 'complete' },
+    iterationStats: { round: 0 },
+    agent: { status: 'running', runtimeKind: 'claude-code', runId: salvagedRunId, startedAt: new Date().toISOString(), eventCount: 0, messages: [], toolCalls: [], artifacts: [] },
+  };
+  await salvagedRuntime.projectState(salvagedState);
+  assert.equal(salvagedState.agent.status, 'awaiting_action');
+  assert.equal(salvagedState.stage, 'candidate');
+  assert.equal(salvagedState.candidateEvaluations[0].id, 'candidate-01');
+  assert.equal(salvagedState.agent.candidateValidation.code, 'CLAUDE_CANDIDATE_DIFF_OBSERVED');
 
   console.log('[claude-workflow-compat] research, materializer, and candidate diff loop passed');
 } finally {

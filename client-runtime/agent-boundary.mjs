@@ -24,9 +24,10 @@ export async function prepareAgentBoundary({ workspace, role, roots }) {
       OPERATOR_AGENT_ROOTS: JSON.stringify(resolvedRoots),
     },
     toolInstruction: [
-      'No local shell, command execution, filesystem read, or add-directory tool is exposed in this stage.',
+      'Do not use a local shell, command execution, or add-directory tool in this stage.',
       `The only filesystem root assigned to this Agent is its current workspace (${resolvedWorkspace}).`,
-      'Use only evidence embedded in the prompt. If this stage requires a file change, use apply_patch only for a relative path inside the current workspace.',
+      'Any available filesystem tool may access only relative paths inside the current workspace. Never assume that a requested file already exists.',
+      'Use evidence embedded in the prompt. Create missing files with the available file creation or patch tool; use patch/edit operations only for files that already exist or that you created during this turn.',
     ].join('\n'),
   };
 }
