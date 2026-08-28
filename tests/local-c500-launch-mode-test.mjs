@@ -30,6 +30,7 @@ assert.deepEqual(resolveLocalC500LaunchMode({
 });
 assert.equal(resolveLocalC500LaunchMode({ OPERATOR_LOCAL_C500_MOCK: '0' }).mock, false);
 assert.equal(isCurrentLocalC500Runtime({ service: 'operator-studio-client-runtime', __bridge: { runtimeContractVersion: LOCAL_C500_RUNTIME_CONTRACT_VERSION } }), true);
+assert.equal(isCurrentLocalC500Runtime({ service: 'operator-studio-client-runtime', __bridge: { runtimeContractVersion: LOCAL_C500_RUNTIME_CONTRACT_VERSION - 1 } }), false);
 assert.equal(isCurrentLocalC500Runtime({ service: 'operator-studio-client-runtime', __bridge: {} }), false);
 assert.equal(isCurrentLocalC500Runtime({ service: 'another-service', __bridge: { runtimeContractVersion: LOCAL_C500_RUNTIME_CONTRACT_VERSION } }), false);
 

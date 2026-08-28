@@ -64,7 +64,17 @@ assert.throws(() => assertWorkflowInvariants(invalid), { code: 'WORKFLOW_INVARIA
 const nextRoundWithLiveBest = baseState();
 nextRoundWithLiveBest.benchmark = { status: 'idle' };
 nextRoundWithLiveBest.currentBest = { candidateId: 'candidate-01', verified: true, evidenceSource: 'live' };
+nextRoundWithLiveBest.decisionReview = { gate: { publishable: true, evidenceSource: 'live' } };
 assert.equal(collectWorkflowInvariantViolations(nextRoundWithLiveBest).length, 0, 'a live current best remains valid after the next round resets benchmark state');
+
+const forgedSimulationGate = baseState();
+forgedSimulationGate.benchmark = { status: 'complete', result: { environment: { liveHardware: true } } };
+forgedSimulationGate.decisionReview = { gate: { publishable: true, evidenceSource: 'mock' } };
+assert.deepEqual(
+  collectWorkflowInvariantViolations(forgedSimulationGate).map((item) => item.code),
+  ['WORKFLOW_SIMULATION_PUBLISH_FORBIDDEN'],
+  'a publishable Gate must carry its own live provenance instead of borrowing the current benchmark',
+);
 
 const persistedFalseBlock = structuredClone(nextRoundWithLiveBest);
 persistedFalseBlock.missionPaused = true;

@@ -278,7 +278,13 @@ export const detectLoopGuard = (state) => {
   }
   const fixedRounds = Number(mission?.testScenario?.fixedRounds || 0);
   if (fixedRounds > 0 && (stats.round || 0) >= fixedRounds) return 'fixed_rounds_complete';
-  // A persisted needs_human marker from an older run must not interrupt a test\n  // that is already queued/running. The active queue operation is authoritative.\n  if (stats.loopStatus === 'needs_human') {\n    const benchmark = state?.benchmark || {};\n    if (['queued', 'running'].includes(benchmark.status)) return null;\n    return stats.loopStatusReason || 'needs_human';\n  }
+  // A persisted needs_human marker from an older run must not interrupt a test
+  // that is already queued/running. The active queue operation is authoritative.
+  if (stats.loopStatus === 'needs_human') {
+    const benchmark = state?.benchmark || {};
+    if (['queued', 'running'].includes(benchmark.status)) return null;
+    return stats.loopStatusReason || 'needs_human';
+  }
   const missionBudgetMs = activeMissionBudgetMs(state);
   const budgetStartedAt = state?.missionBudgetStartedAt || stats.loopStartedAt;
   const totalElapsedMs = budgetStartedAt ? Date.now() - new Date(budgetStartedAt).getTime() : 0;

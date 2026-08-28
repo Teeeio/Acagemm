@@ -17,7 +17,7 @@ import {
   MAX_RESEARCH_ESCALATIONS,
   TOTAL_BUDGET_MS,
 } from '../client-runtime/iteration-loop.mjs';
-import { createSeedState, resumeMissionState } from '../client-runtime/state-store.mjs';
+import { createMission, createSeedState, resumeMissionState } from '../client-runtime/state-store.mjs';
 
 const resumableState = createSeedState();
 const resumableMission = resumableState.missions.find((item) => item.id === resumableState.activeMissionId);
@@ -32,6 +32,15 @@ assert.equal(resumableState.iterationStats.loopStatusReason, null);
 assert.equal(resumableMission.status, 'running');
 assert.equal(resumableState.runtimeEvents.at(-1).type, 'mission.resumed');
 assert.equal(resumableState.runtimeEvents.at(-1).payload.previousLoopStatus, 'needs_human');
+
+const pausedState = createSeedState();
+const pausedMissionId = pausedState.activeMissionId;
+pausedState.missionPaused = true;
+pausedState.iterationStats = { ...pausedState.iterationStats, loopStatus: 'needs_human', loopStatusReason: 'workflow_invariant:WORKFLOW_SIMULATION_PUBLISH_FORBIDDEN' };
+const newMissionState = createMission(pausedState, { goal: 'Run an independent fixed operator profile', title: 'Fresh Mission', repository: 'fresh-mission-repository' });
+assert.notEqual(newMissionState.activeMissionId, pausedMissionId);
+assert.equal(newMissionState.missionPaused, false, 'a new Mission must not inherit the previous Mission pause flag');
+assert.equal(newMissionState.iterationStats.loopStatus, 'running', 'a new Mission must start with its own lifecycle state');
 
 // ---- 纯函数：停滞判定（尺子 B 采纳尺） ----
 assert.equal(STAGNATION_WINDOW, 3);
@@ -136,6 +145,18 @@ const makeState = (overrides = {}) => {
 };
 
 const fixedRoundMission = { id: 'MIS', goal: '三轮后保留最快候选', hardware: ['C550'], metric: 'latency p50', objective: { mode: 'maximize' }, testScenario: { fixedRounds: 3 } };
+const humanBlocked = makeState({
+  missions: [fixedRoundMission],
+  iterationStats: { ...makeState().iterationStats, loopStatus: 'needs_human', loopStatusReason: 'operator_intervention_required' },
+  benchmark: { status: 'idle' },
+});
+assert.equal(detectLoopGuard(humanBlocked), 'operator_intervention_required', 'an idle needs_human Mission must remain stopped');
+const staleBlockWithRunningTest = makeState({
+  missions: [fixedRoundMission],
+  iterationStats: { ...makeState().iterationStats, loopStatus: 'needs_human', loopStatusReason: 'stale_failure' },
+  benchmark: { status: 'running', runId: 'run_active', testTaskId: 'task_active' },
+});
+assert.equal(detectLoopGuard(staleBlockWithRunningTest), null, 'an active operator test is authoritative over a stale needs_human marker');
 const fixedRoundTwo = makeState({ missions: [fixedRoundMission], objective: { mode: 'maximize' }, iterationStats: { ...makeState().iterationStats, round: 2 } });
 assert.equal(detectLoopGuard(fixedRoundTwo), null, 'fixed-profile mission must continue after two completed rounds');
 const fixedRoundThree = makeState({ missions: [fixedRoundMission], objective: { mode: 'maximize' }, iterationStats: { ...makeState().iterationStats, round: 3 }, currentBest: { candidateId: 'candidate-01', value: '16428 us', verified: true, evidenceSource: 'live' } });

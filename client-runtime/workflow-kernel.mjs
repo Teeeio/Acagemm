@@ -90,7 +90,7 @@ export function collectWorkflowInvariantViolations(state = {}) {
   const benchmark = state.benchmark || {};
   const baseline = state.baseline || {};
   const gate = state.decisionReview?.gate || null;
-  const liveHardware = benchmark.result?.environment?.liveHardware === true;
+  const gateLiveHardware = gate?.liveHardware === true || gate?.evidenceSource === 'live';
   const currentBestLiveHardware = state.currentBest?.liveHardware === true || state.currentBest?.evidenceSource === 'live';
   const terminal = state.stage === 'published' && state.knowledgeMaintenance?.status === 'completed';
 
@@ -106,7 +106,7 @@ export function collectWorkflowInvariantViolations(state = {}) {
   if (benchmark.purpose === 'candidate' && benchmark.candidate?.id && state.appliedCandidateId && benchmark.candidate.id !== state.appliedCandidateId) {
     push('WORKFLOW_CANDIDATE_EVIDENCE_MISMATCH', 'Benchmark candidate must match the applied candidate.');
   }
-  if ((gate?.publishable === true && !liveHardware)
+  if ((gate?.publishable === true && !gateLiveHardware)
     || (state.currentBest?.verified === true && !currentBestLiveHardware)) {
     push('WORKFLOW_SIMULATION_PUBLISH_FORBIDDEN', 'Simulation evidence cannot be marked publishable or verified.');
   }
