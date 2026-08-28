@@ -269,7 +269,7 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
   const actions = {
     publish: true,
     pause: hasMission && !terminal && !needsHuman && !paused,
-    resume: hasMission && !terminal && paused,
+    resume: hasMission && !terminal && (paused || needsHuman),
     feedback: hasMission && !terminal,
     doctor: true,
     stop: hasMission && !terminal && loopStatus !== 'stopped',

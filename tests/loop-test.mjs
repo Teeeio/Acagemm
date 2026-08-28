@@ -17,6 +17,21 @@ import {
   MAX_RESEARCH_ESCALATIONS,
   TOTAL_BUDGET_MS,
 } from '../client-runtime/iteration-loop.mjs';
+import { createSeedState, resumeMissionState } from '../client-runtime/state-store.mjs';
+
+const resumableState = createSeedState();
+const resumableMission = resumableState.missions.find((item) => item.id === resumableState.activeMissionId);
+resumableState.missionPaused = true;
+resumableState.iterationStats = { ...resumableState.iterationStats, loopStatus: 'needs_human', loopStatusReason: 'transient_runtime_failure' };
+resumableMission.status = 'needs_human';
+const resumedLifecycle = resumeMissionState(resumableState, { source: 'test' });
+assert.equal(resumedLifecycle.resumed, true);
+assert.equal(resumableState.missionPaused, false);
+assert.equal(resumableState.iterationStats.loopStatus, 'running');
+assert.equal(resumableState.iterationStats.loopStatusReason, null);
+assert.equal(resumableMission.status, 'running');
+assert.equal(resumableState.runtimeEvents.at(-1).type, 'mission.resumed');
+assert.equal(resumableState.runtimeEvents.at(-1).payload.previousLoopStatus, 'needs_human');
 
 // ---- 纯函数：停滞判定（尺子 B 采纳尺） ----
 assert.equal(STAGNATION_WINDOW, 3);

@@ -129,14 +129,21 @@ try {
   ]);
   const concurrentState = (await request('/api/state')).state;
   assert.equal(concurrentState.missionPaused, true);
-  assert.deepEqual(concurrentState.testMatrix, concurrentMatrix);
+  assert.deepEqual(concurrentState.testMatrix.environments, concurrentMatrix.environments);
+  assert.deepEqual(concurrentState.testMatrix.stages, concurrentMatrix.stages);
+  const pausedReplacementRoot = path.join(smokeRoot, 'paused-replacement-project');
+  const pausedReplacementProject = await request('/api/projects', { method: 'POST', body: JSON.stringify({ name: 'Paused replacement project', root: pausedReplacementRoot, initializeGit: true }) });
+  const pausedReplacementMission = await request('/api/missions', { method: 'POST', body: JSON.stringify({ title: 'Paused Replacement Mission', goal: '验证旧 Mission 暂停时可以创建新 Mission', projectId: pausedReplacementProject.project.id, hardware: ['C500'] }) });
+  assert.notEqual(pausedReplacementMission.state.activeMissionId, missionId);
+  assert.equal(pausedReplacementMission.state.missionPaused, false, 'new Mission lifecycle must not inherit the old Mission pause');
+  await request(`/api/missions/${missionId}/select`, { method: 'POST' });
   await request('/api/state', { method: 'PATCH', body: JSON.stringify({ missionPaused: false }) });
   const startedMission = await request(`/api/missions/${missionId}/runs`, { method: 'POST', body: '{}' });
   assert.equal(startedMission.state.agent.status, 'running');
   assert.equal(startedMission.state.agent.artifacts[0].title, '正在读取仓库上下文');
   assert.equal(startedMission.state.runtime.mode, 'reference-fixture');
   const startedEvents = await request(`/api/missions/${missionId}/events`);
-  assert.deepEqual(startedEvents.events.map((event) => event.type), ['mission.run_started']);
+  assert.deepEqual(startedEvents.events.map((event) => event.type), ['mission.resumed', 'mission.run_started']);
   let agentState;
   for (let attempt = 0; attempt < 50; attempt += 1) {
     agentState = (await request('/api/state')).state;
@@ -226,7 +233,8 @@ try {
   }
   assert.equal(state.stage, 'evidence');
   assert.equal(state.decisionReview.status, 'awaiting_review');
-  assert.deepEqual(state.testMatrix, matrix);
+  assert.deepEqual(state.testMatrix.environments, matrix.environments);
+  assert.deepEqual(state.testMatrix.stages, matrix.stages);
   assert.equal(state.benchmark.result.benchmark.length, 1);
   assert.equal(state.benchmark.result.tracer.format, 'operator-trace/v1');
   assert.equal(state.benchmark.result.profiler.format, 'operator-profile/v1');

@@ -26,6 +26,19 @@ export const reconcileOperationSnapshot = (current, result) => {
   return { ...(current || {}), state, mission, tasks: missionChanged ? [] : (current?.tasks || []) };
 };
 
+export const formatOperationResultMessage = (label, result = {}) => {
+  if (label !== 'Resume mission') return `${label}: completed${result?.runId ? ` (${result.runId})` : ''}`;
+  const state = result?.state || {};
+  const loopStatus = state.iterationStats?.loopStatus || null;
+  const reason = state.iterationStats?.loopStatusReason || null;
+  if (state.missionPaused === true || ['stopped', 'paused_budget'].includes(loopStatus)) {
+    return `Resume mission: still paused${reason ? ` (${reason})` : ''}`;
+  }
+  if (loopStatus === 'needs_human') return `Resume mission: still blocked${reason ? ` (${reason})` : ''}`;
+  if (loopStatus === 'completed' || state.stage === 'published') return 'Resume mission: mission already completed';
+  return `Resume mission: ${loopStatus || 'running'}`;
+};
+
 export const createLatestRefreshGate = () => {
   let requested = 0;
   return {

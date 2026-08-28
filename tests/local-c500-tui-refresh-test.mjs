@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createLatestRefreshGate, reconcileOperationSnapshot, reconcileTuiSnapshot } from '../tools/local-c500-tester/tui-refresh.mjs';
+import { createLatestRefreshGate, formatOperationResultMessage, reconcileOperationSnapshot, reconcileTuiSnapshot } from '../tools/local-c500-tester/tui-refresh.mjs';
 
 const current = {
   state: { stateVersion: 7, stage: 'candidate' },
@@ -27,6 +27,9 @@ assert.equal(reconcileTuiSnapshot(newMission, staleMission), newMission, 'older 
 const operationSnapshot = reconcileOperationSnapshot(current, { state: newMission.state });
 assert.equal(operationSnapshot.mission.id, 'MIS_NEW', 'mutation response must select the new active mission');
 assert.deepEqual(operationSnapshot.tasks, [], 'publishing a new mission must clear old mission tasks');
+assert.equal(formatOperationResultMessage('Resume mission', { state: { iterationStats: { loopStatus: 'running' } } }), 'Resume mission: running');
+assert.equal(formatOperationResultMessage('Resume mission', { state: { iterationStats: { loopStatus: 'needs_human', loopStatusReason: 'runner_failed' } } }), 'Resume mission: still blocked (runner_failed)');
+assert.equal(formatOperationResultMessage('Resume mission', { state: { stage: 'published', iterationStats: { loopStatus: 'completed' } } }), 'Resume mission: mission already completed');
 
 const gate = createLatestRefreshGate();
 const slowRequest = gate.begin();

@@ -59,9 +59,11 @@ const needsHumanSnapshot = {
 const needsHuman = deriveTuiViewModel(needsHumanSnapshot);
 assert.equal(needsHuman.needsHuman, true);
 assert.equal(needsHuman.actions.pause, false);
+assert.equal(needsHuman.actions.resume, true);
 assert.equal(needsHuman.actions.feedback, true);
 assert.equal(needsHuman.actions.stop, true);
 assert.match(needsHuman.banner, /ACTION REQUIRED \/ baseline_source_unresolved/);
+assert.equal(resolveDashboardCommand({ input: ' ', viewModel: needsHuman }), 'resume');
 
 const failedBaselineSnapshot = {
   mission: mission({ status: 'needs_human' }),

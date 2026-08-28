@@ -4,7 +4,7 @@ import { Dashboard } from './components/Dashboard.mjs';
 import { CreateMissionForm } from './components/CreateMissionForm.mjs';
 import { deriveTuiViewModel, loadTuiState, renderDashboardSnapshot, renderPublishSnapshot, resolveDashboardCommand } from './tui-state.mjs';
 import { createTerminalScreenSession } from './terminal-screen.mjs';
-import { createLatestRefreshGate, reconcileOperationSnapshot, reconcileTuiSnapshot } from './tui-refresh.mjs';
+import { createLatestRefreshGate, formatOperationResultMessage, reconcileOperationSnapshot, reconcileTuiSnapshot } from './tui-refresh.mjs';
 import { fixedOperatorProfiles } from '../../client-runtime/fixed-operator-profiles.mjs';
 import {
   addHumanFeedback,
@@ -89,13 +89,14 @@ const App = () => {
     setMessage(`${label}...`);
     try {
       const result = await operation();
+      let displayedResult = result;
       if (result?.state) {
         setSnapshot((current) => reconcileOperationSnapshot(current, result));
-        await refreshNow({ background: true });
+        displayedResult = await refreshNow({ background: true }) || result;
       } else {
         await refreshNow();
       }
-      setMessage(`${label}: completed${result?.runId ? ` (${result.runId})` : ''}`);
+      setMessage(formatOperationResultMessage(label, displayedResult));
       return result;
     } catch (error) {
       setMessage(`${label}: ${error.message}`);

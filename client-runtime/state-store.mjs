@@ -1108,6 +1108,35 @@ export function selectMission(state, missionId) {
   return state;
 }
 
+export function resumeMissionState(state, { source = 'client' } = {}) {
+  const previousLoopStatus = state.iterationStats?.loopStatus || null;
+  const wasPaused = state.missionPaused === true;
+  const resumableLoop = ['stopped', 'needs_human'].includes(previousLoopStatus);
+  state.missionPaused = false;
+  if (resumableLoop) {
+    state.iterationStats = {
+      ...(state.iterationStats || {}),
+      loopStatus: 'running',
+      loopStatusReason: null,
+      stoppedAt: null,
+    };
+  }
+  const activeMission = state.missions?.find((item) => item.id === state.activeMissionId);
+  if (activeMission && (wasPaused || resumableLoop) && !['completed', 'published', 'archived'].includes(activeMission.status)) {
+    activeMission.status = 'running';
+    activeMission.missionPaused = false;
+    activeMission.iterationStats = structuredClone(state.iterationStats || activeMission.iterationStats || {});
+  }
+  if (wasPaused || resumableLoop) {
+    appendRuntimeEvent(state, 'mission.resumed', {
+      missionId: state.activeMissionId,
+      source,
+      previousLoopStatus,
+    }, { kind: 'mission', mode: 'client' });
+  }
+  return { state, resumed: wasPaused || resumableLoop, previousLoopStatus };
+}
+
 export function selectProject(state, projectId) {
   projectActiveMission(state);
   const project = state.projects?.find((item) => item.id === projectId);

@@ -258,13 +258,8 @@ export const publishMission = async (draft) => {
   await ensureProductionRuntime();
   const current = await api.get('/api/state');
   const activeMission = current.state.missions?.find((item) => item.id === current.state.activeMissionId);
-  let stoppedOldMission = false;
   if (activeMission && !['completed', 'published', 'stopped', 'archived'].includes(activeMission.status)) {
     await stopMission();
-    stoppedOldMission = true;
-  }
-  if (current.state.missionPaused || activeMission?.status === 'stopped' || stoppedOldMission) {
-    await api.patch('/api/state', { missionPaused: false, missionBudgetMs: null });
   }
   const profile = getFixedOperatorProfile(draft.profileId);
   const device = resolveMuxiDevice();

@@ -34,6 +34,7 @@ import {
   deleteProject,
   saveState,
   selectMission,
+  resumeMissionState,
   selectProject,
   startAgentRun,
   updateProject,
@@ -1565,7 +1566,6 @@ async function handleApi(request, response, url) {
   }
   if (request.method === 'POST' && url.pathname === '/api/projects') {
     const state = await loadRuntimeState();
-    guardMutation(state);
     const body = await readJson(request);
     const requestedPath = String(body.root || '').trim();
     if (!path.isAbsolute(requestedPath)) {
@@ -1761,21 +1761,18 @@ async function handleApi(request, response, url) {
   }
   if (request.method === 'POST' && projectSelectMatch) {
     const state = await loadRuntimeState();
-    guardMutation(state);
     const selection = selectProject(state, decodeURIComponent(projectSelectMatch[1]));
     json(response, 200, { state: await saveState(state), project: selection.project, selectedMissionId: selection.selectedMission?.id || null });
     return;
   }
   if (request.method === 'PATCH' && projectMatch) {
     const state = await loadRuntimeState();
-    guardMutation(state);
     const project = updateProject(state, decodeURIComponent(projectMatch[1]), await readJson(request));
     json(response, 200, { state: await saveState(state), project });
     return;
   }
   if (request.method === 'DELETE' && projectMatch) {
     const state = await loadRuntimeState();
-    guardMutation(state);
     const project = deleteProject(state, decodeURIComponent(projectMatch[1]));
     json(response, 200, { state: await saveState(state), project });
     return;
@@ -1796,7 +1793,6 @@ async function handleApi(request, response, url) {
   }
   if (request.method === 'POST' && url.pathname === '/api/missions') {
     const state = await loadRuntimeState();
-    guardMutation(state);
     const body = await readJson(request);
     if (!body.goal?.trim()) {
       json(response, 400, { error: '请输入一个可执行的优化目标。' });
@@ -2269,15 +2265,11 @@ async function handleApi(request, response, url) {
       state.missionBudgetMs = budgetInput.value;
       if (!budgetInput.value) state.missionBudgetStartedAt = null;
     }
-    for (const key of ['testMatrix', 'workspace', 'unreadCount', 'missionPaused']) {
+    for (const key of ['testMatrix', 'workspace', 'unreadCount']) {
       if (Object.hasOwn(body, key)) state[key] = body[key];
     }
-    if (body.missionPaused === false && state.iterationStats?.loopStatus === 'stopped') {
-      state.iterationStats = { ...state.iterationStats, loopStatus: 'running', loopStatusReason: null, stoppedAt: null };
-      const activeMission = state.missions?.find((item) => item.id === state.activeMissionId);
-      if (activeMission) activeMission.status = 'running';
-      appendRuntimeEvent(state, 'mission.resumed', { missionId: state.activeMissionId, source: 'local-c500-tui' }, { kind: 'mission', mode: 'client' });
-    }
+    if (body.missionPaused === true) state.missionPaused = true;
+    if (body.missionPaused === false) resumeMissionState(state, { source: 'local-c500-tui' });
     json(response, 200, { state: await saveState(state) });
     return;
   }
