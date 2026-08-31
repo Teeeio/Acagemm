@@ -110,6 +110,22 @@ try {
     assert.equal(response.ok, false, `${pathname} should have failed`);
     return { status: response.status, payload };
   };
+  const waitForState = async (predicate, label, timeoutMs = 30000) => {
+    const deadline = Date.now() + timeoutMs;
+    let latest = null;
+    while (Date.now() < deadline) {
+      latest = (await request('/api/state')).state;
+      if (predicate(latest)) return latest;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    throw new Error(`Timed out waiting for ${label}: ${JSON.stringify({
+      stage: latest?.stage,
+      agent: latest?.agent?.status,
+      benchmark: latest?.benchmark?.status,
+      baseline: latest?.baseline?.status,
+      taskId: latest?.benchmark?.testTaskId,
+    })}`);
+  };
   const waitForServer = async () => {
     for (let attempt = 0; attempt < 30; attempt += 1) {
       try { await request('/api/health'); return; } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
@@ -124,8 +140,7 @@ try {
     const missionId = mission.state.activeMissionId;
     await request(`/api/missions/${missionId}/runs`, { method: 'POST', body: '{}' });
     let state;
-    for (let attempt = 0; attempt < 50; attempt += 1) { state = (await request('/api/state')).state; if (state.agent.status === 'awaiting_action') break; await new Promise((resolve) => setTimeout(resolve, 200)); }
-    assert.equal(state.agent.status, 'awaiting_action');
+    state = await waitForState((snapshot) => snapshot.agent.status === 'awaiting_action', 'initial agent readiness');
 
     // ---- 8. baseline start-benchmark：必须先跑 PyTorch reference 权威来源单文件 baseline，且允许在 patch 前运行 ----
     const baselineRunPy = [
@@ -152,22 +167,14 @@ try {
     assert.equal(missingSource.status, 400);
     assert.equal(missingSource.payload.code, 'BASELINE_SOURCE_REQUIRED');
     const naiveBaseline = await request('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ purpose: 'baseline', baselineKind: 'naive_v0', timeoutSeconds: 1, matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'] } }) });
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      state = (await request('/api/state')).state;
-      if (state.benchmark.status === 'idle' && state.baseline?.status === 'complete' && state.baseline?.evidence?.runId === naiveBaseline.runId) break;
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
+    state = await waitForState((snapshot) => snapshot.benchmark.status === 'idle' && snapshot.baseline?.status === 'complete' && snapshot.baseline?.evidence?.runId === naiveBaseline.runId, 'naive baseline completion');
     assert.equal(state.baseline.kind, 'naive_v0');
     assert.equal(state.baseline.evidence.kind, 'naive_v0');
     assert.equal(state.baseline.evidence.source.authority, 'generated');
     assert.equal(state.baseline.evidence.source.basedOn, 'v0');
     assert.equal(state.baseline.resolution.strategy, 'fallback_naive_v0');
     const baseline = await request('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ purpose: 'baseline', runPy: baselineRunPy, baselineSource, timeoutSeconds: 1, matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'] } }) });
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      state = (await request('/api/state')).state;
-      if (state.benchmark.status === 'idle' && state.baseline?.status === 'complete' && state.baseline?.evidence?.runId === baseline.runId) break;
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
+    state = await waitForState((snapshot) => snapshot.benchmark.status === 'idle' && snapshot.baseline?.status === 'complete' && snapshot.baseline?.evidence?.runId === baseline.runId, 'authoritative baseline completion');
     assert.equal(state.benchmark.status, 'idle');
     assert.equal(state.baseline.status, 'complete');
     assert.equal(state.baseline.evidence.kind, 'pytorch_reference');
@@ -200,9 +207,9 @@ try {
     assert.ok(Number.isInteger(first.state.stateVersion) && first.state.stateVersion > 0);
 
     // ---- 9. 自动采用链路在命令日志存在时仍正常（reference-fixture 自动采用，decision.adopted 仅 1 条）----
-    for (let attempt = 0; attempt < 30; attempt += 1) { state = (await request('/api/state')).state; if (state.benchmark.status === 'complete' && state.stage === 'evidence') break; await new Promise((resolve) => setTimeout(resolve, 200)); }
+    state = await waitForState((snapshot) => snapshot.benchmark.status === 'complete' && snapshot.stage === 'evidence', 'candidate benchmark completion');
     assert.equal(state.stage, 'evidence');
-    for (let attempt = 0; attempt < 30; attempt += 1) { state = (await request('/api/state')).state; if (state.stage === 'published' && state.knowledgeMaintenance.status === 'completed') break; await new Promise((resolve) => setTimeout(resolve, 200)); }
+    state = await waitForState((snapshot) => snapshot.stage === 'published' && snapshot.knowledgeMaintenance.status === 'completed', 'published state');
     assert.equal(state.stage, 'published');
     assert.equal(state.decisionReview.resolution.source, 'policy');
     const adoptedEvents = (await request(`/api/missions/${missionId}/events`)).events.filter((event) => event.type === 'decision.auto_adopted' || event.type === 'decision.adopted');
