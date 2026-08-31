@@ -38,19 +38,42 @@ export const C550_STACK = Object.freeze({
 // without the local suffix). The runner only relies on the Triton testing API
 // and the MetaX Torch runtime, so these known-compatible variants must not be
 // rejected as a broken installation.
-const c550StackCompatibility = (key, actual, fullActual = {}) => {
+export const c550StackCompatibility = (key, actual, fullActual = {}) => {
   if (actual === C550_STACK[key]) return { status: 'ok', reason: 'exact release target' };
   if (key === 'triton' && /^3\.1(?:\.\d+)?$/.test(String(actual || ''))) {
     return { status: 'ok', reason: 'compatible MetaX C550 Triton line' };
   }
-  if (key === 'maca' && !actual && /metax3\.3\.0\.2/i.test(String(fullActual.torch || ''))) {
-    return { status: 'inferred', reason: 'inferred from the MetaX Torch build; MACA_VERSION is not exported' };
+  if (key === 'maca') {
+    const torchMacaVersion = String(fullActual.torch || '').match(/metax(\d+(?:\.\d+)+)/i)?.[1] || null;
+    if (actual && actual === torchMacaVersion) {
+      return { status: 'ok', reason: 'matches the MACA version embedded in the MetaX Torch build' };
+    }
+    if (!actual && torchMacaVersion === '3.3.0.2') {
+      return { status: 'inferred', reason: 'inferred from the MetaX Torch build; MACA_VERSION is not exported' };
+    }
   }
   if (key === 'vllm_metax' && /^0\.13\.0\+g181dc3\.d20260129(?:\.|$)/.test(String(actual || ''))) {
     return { status: 'ok', reason: 'compatible vllm-metax build suffix' };
   }
   if (actual == null && ['vllm', 'vllm_metax'].includes(key)) return { status: 'optional-missing', reason: 'optional package not importable' };
   return { status: 'mismatch', reason: 'version is outside the C550 compatibility policy' };
+};
+
+export const evaluateC550Stack = (actual = {}) => {
+  const checks = Object.fromEntries(Object.entries(C550_STACK).map(([key, expected]) => {
+    const actualValue = actual[key] ?? null;
+    const compatibility = c550StackCompatibility(key, actualValue, actual);
+    return [key, { status: compatibility.status, reason: compatibility.reason, expected, actual: actualValue }];
+  }));
+  const required = ['python', 'torch', 'triton', 'maca'];
+  const requiredPassed = required.every((key) => ['ok', 'inferred'].includes(checks[key].status));
+  return {
+    status: requiredPassed ? 'ok' : 'mismatch',
+    expected: C550_STACK,
+    actual,
+    checks,
+    detail: requiredPassed ? 'C550 Python stack is compatible with the frozen target and runner contract.' : 'C550 Python stack does not satisfy the C550 compatibility policy.',
+  };
 };
 
 export const resolveLocalC500LaunchMode = (environment = process.env) => {
@@ -475,20 +498,7 @@ const checkC550Stack = () => {
   if (result.status !== 0) return { status: 'missing', expected: C550_STACK, actual: null, detail: String(result.stderr || result.stdout || '').trim().split(/\r?\n/)[0] || 'C550 Python stack probe failed' };
   let actual;
   try { actual = JSON.parse(String(result.stdout || '').trim()); } catch { return { status: 'invalid', expected: C550_STACK, actual: null, detail: 'C550 Python stack probe returned invalid JSON' }; }
-  const checks = Object.fromEntries(Object.entries(C550_STACK).map(([key, expected]) => {
-    const actualValue = actual[key] ?? null;
-    const compatibility = c550StackCompatibility(key, actualValue, actual);
-    return [key, { status: compatibility.status, reason: compatibility.reason, expected, actual: actualValue }];
-  }));
-  const required = ['python', 'torch', 'triton', 'maca'];
-  const requiredPassed = required.every((key) => ['ok', 'inferred'].includes(checks[key].status));
-  return {
-    status: requiredPassed ? 'ok' : 'mismatch',
-    expected: C550_STACK,
-    actual,
-    checks,
-    detail: requiredPassed ? 'C550 Python stack is compatible with the frozen target and runner contract.' : 'C550 Python stack does not satisfy the C550 compatibility policy.',
-  };
+  return evaluateC550Stack(actual);
 };
 
 const checkC550Smoke = (device) => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { detectMuxiDevice, parseMuxiDevice } from '../client-runtime/muxi-device.mjs';
-import { assertProductionPreflight } from '../tools/local-c500-tester/production-api.mjs';
+import { C550_STACK, assertProductionPreflight, evaluateC550Stack } from '../tools/local-c500-tester/production-api.mjs';
 
 assert.equal(parseMuxiDevice('MetaX C550'), 'C550');
 assert.equal(parseMuxiDevice('device: C500'), 'C500');
@@ -12,6 +12,32 @@ const probe = (command) => command === 'python'
 assert.deepEqual(detectMuxiDevice({}, probe), { device: 'C550', source: 'torch.cuda', detail: 'MetaX C550' });
 assert.equal(detectMuxiDevice({ OPERATOR_MUXI_DEVICE: 'C500' }, probe).device, 'C500');
 assert.deepEqual(detectMuxiDevice({}, () => ({ status: 1, stdout: '', stderr: '' })), { device: 'C550', source: 'release-default' });
+
+const exactStack = evaluateC550Stack(C550_STACK);
+assert.equal(exactStack.status, 'ok');
+assert.ok(Object.values(exactStack.checks).every((check) => check.status === 'ok'));
+
+const deployedStack = evaluateC550Stack({
+  python: '3.12.11',
+  torch: '2.8.0+metax3.3.0.2',
+  triton: '3.1.0',
+  maca: '3.3.0.2',
+  vllm: '0.13.0',
+  vllm_metax: '0.13.0+g181dc3.d20260129',
+});
+assert.equal(deployedStack.status, 'ok');
+assert.equal(deployedStack.checks.triton.status, 'ok');
+assert.equal(deployedStack.checks.maca.status, 'ok');
+assert.equal(deployedStack.checks.vllm_metax.status, 'ok');
+assert.match(deployedStack.checks.maca.reason, /MetaX Torch build/);
+
+const incompatibleMacaStack = evaluateC550Stack({ ...deployedStack.actual, maca: '3.3.0.99' });
+assert.equal(incompatibleMacaStack.status, 'mismatch');
+assert.equal(incompatibleMacaStack.checks.maca.status, 'mismatch');
+
+const missingMacaStack = evaluateC550Stack({ ...deployedStack.actual, maca: null });
+assert.equal(missingMacaStack.status, 'ok');
+assert.equal(missingMacaStack.checks.maca.status, 'inferred');
 
 const validDoctor = {
   runtime: { runtime: { mode: 'claude-code', connected: true }, testBackend: { mock: false, liveHardware: true } },
