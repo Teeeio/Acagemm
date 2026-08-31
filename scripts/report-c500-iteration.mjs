@@ -107,3 +107,7 @@ if (rounds.length !== 3) {
   console.error(`警告：检测到 ${rounds.length} 个已完成候选轮次，期望 3 个。请确认 Mission 已完成三轮。`);
   process.exitCode = 1;
 }
+if (report.tokenUsage.completeness !== 'exact') {
+  console.error(`错误：token 统计不是 exact（${report.tokenUsage.coverage}，completeness=${report.tokenUsage.completeness}）。不能把缺失或不一致的 token 当作 0。`);
+  process.exitCode = 1;
+}
