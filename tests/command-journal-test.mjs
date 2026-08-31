@@ -97,6 +97,7 @@ try {
     ...process.env, API_PORT: String(port), SERVE_WEB: 'false',
     OPERATOR_DATA_DIR: path.join(smokeRoot, 'data'), OPERATOR_RUNTIME_DIR: path.join(smokeRoot, 'runtime'),
     OPERATOR_RUNTIME_MODE: 'reference-fixture', OPERATOR_TEST_SERVICE_URL: `http://127.0.0.1:${testServicePort}`,
+    OPERATOR_AUTO_TICK: '0',
   } });
   const request = async (pathname, options = {}) => {
     const response = await fetch(`${baseUrl}${pathname}`, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });

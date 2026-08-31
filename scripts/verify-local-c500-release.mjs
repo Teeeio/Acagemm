@@ -7,6 +7,9 @@ const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'pa
 const childEnvironment = {
   ...process.env,
   [pathKey]: `${path.dirname(process.execPath)}${path.delimiter}${process.env[pathKey] || ''}`,
+  // Release checks contain deterministic integration harnesses; production
+  // auto-tick is enabled only by the TUI launcher, never by these tests.
+  OPERATOR_AUTO_TICK: '0',
 };
 const checks = [
   'test:workflow-kernel',
