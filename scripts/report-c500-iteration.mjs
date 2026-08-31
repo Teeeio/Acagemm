@@ -21,6 +21,10 @@ const candidateNumber = (item) => {
   const match = String(id).match(/(\d+)$/);
   return match ? Number(match[1]) : null;
 };
+const runtimeEvents = Array.isArray(state.runtimeEvents) ? state.runtimeEvents : [];
+const eventForRun = (runId, pattern) => runtimeEvents
+  .filter((event) => event?.payload?.runId === runId && pattern.test(String(event.type || '')))
+  .sort((a, b) => Date.parse(a.timestamp || '') - Date.parse(b.timestamp || ''))[0] || null;
 const rounds = [];
 const addRound = (item) => {
   if (!item?.benchmark || item.benchmark.purpose !== 'candidate') return;
@@ -28,18 +32,26 @@ const addRound = (item) => {
   if (!measurement || !Number.isFinite(number(measurement.value))) return;
   const key = item.runId || item.benchmark.runId || item.benchmark.testTaskId || item.candidateId;
   if (rounds.some((round) => round.key === key)) return;
+  const runId = item.runId || item.benchmark.runId || null;
+  const agentStart = eventForRun(runId, /\.run_(?:started|resumed|requested)$/i);
+  const agentEnd = eventForRun(runId, /\.run_(?:completed|failed|cancelled|timed_out)$/i);
+  const startedAt = agentStart?.timestamp || item.benchmark.startedAt || item.startedAt || null;
+  const completedAt = item.benchmark.completedAt || item.completedAt || agentEnd?.timestamp || null;
+  const startedMs = Date.parse(startedAt || '');
+  const completedMs = Date.parse(completedAt || '');
   rounds.push({
     key,
-    runId: item.runId || item.benchmark.runId || null,
+    runId,
     candidateId: item.candidateId || item.benchmark.candidate?.id || null,
     round: candidateNumber(item),
     value: number(measurement.value),
     unit: measurement.unit || 'us',
     environment: measurement.environment || null,
     correctness: measurement.correctness || null,
-    startedAt: item.benchmark.startedAt || item.startedAt || null,
-    completedAt: item.benchmark.completedAt || item.completedAt || null,
+    startedAt,
+    completedAt,
     durationMs: number(item.benchmark.durationMs),
+    wallClockMs: Number.isFinite(startedMs) && Number.isFinite(completedMs) && completedMs >= startedMs ? completedMs - startedMs : null,
   });
 };
 for (const item of state.runHistory || []) addRound(item);
@@ -54,9 +66,9 @@ const improvement = (value) => baselineValue && value ? (minimizes ? (baselineVa
 const tokenUsage = state.tokenUsage || {};
 const tokenRuns = tokenUsage.runs || {};
 const tokenFor = (runId) => runId && tokenRuns[runId] ? number(tokenRuns[runId].totalTokens) || 0 : 0;
-const eventTimes = (state.runtimeEvents || []).map((event) => Date.parse(event.timestamp)).filter(Number.isFinite);
-const startEvent = (state.runtimeEvents || []).find((event) => event.type === 'mission.run_started' || event.type === 'mission.run_requested');
-const endEvents = (state.runtimeEvents || []).filter((event) => ['knowledge.maintenance_completed', 'decision.auto_adopted', 'mission.stopped'].includes(event.type));
+const eventTimes = runtimeEvents.map((event) => Date.parse(event.timestamp)).filter(Number.isFinite);
+const startEvent = runtimeEvents.find((event) => event.type === 'mission.run_started' || event.type === 'mission.run_requested');
+const endEvents = runtimeEvents.filter((event) => ['knowledge.maintenance_completed', 'decision.auto_adopted', 'mission.stopped', 'loop.budget_completed'].includes(event.type));
 const startMs = Date.parse(startEvent?.timestamp || state.missionBudgetStartedAt || '') || Math.min(...eventTimes);
 const endMs = Math.max(...endEvents.map((event) => Date.parse(event.timestamp)).filter(Number.isFinite), ...eventTimes);
 const totalWallClockMs = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs ? endMs - startMs : null;
@@ -77,6 +89,16 @@ const report = {
     cacheWriteTokens: number(tokenUsage.cacheWriteTokens) || 0,
     coverage: tokenUsage.coverage || '0/0 runs exact',
     completeness: tokenUsage.completeness || 'unavailable',
+    runs: Object.values(tokenRuns).map((run) => ({
+      runId: run.runId,
+      phase: run.phase || null,
+      provider: run.provider || null,
+      totalTokens: number(run.totalTokens) || 0,
+      inputTokens: number(run.inputTokens) || 0,
+      outputTokens: number(run.outputTokens) || 0,
+      reasoningTokens: number(run.reasoningTokens) || 0,
+      completeness: run.completeness || 'unavailable',
+    })),
   },
   timing: { startedAt: Number.isFinite(startMs) ? new Date(startMs).toISOString() : null, completedAt: Number.isFinite(endMs) ? new Date(endMs).toISOString() : null, totalWallClockMs },
 };
