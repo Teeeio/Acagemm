@@ -198,3 +198,11 @@ npm run build
 ```
 
 `npm run e2e:agent-runtime-hardware-mock -- codex-cli paged-mqa-logits-triton-v01 900000 300000` 会使用所选真实 Agent Runtime 和 Mock C550 完成生产链路三轮闭环。旧的 `e2e:local-c500-production` / `e2e:local-c500-cold-start` 是 Codex 定向诊断脚本，不再代表通用兼容层验收。
+
+三轮实机完成后，按 `E` 导出 Mission，再用报告命令计算每轮相对 baseline 的加速比、精确 token 和墙钟时间：
+
+```bash
+npm run report:c500-iteration -- .local-c500-real-c550/exports/<MISSION_ID>.json
+```
+
+报告要求恰好检测到 3 个已完成 candidate round；`speedup` 对 latency 使用 `baseline / candidate`，对 throughput 使用 `candidate / baseline`。`tokenUsage.completeness` 必须为 `exact`，否则只能作为不完整统计，不能用于成本结论。

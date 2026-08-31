@@ -49,6 +49,7 @@
     "test:baseline-resolver": "node tests/baseline-resolver-test.mjs",
     "test:loop": "node tests/loop-test.mjs",
     "test:journal": "node tests/command-journal-test.mjs",
+    "report:c500-iteration": "node scripts/report-c500-iteration.mjs",
     "test:mission-budget": "node tests/mission-budget-test.mjs",
     "test:mission-panel": "node tests/mission-panel-test.mjs",
     "test:native-directory-picker": "node tests/native-directory-picker-test.mjs",
