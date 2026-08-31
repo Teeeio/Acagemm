@@ -33,6 +33,26 @@ export const C550_STACK = Object.freeze({
   vllm_metax: '0.13.0+g181dc3.d20260129.maca3.3.0.15.torch2.8',
 });
 
+// C550 images in the field can expose a different package build string from
+// the release manifest (for example Triton 3.1.0 and a vllm-metax build
+// without the local suffix). The runner only relies on the Triton testing API
+// and the MetaX Torch runtime, so these known-compatible variants must not be
+// rejected as a broken installation.
+const c550StackCompatibility = (key, actual, fullActual = {}) => {
+  if (actual === C550_STACK[key]) return { status: 'ok', reason: 'exact release target' };
+  if (key === 'triton' && /^3\.1(?:\.\d+)?$/.test(String(actual || ''))) {
+    return { status: 'ok', reason: 'compatible MetaX C550 Triton line' };
+  }
+  if (key === 'maca' && !actual && /metax3\.3\.0\.2/i.test(String(fullActual.torch || ''))) {
+    return { status: 'inferred', reason: 'inferred from the MetaX Torch build; MACA_VERSION is not exported' };
+  }
+  if (key === 'vllm_metax' && /^0\.13\.0\+g181dc3\.d20260129(?:\.|$)/.test(String(actual || ''))) {
+    return { status: 'ok', reason: 'compatible vllm-metax build suffix' };
+  }
+  if (actual == null && ['vllm', 'vllm_metax'].includes(key)) return { status: 'optional-missing', reason: 'optional package not importable' };
+  return { status: 'mismatch', reason: 'version is outside the C550 compatibility policy' };
+};
+
 export const resolveLocalC500LaunchMode = (environment = process.env) => {
   const simulation = simulationEnabled(environment);
   const mock = simulation || environment.OPERATOR_LOCAL_C500_MOCK === '1';
@@ -448,24 +468,26 @@ const checkC550Stack = () => {
     ' vllm_metax_version = getattr(vllm_metax, "__version__", "unknown")',
     'except Exception:',
     ' vllm_metax_version = None',
-    'print(json.dumps({"python": platform.python_version(), "torch": torch.__version__, "triton": triton.__version__, "maca": __import__("os").environ.get("MACA_VERSION"), "vllm": vllm_version, "vllm_metax": vllm_metax_version}))',
+    'maca_version = __import__("os").environ.get("MACA_VERSION") or getattr(getattr(torch, "version", None), "maca", None)',
+    'print(json.dumps({"python": platform.python_version(), "torch": torch.__version__, "triton": triton.__version__, "maca": maca_version, "vllm": vllm_version, "vllm_metax": vllm_metax_version}))',
   ].join('\n');
   const result = spawnSync(python, ['-c', script], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
   if (result.status !== 0) return { status: 'missing', expected: C550_STACK, actual: null, detail: String(result.stderr || result.stdout || '').trim().split(/\r?\n/)[0] || 'C550 Python stack probe failed' };
   let actual;
   try { actual = JSON.parse(String(result.stdout || '').trim()); } catch { return { status: 'invalid', expected: C550_STACK, actual: null, detail: 'C550 Python stack probe returned invalid JSON' }; }
-  const checks = Object.fromEntries(Object.entries(C550_STACK).map(([key, expected]) => [key, {
-    status: actual[key] === expected ? 'ok' : actual[key] == null && ['vllm', 'vllm_metax'].includes(key) ? 'optional-missing' : 'mismatch',
-    expected,
-    actual: actual[key] ?? null,
-  }]));
+  const checks = Object.fromEntries(Object.entries(C550_STACK).map(([key, expected]) => {
+    const actualValue = actual[key] ?? null;
+    const compatibility = c550StackCompatibility(key, actualValue, actual);
+    return [key, { status: compatibility.status, reason: compatibility.reason, expected, actual: actualValue }];
+  }));
   const required = ['python', 'torch', 'triton', 'maca'];
+  const requiredPassed = required.every((key) => ['ok', 'inferred'].includes(checks[key].status));
   return {
-    status: required.every((key) => checks[key].status === 'ok') ? 'ok' : 'mismatch',
+    status: requiredPassed ? 'ok' : 'mismatch',
     expected: C550_STACK,
     actual,
     checks,
-    detail: required.every((key) => checks[key].status === 'ok') ? 'C550 Python stack matches the frozen target.' : 'C550 Python stack does not match the frozen target.',
+    detail: requiredPassed ? 'C550 Python stack is compatible with the frozen target and runner contract.' : 'C550 Python stack does not satisfy the C550 compatibility policy.',
   };
 };
 
