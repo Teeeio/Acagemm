@@ -34,6 +34,7 @@ const checks = [
   'test:strict-zero-source',
   'test:local-c500-production-backend',
   'test:local-c500-runtime-guard',
+  'test:local-c500-existing-runtime',
   'test:local-c500-service-async',
   'test:local-c500-launch-mode',
   'test:local-c500-environment-entry',

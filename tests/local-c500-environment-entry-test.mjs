@@ -14,6 +14,8 @@ assert.match(script, /verify\|doctor\|start\|mock\|simulation\|stop/);
 assert.match(script, /operator-studio-client-runtime/);
 assert.match(script, /bridge\.port/);
 assert.match(script, /kill \"\$pid\"/);
+assert.match(script, /run_npm run tester:c500 -- \"\$\{@:2\}\"/);
+assert.match(script, /whether to connect to the existing workflow or replace it/);
 assert.match(script, /unset OPERATOR_LOCAL_C500_MOCK OPERATOR_LOCAL_C500_MOCK_SCENARIO/);
 assert.match(script, /OPERATOR_LOCAL_C500_SIMULATION OPERATOR_SIMULATION/);
 assert.match(script, /OPERATOR_HARDWARE_DISABLED OPERATOR_MUXI_DEVICE/);

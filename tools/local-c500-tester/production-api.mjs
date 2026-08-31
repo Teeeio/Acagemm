@@ -102,6 +102,40 @@ const processAlive = (pid) => {
   try { process.kill(numeric, 0); return true; } catch (error) { return error.code === 'EPERM'; }
 };
 
+let attachedRuntimePid = 0;
+
+export const normalizeExistingRuntimePolicy = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['reuse', 'attach', 'use', '1'].includes(normalized)) return 'reuse';
+  if (['replace', 'restart', 'kill', '2'].includes(normalized)) return 'replace';
+  if (['cancel', 'fail', 'error', 'q'].includes(normalized)) return 'cancel';
+  return null;
+};
+
+const waitForProcessExit = async (pid, attempts = 30) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (!processAlive(pid)) return true;
+    await sleep(100);
+  }
+  return !processAlive(pid);
+};
+
+const terminateProcess = async (pid, label) => {
+  if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid || !processAlive(pid)) return;
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw new Error(`无法停止${label} PID ${pid}: ${error.message}`);
+  }
+  if (await waitForProcessExit(pid)) return;
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw new Error(`无法强制停止${label} PID ${pid}: ${error.message}`);
+  }
+  if (!await waitForProcessExit(pid, 20)) throw new Error(`${label} PID ${pid} 未能退出，请手动停止后重试。`);
+};
+
 const restartStaleProductionRuntime = async (current) => {
   const expectedRuntimeDir = path.join(testerHome, 'runtime');
   const bridge = current?.__bridge || {};
@@ -166,7 +200,7 @@ const health = async () => {
   }
 };
 
-export const ensureProductionRuntime = async () => {
+export const ensureProductionRuntime = async ({ onExistingRuntime, existingRuntimePolicy } = {}) => {
   let current = await health();
   if (!current) {
     // A busy auto-tick can delay /api/health behind a queue operation. If this
@@ -196,27 +230,67 @@ export const ensureProductionRuntime = async () => {
       && Number.isInteger(pid)
       && pid > 0
       && recordedPid === pid;
-
-    if (ownedByThisTester && ownerPid === process.pid && isCurrentLocalC500Runtime(current)
+    const recognizedRuntime = current?.service === 'operator-studio-client-runtime'
+      && Number.isInteger(pid)
+      && pid > 0
+      && Number(bridge.port || 0) === apiPort;
+    const compatibleRuntime = recognizedRuntime
+      && isCurrentLocalC500Runtime(current)
       && current.testBackend?.mock === launchMode.mock
       && (!launchMode.mock || current.testBackend?.scenario === launchMode.scenario)
-      && current.runtime?.mode === agentRuntimeMode) return current;
+      && current.runtime?.mode === agentRuntimeMode;
+
+    if (ownedByThisTester && ownerPid === process.pid && compatibleRuntime) return current;
+    if (attachedRuntimePid === pid && compatibleRuntime) return current;
 
     if (ownerAlive && ownerPid !== process.pid) {
-      throw new Error(`${apiBaseUrl} is already owned by another active C500 tester process (pid ${ownerPid}). Stop that tester first or use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME.`);
+      if (!recognizedRuntime) {
+        const error = new Error(`${apiBaseUrl} 被无法识别的活动进程占用。为避免误杀进程，系统不会提供自动替换；请人工确认端口占用，或更换 LOCAL_C500_API_PORT。`);
+        error.code = 'LOCAL_C500_UNRECOGNIZED_RUNTIME';
+        throw error;
+      }
+      const conflict = {
+        apiUrl: apiBaseUrl,
+        runtimePid: pid,
+        ownerPid,
+        runtimeDir: bridge.runtimeDir || null,
+        dataDir: bridge.dataDir || null,
+        mode: current.runtime?.mode || null,
+        executionMode: current.testBackend?.simulation ? 'full-simulation' : current.testBackend?.mock ? 'hardware-mock' : 'real-c550',
+        canReuse: compatibleRuntime,
+      };
+      const configuredPolicy = normalizeExistingRuntimePolicy(existingRuntimePolicy || process.env.OPERATOR_EXISTING_RUNTIME_POLICY);
+      const selectedPolicy = configuredPolicy || normalizeExistingRuntimePolicy(await onExistingRuntime?.(conflict));
+      if (selectedPolicy === 'reuse') {
+        if (!compatibleRuntime) {
+          const error = new Error('旧实例的版本、Agent Runtime 或测试后端与本次启动不兼容，不能直接连接；请选择停止旧实例并启动新实例。');
+          error.code = 'LOCAL_C500_RUNTIME_REUSE_INCOMPATIBLE';
+          error.details = conflict;
+          throw error;
+        }
+        attachedRuntimePid = pid;
+        return current;
+      }
+      if (selectedPolicy === 'replace') {
+        await terminateProcess(ownerPid, '旧 C500 TUI');
+        const activeAfterOwnerExit = await health();
+        if (activeAfterOwnerExit) await restartStaleProductionRuntime(activeAfterOwnerExit);
+        current = null;
+      } else {
+        const error = new Error(`${apiBaseUrl} 已由旧 C500 测试实例占用（TUI PID ${ownerPid}，Runtime PID ${pid}）。交互终端可选择连接或替换；非交互运行请设置 OPERATOR_EXISTING_RUNTIME_POLICY=reuse 或 replace。`);
+        error.code = 'LOCAL_C500_RUNTIME_CONFLICT';
+        error.details = conflict;
+        throw error;
+      }
     }
 
     // The health contract, PID and exact target port identify an Operator
     // Studio runtime even when the tester was moved to another container path.
     // Replace that previous-path instance, while never killing an unrelated
     // process that merely occupies the port.
-    const recognizedRuntime = current?.service === 'operator-studio-client-runtime'
-      && Number.isInteger(pid)
-      && pid > 0
-      && Number(bridge.port || 0) === apiPort;
-    if (recognizedRuntime) {
+    if (current && recognizedRuntime) {
       await restartStaleProductionRuntime(current);
-    } else {
+    } else if (current) {
       const detail = current.runtime?.mode && current.runtime.mode !== agentRuntimeMode
         ? `Agent Runtime ${current.runtime.mode} (requested ${agentRuntimeMode})`
         : current.testBackend?.kind !== 'local-c500'

@@ -7,6 +7,7 @@ import { createTerminalScreenSession } from './terminal-screen.mjs';
 import { createLatestRefreshGate, formatOperationResultMessage, reconcileOperationSnapshot, reconcileTuiSnapshot } from './tui-refresh.mjs';
 import { tuiOperatorProfiles } from '../../client-runtime/fixed-operator-profiles.mjs';
 import { bilingual, displayStatus } from './ui-labels.mjs';
+import { promptExistingRuntime } from './existing-runtime-prompt.mjs';
 import {
   addHumanFeedback,
   assertProductionPreflight,
@@ -241,8 +242,14 @@ const main = async () => {
     }
     return;
   }
-  if (args.length) throw new Error('The production tester exposes only TUI, panel --once, doctor, and --snapshot commands.');
-  await ensureProductionRuntime();
+  const existingRuntimePolicy = args.includes('--reuse-existing')
+    ? 'reuse'
+    : args.includes('--replace-existing')
+      ? 'replace'
+      : null;
+  const unknownArgs = args.filter((argument) => !['--reuse-existing', '--replace-existing'].includes(argument));
+  if (unknownArgs.length) throw new Error('The production tester exposes only TUI, panel --once, doctor, --snapshot, --reuse-existing, and --replace-existing commands.');
+  await ensureProductionRuntime({ existingRuntimePolicy, onExistingRuntime: promptExistingRuntime });
   assertProductionPreflight(await runDoctor());
   const screen = createTerminalScreenSession(process.stdout);
   const restoreScreen = () => screen.leave();

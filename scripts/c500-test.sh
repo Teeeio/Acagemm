@@ -118,8 +118,9 @@ case "$MODE" in
     unset OPERATOR_LOCAL_C500_MOCK OPERATOR_LOCAL_C500_MOCK_SCENARIO \
       OPERATOR_LOCAL_C500_SIMULATION OPERATOR_SIMULATION \
       OPERATOR_HARDWARE_DISABLED OPERATOR_MUXI_DEVICE
-    stop_previous_runtime
-    run_npm run tester:c500
+    # Let the TUI inspect the complete owner/runtime relationship and ask
+    # whether to connect to the existing workflow or replace it.
+    run_npm run tester:c500 -- "${@:2}"
     ;;
   *)
     die "usage: bash scripts/c500-test.sh {verify|doctor|start|mock|simulation|stop}"

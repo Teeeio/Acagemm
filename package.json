@@ -81,6 +81,7 @@
     "test:local-c500-mock": "node tests/local-c500-mock-boundary-test.mjs",
     "test:local-c500-simulation": "node tests/local-c500-simulation-mode-test.mjs",
     "test:local-c500-runtime-guard": "node tests/local-c500-runtime-guard-test.mjs",
+    "test:local-c500-existing-runtime": "node tests/local-c500-existing-runtime-test.mjs",
     "test:local-c500-no-hardware-guard": "node tests/local-c500-no-hardware-guard-test.mjs",
     "test:local-c500-simulation-artifact": "node tests/local-c500-simulation-artifact-test.mjs",
     "test:local-c500-mock-sequence": "node tests/local-c500-mock-sequence-test.mjs",

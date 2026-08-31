@@ -12,13 +12,22 @@ npm run tester:c500
 
 该入口固定使用仓库内置 Node 24.19.0 和 Linux x64 依赖包，默认选择 Claude Code，但实际入口是 Agent Runtime 注册表与能力兼容层。可通过 `OPERATOR_RUNTIME_MODE=claude-code|codex-cli|opencode-server` 选择后端；生产预检按能力检查 Research、Materializer、Iteration、Workspace Write、结构化事件、取消、Usage，而不是按后端名称放行。当前 OpenCode 尚缺生产所需能力，会明确拒绝，不会静默回退。真机模式必须通过 C550 设备、CUDA smoke 和软件栈预检，不会把 C500 或未知设备当作可执行目标。
 
-在目标机上推荐使用统一环境入口。它会固定当前 checkout 为 Tester Home、安装仓库内置 Node、安装锁定依赖，并在启动前自动停止同一端口上可识别的旧 Operator Studio runtime：
+在目标机上推荐使用统一环境入口。它会固定当前 checkout 为 Tester Home、安装仓库内置 Node，并安装锁定依赖：
 
 ```bash
 bash scripts/c500-test.sh verify   # 76 项非硬件健壮性门禁与 mock 闭环
 bash scripts/c500-test.sh doctor   # 真机环境检查，不启动 Mission
 bash scripts/c500-test.sh start    # Agent Runtime + C550 真机 TUI（默认 Claude Code）
 ```
+
+`start` 检测到同一端口上有活动的 Operator Studio 实例时，会先显示中文选择：连接旧实例并继续原工作流，或停止旧 TUI/Runtime 后启动新实例。无法识别的端口占用不会被自动终止。无人值守启动必须显式选择策略：
+
+```bash
+bash scripts/c500-test.sh start --reuse-existing   # 复用兼容的旧 Runtime 和工作流状态
+bash scripts/c500-test.sh start --replace-existing # 停止可识别的旧实例并重新启动
+```
+
+也可以设置 `OPERATOR_EXISTING_RUNTIME_POLICY=reuse` 或 `replace`。连接模式只增加当前控制面板，不转移旧 Runtime 的所有权；关闭新面板不会停止旧实例。
 
 需要体验只模拟硬件、仍使用真实 Agent 时：
 
@@ -57,7 +66,7 @@ bash scripts/c500-test.sh simulation
 
 入口默认使用 `claude-code`、当前项目目录下的 `.local-c500-production/` 和端口 `4275`。如果更换容器或 checkout 路径，只需在新目录重新运行上述命令；不要复用旧目录中的 PID 文件或手工复制状态。
 
-Runtime 的自动推进检查绑定当前 TUI 会话：TUI 退出时会主动停止 detached runtime，异常退出时 runtime 通过 `ownerPid` 在下一个 tick 内自停，因此 TUI 未运行时不会持续探测 Claude/Codex。
+Runtime 的自动推进检查绑定其原始 TUI 会话：所有者正常退出时会主动停止 detached runtime，异常退出时 runtime 通过 `ownerPid` 在下一个 tick 内自停。连接到旧实例的新控制面板不是所有者，退出该面板不会中断原工作流。
 
 在本工作树根目录运行：
 
