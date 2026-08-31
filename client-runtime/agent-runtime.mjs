@@ -15,6 +15,8 @@ import { operatorLanguageInstruction, validateOperatorLanguageCandidate } from '
 import { testSpecAgentInstruction } from './test-spec.mjs';
 import { fixedOperatorPrompt } from './fixed-operator-profiles.mjs';
 import { recordRunTokenUsage } from './token-usage.mjs';
+import { runtimeRegistry } from './agent-runtime/registry.mjs';
+import { createAgentRuntimeEngine } from './agent-runtime/engine.mjs';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(serverDir, '..');
@@ -357,11 +359,10 @@ const NON_RECOVERABLE_MANAGED_FAILURE_CODES = new Set([
   'CODEX_SPAWN_FAILED',
 ]);
 const DEFAULT_MAIN_AGENT_STALL_MS = 2 * 60 * 1000;
-const CLAUDE_MAIN_AGENT_STALL_MS = 5 * 60 * 1000;
 
 export const isMainAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_MAIN_AGENT_STATUSES.has(agent?.status));
 export const isResearchAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_RESEARCH_AGENT_STATUSES.has(agent?.status));
-export const isManagedWorkspaceRuntimeMode = (runtimeMode) => runtimeMode === 'codex-cli' || runtimeMode === 'claude-code';
+export const isManagedWorkspaceRuntimeMode = (runtimeMode) => runtimeRegistry.get(runtimeMode)?.managedWorkspace === true;
 
 export function appendRuntimeEvent(state, type, payload = {}, source = { kind: 'adapter' }) {
   if (!state) return null; // 防御：编排器边界可能出现瞬态 undefined，不崩循环
@@ -395,16 +396,22 @@ export function createAgentRuntime(options = {}) {
   const codex = options.codexClient || defaultCodexClient;
   const claude = options.claudeClient || defaultClaudeClient;
   const codexWorkspace = options.codexWorkspace || process.env.OPERATOR_CODEX_WORKSPACE || rootDir;
-  const managedCliMode = mode === 'codex-cli' || mode === 'claude-code';
-  const managedClient = mode === 'claude-code' ? claude : codex;
-  const managedMeta = mode === 'claude-code'
-    ? { name: 'Claude Code', slug: 'claude', unavailableCode: 'CLAUDE_RUNTIME_UNAVAILABLE' }
-    : { name: 'Codex', slug: 'codex', unavailableCode: 'CODEX_RUNTIME_UNAVAILABLE' };
-  const defaultMainAgentStallMs = mode === 'claude-code' ? CLAUDE_MAIN_AGENT_STALL_MS : DEFAULT_MAIN_AGENT_STALL_MS;
+  const runtimeDefinition = runtimeRegistry.get(mode);
+  const runtimeClients = { codex, claude, opencode: openCodeClient };
+  const runtimeEngine = createAgentRuntimeEngine({ registry: runtimeRegistry, clients: runtimeClients });
+  const managedCliMode = runtimeDefinition?.managedWorkspace === true;
+  const managedMeta = managedCliMode
+    ? { name: runtimeDefinition.name, slug: runtimeDefinition.slug, unavailableCode: runtimeDefinition.unavailableCode }
+    : null;
+  const defaultMainAgentStallMs = runtimeDefinition?.defaultStallMs || DEFAULT_MAIN_AGENT_STALL_MS;
   const configuredMainAgentStallMs = Number(options.mainAgentStallMs ?? process.env.OPERATOR_MAIN_AGENT_STALL_MS ?? defaultMainAgentStallMs);
   const mainAgentStallMs = Number.isFinite(configuredMainAgentStallMs) && configuredMainAgentStallMs > 0
     ? configuredMainAgentStallMs
     : defaultMainAgentStallMs;
+  const configuredMainAgentBudgetMs = Number(options.mainAgentBudgetMs ?? process.env.OPERATOR_MAIN_AGENT_BUDGET_MS ?? MAIN_AGENT_BUDGET_MS);
+  const mainAgentBudgetMs = Number.isFinite(configuredMainAgentBudgetMs) && configuredMainAgentBudgetMs > 0
+    ? configuredMainAgentBudgetMs
+    : MAIN_AGENT_BUDGET_MS;
   let sourceMirrorPolicyPromise = null;
   const sourceMirrorPolicy = async () => {
     if (options.sourceMirrorPolicy) return options.sourceMirrorPolicy;
@@ -419,11 +426,19 @@ export function createAgentRuntime(options = {}) {
   const openCodeDescriptorTtlMs = Number(options.openCodeDescriptorTtlMs ?? 5_000);
   let openCodeDescriptorCache = null;
   let openCodeDescriptorCachedAt = 0;
+  const lastManagedActivityAt = (run, previous, eventAdvanced) => {
+    if (eventAdvanced) return Date.now();
+    const heartbeat = Date.parse(run?.lastActivityAt || '');
+    return Math.max(Number(previous || 0), Number.isFinite(heartbeat) ? heartbeat : 0) || Date.now();
+  };
 
   const describeOpenCode = async () => {
     if (openCodeDescriptorCache && Date.now() - openCodeDescriptorCachedAt < openCodeDescriptorTtlMs) return openCodeDescriptorCache;
     try {
-      const [health, providers] = await Promise.all([openCodeClient.health(), openCodeClient.providers()]);
+      const [health, providers] = await Promise.all([
+        runtimeEngine.invoke('opencode-server', 'health'),
+        runtimeEngine.invoke('opencode-server', 'providers'),
+      ]);
       const model = parseOpenCodeModel(openCodeModel);
       const configuredProviders = Array.isArray(providers?.connected) ? providers.connected : [];
       openCodeDescriptorCache = {
@@ -442,6 +457,7 @@ export function createAgentRuntime(options = {}) {
         model: openCodeModel || null,
         providerConfigured: model ? configuredProviders.includes(model.providerID) : configuredProviders.length > 0,
         capabilities: ['mission.run', 'session.status', 'message.read', 'tool.read', 'diff.read'],
+        roleCapabilities: structuredClone(runtimeRegistry.require('opencode-server').capabilities),
         hint: model
           ? `OpenCode Server 已连接；使用 ${model.providerID}/${model.modelID}。Patch 与 Decision 回传尚未启用。`
           : 'OpenCode Server 已连接；请设置 OPENCODE_MODEL=provider/model。Patch 与 Decision 回传尚未启用。',
@@ -459,6 +475,7 @@ export function createAgentRuntime(options = {}) {
         projection: 'none',
         endpoint: openCodeClient.baseUrl,
         capabilities: [],
+        roleCapabilities: structuredClone(runtimeRegistry.require('opencode-server').capabilities),
         error: error.message,
         hint: `请先启动 opencode serve，并确认 ${openCodeClient.baseUrl}/global/health 可访问。`,
       };
@@ -469,7 +486,7 @@ export function createAgentRuntime(options = {}) {
 
   const describeCodex = async () => {
     if (codexDescriptorCache && Date.now() - codexDescriptorCachedAt < codexDescriptorTtlMs) return codexDescriptorCache;
-    const probe = await codex.describe();
+    const probe = await runtimeEngine.invoke('codex-cli', 'describe');
     const restrictedUserContext = Boolean(probe.userContext?.restricted);
     const connected = Boolean(probe.installed) && !restrictedUserContext;
     const hint = restrictedUserContext
@@ -491,6 +508,7 @@ export function createAgentRuntime(options = {}) {
       workspace: codexWorkspace,
       stallTimeoutMs: mainAgentStallMs,
       capabilities: connected ? ['mission.run', 'mission.resume', 'event.read', 'tool.read', 'candidate.observe', 'workflow.decide', 'workflow.intervene', 'workflow.rollback'] : [],
+      roleCapabilities: structuredClone(runtimeRegistry.require('codex-cli').capabilities),
       hint,
       configurationAuthority: 'local-codex',
       authProbe: restrictedUserContext ? 'restricted-user-context' : probe.loggedIn ? 'official-login-detected' : 'delegated-to-local-codex',
@@ -502,7 +520,7 @@ export function createAgentRuntime(options = {}) {
 
   const describeClaude = async () => {
     if (claudeDescriptorCache && Date.now() - claudeDescriptorCachedAt < codexDescriptorTtlMs) return claudeDescriptorCache;
-    const probe = await claude.describe();
+    const probe = await runtimeEngine.invoke('claude-code', 'describe');
     const connected = Boolean(probe.installed) && probe.loggedIn !== false;
     claudeDescriptorCache = {
       mode: 'claude-code',
@@ -518,6 +536,7 @@ export function createAgentRuntime(options = {}) {
       workspace: codexWorkspace,
       stallTimeoutMs: mainAgentStallMs,
       capabilities: connected ? ['mission.run', 'mission.resume', 'research.run', 'materializer.run', 'event.read', 'tool.read', 'candidate.observe', 'workflow.decide', 'workflow.intervene', 'workflow.rollback'] : [],
+      roleCapabilities: structuredClone(runtimeRegistry.require('claude-code').capabilities),
       hint: connected
         ? 'Claude Code CLI 已就绪；模型、网关与认证沿用测试机的 Claude Code 配置。'
         : '未发现 Claude Code CLI，请安装并确保 claude 命令在 PATH 中。',
@@ -529,10 +548,10 @@ export function createAgentRuntime(options = {}) {
     return claudeDescriptorCache;
   };
 
-  const describeManagedCli = () => mode === 'claude-code' ? describeClaude() : describeCodex();
-  const classifyManagedFailure = (run, events) => mode === 'claude-code'
-    ? classifyClaudeFailure(run, events)
-    : classifyCodexFailure(run, events);
+  const managedDescribers = { claude: describeClaude, codex: describeCodex };
+  const failureClassifiers = { claude: classifyClaudeFailure, codex: classifyCodexFailure };
+  const describeManagedRuntime = () => managedDescribers[runtimeDefinition.clientKey]();
+  const classifyManagedFailure = (run, events) => failureClassifiers[runtimeDefinition.failureClassifier](run, events);
 
   const describe = async () => {
     if (mode === 'reference-fixture') {
@@ -551,8 +570,7 @@ export function createAgentRuntime(options = {}) {
     }
 
     if (mode === 'opencode-server') return describeOpenCode();
-    if (mode === 'codex-cli') return describeCodex();
-    if (mode === 'claude-code') return describeClaude();
+    if (managedCliMode) return describeManagedRuntime();
 
     if (mode !== 'cli-file') {
       return {
@@ -599,9 +617,7 @@ export function createAgentRuntime(options = {}) {
       return { ready: false, code: 'AGENT_RUNTIME_UNAVAILABLE', detail: descriptor.hint || 'Agent Runtime 不可用。', runtime: descriptor, workspace };
     }
     if (managedCliMode) {
-      const result = typeof managedClient.preflight === 'function'
-        ? await managedClient.preflight({ workspace })
-        : { ready: true, code: `${managedMeta.slug.toUpperCase()}_READY`, workspace };
+      const result = await runtimeEngine.invoke(mode, 'preflight', { workspace });
       return { ...result, runtime: descriptor };
     }
     return { ready: true, code: 'AGENT_RUNTIME_READY', runtime: descriptor, workspace };
@@ -610,6 +626,12 @@ export function createAgentRuntime(options = {}) {
   const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null }) => {
     if (mode === 'reference-fixture') return { handled: false };
     if (mode === 'opencode-server') {
+      if (!runtimeEngine.supports(mode, 'planning')) {
+        const error = new Error(`Agent Runtime ${mode} does not support planning runs.`);
+        error.status = 409;
+        error.code = 'AGENT_RUNTIME_CAPABILITY_UNSUPPORTED';
+        throw error;
+      }
       const descriptor = await describeOpenCode();
       if (!descriptor.connected) {
         const error = new Error(descriptor.hint);
@@ -617,7 +639,7 @@ export function createAgentRuntime(options = {}) {
         error.code = 'OPENCODE_RUNTIME_UNAVAILABLE';
         throw error;
       }
-      const session = await openCodeClient.createSession(`Operator Studio · ${mission.id} · ${mission.title}`);
+      const session = await runtimeEngine.invoke(mode, 'createSession', `Operator Studio · ${mission.id} · ${mission.title}`);
       const prompt = [
         'You are connected to Operator Studio as its local optimization Agent.',
         `Mission ID: ${mission.id}`,
@@ -628,7 +650,7 @@ export function createAgentRuntime(options = {}) {
         'Return a concrete diagnosis, tool evidence, candidate options, risks, and the recommended next action.',
       ].join('\n');
       try {
-        await openCodeClient.promptAsync(session.id, { text: prompt, agent: openCodeAgent, model: openCodeModel });
+        await runtimeEngine.invoke(mode, 'prompt', session.id, { text: prompt, agent: openCodeAgent, model: openCodeModel });
       } catch (error) {
         error.status = error.status || 502;
         error.code = error.code || 'OPENCODE_PROMPT_FAILED';
@@ -655,7 +677,13 @@ export function createAgentRuntime(options = {}) {
       return { handled: true, state };
     }
     if (managedCliMode) {
-      const descriptor = await describeManagedCli();
+      if (!runtimeEngine.supports(mode, 'iteration')) {
+        const error = new Error(`Agent Runtime ${mode} does not support iteration runs.`);
+        error.status = 409;
+        error.code = 'AGENT_RUNTIME_CAPABILITY_UNSUPPORTED';
+        throw error;
+      }
+      const descriptor = await describeManagedRuntime();
       if (!descriptor.connected) {
         const error = new Error(descriptor.hint);
         error.status = 503;
@@ -726,7 +754,7 @@ export function createAgentRuntime(options = {}) {
         'For a resumed thread, follow the new user goal while keeping all work inside this isolated Mission workspace.',
         boundary.toolInstruction,
       ].join('\n');
-      const run = await managedClient.start({ runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
+      const run = await runtimeEngine.invoke(mode, 'start', { runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
       state.stage = 'diagnosis';
       state.patchApplied = false;
       state.agent = {
@@ -740,7 +768,7 @@ export function createAgentRuntime(options = {}) {
         profileId: 'profile.operator-orchestrator',
         goal,
         startedAt: run.startedAt,
-        budgetMs: MAIN_AGENT_BUDGET_MS,
+        budgetMs: mainAgentBudgetMs,
         eventCount: 0,
         lastEventAt: Date.now(),
         currentAction: null,
@@ -885,13 +913,13 @@ export function createAgentRuntime(options = {}) {
   ].join('\n');
 
   const startBaselineMaterialization = async ({ state, mission, source, matrix = {}, workspace }) => {
-    if (!managedCliMode) {
+    if (!managedCliMode || !runtimeEngine.supports(mode, 'materializer')) {
       const error = new Error(`Baseline materializer requires a managed workspace CLI runtime (current: ${mode}).`);
       error.status = 503;
       error.code = 'BASELINE_MATERIALIZER_RUNTIME_UNSUPPORTED';
       throw error;
     }
-    const descriptor = await describeManagedCli();
+    const descriptor = await describeManagedRuntime();
     if (!descriptor.connected) {
       const error = new Error(descriptor.hint);
       error.status = 503;
@@ -940,7 +968,7 @@ export function createAgentRuntime(options = {}) {
       roots: { workspace },
     });
     const prompt = `${buildBaselineMaterializerPrompt({ mission, source: verifiedSource, matrix, materializationDir: workspace, sourceEvidence })}\n${boundary.toolInstruction}`;
-    const run = await managedClient.start({
+    const run = await runtimeEngine.invoke(mode, 'start', {
       runId,
       missionId: mission.id,
       goal: prompt,
@@ -980,13 +1008,13 @@ export function createAgentRuntime(options = {}) {
   };
 
   const startResearch = async ({ state, mission, direction, workspace, synchronous = false, runPhase = 'acquire' }) => {
-    if (!managedCliMode) {
+    if (!managedCliMode || !runtimeEngine.supports(mode, 'research')) {
       const error = new Error(`Research Agent requires a managed workspace CLI runtime (current: ${mode}).`);
       error.status = 503;
       error.code = 'RESEARCH_RUNTIME_UNSUPPORTED';
       throw error;
     }
-    const descriptor = await describeManagedCli();
+    const descriptor = await describeManagedRuntime();
     if (!descriptor.connected) {
       const error = new Error(descriptor.hint);
       error.status = 503;
@@ -1035,7 +1063,7 @@ export function createAgentRuntime(options = {}) {
       roots: { workspace, ...(runPhase === 'acquire' && mission.sourceRoot ? { sourceRoot: mission.sourceRoot } : {}) },
     });
     const prompt = `${buildResearchPrompt({ mission, direction, researchDir: workspace, sourceRoot: mission.sourceRoot, runPhase, sourceEvidence })}\n${boundary.toolInstruction}`;
-    const run = await managedClient.start({
+    const run = await runtimeEngine.invoke(mode, 'start', {
       runId,
       missionId: mission.id,
       goal: prompt,
@@ -1076,13 +1104,13 @@ export function createAgentRuntime(options = {}) {
 
   const cancelRun = async ({ state, runId }) => {
     if (state.baseline?.materializer?.runId && runId === state.baseline.materializer.runId) {
-      if (!managedCliMode) {
+      if (!managedCliMode || !runtimeEngine.supports(mode, 'cancellation')) {
         const error = new Error(`Baseline materializer cancellation is not supported by runtime mode ${mode}.`);
         error.status = 409;
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await managedClient.cancel(runId);
+      const result = await runtimeEngine.invoke(mode, 'cancel', runId);
       state.baseline = {
         ...(state.baseline || {}),
         materializer: { ...state.baseline.materializer, status: 'cancel_requested', phase: 'Baseline materializer 取消已请求' },
@@ -1091,13 +1119,13 @@ export function createAgentRuntime(options = {}) {
       return { state, result };
     }
     if (state.researchAgent?.runId && runId === state.researchAgent.runId) {
-      if (!managedCliMode) {
+      if (!managedCliMode || !runtimeEngine.supports(mode, 'cancellation')) {
         const error = new Error(`Research cancellation is not supported by runtime mode ${mode}.`);
         error.status = 409;
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await managedClient.cancel(runId);
+      const result = await runtimeEngine.invoke(mode, 'cancel', runId);
       state.researchAgent = { ...state.researchAgent, status: 'cancel_requested', phase: '研究员取消已请求' };
       appendRuntimeEvent(state, 'research.cancel_requested', { runId }, { kind: 'research', mode });
       return { state, result };
@@ -1109,8 +1137,7 @@ export function createAgentRuntime(options = {}) {
       throw error;
     }
     let result;
-    if (managedCliMode) result = await managedClient.cancel(runId);
-    else if (mode === 'opencode-server') result = await openCodeClient.abort(runId);
+    if (runtimeDefinition && runtimeEngine.supports(mode, 'cancellation')) result = await runtimeEngine.invoke(mode, 'cancel', runId);
     else {
       const error = new Error(`Agent cancellation is not supported by runtime mode ${mode}.`);
       error.status = 409;
@@ -1134,14 +1161,26 @@ export function createAgentRuntime(options = {}) {
       const sessionId = state.agent.runId;
       try {
         const [statuses, messages, diff] = await Promise.all([
-          openCodeClient.sessionStatus(),
-          openCodeClient.messages(sessionId),
-          openCodeClient.diff(sessionId),
+          runtimeEngine.invoke(mode, 'readStatus'),
+          runtimeEngine.invoke(mode, 'readEvents', sessionId),
+          runtimeEngine.invoke(mode, 'readDiff', sessionId),
         ]);
         const sessionStatus = statuses?.[sessionId]?.type || statuses?.[sessionId]?.status || 'idle';
         const messageList = Array.isArray(messages) ? messages : [];
         const diffList = Array.isArray(diff) ? diff : [];
         const assistantMessages = messageList.filter((message) => message?.info?.role === 'assistant');
+        const usageBefore = JSON.stringify(state.tokenUsage || null);
+        const usageEvents = assistantMessages
+          .filter((message) => message?.info?.tokens || message?.info?.usage)
+          .map((message, index) => ({
+            type: message.info?.error ? 'turn.failed' : 'turn.completed',
+            id: message.info?.id || `opencode-usage-${index}`,
+            usageId: message.info?.id || `opencode-usage-${index}`,
+            provider: 'opencode-server',
+            usage: message.info?.tokens || message.info?.usage,
+          }));
+        recordRunTokenUsage(state, { runId: sessionId, phase: 'iteration', provider: 'opencode-server', events: usageEvents });
+        const usageChanged = usageBefore !== JSON.stringify(state.tokenUsage || null);
         const errors = assistantMessages.map((message) => message?.info?.error?.data?.message || message?.info?.error?.message).filter(Boolean);
         const textParts = assistantMessages.flatMap((message) => (message.parts || []).filter((part) => part.type === 'text' && part.text));
         const toolParts = messageList.flatMap((message) => (message.parts || []).filter((part) => part.type === 'tool'));
@@ -1191,7 +1230,7 @@ export function createAgentRuntime(options = {}) {
         };
         if (diffList.length) state.stage = 'candidate';
         const statusChanged = nextAgent.status !== state.agent.status || nextAgent.openCodeDiffCount !== state.agent.openCodeDiffCount;
-        const changed = runtimeChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
+        const changed = runtimeChanged || usageChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
         state.agent = nextAgent;
         if (statusChanged) appendRuntimeEvent(state, errors.length ? 'opencode.session_failed' : diffList.length ? 'opencode.diff_ready' : 'opencode.session_updated', { sessionId, status: nextStatus, diffCount: diffList.length, error: errors.at(-1) || null }, { kind: 'agent', mode: 'opencode-server' });
         return { state, changed: changed || statusChanged };
@@ -1207,8 +1246,8 @@ export function createAgentRuntime(options = {}) {
       try {
         const prev = state.baseline.materializer;
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
-        const run = await managedClient.readRun(prev.runId);
-        const events = await managedClient.readEvents(prev.runId);
+        const run = await runtimeEngine.invoke(mode, 'readRun', prev.runId);
+        const events = await runtimeEngine.invoke(mode, 'readEvents', prev.runId);
         recordRunTokenUsage(state, { runId: prev.runId, phase: 'materializer', provider: mode, events });
         const failed = run.status === 'failed';
         const completed = run.status === 'completed';
@@ -1216,11 +1255,11 @@ export function createAgentRuntime(options = {}) {
         const budgetExceeded = prev.startedAt && Date.now() - new Date(prev.startedAt).getTime() >= (prev.budgetMs || 0);
         const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? 'cancelled' : (budgetExceeded && prev.status !== 'cancel_requested') ? 'timed_out' : prev.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         if (nextStatus === 'timed_out') {
-          try { await managedClient.cancel(prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
+          try { await runtimeEngine.invoke(mode, 'cancel', prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
         }
         let terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
         const eventCount = events.length;
-        const lastEventAt = eventCount > (prev.eventCount || 0) ? Date.now() : (prev.lastEventAt || Date.now());
+        const lastEventAt = lastManagedActivityAt(run, prev.lastEventAt, eventCount > (prev.eventCount || 0));
         let result = prev.result || null;
         let materializerError = prev.error || null;
         let finalStatus = nextStatus;
@@ -1252,7 +1291,7 @@ export function createAgentRuntime(options = {}) {
             terminal = true;
             materializerError = null;
             if (!['completed', 'failed', 'cancelled'].includes(run.status)) {
-              try { await managedClient.cancel(prev.runId); } catch { /* Artifact is already authoritative. */ }
+              try { await runtimeEngine.invoke(mode, 'cancel', prev.runId); } catch { /* Artifact is already authoritative. */ }
             }
           } catch (error) {
             if (terminal) {
@@ -1342,21 +1381,23 @@ export function createAgentRuntime(options = {}) {
     if (managedCliMode && researchNeedsProjection && state.researchAgent?.runId && state.researchAgent?.runtimeKind === mode) {
       try {
         const prev = state.researchAgent;
-        const run = await managedClient.readRun(prev.runId);
-        const events = await managedClient.readEvents(prev.runId);
+        const run = await runtimeEngine.invoke(mode, 'readRun', prev.runId);
+        const events = await runtimeEngine.invoke(mode, 'readEvents', prev.runId);
+        const usageBefore = JSON.stringify(state.tokenUsage || null);
         recordRunTokenUsage(state, { runId: prev.runId, phase: `research.${prev.runPhase || 'run'}`, provider: mode, events });
+        const usageChanged = usageBefore !== JSON.stringify(state.tokenUsage || null);
         const failed = run.status === 'failed';
         const completed = run.status === 'completed';
         const cancelled = run.status === 'cancelled';
         const budgetExceeded = prev.startedAt && Date.now() - new Date(prev.startedAt).getTime() >= (prev.budgetMs || 0);
         const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? 'cancelled' : (budgetExceeded && prev.status !== 'cancel_requested') ? 'timed_out' : prev.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         if (nextStatus === 'timed_out') {
-          try { await managedClient.cancel(prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
+          try { await runtimeEngine.invoke(mode, 'cancel', prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
         }
         const terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
         // 事件新鲜度：供循环做停滞/事件预算终止
         const eventCount = events.length;
-        const lastEventAt = eventCount > (prev.eventCount || 0) ? Date.now() : (prev.lastEventAt || Date.now());
+        const lastEventAt = lastManagedActivityAt(run, prev.lastEventAt, eventCount > (prev.eventCount || 0));
         const phaseLabel = prev.runPhase === 'acquire' ? '研究员采集' : prev.runPhase === 'experience' ? '研究员经验调研' : '研究员整理笔记';
         const nextResearchAgent = {
           ...prev,
@@ -1420,7 +1461,7 @@ export function createAgentRuntime(options = {}) {
             }, { kind: 'research', mode });
           }
         }
-        const changed = runtimeChanged || JSON.stringify(nextResearchAgent) !== JSON.stringify(prev);
+        const changed = runtimeChanged || usageChanged || JSON.stringify(nextResearchAgent) !== JSON.stringify(prev);
         state.researchAgent = nextResearchAgent;
         return { state, changed };
       } catch (error) {
@@ -1436,9 +1477,11 @@ export function createAgentRuntime(options = {}) {
     }
     if (managedCliMode && state.agent?.runtimeKind === mode && state.agent?.runId) {
       try {
-        const run = await managedClient.readRun(state.agent.runId);
-        const events = await managedClient.readEvents(state.agent.runId);
+        const run = await runtimeEngine.invoke(mode, 'readRun', state.agent.runId);
+        const events = await runtimeEngine.invoke(mode, 'readEvents', state.agent.runId);
+        const usageBefore = JSON.stringify(state.tokenUsage || null);
         recordRunTokenUsage(state, { runId: state.agent.runId, phase: 'iteration', provider: mode, events });
+        const usageChanged = usageBefore !== JSON.stringify(state.tokenUsage || null);
         const agentResult = parseAgentResult(events);
         const threadEvent = events.find((event) => event.type === 'thread.started' || event.type === 'thread_start' || event.thread_id || event.threadId);
         const assistantEvents = events.filter((event) => event.item?.type === 'agent_message' || /agent_message|message.completed/i.test(event.type || ''));
@@ -1451,25 +1494,26 @@ export function createAgentRuntime(options = {}) {
         // 取消后进程未必立即死透：run.status 仍为 running，不能把已请求的取消覆盖回 running
         // （与研究分支同法：保留 cancel_requested，直到进程真正终结为 cancelled）。
         const eventCount = events.length;
-        const lastEventAt = eventCount > (state.agent.eventCount || 0) ? Date.now() : (state.agent.lastEventAt || Date.now());
+        const lastEventAt = lastManagedActivityAt(run, state.agent.lastEventAt, eventCount > (state.agent.eventCount || 0));
         const elapsed = state.agent.startedAt ? Date.now() - new Date(state.agent.startedAt).getTime() : 0;
         const stalled = !completed && !failed && run.status !== 'cancelled' && lastEventAt && Date.now() - lastEventAt >= mainAgentStallMs;
-        const budgetExceeded = !completed && !failed && run.status !== 'cancelled' && elapsed >= (state.agent.budgetMs || MAIN_AGENT_BUDGET_MS);
+        const budgetExceeded = !completed && !failed && run.status !== 'cancelled' && elapsed >= (state.agent.budgetMs || mainAgentBudgetMs);
         if ((stalled || budgetExceeded) && state.agent.status !== 'cancel_requested') {
-          try { await managedClient.cancel(state.agent.runId); } catch { /* 下一 tick 收敛 */ }
+          try { await runtimeEngine.invoke(mode, 'cancel', state.agent.runId); } catch { /* 下一 tick 收敛 */ }
         }
-        const timedOut = stalled || budgetExceeded;
-        const nextStatus = failed ? 'failed' : completed ? 'completed' : run.status === 'cancelled' ? 'cancelled' : timedOut ? 'completed' : state.agent.status === 'cancel_requested' ? 'cancel_requested' : 'running';
+        const timedOut = stalled || budgetExceeded || (run.status === 'cancelled' && state.agent.timedOut === true);
+        const nextStatus = failed ? 'failed' : completed ? 'completed' : timedOut ? 'completed' : run.status === 'cancelled' ? 'cancelled' : state.agent.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         const failure = failed ? classifyManagedFailure(run, events) : null;
-        const projectedMessages = assistantEvents.slice(-8).map((event, index) => ({ id: event.id || `${managedMeta.slug}-event-${index}`, phase: event.type || managedMeta.name, status: failed ? 'waiting' : 'completed', title: event.type || `${managedMeta.name} 事件`, detail: managedClient.eventText(event) || `${managedMeta.name} 已产生新的运行事件`, time: event.timestamp || '刚刚' }));
+        const projectedMessages = assistantEvents.slice(-8).map((event, index) => ({ id: event.id || `${managedMeta.slug}-event-${index}`, phase: event.type || managedMeta.name, status: failed ? 'waiting' : 'completed', title: event.type || `${managedMeta.name} 事件`, detail: runtimeEngine.invoke(mode, 'eventText', event) || `${managedMeta.name} 已产生新的运行事件`, time: event.timestamp || '刚刚' }));
         if (failure) projectedMessages.push({ id: `${managedMeta.slug}-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: failure.title, detail: failure.detail, time: run.completedAt || '刚刚', errorCode: failure.code });
         const terminalCompleted = completed || timedOut;
         const terminalReached = terminalCompleted || failed;
-        const recoverableGenerationFailure = failed && failure && !NON_RECOVERABLE_MANAGED_FAILURE_CODES.has(failure.code);
+        const recoverableGenerationFailure = timedOut || (failed && failure && !NON_RECOVERABLE_MANAGED_FAILURE_CODES.has(failure.code));
         let candidateValidation = null;
         let verifiedCandidates = agentResult.candidates;
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
-        if (terminalReached && agentResult.candidates.length) {
+        const candidateInspectionEligible = terminalCompleted || recoverableGenerationFailure;
+        if (candidateInspectionEligible && agentResult.candidates.length) {
           const selectedCandidate = agentResult.candidates.find((candidate) => candidate.id === agentResult.recommendedCandidate) || agentResult.candidates[0];
           const declaredFiles = String(selectedCandidate.files || '').split(',').map((file) => file.trim().replaceAll('\\', '/')).filter(Boolean);
           const manifest = await workspaceManager.captureDiff(run.workspace);
@@ -1490,7 +1534,7 @@ export function createAgentRuntime(options = {}) {
             candidateValidation = { passed: true, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_VERIFIED`, digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: '候选自报来源标记，未做固定来源校验（工作区 Diff 为准入权威）' };
             verifiedCandidates = [{ ...selectedCandidate, files: actualFiles.join(', '), sourceReferences: claimedReferences, patchDigest: manifest.digest, sourceRunId: state.agent.runId }];
           }
-        } else if (terminalReached && !agentResult.candidates.length && !workflowAdvanced) {
+        } else if (candidateInspectionEligible && !agentResult.candidates.length && !workflowAdvanced) {
           const manifest = await workspaceManager.captureDiff(run.workspace);
           const stableDigest = state.workflowRecovery?.checkpoints?.at(-1)?.stableDigest || null;
           const actualFiles = manifest.changedFiles.map((file) => file.replaceAll('\\', '/'));
@@ -1568,7 +1612,7 @@ export function createAgentRuntime(options = {}) {
           }, new Map()).entries()].slice(-20).map(([eventId, event]) => {
             const toolFailed = event.item?.status === 'failed' || event.status === 'failed' || Boolean(event.item?.error);
             const toolCompleted = event.type === 'item.completed' || /completed|done/i.test(event.status || event.item?.status || '');
-            return { id: eventId, toolId: event.tool || event.name || event.item?.name || `${managedMeta.slug}.${event.item?.type || 'tool'}`, name: event.name || event.tool || event.item?.name || (event.item?.type === 'command_execution' ? 'Managed Tool' : event.item?.type || `${managedMeta.name} Tool`), version: descriptor.version ? `v${descriptor.version}` : 'runtime', skillId: `${managedMeta.slug}.exec`, status: toolFailed ? 'failed' : toolCompleted ? 'completed' : completed ? 'warning' : 'running', summary: managedClient.eventText(event) || `${managedMeta.name} tool call`, permission: `${managedMeta.slug}:managed` };
+            return { id: eventId, toolId: event.tool || event.name || event.item?.name || `${managedMeta.slug}.${event.item?.type || 'tool'}`, name: event.name || event.tool || event.item?.name || (event.item?.type === 'command_execution' ? 'Managed Tool' : event.item?.type || `${managedMeta.name} Tool`), version: descriptor.version ? `v${descriptor.version}` : 'runtime', skillId: `${managedMeta.slug}.exec`, status: toolFailed ? 'failed' : toolCompleted ? 'completed' : completed ? 'warning' : 'running', summary: runtimeEngine.invoke(mode, 'eventText', event) || `${managedMeta.name} tool call`, permission: `${managedMeta.slug}:managed` };
           }),
           artifacts: [{ id: `${managedMeta.slug}-run-${state.agent.runId}`, kind: `${managedMeta.name} Run`, title: state.agent.artifacts?.[0]?.title || `${managedMeta.name} Mission`, status: nextStatus, meta: `${events.length} events · ${run.threadId || 'session pending'}` }],
           result: agentResult,
@@ -1643,7 +1687,7 @@ export function createAgentRuntime(options = {}) {
           };
         }
         const previousStatus = state.agent.status;
-        const changed = runtimeChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
+        const changed = runtimeChanged || usageChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
         state.agent = nextAgent;
         if (nextStatus === 'completed' && verifiedCandidates.length && !workflowAdvanced) state.stage = 'candidate';
         const lifecycleEventType = `${managedMeta.slug}.run_${nextStatus}`;

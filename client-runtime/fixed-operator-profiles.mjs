@@ -129,6 +129,7 @@ const profiles = [
       contentFiles: ['run.py', 'paged_mqa_logits.py'],
     },
     iterationPolicy: {
+      maxGenerationAttempts: 2,
       maxCorrectnessAttempts: 4,
       performanceRounds: 3,
       acceptFirstCorrectCandidate: true,
@@ -198,6 +199,7 @@ const profiles = [
       contentFiles: ['run.py', 'flash_mla.py'],
     },
     iterationPolicy: {
+      maxGenerationAttempts: 2,
       maxCorrectnessAttempts: 4,
       performanceRounds: 3,
       acceptFirstCorrectCandidate: true,
@@ -223,6 +225,18 @@ const profiles = [
 ];
 
 export const fixedOperatorProfiles = profiles.map((profile) => structuredClone(profile));
+
+// Only profiles with a complete v0.1 delivery and three-round iteration
+// contract are publishable from the production TUI. Other profiles remain
+// available to internal fixtures until their contracts are completed.
+export const tuiOperatorProfiles = profiles
+  .filter((profile) => ['paged-mqa-logits-triton-v01', 'flash-mla-decode-triton-v01'].includes(profile.id))
+  .map((profile) => structuredClone(profile));
+
+export const isTuiOperatorProfile = (profileOrId) => {
+  const id = typeof profileOrId === 'string' ? profileOrId : profileOrId?.id;
+  return tuiOperatorProfiles.some((profile) => profile.id === id);
+};
 
 export const getFixedOperatorProfile = (id) => {
   const profile = profiles.find((item) => item.id === id);

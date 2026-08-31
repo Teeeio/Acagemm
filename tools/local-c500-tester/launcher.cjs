@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const childProcess = require('child_process');
 const crypto = require('crypto');
 
@@ -14,7 +15,8 @@ const installer = path.join(projectRoot, 'scripts', 'install-bundled-node.sh');
 const npmCliRelative = path.join('lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
 const dependencyArchive = path.join(projectRoot, 'vendor', 'node', 'node-modules-linux-x64.tar.gz');
 const dependencyArchiveSha256 = '04ebed39d8752ffb614e0659360037f0455a1704bfe208d4617d99709a380e3d';
-const tuiArgs = [tuiPath].concat(process.argv.slice(2));
+const simulationRequested = process.argv.includes('--simulation') || process.argv.includes('--simulate') || process.env.OPERATOR_LOCAL_C500_SIMULATION === '1';
+const tuiArgs = [tuiPath].concat(process.argv.slice(2).filter((argument) => !['--simulation', '--simulate'].includes(argument)));
 
 function exitFrom(result, label) {
   if (result.error) {
@@ -25,24 +27,40 @@ function exitFrom(result, label) {
 }
 
 function runNode(executable, environment) {
-  const launchEnvironment = Object.assign({}, environment || process.env, {
-    LOCAL_C500_TESTER_HOME: path.join(projectRoot, '.local-c500-production'),
-    LOCAL_C500_API_PORT: '4275',
-    OPERATOR_RUNTIME_MODE: 'claude-code',
-    CLAUDE_COMMAND: 'claude',
+  const inheritedEnvironment = environment || process.env;
+  const mockRequested = simulationRequested || inheritedEnvironment.OPERATOR_LOCAL_C500_MOCK === '1';
+  const explicitTesterHome = inheritedEnvironment.LOCAL_C500_TESTER_HOME;
+  const temporarySimulationHome = simulationRequested && !explicitTesterHome
+    ? fs.mkdtempSync(path.join(os.tmpdir(), 'operator-studio-simulation-'))
+    : null;
+  const launchEnvironment = Object.assign({}, inheritedEnvironment, {
+    LOCAL_C500_TESTER_HOME: explicitTesterHome || temporarySimulationHome || path.join(projectRoot, '.local-c500-production'),
+    LOCAL_C500_API_PORT: inheritedEnvironment.LOCAL_C500_API_PORT || '4275',
+    OPERATOR_RUNTIME_MODE: simulationRequested ? 'reference-fixture' : (inheritedEnvironment.OPERATOR_RUNTIME_MODE || 'claude-code'),
+    CLAUDE_COMMAND: inheritedEnvironment.CLAUDE_COMMAND || 'claude',
     OPERATOR_TEST_BACKEND: 'local-c500',
     OPERATOR_AUTO_TICK: '1',
-    OPERATOR_LOCAL_C500_MOCK: '0',
+    OPERATOR_AUTO_TICK_INTERVAL_MS: simulationRequested ? '2500' : '1500',
+    OPERATOR_TUI_REFRESH_MS: simulationRequested ? '2500' : '1500',
+    OPERATOR_LOCAL_C500_MOCK: mockRequested ? '1' : '0',
+    OPERATOR_LOCAL_C500_SIMULATION: simulationRequested ? '1' : '0',
+    OPERATOR_LOCAL_C500_MOCK_SCENARIO: mockRequested ? (inheritedEnvironment.OPERATOR_LOCAL_C500_MOCK_SCENARIO || 'mla-three-round') : '',
+    OPERATOR_TUI_ANIMATE: simulationRequested ? '0' : (inheritedEnvironment.OPERATOR_TUI_ANIMATE || '1'),
   });
+  // OPERATOR_LOCAL_C500_MOCK: '0' remains the real-hardware default.
   delete launchEnvironment.LOCAL_C500_API_URL;
   delete launchEnvironment.OPERATOR_LOCAL_C500_COMMAND;
-  delete launchEnvironment.OPERATOR_LOCAL_C500_MOCK_SCENARIO;
   delete launchEnvironment.OPERATOR_MUXI_DEVICE;
-  const result = childProcess.spawnSync(executable, tuiArgs, {
-    cwd: projectRoot,
-    env: launchEnvironment,
-    stdio: 'inherit',
-  });
+  let result;
+  try {
+    result = childProcess.spawnSync(executable, tuiArgs, {
+      cwd: projectRoot,
+      env: launchEnvironment,
+      stdio: 'inherit',
+    });
+  } finally {
+    if (temporarySimulationHome) fs.rmSync(temporarySimulationHome, { recursive: true, force: true });
+  }
   exitFrom(result, 'Unable to start the C500 tester');
 }
 

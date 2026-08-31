@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { deriveWorkflowTopology } from '../tui-state.mjs';
+import { displayStatus, displayTitle, displayOwner, displayDisposition, bilingual } from '../ui-labels.mjs';
 
 const statusMeta = {
   completed: { icon: '✓', color: 'green' },
@@ -26,8 +27,8 @@ const TopologyNode = ({ item, width = 20, current = false, oneLine = false }) =>
     borderColor: meta.color,
     paddingX: 1,
   },
-  React.createElement(Text, { color: meta.color, bold: current || item.status === 'running' }, `${meta.icon} ${item.title}`),
-  oneLine ? null : React.createElement(Text, { dimColor: item.status === 'pending' }, `${item.owner} · ${item.detail || item.status}`));
+  React.createElement(Text, { color: meta.color, bold: current || item.status === 'running' }, `${meta.icon} ${displayTitle(item.title)}`),
+  oneLine ? null : React.createElement(Text, { dimColor: item.status === 'pending' }, `${displayOwner(item.owner)} · ${displayStatus(item.detail || item.status)}`));
 };
 
 const Arrow = ({ label = '▶' }) => React.createElement(Box, { width: 3, justifyContent: 'center', alignItems: 'center' }, React.createElement(Text, { dimColor: true }, label));
@@ -46,16 +47,16 @@ const CandidateTable = ({ topology, width, limit = 5 }) => {
     ? { candidate: 12, attempt: 3, result: 9, gain: 7, gate: 11 }
     : { candidate: 16, attempt: 3, result: 11, gain: 12, gate: 15 };
   return React.createElement(Box, { flexDirection: 'column' },
-    React.createElement(Text, { color: 'cyan' }, 'Recent Candidates'),
+    React.createElement(Text, { color: 'cyan' }, bilingual('最近候选', 'Recent Candidates')),
     React.createElement(Text, { dimColor: true }, compact
-      ? `Rnd  ${fit('Candidate', columns.candidate)} ${fit('Try', columns.attempt)} ${fit('Result', columns.result)} ${fit('Gain', columns.gain)} ${fit('Gate', columns.gate)} Disposition`
-      : `Round  ${fit('Candidate', columns.candidate)} ${fit('Try', columns.attempt)} ${fit('Result', columns.result)} ${fit('Improvement', columns.gain)} ${fit('Gate', columns.gate)} Disposition`),
-    earlierCount > 0 ? React.createElement(Text, { dimColor: true }, ` ...   ${earlierCount} earlier candidates`) : null,
+      ? `轮  Rnd  ${fit('候选 Candidate', columns.candidate)} ${fit('次 Try', columns.attempt)} ${fit('结果 Result', columns.result)} ${fit('增益 Gain', columns.gain)} ${fit('门禁 Gate', columns.gate)} 处置 Disposition`
+      : `轮次 Round  ${fit('候选 Candidate', columns.candidate)} ${fit('次 Try', columns.attempt)} ${fit('结果 Result', columns.result)} ${fit('提升 Improvement', columns.gain)} ${fit('门禁 Gate', columns.gate)} 处置 Disposition`),
+    earlierCount > 0 ? React.createElement(Text, { dimColor: true }, ` ...   前面还有 ${earlierCount} 个候选 (earlier candidates)`) : null,
     ...(candidates.length ? candidates.map((candidate) => React.createElement(Text, {
       key: candidate.key,
       color: candidate.adopted ? 'green' : candidate.rolledBack ? 'yellow' : candidate.taskStatus === 'generating' || candidate.taskStatus === 'running' ? 'cyan' : undefined,
-    }, `${String(candidate.round).padStart(compact ? 3 : 5)}  ${fit(candidate.id, columns.candidate)} ${fit(candidate.attempt, columns.attempt)} ${fit(candidate.value, columns.result)} ${fit(candidate.improvement, columns.gain)} ${fit(candidate.gate, columns.gate)} ${candidate.disposition}`))
-      : [React.createElement(Text, { key: 'empty', dimColor: true }, '  --   No candidate generated')]),
+    }, `${String(candidate.round).padStart(compact ? 3 : 5)}  ${fit(candidate.id, columns.candidate)} ${fit(candidate.attempt, columns.attempt)} ${fit(candidate.value, columns.result)} ${fit(candidate.improvement, columns.gain)} ${fit(displayStatus(candidate.gate), columns.gate)} ${displayDisposition(candidate.disposition)}`))
+      : [React.createElement(Text, { key: 'empty', dimColor: true }, '  --   尚未生成候选 (No candidate generated)')]),
   );
 };
 
@@ -70,8 +71,8 @@ export const WorkflowTopology = ({ snapshot = {}, layout = {} }) => {
   const flowNodes = topology.iterationNodes;
   return React.createElement(Box, { flexDirection: 'column', borderStyle: 'round', borderColor: 'cyan', paddingX: 1 },
     React.createElement(Box, { justifyContent: 'space-between' },
-      React.createElement(Text, { color: 'cyan', bold: true }, 'Workflow Topology'),
-      React.createElement(Text, { dimColor: true }, `LIVE · Round ${topology.currentRound || '--'}`),
+      React.createElement(Text, { color: 'cyan', bold: true }, bilingual('工作流拓扑', 'Workflow Topology')),
+      React.createElement(Text, { dimColor: true }, `实时 (LIVE) · 第 ${topology.currentRound || '--'} 轮 (Round)`),
     ),
     React.createElement(Box, { flexDirection: 'row', alignItems: 'center' },
       ...topology.setup.flatMap((item, index) => [

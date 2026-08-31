@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { normalizeWorkflowError } from './workflow-error.mjs';
 
 export const WORKFLOW_OUTCOME = Object.freeze({
   COMPLETED: 'completed',
@@ -12,16 +13,8 @@ const ACTIVE_STATUSES = new Set(['waiting', 'queued', 'running', 'executing', 'c
 const COMPLETED_STATUSES = new Set(['complete', 'completed', 'succeeded', 'success']);
 const CANCELLED_STATUSES = new Set(['cancelled', 'canceled']);
 const FAILURE_STATUSES = new Set(['failed', 'error', 'timed_out', 'timeout']);
-const RETRYABLE_CODE = /(?:^|_)(?:EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EBUSY|ELOCKED|UNAVAILABLE|RATE_LIMITED|SERVICE_ERROR|SUBMIT_FAILED|POLL_FAILED)(?:_|$)/i;
-
 const errorView = (input = {}) => {
-  const error = input?.error && typeof input.error === 'object' ? input.error : input;
-  return {
-    code: String(error?.code || input?.code || 'EXTERNAL_FAILURE'),
-    message: String(error?.message || input?.message || 'External operation failed.'),
-    status: Number(error?.status || input?.httpStatus || input?.statusCode || 0) || null,
-    retryable: error?.retryable === true || input?.retryable === true,
-  };
+  return normalizeWorkflowError(input, { source: 'workflow-kernel', code: 'EXTERNAL_FAILURE' });
 };
 
 export function normalizeExternalOutcome(input = {}) {
@@ -32,7 +25,7 @@ export function normalizeExternalOutcome(input = {}) {
 
   const error = errorView(input);
   const retryableHttp = error.status === 408 || error.status === 425 || error.status === 429 || Number(error.status) >= 500;
-  const retryable = error.retryable || retryableHttp || RETRYABLE_CODE.test(error.code);
+  const retryable = error.retryable || retryableHttp;
   if (FAILURE_STATUSES.has(status) || input?.error || input instanceof Error) {
     return {
       kind: retryable ? WORKFLOW_OUTCOME.RETRYABLE_FAILURE : WORKFLOW_OUTCOME.TERMINAL_FAILURE,

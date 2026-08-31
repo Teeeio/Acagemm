@@ -17,7 +17,9 @@ import { journalPathFor, reconcileCommandJournal } from './command-journal.mjs';
 import { runnerMatches } from './runner-aliases.mjs';
 import { normalizeOperatorLanguage } from './operator-language.mjs';
 import { normalizeMissionTestMatrix } from './test-spec.mjs';
-import { emptyTokenUsage } from './token-usage.mjs';
+import { emptyTokenUsage, normalizeTokenUsageLedger } from './token-usage.mjs';
+import { assertSemanticTaskBinding, createSemanticSnapshot, normalizeSemanticSnapshot } from './semantic-snapshot.mjs';
+import { normalizeWorkflowError, serializeWorkflowError } from './workflow-error.mjs';
 
 export { runtimeDir } from './storage-paths.mjs';
 const statePath = path.join(dataDir, 'mock-db.json');
@@ -930,7 +932,7 @@ function ensureDomainState(state) {
   if (!Array.isArray(state.runtimeEvents)) state.runtimeEvents = [];
   if (!state.testMatrix?.environments?.length || !state.testMatrix?.stages?.length) state.testMatrix = { environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] };
   state.testMatrix = normalizeMissionTestMatrix(state.testMatrix);
-  if (!state.tokenUsage?.runs) state.tokenUsage = emptyTokenUsage();
+  state.tokenUsage = normalizeTokenUsageLedger(state.tokenUsage);
   if (!Array.isArray(state.agent?.toolCalls)) state.agent = { ...state.agent, toolCalls: [] };
   const seedDrafts = new Map(knowledgeDrafts.map((draft) => [draft.id, draft]));
   state.knowledgeDrafts = Array.isArray(state.knowledgeDrafts)
@@ -972,8 +974,11 @@ function ensureDomainState(state) {
       ...mission,
       implementation: normalizeOperatorLanguage(mission.implementation),
       testMatrix: normalizeMissionTestMatrix(mission.testMatrix || defaults.testMatrix),
-      tokenUsage: mission.tokenUsage?.runs ? mission.tokenUsage : emptyTokenUsage(),
+      tokenUsage: normalizeTokenUsageLedger(mission.tokenUsage),
       objective: normalizeMissionObjective(mission.objective || defaults.objective, mission),
+      semanticSnapshot: mission.semanticSnapshot
+        ? normalizeSemanticSnapshot({ snapshot: mission.semanticSnapshot, mission })
+        : createSemanticSnapshot({ mission: { ...mission, testMatrix: normalizeMissionTestMatrix(mission.testMatrix || defaults.testMatrix) }, semanticDraft: mission.semanticDraft || {} }),
     };
     if (mission.id !== state.activeMissionId) return next;
     return {
@@ -1062,6 +1067,7 @@ function projectActiveMission(state) {
     knowledgeMaintenance: structuredClone(state.knowledgeMaintenance),
     knowledgeReferences: structuredClone(state.knowledgeReferences),
     runtimeEvents: structuredClone(state.runtimeEvents),
+    workflowFailure: structuredClone(state.workflowFailure || state.missions[index].workflowFailure || null),
     auditEvents: structuredClone(state.auditEvents),
     runHistory: structuredClone(state.runHistory || []),
     missionPaused: Boolean(state.missionPaused),
@@ -1105,6 +1111,7 @@ export function selectMission(state, missionId) {
   state.knowledgeMaintenance = structuredClone(mission.knowledgeMaintenance || defaults.knowledgeMaintenance);
   state.knowledgeReferences = structuredClone(mission.knowledgeReferences || defaults.knowledgeReferences);
   state.runtimeEvents = structuredClone(mission.runtimeEvents || defaults.runtimeEvents);
+  state.workflowFailure = structuredClone(mission.workflowFailure || null);
   state.auditEvents = structuredClone(mission.auditEvents || defaults.auditEvents);
   state.runHistory = structuredClone(mission.runHistory || defaults.runHistory);
   state.missionPaused = Boolean(mission.missionPaused ?? false);
@@ -1209,6 +1216,7 @@ export function createMission(state, input) {
     currentBest: { candidateId: null, version: null, value: '--', improvement: '--', status: 'empty' },
     agent: createIdleAgent(id, input.goal.trim()),
   };
+  mission.semanticSnapshot = createSemanticSnapshot({ mission, semanticDraft: input.semanticDraft || {}, snapshot: input.semanticSnapshot || null });
   mission.workflowRecovery = createWorkflowRecoveryState(id, repository, mission.projectRoot);
   state.missions = [mission, ...state.missions];
   if (!state.projects?.some((item) => item.id === mission.projectId)) state.projects = [createProjectRecord(repository, { id: mission.projectId }), ...(state.projects || [])];
@@ -1261,9 +1269,35 @@ export function deleteProject(state, projectId) {
 
 export async function loadState({ runtimeMode, ensureWorkspace = true, commandJournal = null, applyRegistry = null } = {}) {
   await ensureStorage({ ensureWorkspace });
-  let state = JSON.parse(await readFile(statePath, 'utf8'));
-  const needsMigration = state.schemaVersion !== 7 || !Array.isArray(state.projects) || !Array.isArray(state.missions) || !state.capabilityRegistry || !Array.isArray(state.agent?.toolCalls) || !Array.isArray(state.knowledgeReferences) || !state.knowledgeMaintenance?.policy || !state.decisionReview?.policy || !Array.isArray(state.candidateEvaluations) || !Array.isArray(state.failureRecords) || state.missions.some((mission) => !mission.workflowRecovery || !mission.testMatrix?.testSpec || !mission.implementation || !mission.tokenUsage?.runs || !Array.isArray(mission.knowledgeDrafts) || !Array.isArray(mission.candidateEvaluations) || !Array.isArray(mission.failureRecords) || !Array.isArray(mission.publishedAssets) || !mission.knowledgeMaintenance?.policy || !mission.decisionReview?.policy || !Array.isArray(mission.runtimeEvents) || !Array.isArray(mission.runHistory) || !Object.hasOwn(mission, 'missionBudgetMs'));
+  let state;
+  let recoveredCorruptSnapshot = false;
+  let corruptionFailure = null;
+  try {
+    state = JSON.parse(await readFile(statePath, 'utf8'));
+  } catch (error) {
+    const corruptPath = error?.code === 'ENOENT' ? null : `${statePath}.corrupt-${Date.now()}`;
+    if (corruptPath) await rename(statePath, corruptPath);
+    state = createProductState();
+    corruptionFailure = serializeWorkflowError(normalizeWorkflowError(error, {
+      code: 'STATE_SNAPSHOT_CORRUPT',
+      category: 'configuration',
+      phase: 'state.load',
+      source: 'state-store',
+      details: { corruptSnapshot: corruptPath, originalError: error?.code || null },
+    }));
+    state.workflowFailure = corruptionFailure;
+    state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'state_snapshot_corrupt' };
+    recoveredCorruptSnapshot = true;
+  }
+  const needsMigration = recoveredCorruptSnapshot || state.schemaVersion !== 7 || !Array.isArray(state.projects) || !Array.isArray(state.missions) || !state.capabilityRegistry || !Array.isArray(state.agent?.toolCalls) || !Array.isArray(state.knowledgeReferences) || !state.knowledgeMaintenance?.policy || !state.decisionReview?.policy || !Array.isArray(state.candidateEvaluations) || !Array.isArray(state.failureRecords) || state.missions.some((mission) => !mission.workflowRecovery || !mission.testMatrix?.testSpec || !mission.implementation || !mission.tokenUsage?.runs || !Array.isArray(mission.knowledgeDrafts) || !Array.isArray(mission.candidateEvaluations) || !Array.isArray(mission.failureRecords) || !Array.isArray(mission.publishedAssets) || !mission.knowledgeMaintenance?.policy || !mission.decisionReview?.policy || !Array.isArray(mission.runtimeEvents) || !Array.isArray(mission.runHistory) || !Object.hasOwn(mission, 'missionBudgetMs'));
   state = ensureDomainState(state);
+  if (corruptionFailure) {
+    const mission = state.missions?.find((item) => item.id === state.activeMissionId);
+    if (mission) {
+      mission.workflowFailure = corruptionFailure;
+      mission.iterationStats = { ...(mission.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'state_snapshot_corrupt' };
+    }
+  }
   // 耐久命令日志崩溃恢复：重放 journal 中 seq > commandJournalSeq 的 applied 条目追上快照。
   let recoveryReplayed = false;
   if (commandJournal && applyRegistry) {
@@ -1412,6 +1446,12 @@ export function applyOperatorTestSnapshot(state, snapshot) {
     source: { kind: 'operator-test-service', mock: snapshot.result?.environment?.liveHardware === false },
     lastServiceError: snapshot.error ? structuredClone(snapshot.error) : null,
   };
+  if (snapshot.payload?.semanticBinding || state.benchmark.semanticBinding) {
+    state.benchmark.semanticBinding = structuredClone(snapshot.payload?.semanticBinding || state.benchmark.semanticBinding);
+    if (state.benchmark.result && typeof state.benchmark.result === 'object') {
+      state.benchmark.result.semanticBinding = structuredClone(state.benchmark.semanticBinding);
+    }
+  }
   if (nextStatus === 'cancelled') {
     state.agent = {
       ...state.agent,
@@ -1762,7 +1802,23 @@ export function evaluateAcceptGate(state, result = {}) {
       && baselineEvidence?.kind === baselineKind
       && Number.isFinite(baselineValue)
       && baselineSourceTrusted(baseline, baselineEvidence)
-      && baselineMatchesRun(baselineEvidence, mission, state.benchmark?.matrix || state.testMatrix || {}, primary));
+       && baselineMatchesRun(baselineEvidence, mission, state.benchmark?.matrix || state.testMatrix || {}, primary));
+  const frozenSemantic = mission.semanticSnapshot?.status === 'frozen';
+  let semanticBindingPassed = !frozenSemantic;
+  let semanticBindingDetail = frozenSemantic ? '缺少冻结语义任务绑定' : '当前 Mission 未冻结语义快照';
+  if (frozenSemantic) {
+    try {
+      assertSemanticTaskBinding(
+        result.semanticBinding || state.benchmark?.semanticBinding,
+        mission.semanticSnapshot,
+        { testSpecDigest: state.benchmark?.semanticBinding?.testSpecDigest },
+      );
+      semanticBindingPassed = true;
+      semanticBindingDetail = `${mission.semanticSnapshot.snapshotId} · ${mission.semanticSnapshot.digest}`;
+    } catch (error) {
+      semanticBindingDetail = error.message;
+    }
+  }
   const currentBestValue = parseMeasurementValue(state.currentBest?.value);
   const relativeThreshold = Number.isFinite(relativeTarget) && Number.isFinite(baselineValue)
     ? baselineValue * (minimizesMetric ? 1 - relativeTarget : 1 + relativeTarget)
@@ -1818,6 +1874,7 @@ export function evaluateAcceptGate(state, result = {}) {
     { id: 'diagnostics.mctracer', label: 'mcTracer 可选诊断', required: false, passed: result.tracer?.status === 'completed', skipped: false, actual: result.tracer?.status || 'not_run', expected: 'best effort; failure does not block' },
     { id: 'diagnostics.mcprofiler', label: 'mcProfiler 可选诊断', required: false, passed: result.profiler?.status === 'completed', skipped: false, actual: result.profiler?.status || 'not_run', expected: 'best effort; failure does not block' },
     { id: 'baseline.current_reference', label: baselineLabel, required: Boolean(baseline.required), passed: baselineReady, skipped: !baseline.required, actual: baselineReady ? `${baselineEvidence?.environment} ${baselineEvidence?.value}${baselineEvidence?.unit}${baselineKind === 'naive_v0' ? ' · v0' : ''}` : (baselineEvidence ? 'baseline 与当前 runner/shape/source 不匹配' : '缺少 baseline 证据'), expected: baselineExpected },
+    { id: 'semantic.snapshot_binding', label: '测试使用冻结语义快照', required: frozenSemantic, passed: semanticBindingPassed, skipped: !frozenSemantic, actual: semanticBindingDetail, expected: frozenSemantic ? 'task semanticDigest 与 Mission frozen snapshot 一致' : '未冻结语义快照' },
     { id: 'performance.target', label: hasThreshold ? '达到 Mission 性能目标' : '达到 Mission 性能策略', required: true, passed: performancePassed, skipped: false, actual: primary ? `${primary.environment} ${primary.value}${primary.unit}` : '无测量值', expected: performanceExpected },
     { id: 'cross_platform.regression', label: '跨平台相对 current best 无回归', required: false, passed: null, skipped: true, actual: '未配置逐平台 current best 基线', expected: '为各平台登记可比较基线后评估' },
     { id: 'evidence.provenance', label: '真实硬件证据可用于正式发布', required: false, passed: liveEvidence, skipped: false, actual: liveEvidence ? '真实测试服务' : 'Mock 测试服务', expected: 'liveHardware=true' },
@@ -1825,7 +1882,7 @@ export function evaluateAcceptGate(state, result = {}) {
   const requiredRules = rules.filter((rule) => rule.required);
   const failedRules = requiredRules.filter((rule) => !rule.passed).map((rule) => rule.id);
   const passedRules = requiredRules.filter((rule) => rule.passed).map((rule) => rule.id);
-  const hardFailure = !correctnessPassed || !completeEvidence;
+  const hardFailure = !correctnessPassed || !completeEvidence || (frozenSemantic && !semanticBindingPassed);
   const passed = failedRules.length === 0;
   const resultKind = passed ? 'eligible' : hardFailure ? 'failed' : 'reference';
   return {
@@ -2090,14 +2147,19 @@ export const workspaceFiles = [
   { id: 'mla_paged_attention.yaml', path: 'benchmarks/mla_paged_attention.yaml', status: 'B', lines: [['context', '1', 'benchmark: mla_paged_attention'], ['context', '2', 'warmup: 50'], ['add', '3', 'repeats: 200'], ['add', '4', 'metric: latency_p50'], ['add', '5', 'environment_snapshot: fixed']], rationale: 'Benchmark 固定预热、重复次数与 Environment Snapshot，保证跨硬件结果可比。' },
 ];
 
-export async function applyCandidatePatch(missionId) {
+export async function applyCandidatePatch(missionId, candidateId = 'candidate-02') {
   await ensureStorage();
   const activeWorkspace = await ensureMissionWorkspace(missionId);
   await mkdir(path.join(activeWorkspace, 'kernels'), { recursive: true });
   const patchedSource = `#include "paged_attention.hpp"\n#include "plan_cache.hpp"\n\nPlan run_paged_attention(const AttentionArgs& args, const KvCache& kv_cache) {\n  auto& plan = plan_cache.get_or_build(args.signature());\n  if (LIKELY(plan.host_mirror_ready())) {\n    launch_paged_kernel(plan.device_view(), kv_cache);\n  } else {\n    plan_cache.enqueue_host_mirror(plan);\n  }\n  return plan;\n}\n`;
   const cacheHeader = `#pragma once\n\nclass PlanCache {\n public:\n  Plan& get_or_build(Signature signature);\n  void enqueue_host_mirror(const Plan& plan);\n};\n`;
+  // The local adapter always validates the production run.py bridge, even in
+  // full simulation. Keep the fixture native files for topology display, but
+  // also materialize a unique, executable bridge for each candidate round.
+  const bridge = `# Simulation candidate ${candidateId}\n# The scripted backend requires explicit operator and paged-KV identity markers.\noperatorIdentity = 'mla_paged_attention'\npage_size = 1\npage_ids = [0]\nkv_indices = [0]\nblock_tables = [0]\n\ndef get_inputs():\n    return [1]\n\ndef get_test_cases():\n    return [{'name': 'simulation', 'inputs': [1]}]\n\ndef get_benchmark_inputs():\n    return [1]\n\ndef reference(inputs):\n    return inputs\n\ndef run(inputs):\n    return inputs\n`;
   await writeFile(path.join(activeWorkspace, 'kernels', 'paged_attention.cu'), patchedSource, 'utf8');
   await writeFile(path.join(activeWorkspace, 'kernels', 'plan_cache.hpp'), cacheHeader, 'utf8');
+  await writeFile(path.join(activeWorkspace, 'run.py'), bridge, 'utf8');
   return { workspace: path.relative(rootDir, activeWorkspace).replaceAll('\\', '/'), files: workspaceFiles };
 }
 

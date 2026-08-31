@@ -15,10 +15,29 @@ assert.deepEqual(detectMuxiDevice({}, () => ({ status: 1, stdout: '', stderr: ''
 
 const validDoctor = {
   runtime: { runtime: { mode: 'claude-code', connected: true }, testBackend: { mock: false, liveHardware: true } },
-  checks: { python: { status: 'ok' }, mxSmi: { status: 'ok' }, device: { status: 'ok' } },
+  checks: { python: { status: 'ok' }, mxSmi: { status: 'ok' }, device: { status: 'ok', detail: 'C550 / torch.cuda' }, stack: { status: 'ok' }, cudaSmoke: { status: 'ok' } },
 };
 assert.equal(assertProductionPreflight(validDoctor), validDoctor);
-assert.equal(assertProductionPreflight({ ...validDoctor, checks: { ...validDoctor.checks, device: { status: 'assumed' } } }).checks.device.status, 'assumed');
-assert.throws(() => assertProductionPreflight({ ...validDoctor, checks: { ...validDoctor.checks, device: { status: 'invalid' } } }), /型号配置无效/);
+assert.throws(() => assertProductionPreflight({ ...validDoctor, checks: { ...validDoctor.checks, device: { status: 'assumed', detail: 'C550 / release-default' } } }), /实际探测到目标 C550/);
+assert.throws(() => assertProductionPreflight({ ...validDoctor, checks: { ...validDoctor.checks, device: { status: 'ok', detail: 'C500 / torch.cuda' } } }), /实际探测到目标 C550/);
+
+for (const mode of ['claude-code', 'codex-cli']) {
+  const hardwareMockDoctor = {
+    executionMode: 'hardware-mock',
+    runtime: { runtime: { mode, connected: true }, testBackend: { mock: true, liveHardware: false } },
+    checks: {},
+  };
+  assert.equal(assertProductionPreflight(hardwareMockDoctor), hardwareMockDoctor);
+}
+assert.throws(() => assertProductionPreflight({
+  executionMode: 'hardware-mock',
+  runtime: { runtime: { mode: 'opencode-server', connected: true }, testBackend: { mock: true, liveHardware: false } },
+  checks: {},
+}), /缺少能力.*research/);
+assert.throws(() => assertProductionPreflight({
+  executionMode: 'hardware-mock',
+  runtime: { runtime: { mode: 'claude-code', connected: true }, testBackend: { mock: false, liveHardware: true } },
+  checks: {},
+}), /hardware-mock/);
 
 console.log('[muxi-device] C550 detection and production preflight passed');

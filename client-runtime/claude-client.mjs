@@ -23,6 +23,14 @@ const parseLines = (content) => content.split(/\r?\n/).map((line) => line.trim()
   try { return [JSON.parse(line)]; } catch { return [{ type: 'text', text: line }]; }
 });
 
+export const isClaudeTelemetryEvent = (event) => {
+  if (event?.type === 'system' && event?.subtype === 'thinking_tokens') return true;
+  const content = event?.type === 'assistant' && Array.isArray(event?.message?.content)
+    ? event.message.content
+    : [];
+  return content.length > 0 && content.every((item) => item?.type === 'thinking');
+};
+
 const contentText = (content) => {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.map((entry) => contentText(entry)).filter(Boolean).join('\n');
@@ -82,8 +90,9 @@ export const normalizeClaudeEvents = (events = []) => {
       }
       if (event.is_error === true || (event.subtype && event.subtype !== 'success')) {
         normalized.push({ type: 'error', error: { message: resultText || event.subtype || 'Claude Code returned an error result.' }, provider: 'claude-code' });
+        if (event.usage) normalized.push({ type: 'turn.failed', usage: event.usage, usageId: event.uuid || event.id || `claude-usage-${eventIndex}`, provider: 'claude-code' });
       } else {
-        normalized.push({ type: 'turn.completed', usage: event.usage || null, provider: 'claude-code' });
+        normalized.push({ type: 'turn.completed', usage: event.usage || null, usageId: event.uuid || event.id || `claude-usage-${eventIndex}`, provider: 'claude-code' });
       }
       continue;
     }
@@ -246,6 +255,7 @@ export const createClaudeClient = (options = {}) => {
       sessionId: resumeThreadId,
       status: 'running',
       startedAt: new Date().toISOString(),
+      lastActivityAt: new Date().toISOString(),
       completedAt: null,
       eventPath: eventsPath(runId),
       permissionMode,
@@ -288,16 +298,26 @@ export const createClaudeClient = (options = {}) => {
     let eventBuffer = '';
     let logicalTerminal = false;
     let appendChain = Promise.resolve();
+    let lastActivityPersistedAt = Date.now();
     child.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
     child.stdout?.on('data', (chunk) => {
       const text = chunk.toString();
-      appendChain = appendChain.then(() => appendFile(eventsPath(runId), text, 'utf8')).catch(() => {});
+      const activityAt = Date.now();
+      record.lastActivityAt = new Date(activityAt).toISOString();
+      if (activityAt - lastActivityPersistedAt >= 2_000) {
+        lastActivityPersistedAt = activityAt;
+        appendChain = appendChain.then(() => persistRun(runId, record)).catch(() => {});
+      }
       eventBuffer += text;
       const lines = eventBuffer.split(/\r?\n/);
       eventBuffer = lines.pop() || '';
       for (const line of lines) {
         let event;
-        try { event = JSON.parse(line); } catch { continue; }
+        try { event = JSON.parse(line); } catch {
+          appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${line}\n`, 'utf8')).catch(() => {});
+          continue;
+        }
+        if (!isClaudeTelemetryEvent(event)) appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${line}\n`, 'utf8')).catch(() => {});
         if (event.session_id) record.threadId = record.threadId || event.session_id, record.sessionId = record.sessionId || event.session_id;
         if (event.type !== 'result' || logicalTerminal) continue;
         logicalTerminal = true;
@@ -317,6 +337,12 @@ export const createClaudeClient = (options = {}) => {
     child.on('close', async (code, signal) => {
       children.delete(runId);
       const cancelled = cancellationRequested.delete(runId);
+      if (eventBuffer.trim()) {
+        let tailEvent = null;
+        try { tailEvent = JSON.parse(eventBuffer); } catch { /* preserve non-JSON diagnostics */ }
+        if (!isClaudeTelemetryEvent(tailEvent)) appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${eventBuffer}\n`, 'utf8')).catch(() => {});
+        eventBuffer = '';
+      }
       await appendChain;
       const rawEvents = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
       const session = rawEvents.find((event) => event.session_id)?.session_id || null;

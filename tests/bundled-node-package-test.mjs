@@ -41,7 +41,7 @@ assert.match(launcher, /currentMajor >= 20/);
 assert.match(launcher, /bundled Node v/);
 assert.match(launcher, /node-modules-linux-x64\.tar\.gz/);
 assert.match(launcher, /installing locked dependencies|extracting bundled Linux dependencies/);
-assert.match(launcher, /OPERATOR_RUNTIME_MODE:\s*'claude-code'/);
+assert.match(launcher, /OPERATOR_RUNTIME_MODE:\s*simulationRequested \? 'reference-fixture' : \(inheritedEnvironment\.OPERATOR_RUNTIME_MODE \|\| 'claude-code'\)/);
 assert.match(launcher, /OPERATOR_LOCAL_C500_MOCK:\s*'0'/);
 assert.match(launcher, /delete launchEnvironment\.LOCAL_C500_API_URL/);
 assert.match(launcher, /delete launchEnvironment\.OPERATOR_LOCAL_C500_COMMAND/);

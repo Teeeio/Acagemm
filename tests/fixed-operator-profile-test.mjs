@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { buildFixedOperatorBaselineRunPy, fixedOperatorPrompt, fixedOperatorTestMatrix, fixedOperatorProfiles, getFixedOperatorProfile } from '../client-runtime/fixed-operator-profiles.mjs';
+import { buildFixedOperatorBaselineRunPy, fixedOperatorPrompt, fixedOperatorTestMatrix, fixedOperatorProfiles, getFixedOperatorProfile, isTuiOperatorProfile, tuiOperatorProfiles } from '../client-runtime/fixed-operator-profiles.mjs';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'fixed-operator-profile-'));
 try {
@@ -18,6 +18,9 @@ try {
   const mqa = getFixedOperatorProfile('paged-mqa-logits-triton-v01');
   const mla = getFixedOperatorProfile('flash-mla-decode-triton-v01');
   assert.equal(fixedOperatorProfiles.length, 6);
+  assert.deepEqual(tuiOperatorProfiles.map((profile) => profile.id), ['paged-mqa-logits-triton-v01', 'flash-mla-decode-triton-v01']);
+  assert.equal(isTuiOperatorProfile('paged-mqa-logits-triton-v01'), true);
+  assert.equal(isTuiOperatorProfile('paged-mqa-logits-triton'), false);
   assert.equal(fixedOperatorProfiles.some((profile) => profile.id === 'triton-paged-mqa-flash-mla-v01'), false, 'the two tasks must not share a combined Mission profile');
   assert.deepEqual(mqa.entrypoints, ['bf16_paged_mqa_logits']);
   assert.deepEqual(mla.entrypoints, ['flash_mla_decode']);

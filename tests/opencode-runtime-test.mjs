@@ -31,11 +31,14 @@ const server = createServer(async (request, response) => {
   }
   if (request.method === 'GET' && url.pathname === '/session/status') return json(response, 200, { [sessionId]: { type: 'idle' } });
   if (request.method === 'GET' && url.pathname === `/session/${sessionId}/message`) return json(response, 200, responseMode === 'error' ? [
-    { info: { id: 'msg_user_error', role: 'user' }, parts: [{ type: 'text', text: 'mission request' }] },
-    { info: { id: 'msg_assistant_error', role: 'assistant', error: { data: { message: 'Provider credential is missing' } } }, parts: [] },
+    { info: { id: 'msg_user', role: 'user' }, parts: [{ type: 'text', text: 'mission request' }] },
+    { info: { id: 'msg_assistant', role: 'assistant', tokens: { input: 100, output: 20, reasoning: 5, cache: { read: 30, write: 10 }, total: 165 } }, parts: [
+      { id: 'part_text', type: 'text', text: 'Profile evidence points to launch overhead.' },
+    ] },
+    { info: { id: 'msg_assistant_error', role: 'assistant', tokens: { input: 10, output: 2, reasoning: 1, cache: { read: 3, write: 0 }, total: 16 }, error: { data: { message: 'Provider credential is missing' } } }, parts: [] },
   ] : [
     { info: { id: 'msg_user', role: 'user' }, parts: [{ type: 'text', text: 'mission request' }] },
-    { info: { id: 'msg_assistant', role: 'assistant' }, parts: [
+    { info: { id: 'msg_assistant', role: 'assistant', tokens: { input: 100, output: 20, reasoning: 5, cache: { read: 30, write: 10 }, total: 165 } }, parts: [
       { id: 'part_text', type: 'text', text: 'Profile evidence points to launch overhead.' },
       { id: 'part_tool', type: 'tool', tool: 'grep', state: { status: 'completed', title: 'Inspect hot path', output: '2 matches' } },
     ] },
@@ -76,12 +79,16 @@ try {
   assert.equal(projection.state.agent.toolCalls[0].toolId, 'grep');
   assert.equal(projection.state.agent.openCodeDiffCount, 1);
   assert.equal(projection.state.agent.currentAction.type, 'candidate.plan');
+  assert.equal(projection.state.tokenUsage.totalTokens, 165);
+  assert.equal(projection.state.tokenUsage.coverage, '1/1 runs exact');
   assert.ok(projection.state.runtimeEvents.some((event) => event.type === 'opencode.diff_ready'));
 
   responseMode = 'error';
   const failedProjection = await runtime.projectState(projection.state);
   assert.equal(failedProjection.state.agent.status, 'failed');
   assert.match(failedProjection.state.agent.messages.at(-1).detail, /credential is missing/);
+  assert.equal(failedProjection.state.tokenUsage.totalTokens, 181, 'failed OpenCode messages must remain in the run usage snapshot');
+  assert.equal(failedProjection.state.tokenUsage.completeness, 'exact');
   assert.ok(failedProjection.state.runtimeEvents.some((event) => event.type === 'opencode.session_failed'));
   console.log('[opencode] server runtime contract passed');
 } finally {

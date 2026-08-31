@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeExternalOutcome, WORKFLOW_OUTCOME } from './workflow-kernel.mjs';
+import { normalizeWorkflowError, serializeWorkflowError, WORKFLOW_STOP_POLICY } from './workflow-error.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDir = process.env.OPERATOR_RUNTIME_DIR ? path.resolve(process.env.OPERATOR_RUNTIME_DIR) : path.join(rootDir, 'runtime');
@@ -132,17 +133,28 @@ export const createOperatorTestQueue = ({ serviceClient, filePath = queuePath, m
   const applyFailure = (task, error, lane) => {
     const attempts = { submit: 0, poll: 0, ...(task.attempts || {}) };
     attempts[lane] += 1;
-    const failure = { code: error.code || `${lane.toUpperCase()}_FAILED`, message: error.message, status: error.status || null, retryable: error.retryable === true };
+    const failure = normalizeWorkflowError(error, {
+      code: error?.code || `${lane.toUpperCase()}_FAILED`,
+      phase: `operator-test.${lane}`,
+      source: 'operator-test-queue',
+    });
     const outcome = normalizeExternalOutcome({ status: 'failed', error: failure });
     const retry = outcome.kind === WORKFLOW_OUTCOME.RETRYABLE_FAILURE && attempts[lane] < maxAttempts;
+    const terminalFailure = retry ? failure : {
+      ...failure,
+      retryable: false,
+      terminal: true,
+      stopPolicy: WORKFLOW_STOP_POLICY.NEEDS_HUMAN,
+      action: '重试次数已耗尽；检查依赖或测试队列后人工恢复。',
+    };
     const sequence = (task.logs || []).length + 1;
     return {
       ...task,
       status: retry ? (lane === 'submit' ? 'waiting' : 'running') : 'failed',
       completedAt: retry ? null : now(),
       attempts,
-      lastError: { ...failure, retryable: retry, observedAt: now() },
-      error: retry ? null : failure,
+      lastError: { ...serializeWorkflowError(terminalFailure), retryable: retry, observedAt: now() },
+      error: retry ? null : serializeWorkflowError(terminalFailure),
       logs: [...(task.logs || []), {
         sequence,
         progress: Number(task.progress || 0),

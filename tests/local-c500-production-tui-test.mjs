@@ -8,7 +8,7 @@ import { Dashboard } from '../tools/local-c500-tester/components/Dashboard.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(path.join(root, relative), 'utf8');
 
-const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, backend, runner, packageJson] = await Promise.all([
+const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, backend, runner, hardwareMockE2e, hardwareMockContract, runtimeRegistry, codexClient, packageJson] = await Promise.all([
   read('tools/local-c500-tester/tui.mjs'),
   read('tools/local-c500-tester/tui-state.mjs'),
   read('tools/local-c500-tester/components/WorkflowTopology.mjs'),
@@ -18,8 +18,19 @@ const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, prod
   read('client-runtime/local-server.mjs'),
   read('client-runtime/local-c500-service-client.mjs'),
   read('tools/local-c500-runner.py'),
+  read('scripts/e2e-agent-runtime-hardware-mock.mjs'),
+  read('scripts/hardware-mock-e2e-contract.mjs'),
+  read('client-runtime/agent-runtime/registry.mjs'),
+  read('client-runtime/codex-client.mjs'),
   read('package.json').then(JSON.parse),
 ]);
+const profiles = await import('../client-runtime/fixed-operator-profiles.mjs');
+assert.deepEqual(profiles.tuiOperatorProfiles.map((profile) => profile.id), ['paged-mqa-logits-triton-v01', 'flash-mla-decode-triton-v01']);
+assert.match(tui, /tuiOperatorProfiles/);
+assert.match(productionApi, /TUI 只允许发布两个完整 v0\.1 C550 Profile/);
+assert.match(productionApi, /TUI_PROFILE_NOT_PUBLISHABLE/);
+assert.match(productionApi, /C550_STACK/);
+assert.match(productionApi, /checkC550Smoke/);
 
 for (const source of [tui, tuiState, productionApi]) {
   assert.doesNotMatch(source, /workflow-entry\.mjs|candidate-agent\.mjs|local-c500-adapter\.mjs/);
@@ -54,9 +65,48 @@ assert.match(productionApi, /Do not substitute an unrelated operator or a smoke 
 assert.doesNotMatch(productionApi, /def get_inputs|vector_add/);
 assert.match(productionApi, /OPERATOR_TEST_BACKEND:\s*'local-c500'/);
 assert.match(productionApi, /OPERATOR_AUTO_TICK:\s*'1'/);
+assert.match(productionApi, /OPERATOR_AUTO_TICK_INTERVAL_MS/);
+assert.match(productionApi, /OPERATOR_RUNTIME_OWNER_PID:\s*String\(process\.pid\)/);
+assert.match(productionApi, /export const stopProductionRuntime/);
+assert.match(productionApi, /ownerPid > 0 && ownerPid !== process\.pid/);
+assert.match(tui, /await stopProductionRuntime\(\)\.catch/);
+assert.match(server, /const runtimeOwnerPid = Number\(process\.env\.OPERATOR_RUNTIME_OWNER_PID/);
+assert.match(server, /ownerPid: runtimeOwnerPid \|\| null/);
+assert.match(server, /runtimeOwnerPid > 0 && !processAlive\(runtimeOwnerPid\)/);
+assert.match(server, /process\.exit\(98\)/);
+assert.match(server, /autoTickBusy/);
+assert.match(server, /autoTickIntervalMs/);
+assert.match(server, /OPERATOR_LOCAL_C500_TIMEOUT_SECONDS \|\| 600/);
+assert.match(backend, /terminateProcessTree/);
+assert.match(backend, /taskkill\.exe/);
+assert.match(backend, /detached: process\.platform !== 'win32'/);
+assert.match(server, /url\.pathname === '\/api\/health'/);
+assert.match(tui, /OPERATOR_TUI_REFRESH_MS/);
+assert.match(tui, /if \(args\[0\] === '--snapshot'\)[\s\S]*stopProductionRuntime/);
+assert.match(tui, /if \(args\[0\] === 'panel' && args\.includes\('--once'\)\)[\s\S]*stopProductionRuntime/);
+assert.match(tui, /if \(args\[0\] === 'doctor'\)[\s\S]*stopProductionRuntime/);
+assert.match(tui, /finally \{[\s\S]*stopProductionRuntime/);
+const simulationEntry = await read('tools/local-c500-tester/simulation.mjs');
+const launcher = await read('tools/local-c500-tester/launcher.cjs');
+assert.match(simulationEntry, /mkdtemp/);
+assert.match(simulationEntry, /rm\(temporaryHome/);
+assert.match(launcher, /operator-studio-simulation-/);
+assert.match(launcher, /rmSync\(temporarySimulationHome/);
 assert.match(productionApi, /OPERATOR_RUNTIME_MODE:\s*agentRuntimeMode/);
 assert.match(productionApi, /OPERATOR_CLAUDE_PERMISSION_MODE:\s*'acceptEdits'/);
 assert.match(productionApi, /environment\.OPERATOR_RUNTIME_MODE \|\| 'claude-code'/);
+assert.match(productionApi, /inspectRuntimeCapabilities/);
+assert.match(productionApi, /executionMode/);
+assert.match(hardwareMockE2e, /const runtimeId = argument\('--runtime'/);
+assert.match(hardwareMockE2e, /OPERATOR_RUNTIME_MODE = runtimeId/);
+assert.match(hardwareMockE2e, /OPERATOR_LOCAL_C500_MOCK = '1'/);
+assert.match(hardwareMockE2e, /validateHardwareMockSnapshot/);
+assert.match(hardwareMockContract, /currentBest\?\.verified, true/);
+assert.match(hardwareMockContract, /every provider run must have exact token usage/);
+assert.doesNotMatch(hardwareMockE2e, /runtimeId\s*===\s*['"](?:codex-cli|claude-code)['"]/);
+assert.match(runtimeRegistry, /productionWorkflowCapabilities/);
+assert.match(runtimeRegistry, /inspectRuntimeCapabilities/);
+assert.doesNotMatch(codexClient, /OPERATOR_CODEX_WINDOWS_SANDBOX \|\| 'unelevated'/);
 assert.match(productionApi, /mxSmi:\s*checkCommand\('mx-smi', \[\]\)/);
 assert.doesNotMatch(productionApi, /ixsmi/i);
 assert.match(productionApi, /resolveLocalC500LaunchMode/);
@@ -73,6 +123,7 @@ assert.match(backend, /kind:\s*'local-c500'/);
 assert.match(runner, /shutil\.which\("mx-smi"\)/);
 assert.doesNotMatch(runner, /ixsmi/i);
 assert.equal(packageJson.scripts['tester:c500'], 'node tools/local-c500-tester/launcher.cjs');
+assert.equal(packageJson.scripts['e2e:agent-runtime-hardware-mock'], 'node scripts/e2e-agent-runtime-hardware-mock.mjs');
 
 const rendered = renderDashboardSnapshot({
   mission: { id: 'MIS_PRODUCTION', title: 'C500 operator optimization', goal: 'minimize latency', status: 'running' },

@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -45,11 +46,12 @@ import {
   createResearchAgentState,
 } from './state-store.mjs';
 import { agentRuntime, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, isResearchAgentActive } from './agent-runtime.mjs';
-import { advanceIteration, selectResearchDirection } from './iteration-loop.mjs';
+import { advanceIteration, selectResearchDirection, settleGenerationAttemptBeforeStart } from './iteration-loop.mjs';
 import { createCommandJournal, executeCommand, hashKey } from './command-journal.mjs';
 import { testServiceClient } from './test-service-client.mjs';
 import { createOperatorTestQueue } from './operator-test-queue.mjs';
 import { consumeWorkflowRecoveryBudget, reconcileWorkflowState } from './workflow-kernel.mjs';
+import { normalizeWorkflowError, serializeWorkflowError } from './workflow-error.mjs';
 import { createLocalC500ServiceClient, localC500Config } from './local-c500-service-client.mjs';
 import { migrateLocalC500TesterState } from './local-c500-state-migration.mjs';
 import { LOCAL_C500_RUNTIME_CONTRACT_VERSION } from './local-c500-runtime-contract.mjs';
@@ -58,6 +60,7 @@ import { assertMissionIntent } from './mission-intent.mjs';
 import { nativeDirectoryPicker } from './native-directory-picker.mjs';
 import { dataDir } from './storage-paths.mjs';
 import { isFixedOperatorMission } from './fixed-operator-profiles.mjs';
+import { createSemanticSnapshot, createSemanticTaskBinding, freezeSemanticSnapshot } from './semantic-snapshot.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -76,6 +79,11 @@ const distDir = path.join(rootDir, 'dist');
 const serverPidPath = path.join(runtimeDir, 'operator-studio.pid');
 const port = Number(process.env.API_PORT || process.env.PORT || 4173);
 const serveWeb = process.env.SERVE_WEB !== 'false';
+const runtimeOwnerPid = Number(process.env.OPERATOR_RUNTIME_OWNER_PID || 0);
+const processAlive = (pid) => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; }
+};
 const startedAt = new Date().toISOString();
 const bridge = {
   schemaVersion: 1,
@@ -87,6 +95,7 @@ const bridge = {
   dataDir,
   runtimeDir,
   runtimeContractVersion: LOCAL_C500_RUNTIME_CONTRACT_VERSION,
+  ownerPid: runtimeOwnerPid || null,
   startedAt,
 };
 const activeTestServiceClient = localC500Config.enabled
@@ -171,7 +180,8 @@ const buildRuntimePreflight = async (mission) => {
   const migrationFromSource = workspaceCheck.baselineEmpty && (isStrictZeroSourceMission(mission)
     ? sourceInspection?.ready === true && sourceInspection.sources.length > 0
     : await hasSourceContent(mission.sourceRoot));
-  if (workspaceCheck.ready && workspaceCheck.baselineEmpty && !migrationFromSource) {
+  const simulationRuntime = agentRuntime.mode === 'reference-fixture' && localC500Config.simulation;
+  if (workspaceCheck.ready && workspaceCheck.baselineEmpty && !migrationFromSource && !simulationRuntime) {
     workspaceCheck = { ...workspaceCheck, ready: false, code: 'WORKSPACE_BASELINE_EMPTY', detail: 'Iteration Repository 基线为空，Mission 工作区没有可供 Agent 检查的源码或测试文件。请先把项目文件放入 repository，或重新选择包含代码的 Git 仓库。' };
   }
   return {
@@ -477,7 +487,7 @@ const commandRegistry = {
         : await createWorkspaceCheckpoint(state.activeMissionId, 'candidate', body.candidate);
       const workspace = isManagedWorkspaceRuntimeMode(runtime.mode)
         ? { workspace: path.relative(rootDir, codexPatch.workspace).replaceAll('\\', '/'), files: actualFiles.map((file) => ({ path: file, status: 'modified' })), digest: codexPatch.digest, diff: codexPatch.diff }
-        : await applyCandidatePatch(state.activeMissionId);
+        : await applyCandidatePatch(state.activeMissionId, body.candidate);
       const appliedDiff = codexPatch || await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId));
       if (!isManagedWorkspaceRuntimeMode(runtime.mode)) workspace.digest = appliedDiff.digest, workspace.diff = appliedDiff.diff;
       const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
@@ -542,6 +552,9 @@ const commandRegistry = {
       const baselinePlan = purpose === 'baseline'
         ? await resolveBaselineRunPlan({ state, mission, body, matrix: normalizedMatrix, readMissionRunPy })
         : null;
+      const semanticBinding = mission.semanticSnapshot?.status === 'frozen'
+        ? createSemanticTaskBinding(mission.semanticSnapshot, { testSpec: normalizedMatrix.testSpec })
+        : null;
       const baselineKind = baselinePlan?.baselineKind || null;
       const baselineSource = baselinePlan?.baselineSource || null;
       const candidateId = purpose === 'baseline' ? baselinePlan.candidateId : (body.candidate || state.appliedCandidateId);
@@ -575,7 +588,7 @@ const commandRegistry = {
         operator: body.operator || 'mla_paged_attention', candidate: { id: candidateId, digest: candidateDigest, remoteId: body.remoteCandidateId || null },
         hardware: mission.hardware || matrix.environments, runtime: body.runtime || 'client-managed-runtime', metric: mission.metric || 'latency_p50',
         matrix: normalizedMatrix, tracer: { enabled: true, format: 'operator-trace/v1' }, profiler: { enabled: true, format: 'operator-profile/v1' },
-        limits: { timeoutSeconds: Number(body.timeoutSeconds || 120) },
+        limits: { timeoutSeconds: Number(body.timeoutSeconds || process.env.OPERATOR_LOCAL_C500_TIMEOUT_SECONDS || 600) },
         ...(baselineSource ? { baselineSource } : {}),
         ...(baselinePlan?.materializationReport ? { baselineMaterialization: baselinePlan.materializationReport } : {}),
         ...(missionRunPy.content ? { runPy: missionRunPy.content, runPySource: missionRunPy.source } : {}),
@@ -584,9 +597,10 @@ const commandRegistry = {
         ...(Object.keys(missionRunPy.implementationFiles || {}).length ? { implementationFiles: missionRunPy.implementationFiles } : {}),
         ...(body.packageId ? { packageId: body.packageId } : {}),
         ...(body.remoteCandidateId ? { remoteCandidateId: body.remoteCandidateId } : {}),
+        ...(semanticBinding ? { semanticBinding } : {}),
       });
       return {
-        payload: { runId, taskId: submitted.taskId, purpose, baselineKind, baselineSource, baselineResolution: baselinePlan?.resolution || null, baselineMaterialization: baselinePlan?.materializationReport || null, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages, submittedAt: submitted.submittedAt },
+        payload: { runId, taskId: submitted.taskId, purpose, baselineKind, baselineSource, semanticBinding, baselineResolution: baselinePlan?.resolution || null, baselineMaterialization: baselinePlan?.materializationReport || null, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages, submittedAt: submitted.submittedAt },
         result: { runId, taskId: submitted.taskId },
       };
     },
@@ -597,6 +611,7 @@ const commandRegistry = {
         status: 'running', progress: 0, runId: payload.runId, startedAt: payload.submittedAt || new Date().toISOString(), completedAt: null, durationMs: 0,
         logs: [{ sequence: 1, progress: 0, message: `调度器已锁定 ${payload.environments.length} 个环境快照` }], matrix: structuredClone(payload.matrix),
         purpose: payload.purpose, baselineKind: payload.baselineKind, baselineSource: payload.baselineSource ? structuredClone(payload.baselineSource) : null, baselineMaterialization: payload.baselineMaterialization ? structuredClone(payload.baselineMaterialization) : null,
+        semanticBinding: payload.semanticBinding ? structuredClone(payload.semanticBinding) : null,
         candidate: { id: payload.candidateId, digest: payload.candidateDigest }, testTaskId: payload.taskId, result: null,
         source: {
           kind: localC500Config.enabled ? 'local-c500-adapter' : 'operator-test-service',
@@ -1069,6 +1084,8 @@ const iterationDeps = {
   startMainRound: async ({ state, goal }) => {
     const runtimeDescriptor = await agentRuntime.describe();
     const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+    const generationSettlement = settleGenerationAttemptBeforeStart(state, mission);
+    if (generationSettlement.blocked) return state;
     const preflight = await buildRuntimePreflight(mission);
     if (!preflight.ready) return state;
     const workspace = preflight.workspace;
@@ -1237,7 +1254,7 @@ const iterationDeps = {
         warmup: matrix.warmup,
         repeats: matrix.repeats,
         correctnessCases: matrix.correctnessCases,
-        timeoutSeconds: 120,
+        timeoutSeconds: Number(process.env.OPERATOR_LOCAL_C500_TIMEOUT_SECONDS || 600),
       },
       expectedVersion: state.stateVersion,
     });
@@ -1251,6 +1268,7 @@ const advanceTesterAutopilot = async (state) => {
   const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
   const actionType = state.agent?.currentAction?.type;
   const candidate = (state.candidateEvaluations || []).find((item) => item.patchDigest)
+    || (state.candidateEvaluations || []).find((item) => item.acceptGate?.passed === true || item.classification === 'eligible')
     || (state.candidateEvaluations || [])[0];
 
   // 专用四算子路径：冻结语义和测试矩阵 -> baseline -> 可选经验调研 -> 三轮候选。
@@ -1343,6 +1361,18 @@ const advanceTesterAutopilot = async (state) => {
   }
 
   if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status === 'complete') {
+    if (agentRuntime.mode === 'reference-fixture' && candidate?.id && !candidate.patchDigest && actionType === 'candidate.plan') {
+      const result = await executeCommand({
+        journal: commandJournal,
+        saveState,
+        registry: commandRegistry,
+        state,
+        type: 'apply-patch',
+        body: { candidate: candidate.id },
+        expectedVersion: state.stateVersion,
+      });
+      return { state: result.state || state, action: 'simulation_candidate_applied' };
+    }
     if (candidate?.patchDigest && actionType === 'candidate.plan') {
       const result = await executeCommand({
         journal: commandJournal,
@@ -1808,6 +1838,32 @@ async function handleApi(request, response, url) {
     const mission = nextState.missions.find((item) => item.id === nextState.activeMissionId);
     await ensureMissionWorkspace(mission.id, mission.repository, { projectRoot: mission.projectRoot, sourceRoot: mission.sourceRoot });
     json(response, 201, { state: await saveState(nextState) });
+    return;
+  }
+  const semanticFreezeMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/semantic\/freeze$/);
+  if (request.method === 'POST' && semanticFreezeMatch) {
+    const state = await loadRuntimeState();
+    guardMutation(state);
+    const missionId = decodeURIComponent(semanticFreezeMatch[1]);
+    const mission = state.missions.find((item) => item.id === missionId);
+    if (!mission) {
+      json(response, 404, { error: 'Mission 不存在。', code: 'MISSION_NOT_FOUND' });
+      return;
+    }
+    const body = await readJson(request);
+    try {
+      const draft = createSemanticSnapshot({ mission, semanticDraft: body.semanticDraft || {}, snapshot: body.snapshot || mission.semanticSnapshot || null });
+      const frozen = freezeSemanticSnapshot(draft);
+      mission.semanticSnapshot = frozen;
+      mission.status = mission.status === 'ready' ? 'ready' : mission.status;
+      mission.updatedLabel = '语义已冻结';
+      if (state.activeMissionId === missionId) state.semanticSnapshot = structuredClone(frozen);
+      appendRuntimeEvent(state, 'semantic.snapshot_frozen', { missionId, snapshotId: frozen.snapshotId, semanticDigest: frozen.digest, version: frozen.version }, { kind: 'semantic', mode: 'client' });
+      addAuditEvent(state, '语义快照已冻结', `${mission.title || missionId} · ${frozen.digest}`, 'green', 'LockKeyhole');
+      json(response, 200, { snapshot: frozen, state: await saveState(state) });
+    } catch (error) {
+      json(response, error.status || 409, { error: error.message, code: error.code || 'SEMANTIC_FREEZE_BLOCKED', issues: error.issues || [] });
+    }
     return;
   }
   const missionRunMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/runs$/);
@@ -2307,7 +2363,6 @@ async function serveStatic(response, url) {
 
 await ensureStorage();
 await mkdir(path.dirname(serverPidPath), { recursive: true });
-await writeFile(serverPidPath, `${process.pid}\n`, 'ascii');
 let apiQueue = Promise.resolve();
 const enqueueApiRequest = (task) => {
   const queued = apiQueue.then(task, task);
@@ -2317,19 +2372,26 @@ const enqueueApiRequest = (task) => {
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || '127.0.0.1'}`);
   try {
-    if (url.pathname.match(/^\/api\/missions\/[^/]+\/events\/stream$/)) await handleApi(request, response, url);
+    if (url.pathname.match(/^\/api\/missions\/[^/]+\/events\/stream$/)
+      || url.pathname === '/api/health'
+      || url.pathname === '/api/runtime') await handleApi(request, response, url);
     else if (url.pathname.startsWith('/api/')) await enqueueApiRequest(() => handleApi(request, response, url));
     else await serveStatic(response, url);
   } catch (error) {
     console.error('[client-runtime]', error);
-    json(response, error.status || 500, { error: error.message || 'Internal server error.', ...(error.code ? { code: error.code } : {}), ...(error.details ? { details: error.details } : {}) });
+    const workflowError = serializeWorkflowError(normalizeWorkflowError(error, { phase: `api:${request.method} ${url.pathname}`, source: 'client-runtime-api' }));
+    json(response, error.status || 500, { error: workflowError.message, code: workflowError.code, workflowError, ...(error.details ? { details: error.details } : {}) });
   }
 });
 
+let autoTick = null;
 server.on('error', (error) => {
   if (error?.code === 'EADDRINUSE') {
     console.error(`[client-runtime] port ${port} is already in use; refusing duplicate runtime start (mode=${agentRuntime.mode || 'unknown'}, pid=${process.pid}).`);
-    process.exitCode = 98;
+    // A failed listener must not leave its auto-tick loop alive. This used to
+    // keep a duplicate process spinning and competing for the same state file.
+    if (autoTick) clearInterval(autoTick);
+    process.exit(98);
     return;
   }
   console.error('[client-runtime] server error', error);
@@ -2337,12 +2399,11 @@ server.on('error', (error) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
+  // Only publish the PID after the listener is bound. A duplicate process
+  // must never overwrite the live runtime's PID file before EADDRINUSE.
+  writeFileSync(serverPidPath, `${process.pid}\n`, 'ascii');
   console.log(`[client-runtime] ${serveWeb ? 'web + local api' : 'local api'} listening on http://127.0.0.1:${port}`);
 });
-
-const autoTick = process.env.OPERATOR_AUTO_TICK === '1'
-  ? setInterval(() => enqueueApiRequest(() => loadRuntimeState()).catch((error) => console.error('[client-runtime:auto-tick]', error)), 750)
-  : null;
 
 let shuttingDown = false;
 const shutdown = () => {
@@ -2353,3 +2414,30 @@ const shutdown = () => {
 };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+// A detached production runtime may only advance the workflow while its TUI
+// owner is alive. Legacy/direct server launches without an owner retain their
+// explicit OPERATOR_AUTO_TICK behavior for integration harnesses.
+let autoTickBusy = false;
+const configuredAutoTickIntervalMs = Number(process.env.OPERATOR_AUTO_TICK_INTERVAL_MS || 1500);
+const autoTickIntervalMs = Number.isFinite(configuredAutoTickIntervalMs)
+  ? Math.max(1000, configuredAutoTickIntervalMs)
+  : 1500;
+const runAutoTick = async () => {
+  if (autoTickBusy) return;
+  autoTickBusy = true;
+  try {
+    if (runtimeOwnerPid > 0 && !processAlive(runtimeOwnerPid)) {
+      shutdown();
+      return;
+    }
+    await enqueueApiRequest(() => loadRuntimeState());
+  } catch (error) {
+    console.error('[client-runtime:auto-tick]', error);
+  } finally {
+    autoTickBusy = false;
+  }
+};
+autoTick = process.env.OPERATOR_AUTO_TICK === '1'
+  ? setInterval(() => { void runAutoTick(); }, autoTickIntervalMs)
+  : null;

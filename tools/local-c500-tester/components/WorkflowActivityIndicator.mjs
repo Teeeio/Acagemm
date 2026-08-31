@@ -14,24 +14,25 @@ export const deriveWorkflowActivity = (snapshot = {}) => {
     && !view.paused
     && !view.needsHuman
     && (loopStatus === 'running' || topology.currentNode.status === 'running');
-  if (active) return { active: true, color: 'cyan', label: `FLOW ACTIVE · Round ${topology.currentRound || '--'}` };
-  if (view.terminal) return { active: false, color: 'green', label: `✓ COMPLETE · Round ${topology.currentRound || '--'}` };
-  if (view.needsHuman) return { active: false, color: 'red', label: `! ACTION REQUIRED · Round ${topology.currentRound || '--'}` };
-  if (view.paused) return { active: false, color: 'yellow', label: `Ⅱ PAUSED · Round ${topology.currentRound || '--'}` };
-  return { active: false, color: 'gray', label: `IDLE · Round ${topology.currentRound || '--'}` };
+  if (active) return { active: true, color: 'cyan', label: `流程运行中 (FLOW ACTIVE) · 第 ${topology.currentRound || '--'} 轮` };
+  if (view.terminal) return { active: false, color: 'green', label: `✓ 已完成 (COMPLETE) · 第 ${topology.currentRound || '--'} 轮` };
+  if (view.needsHuman) return { active: false, color: 'red', label: `! 需要操作 (ACTION REQUIRED) · 第 ${topology.currentRound || '--'} 轮` };
+  if (view.paused) return { active: false, color: 'yellow', label: `Ⅱ 已暂停 (PAUSED) · 第 ${topology.currentRound || '--'} 轮` };
+  return { active: false, color: 'gray', label: `空闲 (IDLE) · 第 ${topology.currentRound || '--'} 轮` };
 };
 
 export const WorkflowActivityIndicator = ({ snapshot = {} }) => {
   const activity = deriveWorkflowActivity(snapshot);
   const [frame, setFrame] = useState(0);
+  const animationEnabled = process.env.OPERATOR_TUI_ANIMATE !== '0';
   useEffect(() => {
-    if (!activity.active) {
+    if (!activity.active || !animationEnabled) {
       setFrame(0);
       return undefined;
     }
     const timer = setInterval(() => setFrame((current) => (current + 1) % WORKFLOW_SPINNER_FRAMES.length), WORKFLOW_SPINNER_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [activity.active]);
+  }, [activity.active, animationEnabled]);
   return React.createElement(Text, { color: activity.color, bold: activity.active }, activity.active
     ? `${WORKFLOW_SPINNER_FRAMES[frame]} ${activity.label}`
     : activity.label);

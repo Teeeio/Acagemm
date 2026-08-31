@@ -11,6 +11,7 @@ import {
   detectTunnelVision,
   isResearchExhausted,
   isResolvedEvidenceRound,
+  settleGenerationAttemptBeforeStart,
   PLATEAU_NO_IMPROVE_ROUNDS,
   STAGNATION_WINDOW,
   MAX_ROUNDS,
@@ -168,8 +169,45 @@ assert.match(fixedRoundComplete.state.agent.phase, /固定三轮完成/);
 
 const phasedMission = {
   ...fixedRoundMission,
-  testScenario: { iterationPolicy: { maxCorrectnessAttempts: 4, performanceRounds: 3 } },
+  testScenario: { iterationPolicy: { maxGenerationAttempts: 2, maxCorrectnessAttempts: 4, performanceRounds: 3 } },
 };
+const phasedGenerationRetry = makeState({
+  missions: [phasedMission],
+  baseline: { status: 'complete' },
+  agent: { status: 'completed', runId: 'generation_attempt_1' },
+  iterationStats: { ...makeState().iterationStats, currentRoundGenerationAttempts: 1, lastGenerationAttemptRunId: 'generation_attempt_1' },
+});
+assert.equal(detectLoopGuard(phasedGenerationRetry), null, 'one failed generation attempt remains retryable');
+const phasedGenerationExhausted = makeState({
+  missions: [phasedMission],
+  baseline: { status: 'complete' },
+  agent: { status: 'completed', runId: 'generation_attempt_2' },
+  iterationStats: { ...makeState().iterationStats, currentRoundGenerationAttempts: 2, lastGenerationAttemptRunId: 'generation_attempt_2' },
+});
+assert.equal(detectLoopGuard(phasedGenerationExhausted), 'candidate_generation_failed');
+const phasedGenerationStopped = await advanceIteration(phasedGenerationExhausted, {});
+assert.equal(phasedGenerationStopped.action, 'needs_human');
+assert.equal(phasedGenerationStopped.state.iterationStats.loopStatus, 'needs_human');
+assert.equal(phasedGenerationStopped.state.iterationStats.loopStatusReason, 'candidate_generation_failed');
+const generationRaceState = makeState({
+  missions: [phasedMission],
+  baseline: { status: 'complete' },
+  agent: { status: 'completed', runId: 'race_attempt_1' },
+});
+const firstRaceSettlement = settleGenerationAttemptBeforeStart(generationRaceState, phasedMission);
+assert.equal(firstRaceSettlement.blocked, false);
+assert.equal(firstRaceSettlement.attempt, 1);
+assert.equal(firstRaceSettlement.counted, true);
+const duplicateRaceSettlement = settleGenerationAttemptBeforeStart(generationRaceState, phasedMission);
+assert.equal(duplicateRaceSettlement.attempt, 1);
+assert.equal(duplicateRaceSettlement.counted, false);
+generationRaceState.agent.runId = 'race_attempt_2';
+const finalRaceSettlement = settleGenerationAttemptBeforeStart(generationRaceState, phasedMission);
+assert.equal(finalRaceSettlement.blocked, true);
+assert.equal(finalRaceSettlement.attempt, 2);
+assert.equal(generationRaceState.iterationStats.loopStatus, 'needs_human');
+assert.equal(generationRaceState.runtimeEvents.filter((event) => event.type === 'candidate.generation_attempt_failed').length, 2);
+assert.equal(generationRaceState.runtimeEvents.filter((event) => event.type === 'loop.needs_human').length, 1);
 const phasedCorrectnessFailed = makeState({ missions: [phasedMission], objective: { mode: 'maximize' }, iterationStats: { ...makeState().iterationStats, currentRoundCorrectnessAttempts: 4, totalCorrectnessAttempts: 4, correctnessEstablished: false } });
 assert.equal(detectLoopGuard(phasedCorrectnessFailed), 'correctness_failed');
 const phasedFailureResult = await advanceIteration(phasedCorrectnessFailed, {});

@@ -10,6 +10,7 @@ import { generateMissionCandidate } from './candidate-generation.mjs';
 import { adoptCandidatePatch, recordCandidateExperience } from './adoption.mjs';
 import { discoverOperatorMaterial } from './source-discovery.mjs';
 import { materializeOperatorMaterial } from './materializer.mjs';
+import { normalizeWorkflowError, serializeWorkflowError } from '../../client-runtime/workflow-error.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const testerDir = path.join(rootDir, 'tools', 'local-c500-tester');
@@ -18,6 +19,7 @@ const currentMissionDir = path.join(homeDir, 'current');
 const archiveRoot = path.join(homeDir, 'archive');
 const DEFAULT_MAX_ROUNDS = 20;
 const DEFAULT_MAX_RESEARCH = 3;
+const WORKFLOW_RECOVERY_AGE_MS = 15 * 60 * 1000;
 
 const expectedEnvironment = {
   triton: '3.7.1',
@@ -29,6 +31,11 @@ const expectedEnvironment = {
 };
 
 const nowIso = () => new Date().toISOString();
+const processAlive = (pid) => {
+  const numeric = Number(pid);
+  if (!Number.isInteger(numeric) || numeric <= 0) return false;
+  try { process.kill(numeric, 0); return true; } catch (error) { return error.code === 'EPERM'; }
+};
 
 const parseArgs = (argv) => {
   const positional = [];
@@ -845,8 +852,19 @@ const analysisFromAdapterResult = (result) => ({
 });
 
 const copyOperator = async (source, target) => {
-  await mkdir(target, { recursive: true });
-  await cp(source, target, { recursive: true, force: true });
+  try {
+    await mkdir(target, { recursive: true });
+    await cp(source, target, { recursive: true, force: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') {
+      const cause = error.code;
+      error.code = 'OPERATOR_SOURCE_UNAVAILABLE';
+      error.category = 'configuration';
+      error.retryable = false;
+      error.details = { source, target, cause };
+    }
+    throw error;
+  }
 };
 
 const runHarness = (operatorPath, flags, context = {}) => {
@@ -989,6 +1007,7 @@ const writeWorkflowState = async (dir, mission, extra = {}) => {
     current_best: mission.current_best || null,
     candidate_evaluations: mission.candidateEvaluations || [],
     updated_at: nowIso(),
+    runner_pid: process.pid,
     ...extra,
     events: extra.events || previous.events || [],
   };
@@ -1011,6 +1030,8 @@ const writeLoopSummary = async ({ dir, mission, latestRound = null, analysis = n
     status: mission.status,
     mission_completed: mission.completed,
     stop_reason: stopReason,
+    stop_detail: mission.stopDetail || null,
+    failure: mission.workflowFailure || null,
     repository: mission.repository,
     projectId: mission.projectId,
     agent: mission.agent,
@@ -1041,6 +1062,48 @@ const writeLoopSummary = async ({ dir, mission, latestRound = null, analysis = n
   };
   await writeJson(path.join(dir, 'summary.json'), summary);
   return summary;
+};
+
+const workflowFailureView = (error, phase) => {
+  const normalized = normalizeWorkflowError(error, { phase, source: 'local-c500-workflow' });
+  if (/TIMEOUT|TIMED_OUT|QUEUE_TIMEOUT|POLL_TIMEOUT/i.test(normalized.code)) {
+    return serializeWorkflowError(normalizeWorkflowError({ ...error, code: 'TEST_QUEUE_TIMEOUT', message: error?.message }, { phase, source: 'local-c500-workflow', category: 'timeout' }));
+  }
+  return serializeWorkflowError(normalized);
+};
+
+const persistUnexpectedWorkflowStop = async ({ dir, mission, phase, error, latestRound = null, latestAnalysis = null }) => {
+  const failure = workflowFailureView(error, phase);
+  const reason = failure.code === 'TEST_QUEUE_TIMEOUT' ? 'test_queue_timeout' : 'workflow_error';
+  mission.status = 'needs_human';
+  mission.completed = false;
+  mission.stage = 'needs_human';
+  mission.client_stage = 'evidence';
+  mission.completed_at = nowIso();
+  mission.stopDetail = { reason, phase, failure };
+  mission.workflowFailure = failure;
+  mission.iterationStats = {
+    ...(mission.iterationStats || {}),
+    loopStatus: 'needs_human',
+    loopStatusReason: reason,
+    loopStoppedAt: mission.completed_at,
+  };
+  mission.recent_events = [
+    { time: mission.completed_at, message: `Workflow stopped at ${phase}: ${reason} (${failure.code})` },
+    ...(mission.recent_events || []),
+  ].slice(0, 20);
+  await writeJson(path.join(dir, 'mission.json'), mission);
+  await appendWorkflowEvent(dir, mission, 'loop_interrupted', { reason, phase, failure });
+  const summary = await writeLoopSummary({ dir, mission, latestRound, analysis: latestAnalysis, stopReason: reason });
+  await writeWorkflowState(dir, mission, {
+    status: 'needs_human',
+    stalled: true,
+    stop_reason: reason,
+    stop_detail: mission.stopDetail,
+    failure,
+    recovery: { required: true, resumable: true, command: `mission loop --mission ${mission.mission_id}` },
+  });
+  return { failure, summary, reason };
 };
 
 const ensureBaselineMeasured = async ({ dir, mission, operatorPath, flags }) => {
@@ -1257,7 +1320,7 @@ const executeCandidateRound = async ({ dir, mission, operatorPath, flags }) => {
 
 const loopStopReason = (mission, startedAt) => {
   const tokenLimit = mission.budget?.token_limit;
-  if (Number.isFinite(tokenLimit) && tokenLimit != null && Number(mission.budget.tokens_used || 0) > tokenLimit) return 'token_budget';
+  if (Number.isFinite(tokenLimit) && tokenLimit != null && Number(mission.budget.tokens_used || 0) >= tokenLimit) return 'token_budget';
   const timeLimit = mission.budget?.time_limit_ms;
   if (Number.isFinite(timeLimit) && timeLimit != null && Date.now() - startedAt >= timeLimit) return 'time_budget';
   const roundLimit = mission.budget?.round_limit;
@@ -1272,10 +1335,35 @@ const runIterationLoop = async (flags) => {
   const missionFile = path.join(dir, 'mission.json');
   const mission = await readJson(missionFile);
   const operatorPath = flags['operator-path'] || mission.workspace?.operator;
-  if (!operatorPath) throw new Error('operator path is required');
+  if (!operatorPath) {
+    const interrupted = await persistUnexpectedWorkflowStop({ dir, mission, phase: 'initializing', error: Object.assign(new Error('operator path is required'), { code: 'OPERATOR_PATH_REQUIRED' }) });
+    printJsonOrText({ status: 'needs_human', mission_id: missionId, stop_reason: interrupted.reason, failure: interrupted.failure, summary: interrupted.summary }, flags, `mission needs_human: ${missionId} (${interrupted.reason})`);
+    return;
+  }
   const startedAt = Date.now();
   let latestRound = null;
   let latestAnalysis = null;
+  let phase = 'initializing';
+  try {
+  const previousWorkflow = await workflowStateFor(dir);
+  const previousAge = Date.now() - Date.parse(previousWorkflow.updated_at || '');
+  const previousRunnerDead = previousWorkflow.status === 'running'
+    && previousWorkflow.runner_pid
+    && Number(previousWorkflow.runner_pid) !== process.pid
+    && !processAlive(previousWorkflow.runner_pid);
+  const previousRunnerStale = previousWorkflow.status === 'running'
+    && Number.isFinite(previousAge)
+    && previousAge >= WORKFLOW_RECOVERY_AGE_MS;
+  if (previousRunnerDead || previousRunnerStale) {
+    const recovery = normalizeWorkflowError({
+      code: 'WORKFLOW_PROCESS_INTERRUPTED',
+      message: '上一次 workflow 进程未正常完成，已从持久化快照恢复。',
+      category: 'internal',
+    }, { phase: previousWorkflow.phase || 'unknown', source: 'local-c500-recovery', details: { previousRunnerPid: previousWorkflow.runner_pid || null, previousUpdatedAt: previousWorkflow.updated_at || null } });
+    mission.recent_events = [{ time: nowIso(), message: `Recovered interrupted workflow at ${recovery.phase} (${recovery.code})` }, ...(mission.recent_events || [])].slice(0, 20);
+    await writeJson(missionFile, mission);
+    await appendWorkflowEvent(dir, mission, 'workflow_recovered', { failure: serializeWorkflowError(recovery) });
+  }
   mission.status = 'running';
   mission.completed = false;
   mission.stage = 'baseline';
@@ -1292,6 +1380,7 @@ const runIterationLoop = async (flags) => {
   };
   await writeJson(missionFile, mission);
   await writeWorkflowState(dir, mission, { status: 'running', stalled: false });
+  phase = 'baseline';
   await ensureBaselineMeasured({ dir, mission, operatorPath, flags });
   if (mission.baseline?.status !== 'complete') {
     mission.status = 'failed';
@@ -1309,11 +1398,18 @@ const runIterationLoop = async (flags) => {
 
   let reason = loopStopReason(mission, startedAt);
   while (!reason && !terminalStatuses.has(mission.status)) {
+    phase = `candidate_round_${Number(mission.rounds_completed || 0) + 1}`;
     const executed = await executeCandidateRound({ dir, mission, operatorPath, flags });
     latestRound = executed.roundRecord;
     latestAnalysis = executed.analysis;
     reason = loopStopReason(mission, startedAt);
     if (!reason) await appendWorkflowEvent(dir, mission, 'loop_continued', { next_round: Number(mission.rounds_completed || 0) + 1 });
+  }
+  // A round may deliberately transition the Mission to needs_human (for example
+  // no candidate, an unrecoverable gate, or an operator decision). Never emit a
+  // terminal summary without carrying that transition's concrete reason.
+  if (!reason && mission.status !== 'running') {
+    reason = mission.iterationStats?.loopStatusReason || mission.status || 'workflow_terminal';
   }
 
   if (reason === 'round_budget' || reason === 'token_budget' || reason === 'time_budget') {
@@ -1343,6 +1439,10 @@ const runIterationLoop = async (flags) => {
   const summary = await writeLoopSummary({ dir, mission, latestRound, analysis: latestAnalysis, stopReason: reason });
   await writeWorkflowState(dir, mission, { status: mission.status, stalled: false });
   printJsonOrText({ status: mission.status, mission_id: missionId, summary }, flags, `mission ${mission.status}: ${missionId}`);
+  } catch (error) {
+    const interrupted = await persistUnexpectedWorkflowStop({ dir, mission, phase, error, latestRound, latestAnalysis });
+    printJsonOrText({ status: 'needs_human', mission_id: missionId, stop_reason: interrupted.reason, failure: interrupted.failure, summary: interrupted.summary }, flags, `mission needs_human: ${missionId} (${interrupted.reason})`);
+  }
 };
 
 const runMission = async (flags) => {
@@ -1350,26 +1450,35 @@ const runMission = async (flags) => {
   const dir = missionDirFor(missionId);
   const missionFile = path.join(dir, 'mission.json');
   const mission = await readJson(missionFile);
+  let phase = 'initializing';
+  let latestRound = null;
+  let latestAnalysis = null;
+  try {
   const started = Date.now();
   const operatorPath = flags['operator-path'];
-  if (!operatorPath) throw new Error('operator path is required');
+  if (!operatorPath) throw Object.assign(new Error('operator path is required'), { code: 'OPERATOR_PATH_REQUIRED' });
 
   const round = Number(mission.rounds_completed || 0) + 1;
   const candidateId = `candidate-${String(round).padStart(3, '0')}`;
   const roundDir = path.join(dir, 'reports', `round-${String(round).padStart(3, '0')}`);
   const snapshotDir = path.join(dir, 'operator_snapshot');
   const resolvedOperator = path.resolve(operatorPath);
+  phase = 'copy_operator';
   await copyOperator(resolvedOperator, snapshotDir);
   await copyOperator(resolvedOperator, path.join(roundDir, 'operator_snapshot'));
 
+  phase = 'prepare_test_cases';
   const environment = buildEnvironment({ mock: Boolean(flags.mock) });
   const testCases = generateTestCases(mission);
   await writeJson(path.join(dir, 'test_cases.json'), testCases);
   await writeJson(path.join(roundDir, 'test_cases.json'), testCases);
   await writeJson(path.join(roundDir, 'environment.json'), environment);
 
+  phase = 'harness';
   const result = runHarness(resolvedOperator, flags);
+  phase = 'analysis';
   const analysis = await runAnalysisTools({ result, environment, operatorPath: resolvedOperator, roundDir, flags });
+  latestAnalysis = analysis;
   result.analysis_runs = analysis.runs;
   result.analysis_artifacts = analysis.artifacts;
   const elapsedMs = Date.now() - started;
@@ -1402,12 +1511,13 @@ const runMission = async (flags) => {
     analysis_artifacts: analysis.artifacts,
     decision: { accepted, reason: accepted ? 'improved current best' : result.error || 'not better than current best' },
   };
+  latestRound = roundRecord;
   await appendFile(path.join(dir, 'rounds.jsonl'), `${JSON.stringify(roundRecord)}\n`, 'utf8');
   await writeJson(path.join(roundDir, 'result.json'), result);
 
   const tokenBudgetExceeded = Number.isFinite(mission.budget.token_limit)
     && mission.budget.token_limit != null
-    && Number(mission.budget.tokens_used || 0) + tokensUsed > mission.budget.token_limit;
+    && Number(mission.budget.tokens_used || 0) + tokensUsed >= mission.budget.token_limit;
   const timeBudgetExceeded = Number.isFinite(mission.budget.time_limit_ms)
     && mission.budget.time_limit_ms != null
     && Number(mission.elapsed_ms || 0) + elapsedMs > mission.budget.time_limit_ms;
@@ -1465,6 +1575,10 @@ const runMission = async (flags) => {
   };
   await writeJson(path.join(dir, 'summary.json'), summary);
   printJsonOrText({ status: mission.status, mission_id: missionId, summary }, flags, `mission ${mission.status}: ${missionId}`);
+  } catch (error) {
+    const interrupted = await persistUnexpectedWorkflowStop({ dir, mission, phase, error, latestRound, latestAnalysis });
+    printJsonOrText({ status: 'needs_human', mission_id: missionId, stop_reason: interrupted.reason, failure: interrupted.failure, summary: interrupted.summary }, flags, `mission needs_human: ${missionId} (${interrupted.reason})`);
+  }
 };
 
 const renderPanel = async () => {

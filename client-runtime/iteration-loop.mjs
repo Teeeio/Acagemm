@@ -244,6 +244,7 @@ const LOOP_GUARD_TEXT = {
   max_rounds: '已迭代到最大轮数上限，仍未完成采纳，请人工介入',
   total_budget: '累计迭代时长超出预算上限，请人工介入',
   max_research: '研究员已多次升级仍未产生被采纳候选，停止研究员升级但主循环继续',
+  candidate_generation_failed: '当前轮次的候选生成连续失败，已停止自动重试，请检查 Agent 后端或调整指令后恢复',
   correctness_failed: '固定精度测试在允许的修复轮次内仍未通过',
 };
 
@@ -256,6 +257,49 @@ const activeMissionBudgetMs = (state = {}) => {
 };
 
 const phasedIterationPolicy = (mission = {}) => mission?.testScenario?.iterationPolicy || mission?.operatorProfile?.iterationPolicy || null;
+
+export const settleGenerationAttemptBeforeStart = (state = {}, mission = {}) => {
+  const iterationPolicy = phasedIterationPolicy(mission);
+  const previousRunId = state.agent?.runId || null;
+  const generationFailed = Boolean(iterationPolicy)
+    && previousRunId
+    && state.stage === 'diagnosis'
+    && ['completed', 'failed', 'cancelled'].includes(state.agent?.status)
+    && !state.candidateEvaluations?.length
+    && state.baseline?.status === 'complete';
+  if (!generationFailed) return { state, blocked: false, counted: false, attempt: 0, limit: null };
+
+  const stats = state.iterationStats || {};
+  const alreadyCounted = stats.lastGenerationAttemptRunId === previousRunId;
+  const attempt = Number(stats.currentRoundGenerationAttempts || 0) + (alreadyCounted ? 0 : 1);
+  const limit = Math.max(1, Number(iterationPolicy.maxGenerationAttempts || 1));
+  state.iterationStats = {
+    ...stats,
+    generationAttempts: Number(stats.generationAttempts || 0) + (alreadyCounted ? 0 : 1),
+    currentRoundGenerationAttempts: attempt,
+    lastGenerationAttemptRunId: previousRunId,
+    lastRoundOutcome: 'candidate_generation_failed',
+    loopStartedAt: stats.loopStartedAt || new Date().toISOString(),
+  };
+  if (!alreadyCounted) {
+    appendRuntimeEvent(state, 'candidate.generation_attempt_failed', {
+      round: Number(stats.round || 0) + 1,
+      attempt,
+      limit,
+      runId: previousRunId,
+    }, { kind: 'iteration', mode: 'policy' });
+  }
+  const blocked = attempt >= limit;
+  if (blocked) {
+    state.iterationStats = { ...state.iterationStats, loopStatus: 'needs_human', loopStatusReason: 'candidate_generation_failed' };
+    state.agent = { ...state.agent, status: 'completed', phase: '候选生成重试已耗尽，需要人工调整 Agent 后端或指令', progress: 100, currentAction: null };
+    mission.status = 'needs_human';
+    if (!state.runtimeEvents?.some((event) => event.type === 'loop.needs_human' && event.payload?.reason === 'candidate_generation_failed')) {
+      appendRuntimeEvent(state, 'loop.needs_human', { reason: 'candidate_generation_failed', attempt, limit }, { kind: 'policy', mode: 'client' });
+    }
+  }
+  return { state, blocked, counted: !alreadyCounted, attempt, limit };
+};
 
 const roundCorrectnessPassed = (round = {}) => {
   const measurements = round?.benchmark?.result?.benchmark;
@@ -271,8 +315,10 @@ export const detectLoopGuard = (state) => {
   const mission = (state?.missions || []).find((item) => item.id === state?.activeMissionId) || {};
   const phasedPolicy = phasedIterationPolicy(mission);
   if (phasedPolicy) {
+    const maxGenerationAttempts = Math.max(1, Number(phasedPolicy.maxGenerationAttempts || 1));
     const maxCorrectnessAttempts = Math.max(1, Number(phasedPolicy.maxCorrectnessAttempts || 1));
     const performanceRounds = Math.max(1, Number(phasedPolicy.performanceRounds || 1));
+    if (Number(stats.currentRoundGenerationAttempts || 0) >= maxGenerationAttempts) return 'candidate_generation_failed';
     if (Number(stats.currentRoundCorrectnessAttempts || 0) >= maxCorrectnessAttempts) return 'correctness_failed';
     if (Number(stats.performanceRounds || 0) >= performanceRounds) return 'fixed_rounds_complete';
   }
@@ -663,14 +709,19 @@ export async function advanceIteration(state, deps = {}) {
 
     if (phasedPolicy && diagnosticNoCandidateRound) {
       if (stats.lastGenerationAttemptRunId === latestRound.runId) return { state, action: 'none' };
+      const attempt = Number(stats.currentRoundGenerationAttempts || 0) + 1;
       state.iterationStats = {
         ...stats,
+        generationAttempts: Number(stats.generationAttempts || 0) + 1,
+        currentRoundGenerationAttempts: attempt,
         lastGenerationAttemptRunId: latestRound.runId,
         lastRoundOutcome: 'candidate_generation_failed',
         loopStartedAt: stats.loopStartedAt || new Date().toISOString(),
       };
       appendRuntimeEvent(state, 'candidate.generation_attempt_failed', {
         round: Number(stats.round || 0) + 1,
+        attempt,
+        limit: Math.max(1, Number(phasedPolicy.maxGenerationAttempts || 1)),
         runId: latestRound.runId,
       }, { kind: 'iteration', mode: 'policy' });
       return { state, action: 'generation_attempt_counted' };
@@ -689,6 +740,8 @@ export async function advanceIteration(state, deps = {}) {
       nextStats.correctnessEstablished = true;
       nextStats.correctnessEstablishedRunId ||= latestRound.runId;
       nextStats.performanceRounds = Number(stats.performanceRounds || 0) + 1;
+      nextStats.currentRoundGenerationAttempts = 0;
+      nextStats.lastGenerationAttemptRunId = null;
       nextStats.currentRoundCorrectnessAttempts = 0;
       nextStats.lastCorrectnessAttemptRunId = null;
     }

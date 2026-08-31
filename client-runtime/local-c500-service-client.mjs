@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,7 +13,9 @@ const taskRoot = process.env.OPERATOR_LOCAL_C500_DIR
   ? path.resolve(process.env.OPERATOR_LOCAL_C500_DIR)
   : path.join(runtimeDir, 'local-c500');
 const commandTemplate = process.env.OPERATOR_LOCAL_C500_COMMAND || `python "${bundledRunner}"`;
+const explicitRunnerCommand = Boolean(process.env.OPERATOR_LOCAL_C500_COMMAND);
 const mockEnabled = process.env.OPERATOR_LOCAL_C500_MOCK === '1';
+const hardwareDisabled = process.env.OPERATOR_HARDWARE_DISABLED === '1';
 const mockScenario = process.env.OPERATOR_LOCAL_C500_MOCK_SCENARIO || '';
 const iterativeMlaScenario = mockScenario === 'mla-three-round';
 
@@ -35,12 +37,22 @@ const correctnessPath = (taskId) => path.join(taskRoot, taskId, 'correctness.jso
 const runnerStatusPath = (taskId) => path.join(taskRoot, taskId, 'runner-status.json');
 const referenceCacheRoot = path.join(taskRoot, 'reference-cache');
 const activeExecutions = new Map();
+const simulationEnabled = process.env.OPERATOR_LOCAL_C500_SIMULATION === '1';
 
 const fail = (message, code, status = 400) => {
   const error = new Error(message);
   error.code = code;
   error.status = status;
   return error;
+};
+
+const terminateProcessTree = (child) => {
+  if (!child?.pid) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
+    return;
+  }
+  try { process.kill(-child.pid, 'SIGTERM'); } catch (error) { if (!['ESRCH', 'EPERM'].includes(error.code)) throw error; }
 };
 
 const loadTask = async (taskId) => {
@@ -203,6 +215,7 @@ const runCommand = (command, task, timeoutMs) => new Promise((resolve, reject) =
   const child = spawn(command, {
     cwd: path.dirname(taskPath(taskId)),
     shell: true,
+    detached: process.platform !== 'win32',
     windowsHide: true,
     timeout: timeoutMs,
     env: {
@@ -213,17 +226,26 @@ const runCommand = (command, task, timeoutMs) => new Promise((resolve, reject) =
       ...(task.payload?.oracleRunPy ? { OPERATOR_LOCAL_C500_ORACLE_RUN_PY: oracleRunPyPath(taskId) } : {}),
       OPERATOR_LOCAL_C500_RESULT_JSON: resultPath(taskId),
       OPERATOR_LOCAL_C500_REFERENCE_CACHE_DIR: referenceCacheRoot,
+      OPERATOR_LOCAL_C500_EXPECTED_DEVICE: String(task.hardware?.[0] || 'C550'),
     },
   });
   const execution = activeExecutions.get(taskId);
   if (execution) execution.child = child;
   let stdout = '';
   let stderr = '';
+  const treeTimeout = setTimeout(() => terminateProcessTree(child), Math.max(1, Number(timeoutMs) || 1));
   const append = (current, chunk) => `${current}${chunk}`.slice(-8 * 1024 * 1024);
   child.stdout?.on('data', (chunk) => { stdout = append(stdout, chunk); });
   child.stderr?.on('data', (chunk) => { stderr = append(stderr, chunk); });
-  child.once('error', reject);
-  child.once('close', (status, signal) => resolve({ status, signal, stdout, stderr }));
+  child.once('error', (error) => {
+    clearTimeout(treeTimeout);
+    if (error.code === 'ETIMEDOUT') terminateProcessTree(child);
+    reject(error);
+  });
+  child.once('close', (status, signal) => {
+    clearTimeout(treeTimeout);
+    resolve({ status, signal, stdout, stderr });
+  });
 });
 
 const executeTask = async (task) => {
@@ -233,6 +255,9 @@ const executeTask = async (task) => {
     const result = mockEnabled
       ? await mockResult(task)
       : await (async () => {
+        if (hardwareDisabled && !explicitRunnerCommand) {
+          throw fail('Hardware execution is disabled for this verification run.', 'LOCAL_C500_HARDWARE_DISABLED', 503);
+        }
         const command = renderCommand(commandTemplate, task);
         const processResult = await runCommand(command, task, Math.max(1, Number(task.payload?.limits?.timeoutSeconds || 120)) * 1000);
         if (processResult.status !== 0) {
@@ -362,7 +387,7 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
     cancel: async (taskId) => {
       const task = await loadTask(taskId);
       if (!['completed', 'failed', 'cancelled'].includes(task.status)) {
-        activeExecutions.get(taskId)?.child?.kill();
+        terminateProcessTree(activeExecutions.get(taskId)?.child);
         task.status = 'cancelled';
         task.cancelRequested = true;
         task.completedAt = now();
@@ -376,12 +401,14 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
 
 export const localC500Config = {
   kind: 'local-c500',
-  device: process.env.OPERATOR_MUXI_DEVICE || 'C500',
+  device: process.env.OPERATOR_MUXI_DEVICE || (simulationEnabled ? 'C500' : 'C550'),
   enabled: process.env.OPERATOR_TEST_BACKEND === 'local-c500',
+  simulation: simulationEnabled,
   mock: mockEnabled,
   liveHardware: !mockEnabled,
   taskRoot,
   commandConfigured: Boolean(commandTemplate),
+  hardwareDisabled,
   scenario: iterativeMlaScenario ? mockScenario : null,
   bundledRunner,
 };

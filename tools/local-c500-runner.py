@@ -32,21 +32,25 @@ def _torch_and_device():
     import torch
 
     if not torch.cuda.is_available():
-        raise RuntimeError("torch.cuda is unavailable; refusing to label this execution as local C500 hardware")
+        raise RuntimeError("torch.cuda is unavailable; refusing to label this execution as C550 hardware")
     return torch, torch.cuda.current_device()
 
 
 def _probe_c500(torch, device):
     mx_smi = shutil.which("mx-smi")
     if not mx_smi:
-        raise RuntimeError("mx-smi is unavailable; local C500 hardware provenance cannot be established")
+        raise RuntimeError("mx-smi is unavailable; C550 hardware provenance cannot be established")
     probe = subprocess.run([mx_smi], capture_output=True, text=True, timeout=20, check=False)
     if probe.returncode != 0:
         raise RuntimeError(f"mx-smi failed: {(probe.stderr or probe.stdout).strip()}")
+    device_name = torch.cuda.get_device_name(device)
+    expected_device = os.environ.get("OPERATOR_LOCAL_C500_EXPECTED_DEVICE", "C550").strip().upper()
+    if expected_device and expected_device not in str(device_name).upper():
+        raise RuntimeError(f"target device mismatch: expected {expected_device}, detected {device_name}")
     return {
         "tool": mx_smi,
         "deviceIndex": int(device),
-        "deviceName": torch.cuda.get_device_name(device),
+        "deviceName": device_name,
         "torchVersion": torch.__version__,
         "mxSmi": (probe.stdout or "").strip()[:4000],
     }
@@ -91,7 +95,9 @@ def _json_digest(value):
 def _input_signature(value, torch):
     tensor_type = getattr(torch, "Tensor", ())
     if tensor_type and isinstance(value, tensor_type):
-        return {"kind": "tensor", "shape": list(value.shape), "dtype": str(value.dtype).replace("torch.", "")}
+        tensor = value.detach().contiguous().view(torch.uint8).cpu()
+        content_digest = hashlib.sha256(tensor.numpy().tobytes()).hexdigest()
+        return {"kind": "tensor", "shape": list(value.shape), "dtype": str(value.dtype).replace("torch.", ""), "contentDigest": content_digest}
     if isinstance(value, dict):
         return {str(key): _input_signature(item, torch) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
     if isinstance(value, (list, tuple)):

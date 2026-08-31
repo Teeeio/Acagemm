@@ -1,13 +1,14 @@
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSourceMirrorPolicy } from '../../client-runtime/source-mirror-policy.mjs';
 import { normalizeOperatorLanguage } from '../../client-runtime/operator-language.mjs';
-import { buildFixedOperatorBaselineRunPy, fixedOperatorBaselineSource, fixedOperatorPrompt, fixedOperatorTestMatrix, getFixedOperatorProfile } from '../../client-runtime/fixed-operator-profiles.mjs';
+import { buildFixedOperatorBaselineRunPy, fixedOperatorBaselineSource, fixedOperatorPrompt, fixedOperatorTestMatrix, getFixedOperatorProfile, isTuiOperatorProfile } from '../../client-runtime/fixed-operator-profiles.mjs';
 import { isCurrentLocalC500Runtime } from '../../client-runtime/local-c500-runtime-contract.mjs';
 import { detectMuxiDevice } from '../../client-runtime/muxi-device.mjs';
+import { inspectRuntimeCapabilities, productionWorkflowCapabilities } from '../../client-runtime/agent-runtime/registry.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const testerHome = path.resolve(process.env.LOCAL_C500_TESTER_HOME || path.join(rootDir, '.local-c500-production'));
@@ -15,15 +16,35 @@ export const projectHome = path.join(testerHome, 'projects');
 export const exportHome = path.join(testerHome, 'exports');
 export const apiPort = Number(process.env.LOCAL_C500_API_PORT || 4275);
 export const apiBaseUrl = process.env.LOCAL_C500_API_URL || `http://127.0.0.1:${apiPort}`;
-export const resolveAgentRuntimeMode = (environment = process.env) => environment.OPERATOR_RUNTIME_MODE || 'claude-code';
-export const resolveMuxiDevice = (environment = process.env, spawn = spawnSync) => detectMuxiDevice(environment, spawn).device;
+const simulationEnabled = (environment = process.env) => environment.OPERATOR_LOCAL_C500_SIMULATION === '1' || environment.OPERATOR_SIMULATION === '1';
+export const resolveAgentRuntimeMode = (environment = process.env) => simulationEnabled(environment) ? 'reference-fixture' : environment.OPERATOR_RUNTIME_MODE || 'claude-code';
+export const resolveMuxiDevice = (environment = process.env, spawn = spawnSync) => {
+  if (simulationEnabled(environment)) return environment.OPERATOR_MUXI_DEVICE || 'C500';
+  if (environment.OPERATOR_LOCAL_C500_MOCK === '1') return environment.OPERATOR_MUXI_DEVICE || 'C550';
+  return detectMuxiDevice(environment, spawn).device;
+};
+
+export const C550_STACK = Object.freeze({
+  python: '3.12.11',
+  torch: '2.8.0+metax3.3.0.2',
+  triton: '3.7.1',
+  maca: '3.3.0.15',
+  vllm: '0.13.0',
+  vllm_metax: '0.13.0+g181dc3.d20260129.maca3.3.0.15.torch2.8',
+});
 
 export const resolveLocalC500LaunchMode = (environment = process.env) => {
-  const mock = environment.OPERATOR_LOCAL_C500_MOCK === '1';
+  const simulation = simulationEnabled(environment);
+  const mock = simulation || environment.OPERATOR_LOCAL_C500_MOCK === '1';
+  const id = simulation ? 'full-simulation' : mock ? 'hardware-mock' : 'real-c550';
   return {
+    id,
+    simulation,
     mock,
+    hardwareMock: id === 'hardware-mock',
+    liveHardware: id === 'real-c550',
     scenario: mock ? environment.OPERATOR_LOCAL_C500_MOCK_SCENARIO || 'mla-three-round' : null,
-    label: mock ? 'simulation' : `real ${resolveMuxiDevice(environment)} hardware`,
+    label: simulation ? 'full simulation' : mock ? 'mock hardware' : `real ${resolveMuxiDevice(environment)} hardware`,
   };
 };
 
@@ -32,6 +53,11 @@ const agentRuntimeMode = resolveAgentRuntimeMode();
 const muxiDevice = resolveMuxiDevice();
 
 const sleep = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
+const processAlive = (pid) => {
+  const numeric = Number(pid);
+  if (!Number.isInteger(numeric) || numeric <= 0) return false;
+  try { process.kill(numeric, 0); return true; } catch (error) { return error.code === 'EPERM'; }
+};
 
 const restartStaleProductionRuntime = async (current) => {
   const expectedRuntimeDir = path.join(testerHome, 'runtime');
@@ -86,7 +112,7 @@ export const api = {
 
 const health = async () => {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 750);
+  const timer = setTimeout(() => controller.abort(), 3000);
   try {
     const response = await fetch(`${apiBaseUrl}/api/health`, { signal: controller.signal });
     return response.ok ? response.json() : null;
@@ -98,11 +124,27 @@ const health = async () => {
 };
 
 export const ensureProductionRuntime = async () => {
-  const current = await health();
+  let current = await health();
+  if (!current) {
+    // A busy auto-tick can delay /api/health behind a queue operation. If this
+    // tester still owns a live PID, wait for that runtime instead of spawning
+    // a second process against the same queue and port.
+    const expectedRuntimeDir = path.join(testerHome, 'runtime');
+    const pidFile = path.join(expectedRuntimeDir, 'operator-studio.pid');
+    const recordedPid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'ascii').trim()) : 0;
+    if (processAlive(recordedPid)) {
+      for (let attempt = 0; attempt < 30 && !current; attempt += 1) {
+        await sleep(100);
+        current = await health();
+      }
+    }
+  }
   if (current) {
     const expectedRuntimeDir = path.join(testerHome, 'runtime');
     const bridge = current?.__bridge || {};
     const pid = Number(bridge.pid || 0);
+    const ownerPid = Number(bridge.ownerPid || 0);
+    const ownerAlive = ownerPid > 0 && processAlive(ownerPid);
     const pidFile = path.join(expectedRuntimeDir, 'operator-studio.pid');
     const recordedPid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'ascii').trim()) : 0;
     const ownedByThisTester = current?.service === 'operator-studio-client-runtime'
@@ -112,10 +154,14 @@ export const ensureProductionRuntime = async () => {
       && pid > 0
       && recordedPid === pid;
 
-    if (ownedByThisTester && isCurrentLocalC500Runtime(current)
+    if (ownedByThisTester && ownerPid === process.pid && isCurrentLocalC500Runtime(current)
       && current.testBackend?.mock === launchMode.mock
       && (!launchMode.mock || current.testBackend?.scenario === launchMode.scenario)
       && current.runtime?.mode === agentRuntimeMode) return current;
+
+    if (ownerAlive && ownerPid !== process.pid) {
+      throw new Error(`${apiBaseUrl} is already owned by another active C500 tester process (pid ${ownerPid}). Stop that tester first or use a different LOCAL_C500_API_PORT/LOCAL_C500_TESTER_HOME.`);
+    }
 
     // The health contract, PID and exact target port identify an Operator
     // Studio runtime even when the tester was moved to another container path.
@@ -139,6 +185,14 @@ export const ensureProductionRuntime = async () => {
 
   mkdirSync(path.join(testerHome, 'logs'), { recursive: true });
   const logPath = path.join(testerHome, 'logs', 'runtime.log');
+  // Keep persistent tester homes bounded. Simulation homes are temporary, but
+  // explicit real/mock homes can survive many runs and should not grow without
+  // limit when a runtime reports repeated failures.
+  try {
+    if (statSync(logPath).size > 5 * 1024 * 1024) writeFileSync(logPath, '', 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
   const logFd = openSync(logPath, 'a');
   const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
     cwd: rootDir,
@@ -155,10 +209,13 @@ export const ensureProductionRuntime = async () => {
       OPERATOR_CLAUDE_PERMISSION_MODE: 'acceptEdits',
       OPERATOR_TEST_BACKEND: 'local-c500',
       OPERATOR_AUTO_TICK: '1',
+      OPERATOR_AUTO_TICK_INTERVAL_MS: launchMode.simulation ? '2500' : '1500',
+      OPERATOR_RUNTIME_OWNER_PID: String(process.pid),
       OPERATOR_DATA_DIR: path.join(testerHome, 'data'),
       OPERATOR_RUNTIME_DIR: path.join(testerHome, 'runtime'),
       OPERATOR_LOCAL_C500_DIR: path.join(testerHome, 'local-c500-tasks'),
       OPERATOR_LOCAL_C500_MOCK: launchMode.mock ? '1' : '0',
+      OPERATOR_LOCAL_C500_SIMULATION: launchMode.simulation ? '1' : '0',
       OPERATOR_LOCAL_C500_MOCK_SCENARIO: launchMode.scenario || '',
     },
   });
@@ -174,6 +231,29 @@ export const ensureProductionRuntime = async () => {
       && (!launchMode.mock || started.testBackend?.scenario === launchMode.scenario)) return started;
   }
   throw new Error(`Production runtime did not start. See ${logPath}`);
+};
+
+// The production runtime is intentionally detached so the TUI can start it
+// without inheriting terminal handles. It is still owned by the current TUI
+// process and must be stopped when that owner exits.
+export const stopProductionRuntime = async () => {
+  const current = await health();
+  if (!current) return false;
+  const bridge = current.__bridge || {};
+  const ownerPid = Number(bridge.ownerPid || 0);
+  if (ownerPid > 0 && ownerPid !== process.pid) return false;
+  const pid = Number(bridge.pid || 0);
+  if (!Number.isInteger(pid) || pid <= 0 || Number(bridge.port || 0) !== apiPort) return false;
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await sleep(50);
+    if (!await health()) return true;
+  }
+  return false;
 };
 
 const slug = (value) => String(value || 'local-c500-project')
@@ -265,6 +345,12 @@ export const publishMission = async (draft) => {
   if (activeMission && !['completed', 'published', 'stopped', 'archived'].includes(activeMission.status)) {
     await stopMission();
   }
+  if (!isTuiOperatorProfile(draft.profileId)) {
+    const error = new Error('当前 TUI 只允许发布两个完整 v0.1 C550 Profile。');
+    error.code = 'TUI_PROFILE_NOT_PUBLISHABLE';
+    error.status = 409;
+    throw error;
+  }
   const profile = getFixedOperatorProfile(draft.profileId);
   const device = resolveMuxiDevice();
   const project = await createFreshManagedProject(profile.id);
@@ -346,9 +432,94 @@ const checkCommand = (command, args = ['--version']) => {
   return { status: result.status === 0 ? 'ok' : 'missing', detail: String(result.stdout || result.stderr || '').trim().split(/\r?\n/)[0] || null };
 };
 
+const checkC550Stack = () => {
+  const python = process.env.PYTHON || 'python';
+  const script = [
+    'import json, platform',
+    'import torch',
+    'import triton',
+    'try:',
+    ' import vllm',
+    ' vllm_version = getattr(vllm, "__version__", "unknown")',
+    'except Exception:',
+    ' vllm_version = None',
+    'try:',
+    ' import vllm_metax',
+    ' vllm_metax_version = getattr(vllm_metax, "__version__", "unknown")',
+    'except Exception:',
+    ' vllm_metax_version = None',
+    'print(json.dumps({"python": platform.python_version(), "torch": torch.__version__, "triton": triton.__version__, "maca": __import__("os").environ.get("MACA_VERSION"), "vllm": vllm_version, "vllm_metax": vllm_metax_version}))',
+  ].join('\n');
+  const result = spawnSync(python, ['-c', script], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  if (result.status !== 0) return { status: 'missing', expected: C550_STACK, actual: null, detail: String(result.stderr || result.stdout || '').trim().split(/\r?\n/)[0] || 'C550 Python stack probe failed' };
+  let actual;
+  try { actual = JSON.parse(String(result.stdout || '').trim()); } catch { return { status: 'invalid', expected: C550_STACK, actual: null, detail: 'C550 Python stack probe returned invalid JSON' }; }
+  const checks = Object.fromEntries(Object.entries(C550_STACK).map(([key, expected]) => [key, {
+    status: actual[key] === expected ? 'ok' : actual[key] == null && ['vllm', 'vllm_metax'].includes(key) ? 'optional-missing' : 'mismatch',
+    expected,
+    actual: actual[key] ?? null,
+  }]));
+  const required = ['python', 'torch', 'triton', 'maca'];
+  return {
+    status: required.every((key) => checks[key].status === 'ok') ? 'ok' : 'mismatch',
+    expected: C550_STACK,
+    actual,
+    checks,
+    detail: required.every((key) => checks[key].status === 'ok') ? 'C550 Python stack matches the frozen target.' : 'C550 Python stack does not match the frozen target.',
+  };
+};
+
+const checkC550Smoke = (device) => {
+  const python = process.env.PYTHON || 'python';
+  const script = 'import torch; assert torch.cuda.is_available(); x=torch.ones((1,), device="cuda"); y=x+1; torch.cuda.synchronize(); print(torch.cuda.get_device_name(torch.cuda.current_device()))';
+  const result = spawnSync(python, ['-c', script], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  const detail = String(result.stdout || result.stderr || '').trim().split(/\r?\n/)[0] || null;
+  return { status: result.status === 0 && /C550/i.test(detail || device || '') ? 'ok' : 'failed', detail };
+};
+
 export const runDoctor = async () => {
   const runtime = await ensureProductionRuntime();
+  if (launchMode.simulation) {
+    const simulatedCheck = (detail) => ({ status: 'simulated', detail });
+    return {
+      status: 'completed',
+      executionMode: launchMode.id,
+      runtime,
+      mock: true,
+      simulation: true,
+      checks: {
+        device: simulatedCheck(`${muxiDevice} / simulation (no hardware probe)`),
+        python: simulatedCheck('not queried in full simulation'),
+        mxSmi: simulatedCheck('not queried in full simulation'),
+        mctracer: { ...simulatedCheck('not queried in full simulation'), required: false },
+        mcProfiler: { ...simulatedCheck('not queried in full simulation'), required: false },
+        sourceMirror: simulatedCheck('not queried in full simulation'),
+      },
+    };
+  }
+  if (launchMode.hardwareMock) {
+    const mockedCheck = (detail) => ({ status: 'mocked', detail });
+    return {
+      status: 'completed',
+      executionMode: launchMode.id,
+      runtime,
+      mock: true,
+      simulation: false,
+      checks: {
+        device: mockedCheck('C550 backend mocked; no hardware probe'),
+        python: mockedCheck('not queried in hardware-mock mode'),
+        mxSmi: mockedCheck('not queried in hardware-mock mode'),
+        mctracer: { ...mockedCheck('not queried in hardware-mock mode'), required: false },
+        mcProfiler: { ...mockedCheck('not queried in hardware-mock mode'), required: false },
+        sourceMirror: mockedCheck('validated by workflow source policy'),
+        stack: mockedCheck('not queried in hardware-mock mode'),
+        cudaSmoke: mockedCheck('not queried in hardware-mock mode'),
+      },
+    };
+  }
   const device = detectMuxiDevice();
+  const stack = checkC550Stack();
+  const cudaSmoke = device.device === 'C550' && device.source !== 'release-default' ? checkC550Smoke(device.device) : { status: 'blocked', detail: 'Skipped because C550 was not independently detected.' };
   let sourceMirror;
   try {
     const policy = await loadSourceMirrorPolicy();
@@ -367,26 +538,47 @@ export const runDoctor = async () => {
   const mcProfiler = checkCommand('mcProfiler');
   return {
     status: 'completed',
+    executionMode: launchMode.id,
     runtime,
     mock: runtime.testBackend?.mock === true,
     checks: {
-      device: { status: device.source === 'release-default' ? 'assumed' : 'ok', detail: `${device.device || 'unknown'} / ${device.source}` },
+      device: { status: device.source === 'release-default' ? 'assumed' : device.device === 'C550' ? 'ok' : 'invalid', detail: `${device.device || 'unknown'} / ${device.source}` },
       python: checkCommand(process.env.PYTHON || 'python', ['--version']),
       mxSmi: checkCommand('mx-smi', []),
       mctracer: { ...mctracer, required: false, status: mctracer.status === 'ok' ? 'ok' : 'optional-missing' },
       mcProfiler: { ...mcProfiler, required: false, status: mcProfiler.status === 'ok' ? 'ok' : 'optional-missing' },
       sourceMirror,
+      stack,
+      cudaSmoke,
     },
   };
 };
 
 export const assertProductionPreflight = (doctor) => {
+  const executionMode = doctor?.executionMode || (doctor?.simulation ? 'full-simulation' : doctor?.runtime?.testBackend?.mock ? 'hardware-mock' : 'real-c550');
+  const runtime = doctor?.runtime?.runtime || {};
+  const backend = doctor?.runtime?.testBackend || {};
+  if (executionMode === 'full-simulation') {
+    if (runtime.mode === 'reference-fixture' && runtime.connected === true && backend.mock === true && backend.liveHardware === false) return doctor;
+    const error = new Error('启动前检查失败：完整模拟必须使用 reference-fixture Agent 和 mock C550 backend');
+    error.code = 'LOCAL_C500_PREFLIGHT_FAILED';
+    error.details = doctor;
+    throw error;
+  }
   const failures = [];
-  if (doctor?.runtime?.runtime?.mode !== 'claude-code' || doctor?.runtime?.runtime?.connected !== true) failures.push('Claude Code 未连接或未登录');
-  if (doctor?.runtime?.testBackend?.mock === true || doctor?.runtime?.testBackend?.liveHardware !== true) failures.push('测试后端不是实机模式');
-  if (doctor?.checks?.python?.status !== 'ok') failures.push('Python 不可用');
-  if (doctor?.checks?.mxSmi?.status !== 'ok') failures.push('mx-smi 不可用');
-  if (!['ok', 'assumed'].includes(doctor?.checks?.device?.status)) failures.push('沐曦设备型号配置无效');
+  const capabilityCheck = inspectRuntimeCapabilities(runtime.mode, productionWorkflowCapabilities);
+  if (runtime.connected !== true) failures.push(`Agent Runtime ${runtime.mode || 'unknown'} 未连接`);
+  if (!capabilityCheck.supported) failures.push(`Agent Runtime ${runtime.mode || 'unknown'} 缺少能力：${capabilityCheck.missing.join(', ')}`);
+  if (executionMode === 'hardware-mock') {
+    if (backend.mock !== true || backend.liveHardware !== false) failures.push('hardware-mock 必须使用不可发布的 mock C550 backend');
+  } else {
+    if (backend.mock === true || backend.liveHardware !== true) failures.push('测试后端不是 C550 实机模式');
+    if (doctor?.checks?.python?.status !== 'ok') failures.push('Python 不可用');
+    if (doctor?.checks?.mxSmi?.status !== 'ok') failures.push('mx-smi 不可用');
+    if (doctor?.checks?.device?.status !== 'ok' || !/^C550(?:\s|\/|$)/i.test(String(doctor?.checks?.device?.detail || ''))) failures.push('未实际探测到目标 C550 设备');
+    if (doctor?.checks?.stack?.status !== 'ok') failures.push('C550 Python 软件栈版本不匹配');
+    if (doctor?.checks?.cudaSmoke?.status !== 'ok') failures.push('C550 CUDA 运行时 smoke test 失败');
+  }
   if (failures.length) {
     const error = new Error(`启动前检查失败：${failures.join('；')}`);
     error.code = 'LOCAL_C500_PREFLIGHT_FAILED';

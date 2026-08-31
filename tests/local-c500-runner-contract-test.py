@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 runner_path = Path(__file__).resolve().parents[1] / "tools" / "local-c500-runner.py"
+assert "contentDigest" in runner_path.read_text(encoding="utf-8")
 spec = importlib.util.spec_from_file_location("local_c500_runner", runner_path)
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)

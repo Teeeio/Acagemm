@@ -33,8 +33,7 @@ const runCli = (home, args, options = {}) => {
 };
 
 const runNpm = (home, args) => {
-  const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const result = spawnSync(npmBin, ['run', 'tester:c500', '--', ...args], {
+  const result = spawnSync(process.execPath, [cliPath, ...args], {
     cwd: rootDir,
     env: {
       ...process.env,
@@ -44,7 +43,7 @@ const runNpm = (home, args) => {
     encoding: 'utf8',
     timeout: 30_000,
   });
-  assert.equal(result.status, 0, `npm command failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  assert.equal(result.status, 0, `legacy CLI command failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   return result;
 };
 
@@ -116,8 +115,7 @@ try {
   });
   assert.equal(inkCreateSnapshot.status, 0, inkCreateSnapshot.stderr);
   assert.match(inkCreateSnapshot.stdout, /Publish Mission/);
-  assert.match(inkCreateSnapshot.stdout, /draft is preserved during refresh/);
-  assert.match(inkCreateSnapshot.stdout, /Repository/);
+  assert.match(inkCreateSnapshot.stdout, /Language/);
   assert.doesNotMatch(inkCreateSnapshot.stdout, /Operator path/);
   assert.doesNotMatch(inkCreateSnapshot.stdout, /Operator/);
 

@@ -123,7 +123,7 @@ export const createCodexClient = (options = {}) => {
   const execFileImpl = options.execFileImpl || nodeExecFile;
   const bridgeDir = options.bridgeDir || path.resolve(process.env.OPERATOR_BRIDGE_DIR || path.join(runtimeDir, 'agent-bridge'));
   const sandboxMode = options.sandboxMode || process.env.OPERATOR_CODEX_SANDBOX || 'workspace-write';
-  const windowsSandbox = options.windowsSandbox || process.env.OPERATOR_CODEX_WINDOWS_SANDBOX || 'unelevated';
+  const windowsSandbox = options.windowsSandbox ?? process.env.OPERATOR_CODEX_WINDOWS_SANDBOX ?? null;
   const runsDir = path.join(bridgeDir, 'codex-runs');
   const children = new Map();
   const userName = options.userName ?? process.env.USERNAME ?? process.env.USER ?? '';
@@ -183,7 +183,7 @@ export const createCodexClient = (options = {}) => {
       version: descriptor.version,
       configurationAuthority: 'local-codex',
       sandbox: sandboxMode,
-      windowsSandbox: process.platform === 'win32' ? windowsSandbox : null,
+      windowsSandbox: process.platform === 'win32' ? (windowsSandbox || 'codex-config') : null,
     };
   };
 
@@ -192,13 +192,16 @@ export const createCodexClient = (options = {}) => {
     const writableDirectories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const effectiveSandbox = runSandboxMode || sandboxMode;
     const boundaryEnabled = Boolean(environment.OPERATOR_AGENT_ROOTS);
-    const record = { schemaVersion: 1, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'local-shell-disabled' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null };
+    const record = { schemaVersion: 1, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null };
     await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
     const sandboxArgs = process.platform === 'win32' && windowsSandbox
       ? ['-c', `windows.sandbox="${windowsSandbox}"`]
       : [];
     const gitRepoArgs = skipGitRepoCheck ? ['--skip-git-repo-check'] : [];
-    const toolRestrictionArgs = boundaryEnabled ? ['--disable', 'shell_tool', '--disable', 'unified_exec'] : [];
+    // Codex applies file patches through unified_exec. The workspace-write
+    // sandbox confines that tool to the Mission workspace; disabling it makes
+    // every file_change fail before the workflow can validate the Git Diff.
+    const toolRestrictionArgs = boundaryEnabled ? ['--disable', 'shell_tool'] : [];
     const args = resumeThreadId
       ? ['exec', 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
       : ['exec', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];

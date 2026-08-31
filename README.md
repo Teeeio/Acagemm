@@ -1,6 +1,6 @@
 # Operator Studio
 
-> Local C500 生产工作流测试版入口为 `npm run tester:c500`。部署、TUI 操作、真实 C500 runner 和 mock 边界见 `tools/local-c500-tester/README.md`。
+> TUI 分支的 C550 生产工作流测试版入口为 `npm run tester:c500`。部署、三种运行模式、Agent Runtime 兼容层、TUI 操作、真实 C550 runner 和 Mock 边界见 `tools/local-c500-tester/README.md`；`local-c500` 为历史兼容命名。
 
 Operator Studio 是面向异构算子优化的本地 Agentic IDE。Agent 推理、工具调用、候选生成、代码工作区、流程状态、效果决策和知识维护都属于客户端；远端测试服务只接收算子测试任务并返回 Benchmark、Tracer 和 Profiler。
 
@@ -9,7 +9,10 @@ Operator Studio 是面向异构算子优化的本地 Agentic IDE。Agent 推理�
 ```mermaid
 flowchart LR
   UI[React UI] --> CR[Client Runtime]
-  CR --> AGENT[Codex CLI / Coding Agent Adapter]
+  CR --> AGENT[Agent Runtime compatibility layer]
+  AGENT --> CLAUDE[Claude Code]
+  AGENT --> CODEX[Codex CLI]
+  AGENT --> OPENCODE[OpenCode capability-gated]
   CR --> WS[Worktree and local state]
   CR --> QUEUE[Local Serial Test Queue]
   QUEUE --> TS[Operator Test Service]
@@ -17,7 +20,7 @@ flowchart LR
 ```
 
 - `src/`：产品界面，只展示客户端运行时返回的状态。
-- `client-runtime/`：本地应用后端，负责 Agent Adapter、Mission、候选、工作区、决策、知识和本地持久化。
+- `client-runtime/`：本地应用后端，负责能力驱动的 Agent Runtime Adapter、Mission、候选、工作区、决策、知识和本地持久化。
 - `test-service/`：远端测试服务契约的 Mock 实现，不提供 Mission、Agent、候选、决策或知识 API。
 - `tests/`：客户端运行时、产品边界、烟雾和发布守卫测试。
 - `reference-fixture`：仅供自动化测试使用，不能作为展会运行模式。

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { classifyClaudeFailure, createClaudeClient, normalizeClaudeEvents } from '../client-runtime/claude-client.mjs';
@@ -13,17 +13,19 @@ const normalized = normalizeClaudeEvents([
     { type: 'text', text: '{"summary":"candidate ready"}' },
   ] } },
   { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] } },
-  { type: 'result', subtype: 'success', is_error: false, session_id: 'session-test', result: '{"summary":"candidate ready"}' },
+  { type: 'result', subtype: 'success', is_error: false, session_id: 'session-test', result: '{"summary":"candidate ready"}', usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 30, cache_creation_input_tokens: 10 } },
 ]);
 assert.equal(normalized[0].type, 'thread.started');
 assert.ok(normalized.some((event) => event.type === 'item.started' && event.item.id === 'tool-1'));
 assert.ok(normalized.some((event) => event.type === 'item.completed' && event.item.type === 'agent_message'));
 assert.equal(normalized.at(-1).type, 'turn.completed');
+assert.equal(normalized.at(-1).usageId, 'claude-usage-3');
 const normalizedError = normalizeClaudeEvents([
-  { type: 'result', subtype: 'success', is_error: true, result: 'API Error: 402 Insufficient Balance' },
+  { type: 'result', subtype: 'success', is_error: true, result: 'API Error: 402 Insufficient Balance', usage: { input_tokens: 10, output_tokens: 2 } },
 ]);
-assert.equal(normalizedError.at(-1).type, 'error');
-assert.match(normalizedError.at(-1).error.message, /402 Insufficient Balance/);
+assert.equal(normalizedError.at(-1).type, 'turn.failed');
+assert.equal(normalizedError.at(-1).usage.input_tokens, 10);
+assert.match(normalizedError.find((event) => event.type === 'error').error.message, /402 Insufficient Balance/);
 const billingFailure = classifyClaudeFailure(
   { error: { code: 'CLAUDE_RESULT_ERROR', message: 'API Error: 402 Insufficient Balance' } },
   [],
@@ -52,8 +54,10 @@ const spawnImpl = (command, args, options) => {
   child.stdin.on('finish', () => {
     if (call.stdin === 'hold\n') return;
     child.stdout.write(`${JSON.stringify({ type: 'system', subtype: 'init', session_id: 'session-test' })}\n`);
+    for (let token = 1; token <= 200; token += 1) child.stdout.write(`${JSON.stringify({ type: 'system', subtype: 'thinking_tokens', estimated_tokens: token, estimated_tokens_delta: 1, session_id: 'session-test' })}\n`);
+    child.stdout.write(`${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'private reasoning block'.repeat(5000) }] } })}\n`);
     child.stdout.write(`${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: '{"summary":"ok"}' }] } })}\n`);
-    child.stdout.write(`${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 'session-test', result: '{"summary":"ok"}' })}\n`);
+    child.stdout.write(`${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 'session-test', result: '{"summary":"ok"}', usage: { input_tokens: 12, output_tokens: 3 } })}\n`);
     child.stdout.end();
     setTimeout(() => child.emit('close', 0, null), 30);
   });
@@ -97,7 +101,13 @@ try {
   const record = await client.readRun('claude_TEST');
   assert.equal(record.status, 'completed');
   assert.equal(record.threadId, 'session-test');
-  assert.equal((await client.readEvents('claude_TEST')).at(-1).type, 'turn.completed');
+  assert.ok(Date.parse(record.lastActivityAt) >= Date.parse(record.startedAt));
+  const persistedEvents = await readFile(record.eventPath, 'utf8');
+  assert.doesNotMatch(persistedEvents, /thinking_tokens/);
+  assert.doesNotMatch(persistedEvents, /private reasoning block/);
+  const completedEvents = await client.readEvents('claude_TEST');
+  assert.equal(completedEvents.at(-1).type, 'turn.completed');
+  assert.equal(completedEvents.at(-1).usage.input_tokens, 12);
   assert.deepEqual(spawnCalls[0].args, [
     '-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits', '--tools', 'Read,Write,Edit',
     '--allowedTools', 'Read,Write,Edit', '--disallowedTools', 'Bash,NotebookEdit',

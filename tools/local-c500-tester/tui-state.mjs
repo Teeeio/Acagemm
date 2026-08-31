@@ -1,5 +1,5 @@
 import { loadProductionState, rootDir, testerHome } from './production-api.mjs';
-import { formatTokenCount } from '../../client-runtime/token-usage.mjs';
+import { formatExactTokenCount } from '../../client-runtime/token-usage.mjs';
 import { normalizeOperatorLanguage } from '../../client-runtime/operator-language.mjs';
 
 export { rootDir };
@@ -93,6 +93,38 @@ const queueEntries = (tasks = []) => [...tasks]
   })
   .slice(0, 4)
   .map((task) => ({ key: task.taskId || task.id, line: queueLine(task), status: task.status }));
+
+export const deriveSemanticAlignment = ({ state = {}, mission = null } = {}) => {
+  const active = mission || {};
+  const snapshot = active.semanticSnapshot || state.semanticSnapshot || null;
+  const testSpec = snapshot?.testSpec || active.testMatrix?.testSpec || state.testMatrix?.testSpec || {};
+  const correctness = testSpec.correctness || {};
+  const benchmark = testSpec.benchmark || {};
+  const conflicts = Array.isArray(snapshot?.conflicts) ? snapshot.conflicts : [];
+  const unknowns = Array.isArray(snapshot?.unknowns) ? snapshot.unknowns : [];
+  const uncovered = Array.isArray(snapshot?.correctnessContract?.uncovered) ? snapshot.correctnessContract.uncovered : [];
+  const unresolvedConflicts = conflicts.filter((item) => item?.resolved !== true && item?.status !== 'resolved' && item?.blocking !== false && String(item?.severity || 'blocking') !== 'warning');
+  const unresolvedUnknowns = unknowns.filter((item) => item?.resolved !== true && item?.accepted !== true && item?.status !== 'accepted' && item?.blocking !== false);
+  const blockers = [...unresolvedConflicts.map((item) => `conflict:${item.field || 'unknown'}`), ...unresolvedUnknowns.map((item) => `unknown:${item.field || item.value || 'unknown'}`), ...uncovered.map((item) => `uncovered:${item}`)];
+  const status = snapshot?.status || 'missing';
+  const frozen = status === 'frozen';
+  const ready = blockers.length === 0 && Boolean(snapshot?.semanticContract?.operator || active.operator || active.title);
+  return {
+    status,
+    statusLabel: frozen ? 'FROZEN' : ready ? 'READY TO FREEZE' : snapshot ? 'ALIGNMENT REQUIRED' : 'NO SNAPSHOT',
+    snapshotId: snapshot?.snapshotId || '--',
+    digest: snapshot?.digest || '--',
+    digestShort: snapshot?.digest ? String(snapshot.digest).replace(/^sha256:/, '').slice(0, 12) : '--',
+    operator: snapshot?.semanticContract?.operator || active.operator || active.title || '--',
+    correctnessCases: Number(correctness.requestedCases || active.testMatrix?.correctnessCases || 0),
+    correctnessCategories: Array.isArray(correctness.requiredCategories) ? correctness.requiredCategories : [],
+    benchmarkProfiles: Array.isArray(benchmark.requiredProfiles) ? benchmark.requiredProfiles : [],
+    primaryProfile: benchmark.primaryProfile || '--',
+    blockers,
+    frozen,
+    ready,
+  };
+};
 
 export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] } = {}) => {
   const active = mission || {};
@@ -244,7 +276,7 @@ const fit = (input, width) => String(input ?? '').length > width ? `${String(inp
 
 export const renderWorkflowTopologySnapshot = (snapshot = {}) => {
   const topology = deriveWorkflowTopology(snapshot);
-  const setup = topology.setup.map((item) => `${topologyIcon(item.status)} ${item.title} [${item.owner === 'Agent' ? 'A' : 'F'}]`).join(' -> ');
+  const setup = topology.setup.map((item) => `${topologyIcon(item.status)} ${item.title} [${item.owner === 'Agent' ? 'A' : 'F'}] (${item.detail || item.status})`).join(' -> ');
   const rows = topology.recentCandidates.map((candidate) => [
     String(candidate.round).padStart(5),
     fit(candidate.id, 16),
@@ -280,7 +312,12 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
   const iteration = state.iterationStats || active.iterationStats || {};
   const benchmark = state.benchmark || active.benchmark || {};
   const benchmarkTask = benchmark.testTaskId ? tasks.find((task) => (task.taskId || task.id) === benchmark.testTaskId) : null;
-  const failure = benchmark.lastServiceError || benchmarkTask?.error || state.baseline?.error || null;
+  const failure = benchmark.lastServiceError
+    || benchmarkTask?.error
+    || state.baseline?.error
+    || state.workflowFailure
+    || active.workflowFailure
+    || null;
   const failureMessage = failure?.message ? String(failure.message) : '';
   const failureCode = failure?.code ? String(failure.code) : '';
   const best = state.currentBest || active.currentBest || {};
@@ -366,14 +403,17 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
   const iteration = state.iterationStats || active.iterationStats || {};
   const events = (state.runtimeEvents || []).slice(-6).reverse();
   const view = deriveTuiViewModel({ state, mission, tasks });
-  const tokens = formatTokenCount(state.tokenUsage?.totalTokens || active.tokenUsage?.totalTokens || 0);
+  const tokenUsage = state.tokenUsage || active.tokenUsage || {};
+  const tokens = formatExactTokenCount(tokenUsage.totalTokens || 0);
+  const tokenCoverage = tokenUsage.coverage || '0/0 runs exact';
   const implementation = normalizeOperatorLanguage(active.implementation);
+  const semantic = deriveSemanticAlignment({ state, mission: active });
   return [
     'C500 Production Workflow Tester',
     `  backend     ${health.testBackend?.kind || '--'}${health.testBackend?.mock ? ' (simulation)' : ''}`,
     `  api         ${health.__bridge?.apiUrl || '--'}`,
     `  workflow    ${view.banner}`,
-    `  tokens      ${tokens}`,
+    `  tokens      ${tokens} · ${tokenCoverage}`,
     '',
     'Current Mission',
     `  id          ${active.id || '--'}`,
@@ -386,6 +426,9 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
     `  rounds      ${view.displayedRounds}`,
     `  language    ${implementation.label}`,
     `  test spec   ${active.testMatrix?.testSpec?.schemaVersion || '--'}`,
+    `  semantics   ${semantic.statusLabel} · ${semantic.operator} · digest ${semantic.digestShort}`,
+    `  test map    correctness ${semantic.correctnessCases || '--'} [${semantic.correctnessCategories.join(', ') || '--'}] · benchmark ${semantic.primaryProfile}`,
+    ...(semantic.blockers.length ? [`  blockers    ${semantic.blockers.join(', ')}`] : []),
     '',
     renderWorkflowTopologySnapshot({ state, mission, tasks }),
     '',

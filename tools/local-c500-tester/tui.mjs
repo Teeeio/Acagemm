@@ -5,7 +5,8 @@ import { CreateMissionForm } from './components/CreateMissionForm.mjs';
 import { deriveTuiViewModel, loadTuiState, renderDashboardSnapshot, renderPublishSnapshot, resolveDashboardCommand } from './tui-state.mjs';
 import { createTerminalScreenSession } from './terminal-screen.mjs';
 import { createLatestRefreshGate, formatOperationResultMessage, reconcileOperationSnapshot, reconcileTuiSnapshot } from './tui-refresh.mjs';
-import { fixedOperatorProfiles } from '../../client-runtime/fixed-operator-profiles.mjs';
+import { tuiOperatorProfiles } from '../../client-runtime/fixed-operator-profiles.mjs';
+import { bilingual, displayStatus } from './ui-labels.mjs';
 import {
   addHumanFeedback,
   assertProductionPreflight,
@@ -16,6 +17,7 @@ import {
   resumeMission,
   runDoctor,
   stopMission,
+  stopProductionRuntime,
 } from './production-api.mjs';
 
 const initialSnapshot = { state: {}, mission: null, health: {}, tasks: [] };
@@ -27,13 +29,13 @@ const App = () => {
   const [mode, setMode] = useState('dashboard');
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [draft, setDraft] = useState({
-    profileId: fixedOperatorProfiles[0].id,
+    profileId: tuiOperatorProfiles[0].id,
     researchEnabled: true,
     requireAuthority: false,
     timeBudget: '',
   });
   const [fieldIndex, setFieldIndex] = useState(0);
-  const [message, setMessage] = useState('Connecting to production runtime...');
+  const [message, setMessage] = useState('正在连接生产运行时 (Connecting to production runtime...)');
   const [noteDraft, setNoteDraft] = useState('');
   const [doctorResult, setDoctorResult] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -41,9 +43,9 @@ const App = () => {
   const fields = ['profileId', 'researchEnabled', 'requireAuthority', 'timeBudget'];
 
   const cycleProfile = (direction = 1) => setDraft((current) => {
-    const index = fixedOperatorProfiles.findIndex((item) => item.id === current.profileId);
-    const next = (Math.max(0, index) + direction + fixedOperatorProfiles.length) % fixedOperatorProfiles.length;
-    return { ...current, profileId: fixedOperatorProfiles[next].id };
+    const index = tuiOperatorProfiles.findIndex((item) => item.id === current.profileId);
+    const next = (Math.max(0, index) + direction + tuiOperatorProfiles.length) % tuiOperatorProfiles.length;
+    return { ...current, profileId: tuiOperatorProfiles[next].id };
   });
 
   useEffect(() => {
@@ -59,11 +61,11 @@ const App = () => {
       if (!refreshGate.current.isLatest(requestId)) return null;
       setSnapshot((current) => reconcileTuiSnapshot(current, next));
       if (background) {
-        setMessage((current) => current === 'Connecting to production runtime...' || current.startsWith('Runtime refresh:') ? '' : current);
+        setMessage((current) => current === '正在连接生产运行时 (Connecting to production runtime...)' || current.startsWith('运行时刷新 (Runtime refresh):') ? '' : current);
       }
       return next;
     } catch (error) {
-      if (background && refreshGate.current.isLatest(requestId)) setMessage(`Runtime refresh: ${error.message}`);
+      if (background && refreshGate.current.isLatest(requestId)) setMessage(`运行时刷新 (Runtime refresh): ${error.message}`);
       if (!background) throw error;
       return null;
     }
@@ -72,9 +74,13 @@ const App = () => {
   useEffect(() => {
     let cancelled = false;
     let timer = null;
+    const configuredRefreshIntervalMs = Number(process.env.OPERATOR_TUI_REFRESH_MS || 1500);
+    const refreshIntervalMs = Number.isFinite(configuredRefreshIntervalMs)
+      ? Math.max(1000, configuredRefreshIntervalMs)
+      : 1500;
     const refresh = async () => {
       await refreshNow({ background: true });
-      if (!cancelled) timer = setTimeout(refresh, 1500);
+      if (!cancelled) timer = setTimeout(refresh, refreshIntervalMs);
     };
     void refresh();
     return () => {
@@ -107,15 +113,15 @@ const App = () => {
   };
 
   const submitPublish = async () => {
-    if (draft.timeBudget && (!/^\d+$/.test(draft.timeBudget) || Number(draft.timeBudget) <= 0)) return setMessage('Time budget must be positive milliseconds or empty.');
-    const result = await perform('Publish production mission', () => publishMission(draft));
+    if (draft.timeBudget && (!/^\d+$/.test(draft.timeBudget) || Number(draft.timeBudget) <= 0)) return setMessage('时间预算必须是正整数毫秒，或留空 (Time budget must be positive milliseconds or empty).');
+    const result = await perform('发布生产任务 (Publish production mission)', () => publishMission(draft));
     if (result) setMode('dashboard');
   };
 
   const submitNote = async () => {
-    if (!snapshot.mission) return setMessage('No active mission.');
-    if (noteDraft.trim().length < 2) return setMessage('Feedback must contain at least 2 characters.');
-    const result = await perform('Add human feedback', () => addHumanFeedback(noteDraft));
+    if (!snapshot.mission) return setMessage('当前没有活动任务 (No active mission).');
+    if (noteDraft.trim().length < 2) return setMessage('反馈至少需要 2 个字符 (Feedback must contain at least 2 characters).');
+    const result = await perform('添加人工反馈 (Add human feedback)', () => addHumanFeedback(noteDraft));
     if (result) {
       setNoteDraft('');
       setMode('dashboard');
@@ -125,7 +131,7 @@ const App = () => {
   const showDoctor = async () => {
     if (busy) return;
     setBusy(true);
-    setMessage('Checking C500 environment...');
+    setMessage('正在检查 C500 环境 (Checking C500 environment...)');
     try {
       setDoctorResult(await runDoctor());
       setMode('doctor');
@@ -174,33 +180,33 @@ const App = () => {
     if (command === 'publish') setMode('publish');
     if (command === 'doctor') void showDoctor();
     if (command === 'feedback') setMode('note');
-    if (command === 'stop') void perform('Stop mission', stopMission);
-    if (command === 'export') void perform('Export mission', async () => ({ path: await exportMission() }));
-    if (command === 'resume') void perform('Resume mission', resumeMission);
-    if (command === 'pause') void perform('Pause mission', pauseMission);
+    if (command === 'stop') void perform('停止任务 (Stop mission)', stopMission);
+    if (command === 'export') void perform('导出任务 (Export mission)', async () => ({ path: await exportMission() }));
+    if (command === 'resume') void perform('恢复任务 (Resume mission)', resumeMission);
+    if (command === 'pause') void perform('暂停任务 (Pause mission)', pauseMission);
   });
 
   if (mode === 'publish') return React.createElement(CreateMissionForm, { draft, fieldIndex, message, busy });
   if (mode === 'note') {
     return React.createElement(Box, { flexDirection: 'column', borderStyle: 'round', paddingX: 1 },
-      React.createElement(Text, { color: 'cyan', bold: true }, 'Human Feedback'),
-      React.createElement(Text, null, `Mission: ${snapshot.mission?.id || '--'}`),
-      React.createElement(Text, null, `Note: ${noteDraft}`),
+      React.createElement(Text, { color: 'cyan', bold: true }, '人工反馈 (Human Feedback)'),
+      React.createElement(Text, null, `任务 (Mission): ${snapshot.mission?.id || '--'}`),
+      React.createElement(Text, null, `内容 (Note): ${noteDraft}`),
       React.createElement(Text, null, ''),
-      React.createElement(Text, { inverse: true }, busy ? 'Submitting...' : '[Enter] Submit  [Esc] Cancel'),
+      React.createElement(Text, { inverse: true }, busy ? '正在提交 (Submitting...)' : '[Enter] 提交  [Esc] 取消'),
     );
   }
   if (mode === 'doctor') {
     const checks = doctorResult?.checks || {};
     return React.createElement(Box, { flexDirection: 'column', borderStyle: 'round', paddingX: 1 },
-      React.createElement(Text, { color: 'cyan', bold: true }, 'C500 Environment Doctor'),
-      React.createElement(Text, null, `runtime      ${doctorResult?.runtime?.runtime?.mode || doctorResult?.status || 'unknown'}`),
-      React.createElement(Text, null, `backend      ${doctorResult?.runtime?.testBackend?.kind || '--'}${doctorResult?.mock ? ' / simulation' : ''}`),
+      React.createElement(Text, { color: 'cyan', bold: true }, 'C500 环境诊断 (C500 Environment Doctor)'),
+      React.createElement(Text, null, `运行时 (runtime)  ${doctorResult?.runtime?.runtime?.mode || displayStatus(doctorResult?.status || 'unknown')}`),
+      React.createElement(Text, null, `后端 (backend)    ${doctorResult?.runtime?.testBackend?.kind || '--'}${doctorResult?.mock ? ' / 模拟 (simulation)' : ''}`),
       ...[['device', 'device'], ['python', 'python'], ['mxSmi', 'mx-smi'], ['mctracer', 'mctracer'], ['mcProfiler', 'mcProfiler'], ['sourceMirror', 'sourceMirror']]
-        .map(([key, label]) => React.createElement(Text, { key }, `${label.padEnd(12)} ${checks[key]?.status || '--'}${checks[key]?.detail ? ` / ${checks[key].detail}` : ''}`)),
+        .map(([key, label]) => React.createElement(Text, { key }, `${label.padEnd(12)} ${displayStatus(checks[key]?.status)}${checks[key]?.detail ? ` / ${checks[key].detail}` : ''}`)),
       doctorResult?.error ? React.createElement(Text, { color: 'red' }, doctorResult.error) : null,
       React.createElement(Text, null, ''),
-      React.createElement(Text, { inverse: true }, '[Esc] Back'),
+      React.createElement(Text, { inverse: true }, '[Esc] 返回 (Back)'),
     );
   }
   return React.createElement(Dashboard, { snapshot, message, viewport });
@@ -211,16 +217,28 @@ const main = async () => {
   if (args[0] === '--snapshot') {
     const modeIndex = args.indexOf('--mode');
     const mode = modeIndex >= 0 ? args[modeIndex + 1] : 'dashboard';
-    process.stdout.write(`${mode === 'publish' ? renderPublishSnapshot() : renderDashboardSnapshot(await loadTuiState())}\n`);
+    try {
+      process.stdout.write(`${mode === 'publish' ? renderPublishSnapshot() : renderDashboardSnapshot(await loadTuiState())}\n`);
+    } finally {
+      await stopProductionRuntime().catch(() => {});
+    }
     return;
   }
   if (args[0] === 'panel' && args.includes('--once')) {
-    process.stdout.write(`${renderDashboardSnapshot(await loadTuiState())}\n`);
+    try {
+      process.stdout.write(`${renderDashboardSnapshot(await loadTuiState())}\n`);
+    } finally {
+      await stopProductionRuntime().catch(() => {});
+    }
     return;
   }
   if (args[0] === 'doctor') {
-    const result = await runDoctor();
-    process.stdout.write(args.includes('--json') ? `${JSON.stringify(result, null, 2)}\n` : `${JSON.stringify(result)}\n`);
+    try {
+      const result = await runDoctor();
+      process.stdout.write(args.includes('--json') ? `${JSON.stringify(result, null, 2)}\n` : `${JSON.stringify(result)}\n`);
+    } finally {
+      await stopProductionRuntime().catch(() => {});
+    }
     return;
   }
   if (args.length) throw new Error('The production tester exposes only TUI, panel --once, doctor, and --snapshot commands.');
@@ -236,6 +254,7 @@ const main = async () => {
   } finally {
     process.removeListener('exit', restoreScreen);
     restoreScreen();
+    await stopProductionRuntime().catch(() => {});
   }
 };
 

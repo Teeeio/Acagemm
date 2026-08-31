@@ -87,7 +87,7 @@ try {
   assert.equal(record.status, 'completed');
   assert.equal(record.threadId, 'thread-test');
   assert.equal((await client.readEvents('codex_TEST')).length, 3);
-  const expectedWindowsSandboxArgs = process.platform === 'win32' ? ['-c', 'windows.sandbox="unelevated"'] : [];
+  const expectedWindowsSandboxArgs = [];
   assert.deepEqual(spawnCalls[0].args, ['exec', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, '--cd', root, '-']);
   await client.start({ runId: 'codex_RESUME', missionId: 'MIS_TEST', goal: 'continue operator', workspace: root, resumeThreadId: 'thread-test' });
   await new Promise((resolve) => setTimeout(resolve, 30));
@@ -132,6 +132,8 @@ try {
   const state = { activeMissionId: 'MIS_RUNTIME', runtimeEvents: [], stage: 'candidate', candidateEvaluations: [{ id: 'stale-candidate' }], agent: null };
   const mission = { id: 'MIS_RUNTIME', title: 'Codex mission', repository: root, hardware: ['C500'], metric: 'latency_p50' };
   await runtime.startRun({ state, mission, goal: 'inspect operator', workspace: root });
+  assert.ok(spawnCalls[2].args.includes('shell_tool'));
+  assert.ok(!spawnCalls[2].args.includes('unified_exec'));
   assert.match(spawnCalls[2].stdin, /Mission ID: MIS_RUNTIME/);
   assert.match(spawnCalls[2].stdin, /Do not call a remote benchmark service/);
   assert.match(spawnCalls[2].stdin, /Do not decide whether human approval is required/);

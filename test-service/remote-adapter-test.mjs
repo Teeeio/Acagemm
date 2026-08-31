@@ -223,13 +223,17 @@ const run = async () => {
     });
     await checkAsync('cancel 本地覆盖，随后 GET 保持 cancelled', async () => {
       // 先提交一个停留在 running 的 job（candidate_id=cancel-me → job_cancel），让 adapter 有记录
+      const previousCandidateId = process.env.OPERATOR_TEST_CANDIDATE_ID;
+      process.env.OPERATOR_TEST_CANDIDATE_ID = 'cancel-me';
       const sub = await api('/v1/operator-tests', { method: 'POST', body: JSON.stringify(samplePayload({ requestId: 'run_cancel', candidate: { id: 'cancel-me', digest: 'c' } })) });
+      if (previousCandidateId == null) delete process.env.OPERATOR_TEST_CANDIDATE_ID;
+      else process.env.OPERATOR_TEST_CANDIDATE_ID = previousCandidateId;
       assert.equal(sub.body.taskId, 'job_cancel');
       const c = await api('/v1/operator-tests/job_cancel/cancel', { method: 'POST', body: '{}' });
       assert.equal(c.body.status, 'cancelled');
       const again = await api('/v1/operator-tests/job_cancel');
       assert.equal(again.body.status, 'cancelled');
-      assert.equal(fake.submitted[0].idempotencyKey, 'op-run_cancel');
+      assert.equal(fake.submitted.at(-1).idempotencyKey, 'op-run_cancel');
     });
     await stack.close();
   }

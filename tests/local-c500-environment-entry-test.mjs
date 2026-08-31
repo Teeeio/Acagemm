@@ -10,10 +10,13 @@ assert.match(script, /install-bundled-node\.sh/);
 assert.match(script, /with-bundled-node\.sh/);
 assert.match(script, /BUNDLED_NODE=/);
 assert.match(script, /BUNDLED_NODE.*--input-type=module/);
-assert.match(script, /verify\|doctor\|start\|mock\|stop/);
+assert.match(script, /verify\|doctor\|start\|mock\|simulation\|stop/);
 assert.match(script, /operator-studio-client-runtime/);
 assert.match(script, /bridge\.port/);
 assert.match(script, /kill \"\$pid\"/);
+assert.match(script, /unset OPERATOR_LOCAL_C500_MOCK OPERATOR_LOCAL_C500_MOCK_SCENARIO/);
+assert.match(script, /OPERATOR_LOCAL_C500_SIMULATION OPERATOR_SIMULATION/);
+assert.match(script, /OPERATOR_HARDWARE_DISABLED OPERATOR_MUXI_DEVICE/);
 assert.doesNotMatch(script, /rm\s+-rf/);
 
 console.log('[local-c500-environment-entry] relocatable bootstrap and scoped runtime replacement passed');

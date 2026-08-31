@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 TESTER_HOME="${LOCAL_C500_TESTER_HOME:-$PROJECT_ROOT/.local-c500-production}"
+EXPLICIT_TESTER_HOME="${LOCAL_C500_TESTER_HOME:-}"
 API_PORT="${LOCAL_C500_API_PORT:-4275}"
 MODE="${1:-start}"
 NODE_VERSION='24.19.0'
@@ -77,11 +78,15 @@ case "$MODE" in
     ;;
   verify)
     ensure_dependencies
-    run_npm run verify:local-c500-release
-    run_npm run test:local-c500-e2e
+    run_npm run verify:non-hardware-robustness
     ;;
   doctor)
     ensure_dependencies
+    # Doctor must always inspect the physical C550 path. Clear any mode
+    # overrides left behind by a previous mock/simulation session.
+    unset OPERATOR_LOCAL_C500_MOCK OPERATOR_LOCAL_C500_MOCK_SCENARIO \
+      OPERATOR_LOCAL_C500_SIMULATION OPERATOR_SIMULATION \
+      OPERATOR_HARDWARE_DISABLED OPERATOR_MUXI_DEVICE
     run_npm run tester:c500:doctor
     ;;
   mock)
@@ -91,13 +96,32 @@ case "$MODE" in
     stop_previous_runtime
     run_npm run tester:c500
     ;;
+  simulation)
+    ensure_dependencies
+    if [[ -z "$EXPLICIT_TESTER_HOME" ]]; then
+      TESTER_HOME="$(mktemp -d "${TMPDIR:-/tmp}/operator-studio-simulation.XXXXXX")"
+      export LOCAL_C500_TESTER_HOME="$TESTER_HOME"
+      trap 'rm -r -- "$TESTER_HOME"' EXIT
+    fi
+    export OPERATOR_LOCAL_C500_SIMULATION=1
+    export OPERATOR_LOCAL_C500_MOCK=1
+    export OPERATOR_RUNTIME_MODE=reference-fixture
+    export OPERATOR_LOCAL_C500_MOCK_SCENARIO="${OPERATOR_LOCAL_C500_MOCK_SCENARIO:-mla-three-round}"
+    stop_previous_runtime
+    run_npm run tester:c500
+    ;;
   start)
     ensure_dependencies
-    unset OPERATOR_LOCAL_C500_MOCK OPERATOR_LOCAL_C500_MOCK_SCENARIO
+    # A real run must not inherit simulation/mock/device overrides from the
+    # current shell. Keep OPERATOR_RUNTIME_MODE intact so the operator can
+    # choose Claude Code or Codex CLI through the compatibility layer.
+    unset OPERATOR_LOCAL_C500_MOCK OPERATOR_LOCAL_C500_MOCK_SCENARIO \
+      OPERATOR_LOCAL_C500_SIMULATION OPERATOR_SIMULATION \
+      OPERATOR_HARDWARE_DISABLED OPERATOR_MUXI_DEVICE
     stop_previous_runtime
     run_npm run tester:c500
     ;;
   *)
-    die "usage: bash scripts/c500-test.sh {verify|doctor|start|mock|stop}"
+    die "usage: bash scripts/c500-test.sh {verify|doctor|start|mock|simulation|stop}"
     ;;
 esac
