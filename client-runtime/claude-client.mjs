@@ -38,9 +38,66 @@ const contentText = (content) => {
   return content.text || content.content || content.message || '';
 };
 
+const compactValue = (value, limit = 120) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit);
+
+export const describeClaudeTool = (name = 'Claude tool', input = {}) => {
+  const tool = String(name || 'Claude tool');
+  const file = compactValue(input.file_path || input.path);
+  if (tool === 'Read') return file ? `读取 ${file}` : '读取工作区文件';
+  if (tool === 'Write') return file ? `写入 ${file}` : '写入候选文件';
+  if (tool === 'Edit') return file ? `修改 ${file}` : '修改候选文件';
+  if (tool === 'Glob') return `查找文件 ${compactValue(input.pattern) || ''}`.trim();
+  if (tool === 'Grep') {
+    const pattern = compactValue(input.pattern);
+    const root = compactValue(input.path);
+    return `搜索 ${pattern ? `“${pattern}”` : '代码'}${root ? `，范围 ${root}` : ''}`;
+  }
+  if (tool === 'WebSearch') return `检索 ${compactValue(input.query) || '外部资料'}`;
+  if (tool === 'WebFetch') return `读取网页 ${compactValue(input.url) || ''}`.trim();
+  return `${tool}${file ? ` · ${file}` : ''}`;
+};
+
+export const claudeActivityFromEvent = (event, previous = null) => {
+  const now = new Date().toISOString();
+  if (event?.type === 'system' && event?.subtype === 'init') {
+    return { kind: 'session', status: 'running', name: 'Claude Code', summary: '会话已建立，正在读取任务上下文', updatedAt: now };
+  }
+  if (event?.type === 'system' && event?.subtype === 'thinking_tokens') {
+    return { kind: 'thinking', status: 'running', name: '分析', summary: '正在分析任务，尚未调用新工具', updatedAt: now };
+  }
+  if (event?.type === 'assistant') {
+    const content = Array.isArray(event.message?.content) ? event.message.content : [];
+    const tool = [...content].reverse().find((item) => item?.type === 'tool_use');
+    if (tool) return { kind: 'tool', status: 'running', toolId: tool.id || null, name: tool.name || 'Claude tool', summary: describeClaudeTool(tool.name, tool.input), updatedAt: now };
+    if (content.some((item) => item?.type === 'text' && item.text)) {
+      return { kind: 'message', status: 'running', name: '候选整理', summary: '正在整理分析结果与候选说明', updatedAt: now };
+    }
+  }
+  if (event?.type === 'user') {
+    const results = Array.isArray(event.message?.content) ? event.message.content.filter((item) => item?.type === 'tool_result') : [];
+    const result = results.at(-1);
+    if (result) {
+      const sameTool = previous?.toolId && previous.toolId === result.tool_use_id;
+      return {
+        kind: 'tool',
+        status: result.is_error ? 'failed' : 'completed',
+        toolId: result.tool_use_id || previous?.toolId || null,
+        name: sameTool ? previous.name : '工具',
+        summary: sameTool ? previous.summary : result.is_error ? '工具执行失败' : '工具执行完成，正在检查结果',
+        updatedAt: now,
+      };
+    }
+  }
+  if (event?.type === 'result') {
+    return { kind: 'result', status: event.is_error ? 'failed' : 'completed', name: 'Claude Code', summary: event.is_error ? '本次分析失败' : '本次分析完成', updatedAt: now };
+  }
+  return previous;
+};
+
 export const normalizeClaudeEvents = (events = []) => {
   const normalized = [];
   let lastAssistantText = '';
+  const tools = new Map();
   for (const [eventIndex, event] of events.entries()) {
     if (event?.type === 'system' && event?.subtype === 'init') {
       normalized.push({ type: 'thread.started', thread_id: event.session_id || null, provider: 'claude-code' });
@@ -57,9 +114,11 @@ export const normalizeClaudeEvents = (events = []) => {
             provider: 'claude-code',
           });
         } else if (item?.type === 'tool_use') {
+          const tool = { id: item.id || `claude-tool-${eventIndex}-${contentIndex}`, name: item.name || 'Claude tool', input: item.input || {} };
+          tools.set(tool.id, tool);
           normalized.push({
             type: 'item.started',
-            item: { id: item.id || `claude-tool-${eventIndex}-${contentIndex}`, type: 'command_execution', command: item.name || 'Claude tool', input: item.input || {} },
+            item: { ...tool, type: 'command_execution', command: tool.name, summary: describeClaudeTool(tool.name, tool.input) },
             provider: 'claude-code',
           });
         }
@@ -70,11 +129,16 @@ export const normalizeClaudeEvents = (events = []) => {
       const content = Array.isArray(event.message?.content) ? event.message.content : [];
       for (const [contentIndex, item] of content.entries()) {
         if (item?.type !== 'tool_result') continue;
+        const tool = tools.get(item.tool_use_id) || {};
         normalized.push({
           type: 'item.completed',
           item: {
             id: item.tool_use_id || `claude-tool-result-${eventIndex}-${contentIndex}`,
             type: 'command_execution',
+            name: tool.name || 'Claude tool',
+            command: tool.name || 'Claude tool',
+            input: tool.input || {},
+            summary: tool.name ? describeClaudeTool(tool.name, tool.input) : item.is_error ? '工具执行失败' : '工具执行完成',
             status: item.is_error ? 'failed' : 'completed',
             aggregated_output: contentText(item.content),
           },
@@ -104,6 +168,7 @@ export const normalizeClaudeEvents = (events = []) => {
 export const claudeEventText = (event) => event?.text
   || event?.message
   || event?.item?.text
+  || event?.item?.summary
   || event?.item?.aggregated_output
   || event?.item?.output
   || event?.item?.command
@@ -260,6 +325,7 @@ export const createClaudeClient = (options = {}) => {
       eventPath: eventsPath(runId),
       permissionMode,
       boundary: { role, roots, enforcement: 'claude-permissions-and-workflow-diff' },
+      activity: { kind: 'startup', status: 'running', name: 'Claude Code', summary: '正在启动候选生成智能体', updatedAt: new Date().toISOString() },
       error: null,
     };
     await persistRun(runId, record);
@@ -317,6 +383,11 @@ export const createClaudeClient = (options = {}) => {
           appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${line}\n`, 'utf8')).catch(() => {});
           continue;
         }
+        const previousActivity = record.activity;
+        record.activity = claudeActivityFromEvent(event, previousActivity);
+        const significantActivityChange = record.activity !== previousActivity
+          && (record.activity?.kind !== previousActivity?.kind || record.activity?.toolId !== previousActivity?.toolId || record.activity?.status !== previousActivity?.status);
+        if (significantActivityChange) appendChain = appendChain.then(() => persistRun(runId, record)).catch(() => {});
         if (!isClaudeTelemetryEvent(event)) appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${line}\n`, 'utf8')).catch(() => {});
         if (event.session_id) record.threadId = record.threadId || event.session_id, record.sessionId = record.sessionId || event.session_id;
         if (event.type !== 'result' || logicalTerminal) continue;

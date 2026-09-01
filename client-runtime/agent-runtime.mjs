@@ -1620,6 +1620,7 @@ export function createAgentRuntime(options = {}) {
           artifacts: [{ id: `${managedMeta.slug}-run-${state.agent.runId}`, kind: `${managedMeta.name} Run`, title: state.agent.artifacts?.[0]?.title || `${managedMeta.name} Mission`, status: nextStatus, meta: `${events.length} events · ${run.threadId || 'session pending'}` }],
           result: agentResult,
           candidateValidation,
+          activity: run.activity || state.agent.activity || null,
           eventCount,
           lastEventAt,
           timedOut: timedOut || undefined,

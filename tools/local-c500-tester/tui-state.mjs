@@ -66,11 +66,17 @@ const elapsedLabel = (startedAt) => {
 };
 
 const latestAgentActivity = (agent = {}) => {
+  const statusLabel = (status) => ({ running: '运行中', waiting: '等待中', completed: '已完成', failed: '失败', warning: '需注意' })[status] || status || '运行中';
+  if (agent.status === 'running' && agent.activity?.summary) {
+    return `${statusLabel(agent.activity.status)} · ${agent.activity.name || '智能体'} · ${agent.activity.summary}`;
+  }
   const tools = agent.toolCalls || [];
   const tool = [...tools].reverse().find((item) => ['running', 'waiting'].includes(item.status)) || tools.at(-1);
-  if (tool) return `${tool.status || 'running'} · ${tool.name || tool.toolId || 'tool'} · ${tool.summary || 'working'}`;
+  if (tool) return `${statusLabel(tool.status)} · ${tool.name || tool.toolId || '工具'} · ${tool.summary || '处理中'}`;
   const message = (agent.messages || []).at(-1);
-  if (message) return `${message.title || message.phase || 'message'} · ${message.detail || message.status || 'received'}`;
+  const launchOnly = message && /(?:Mission|Session).*(?:已启动|started)/i.test(message.title || '') && /\bRun\s+\S+/i.test(message.detail || '');
+  if (agent.status === 'running' && launchOnly) return agent.phase || '智能体正在分析，尚未调用工具';
+  if (message) return `${message.title || message.phase || '消息'} · ${message.detail || message.status || '已接收'}`;
   return agent.phase || 'waiting for first runtime event';
 };
 

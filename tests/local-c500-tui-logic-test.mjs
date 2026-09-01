@@ -41,6 +41,32 @@ assert.equal(running.actions.pause, true);
 assert.equal(resolveDashboardCommand({ input: ' ', viewModel: running }), 'pause');
 assert.equal(resolveDashboardCommand({ input: 'n', viewModel: running }), 'feedback');
 
+const liveClaudeActivity = deriveTuiViewModel({
+  ...runningSnapshot,
+  state: {
+    ...runningSnapshot.state,
+    agent: {
+      status: 'running',
+      phase: 'Claude Code 正在分析',
+      messages: [{ title: 'Claude Code Mission 已启动', detail: 'Run claude_TEST · 2.1.247 (Claude Code)' }],
+      activity: { status: 'running', name: 'Read', summary: '读取 run.py' },
+    },
+  },
+});
+assert.equal(liveClaudeActivity.currentActivity, '运行中 · Read · 读取 run.py');
+const preToolClaudeActivity = deriveTuiViewModel({
+  ...runningSnapshot,
+  state: {
+    ...runningSnapshot.state,
+    agent: {
+      status: 'running',
+      phase: 'Claude Code 正在分析',
+      messages: [{ title: 'Claude Code Mission 已启动', detail: 'Run claude_TEST · 2.1.247 (Claude Code)' }],
+    },
+  },
+});
+assert.equal(preToolClaudeActivity.currentActivity, 'Claude Code 正在分析');
+
 const paused = deriveTuiViewModel({
   ...runningSnapshot,
   state: { ...runningSnapshot.state, missionPaused: true },

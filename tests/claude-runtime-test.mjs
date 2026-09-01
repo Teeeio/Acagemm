@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { classifyClaudeFailure, createClaudeClient, normalizeClaudeEvents } from '../client-runtime/claude-client.mjs';
+import { claudeActivityFromEvent, classifyClaudeFailure, createClaudeClient, normalizeClaudeEvents } from '../client-runtime/claude-client.mjs';
 
 const normalized = normalizeClaudeEvents([
   { type: 'system', subtype: 'init', session_id: 'session-test' },
@@ -17,6 +17,9 @@ const normalized = normalizeClaudeEvents([
 ]);
 assert.equal(normalized[0].type, 'thread.started');
 assert.ok(normalized.some((event) => event.type === 'item.started' && event.item.id === 'tool-1'));
+assert.equal(normalized.find((event) => event.type === 'item.started').item.summary, '写入 run.py');
+assert.equal(normalized.find((event) => event.type === 'item.completed' && event.item.id === 'tool-1').item.name, 'Write');
+assert.equal(normalized.find((event) => event.type === 'item.completed' && event.item.id === 'tool-1').item.summary, '写入 run.py');
 assert.ok(normalized.some((event) => event.type === 'item.completed' && event.item.type === 'agent_message'));
 assert.equal(normalized.at(-1).type, 'turn.completed');
 assert.equal(normalized.at(-1).usageId, 'claude-usage-3');
@@ -26,6 +29,13 @@ const normalizedError = normalizeClaudeEvents([
 assert.equal(normalizedError.at(-1).type, 'turn.failed');
 assert.equal(normalizedError.at(-1).usage.input_tokens, 10);
 assert.match(normalizedError.find((event) => event.type === 'error').error.message, /402 Insufficient Balance/);
+const thinkingActivity = claudeActivityFromEvent({ type: 'system', subtype: 'thinking_tokens' });
+assert.equal(thinkingActivity.summary, '正在分析任务，尚未调用新工具');
+const readActivity = claudeActivityFromEvent({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'read-1', name: 'Read', input: { file_path: 'run.py' } }] } }, thinkingActivity);
+assert.equal(readActivity.summary, '读取 run.py');
+const completedReadActivity = claudeActivityFromEvent({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read-1', content: 'ok' }] } }, readActivity);
+assert.equal(completedReadActivity.name, 'Read');
+assert.equal(completedReadActivity.status, 'completed');
 const billingFailure = classifyClaudeFailure(
   { error: { code: 'CLAUDE_RESULT_ERROR', message: 'API Error: 402 Insufficient Balance' } },
   [],
@@ -51,6 +61,7 @@ const spawnImpl = (command, args, options) => {
   child.pid = 7182;
   child.killed = false;
   child.kill = () => { child.killed = true; child.emit('close', null, 'SIGTERM'); };
+  call.child = child;
   child.stdin.on('finish', () => {
     if (call.stdin === 'hold\n') return;
     child.stdout.write(`${JSON.stringify({ type: 'system', subtype: 'init', session_id: 'session-test' })}\n`);
@@ -140,6 +151,27 @@ try {
   assert.equal(spawnCalls[2].args[spawnCalls[2].args.indexOf('--allowedTools') + 1], 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch');
 
   await client.start({
+    runId: 'claude_ACTIVITY',
+    missionId: 'MIS_CLAUDE',
+    goal: 'hold',
+    workspace: root,
+    environment: { OPERATOR_AGENT_ROLE: 'iteration', OPERATOR_AGENT_ROOTS: JSON.stringify({ workspace: root }) },
+  });
+  const activityChild = spawnCalls[3].child;
+  activityChild.stdout.write(`${JSON.stringify({ type: 'system', subtype: 'init', session_id: 'session-activity' })}\n`);
+  activityChild.stdout.write(`${JSON.stringify({ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 50, estimated_tokens_delta: 50 })}\n`);
+  activityChild.stdout.write(`${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'edit-live', name: 'Edit', input: { file_path: 'run.py' } }] } })}\n`);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const liveActivityRecord = await client.readRun('claude_ACTIVITY');
+  assert.equal(liveActivityRecord.status, 'running');
+  assert.equal(liveActivityRecord.activity.name, 'Edit');
+  assert.equal(liveActivityRecord.activity.summary, '修改 run.py');
+  const liveActivityEvents = await client.readEvents('claude_ACTIVITY');
+  assert.equal(liveActivityEvents.find((event) => event.item?.id === 'edit-live').item.summary, '修改 run.py');
+  assert.doesNotMatch(await readFile(liveActivityRecord.eventPath, 'utf8'), /thinking_tokens/);
+  await client.cancel('claude_ACTIVITY');
+
+  await client.start({
     runId: 'claude_CANCEL',
     missionId: 'MIS_CLAUDE',
     goal: 'hold',
@@ -148,7 +180,7 @@ try {
   });
   const cancelResult = await client.cancel('claude_CANCEL');
   assert.equal(cancelResult.status, 'cancel_requested');
-  assert.deepEqual(terminatedPids, [7182]);
+  assert.deepEqual(terminatedPids, [7182, 7182]);
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal((await client.readRun('claude_CANCEL')).status, 'cancelled');
 
