@@ -129,7 +129,7 @@ const profiles = [
       contentFiles: ['run.py', 'paged_mqa_logits.py'],
     },
     iterationPolicy: {
-      maxGenerationAttempts: 2,
+      maxGenerationAttempts: 3,
       maxCorrectnessAttempts: 4,
       performanceRounds: 3,
       acceptFirstCorrectCandidate: true,
@@ -199,7 +199,7 @@ const profiles = [
       contentFiles: ['run.py', 'flash_mla.py'],
     },
     iterationPolicy: {
-      maxGenerationAttempts: 2,
+      maxGenerationAttempts: 3,
       maxCorrectnessAttempts: 4,
       performanceRounds: 3,
       acceptFirstCorrectCandidate: true,

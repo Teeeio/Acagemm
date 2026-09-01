@@ -88,6 +88,44 @@ assert.equal(migrateLocalC500TesterState(genericState, { enabled: true }).change
 assert.equal(genericState.missions[0].sourcePolicy.mode, 'agent-research-only');
 assert.equal(migrateLocalC500TesterState(legacyState(), { enabled: false }).changed, false);
 
+const fixedProfileBlocked = legacyState();
+fixedProfileBlocked.activeMissionId = 'MIS_FIXED_V01';
+fixedProfileBlocked.iterationStats = {
+  loopStatus: 'needs_human',
+  loopStatusReason: 'candidate_generation_failed',
+  round: 0,
+  currentRoundGenerationAttempts: 2,
+  generationAttempts: 2,
+  currentRoundCorrectnessAttempts: 1,
+  correctnessAttempts: 1,
+};
+fixedProfileBlocked.missions = [{
+  id: 'MIS_FIXED_V01',
+  status: 'needs_human',
+  hardware: ['C550'],
+  testScenario: {
+    id: 'paged-mqa-logits-triton-v01',
+    iterationPolicy: { maxGenerationAttempts: 2, maxCorrectnessAttempts: 4, performanceRounds: 3 },
+  },
+  operatorProfile: {
+    id: 'paged-mqa-logits-triton-v01',
+    iterationPolicy: { maxGenerationAttempts: 2, maxCorrectnessAttempts: 4, performanceRounds: 3 },
+  },
+  iterationStats: structuredClone(fixedProfileBlocked.iterationStats),
+}];
+const fixedProfileMigration = migrateLocalC500TesterState(fixedProfileBlocked, { enabled: true });
+assert.equal(fixedProfileMigration.changed, true);
+assert.equal(fixedProfileMigration.recovery.iterationPolicyChanged, true);
+assert.equal(fixedProfileMigration.recovery.previousGenerationLimit, 2);
+assert.equal(fixedProfileBlocked.missions[0].testScenario.iterationPolicy.maxGenerationAttempts, 3);
+assert.equal(fixedProfileBlocked.missions[0].operatorProfile.iterationPolicy.maxGenerationAttempts, 3);
+assert.equal(fixedProfileBlocked.iterationStats.loopStatus, 'running');
+assert.equal(fixedProfileBlocked.iterationStats.loopStatusReason, null);
+assert.equal(fixedProfileBlocked.iterationStats.currentRoundGenerationAttempts, 2, 'migration must preserve the two real historical generation failures');
+assert.equal(fixedProfileBlocked.iterationStats.currentRoundCorrectnessAttempts, 1, 'migration must preserve correctness history');
+assert.equal(fixedProfileBlocked.missions[0].status, 'running');
+assert.equal(migrateLocalC500TesterState(fixedProfileBlocked, { enabled: true }).changed, false, 'fixed-profile migration must be idempotent');
+
 const reservePort = () => new Promise((resolve, reject) => {
   const server = createServer();
   server.once('error', reject);

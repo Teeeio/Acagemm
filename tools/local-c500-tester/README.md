@@ -158,7 +158,7 @@ Mission intent
 - vLLM MetaX `0.13.0+g181dc3.d20260129.maca3.3.0.15.torch2.8`
 - `mx-smi`, `mctracer`, `mcProfiler`
 
-默认真实执行命令是 `python tools/local-c500-runner.py`。Baseline Materializer 根据权威语义生成具名 `get_test_cases()` 和 `get_benchmark_inputs()`；Runner 使用独立 baseline oracle 产生输入与预期结果，只调用候选的 `run(inputs)`，防止候选通过改写 reference 自证正确。Correctness 覆盖 minimal、representative、boundary、ragged 类别，benchmark 覆盖 primary、small、boundary profile，并继续主动尝试 mctracer 和 mcProfiler。两项诊断工具缺失或执行失败会记录 warning/失败工件，但不会阻塞 benchmark、Accept Gate 或采用；`mx-smi`、C550 软件栈、correctness 和 benchmark 仍是硬要求。
+默认真实执行命令是 `python tools/local-c500-runner.py`。Baseline Materializer 根据权威语义生成具名 `get_test_cases()` 和 `get_benchmark_inputs()`；Runner 使用独立 baseline oracle 产生输入与预期结果，只调用候选的 `run(inputs)`，防止候选通过改写 reference 自证正确。Correctness 覆盖 minimal、representative、boundary、ragged 类别，benchmark 覆盖 primary、small、boundary profile，并继续主动尝试 mctracer 和 mcProfiler。两项诊断工具缺失或执行失败会记录 warning/失败工件，但不会阻塞 benchmark、Accept Gate 或采用；`mx-smi`、C550 软件栈、correctness 和 benchmark 仍是硬要求。固定 Profile 每轮最多允许 3 次候选生成，correctness 修复独立允许 4 次；correctness 修复不会消耗候选生成配额。
 
 现场工具参数不同可设置：
 

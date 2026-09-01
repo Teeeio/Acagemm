@@ -249,7 +249,9 @@ export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] 
   };
 
   let currentNode = { title: 'WAITING', owner: 'Fixed', status: 'pending', progress: 0, detail: 'Publish a Mission to start', meta: '' };
-  if (research.status && research.status !== 'completed') currentNode = { title: 'SOURCE RESEARCH', owner: 'Agent', status: normalizedStatus(research.status), progress: Number(research.progress || 0), detail: research.phase || 'discovering source', meta: research.runPhase || '' };
+  const researchBlocksMain = ['running', 'cancel_requested'].includes(research.status)
+    && (research.synchronous === true || (research.synchronous !== false && baseline.status !== 'complete'));
+  if (researchBlocksMain) currentNode = { title: 'SOURCE RESEARCH', owner: 'Agent', status: normalizedStatus(research.status), progress: Number(research.progress || 0), detail: research.phase || 'discovering source', meta: research.runPhase || '' };
   else if (materializer.status && materializer.status !== 'completed') currentNode = { title: 'BASELINE MATERIALIZER', owner: 'Agent', status: normalizedStatus(materializer.status), progress: Number(materializer.progress || 0), detail: materializer.phase || 'building run.py', meta: materializer.runId || '' };
   else if (baselineTask && !completedTaskStatuses.has(baselineTask.status)) currentNode = { title: 'BASELINE TEST', owner: 'Fixed', status: normalizedStatus(baselineTask.status), progress: Number(baselineTask.progress || 0), detail: baselineTask.status, meta: baselineTask.taskId || '' };
   else if (current?.taskStatus === 'generating') currentNode = { title: `AGENT RUN · CANDIDATE ${current.round}`, owner: 'Agent', status: 'running', progress: null, progressMode: 'activity', detail: latestAgentActivity(state.agent), meta: `${state.agent?.runId || 'run pending'} · events ${Number(state.agent?.eventCount || 0)} · elapsed ${elapsedLabel(state.agent?.startedAt)}` };

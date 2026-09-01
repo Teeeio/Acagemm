@@ -257,6 +257,53 @@ assert.equal(phasedRetryResumed.action, 'resumed_agent');
 assert.equal(phasedRetryResumed.state.iterationStats.round, 1, 'starting a repair Agent must not increment the completed round count');
 assert.match(repairGoal, /Candidate 2 第 1 次 correctness 未通过/);
 assert.match(repairGoal, /仍属于 Round 2/);
+
+// A correctness repair Agent that returns no candidate must stay in the
+// correctness budget. Starting that repair must not consume generation quota.
+const repairNoCandidateState = {
+  ...structuredClone(phasedRetryCounted.state),
+  stage: 'diagnosis',
+  baseline: { status: 'complete' },
+  agent: { status: 'completed', runId: 'suite_repair_no_candidate' },
+  benchmark: { status: 'idle' },
+  decisionReview: { status: 'idle' },
+  candidateEvaluations: [],
+  iterationStats: {
+    ...phasedRetryCounted.state.iterationStats,
+    correctnessEstablished: false,
+    currentRoundCorrectnessAttempts: 1,
+    currentRoundGenerationAttempts: 0,
+    lastCorrectnessAttemptRunId: 'suite_retry_1',
+    lastGenerationAttemptRunId: null,
+  },
+};
+const repairNoCandidateCounted = await advanceIteration(repairNoCandidateState, {});
+assert.equal(repairNoCandidateCounted.action, 'correctness_attempt_counted');
+assert.equal(repairNoCandidateCounted.state.iterationStats.currentRoundCorrectnessAttempts, 2);
+assert.equal(repairNoCandidateCounted.state.iterationStats.currentRoundGenerationAttempts, 0);
+let repairRetryMode = null;
+const repairNoCandidateResumed = await advanceIteration(repairNoCandidateCounted.state, {
+  startMainRound: async ({ state, retryMode }) => {
+    repairRetryMode = retryMode;
+    state.agent = { status: 'running', runId: 'suite_repair_no_candidate_next' };
+    return state;
+  },
+});
+assert.equal(repairNoCandidateResumed.action, 'resumed_agent');
+assert.equal(repairRetryMode, 'correctness');
+assert.equal(repairNoCandidateResumed.state.iterationStats.currentRoundGenerationAttempts, 0);
+
+const generationSkipForRepair = settleGenerationAttemptBeforeStart(
+  {
+    ...structuredClone(repairNoCandidateState),
+    agent: { status: 'completed', runId: 'suite_repair_start' },
+  },
+  phasedMission,
+  { retryMode: 'correctness' },
+);
+assert.equal(generationSkipForRepair.counted, false);
+assert.equal(generationSkipForRepair.blocked, false);
+
 const phasedOptimization = {
   ...phasedRetryCounted.state,
   stage: 'evidence',

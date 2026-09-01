@@ -1,5 +1,11 @@
 const FLEXIBLE_SOURCE_POLICY_REVISION = 'local-c500-flexible-source-v1';
 const MATERIALIZER_DELIVERY_REVISION = 'local-c500-materializer-file-v1';
+const FIXED_ITERATION_POLICY_REVISION = 'local-c500-fixed-iteration-v2';
+const FIXED_GENERATION_ATTEMPT_LIMIT = 3;
+const TUI_FIXED_PROFILE_IDS = new Set([
+  'paged-mqa-logits-triton-v01',
+  'flash-mla-decode-triton-v01',
+]);
 const RECOVERABLE_SOURCE_BLOCKERS = new Set([
   'baseline_source_unresolved',
   'baseline_source_unverified',
@@ -9,6 +15,10 @@ const TERMINAL_RESEARCH_STATUSES = new Set(['completed', 'failed', 'cancelled', 
 const isManagedC500TesterMission = (mission = {}) => (
   mission.testScenario?.id === 'mla-three-round'
   && (mission.hardware || []).some((item) => String(item).toUpperCase() === 'C500')
+);
+
+const isTuiFixedProfileMission = (mission = {}) => TUI_FIXED_PROFILE_IDS.has(
+  mission.testScenario?.id || mission.operatorProfile?.id,
 );
 
 const flexibleSourcePolicy = (current = {}) => ({
@@ -52,16 +62,43 @@ const recoveredResearchAgent = (current = {}) => ({
 export const migrateLocalC500TesterState = (state, { enabled = true } = {}) => {
   if (!enabled || !state?.activeMissionId || !Array.isArray(state.missions)) return { state, changed: false, recovery: null };
   const mission = state.missions.find((item) => item.id === state.activeMissionId);
-  if (!mission || !isManagedC500TesterMission(mission)) return { state, changed: false, recovery: null };
+  const managedC500Mission = isManagedC500TesterMission(mission);
+  const fixedProfileMission = isTuiFixedProfileMission(mission);
+  if (!mission || (!managedC500Mission && !fixedProfileMission)) return { state, changed: false, recovery: null };
 
   const previousPolicy = mission.sourcePolicy || {};
-  const policyChanged = previousPolicy.mode !== 'agent-flexible'
+  const policyChanged = managedC500Mission && (previousPolicy.mode !== 'agent-flexible'
     || previousPolicy.localFirst !== true
     || previousPolicy.allowDiscoveredSources !== true
     || previousPolicy.allowSemanticFallback !== true
     || previousPolicy.revision !== FLEXIBLE_SOURCE_POLICY_REVISION
-    || previousPolicy.materializerRevision !== MATERIALIZER_DELIVERY_REVISION;
+    || previousPolicy.materializerRevision !== MATERIALIZER_DELIVERY_REVISION);
   if (policyChanged) mission.sourcePolicy = flexibleSourcePolicy(previousPolicy);
+
+  const previousGenerationLimit = Number(
+    mission.testScenario?.iterationPolicy?.maxGenerationAttempts
+      ?? mission.operatorProfile?.iterationPolicy?.maxGenerationAttempts
+      ?? 0,
+  );
+  const iterationPolicyChanged = fixedProfileMission
+    && (previousGenerationLimit !== FIXED_GENERATION_ATTEMPT_LIMIT
+      || mission.testScenario?.iterationPolicy?.revision !== FIXED_ITERATION_POLICY_REVISION);
+  if (iterationPolicyChanged) {
+    if (mission.testScenario?.iterationPolicy) {
+      mission.testScenario.iterationPolicy = {
+        ...mission.testScenario.iterationPolicy,
+        maxGenerationAttempts: FIXED_GENERATION_ATTEMPT_LIMIT,
+        revision: FIXED_ITERATION_POLICY_REVISION,
+      };
+    }
+    if (mission.operatorProfile?.iterationPolicy) {
+      mission.operatorProfile.iterationPolicy = {
+        ...mission.operatorProfile.iterationPolicy,
+        maxGenerationAttempts: FIXED_GENERATION_ATTEMPT_LIMIT,
+        revision: FIXED_ITERATION_POLICY_REVISION,
+      };
+    }
+  }
 
   const blockedReason = state.iterationStats?.loopStatus === 'needs_human'
     ? state.iterationStats?.loopStatusReason
@@ -69,10 +106,14 @@ export const migrateLocalC500TesterState = (state, { enabled = true } = {}) => {
   const recoverSourceBlock = RECOVERABLE_SOURCE_BLOCKERS.has(blockedReason);
   const recoverMaterializerBlock = blockedReason === 'baseline_materializer_failed'
     && previousPolicy.materializerRevision !== MATERIALIZER_DELIVERY_REVISION;
+  const recoverGenerationBlock = iterationPolicyChanged
+    && blockedReason === 'candidate_generation_failed'
+    && Number(state.iterationStats?.currentRoundGenerationAttempts || 0) < FIXED_GENERATION_ATTEMPT_LIMIT;
   let recoveredRunId = null;
-  if (recoverSourceBlock || recoverMaterializerBlock) {
+  if (recoverSourceBlock || recoverMaterializerBlock || recoverGenerationBlock) {
     state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'running', loopStatusReason: null };
     mission.iterationStats = { ...(mission.iterationStats || {}), loopStatus: 'running', loopStatusReason: null };
+    if (recoverGenerationBlock && mission.status === 'needs_human') mission.status = 'running';
     if (recoverSourceBlock && (TERMINAL_RESEARCH_STATUSES.has(state.researchAgent?.status) || state.researchAgent?.phase === '研究员状态读取失败')) {
       recoveredRunId = state.researchAgent?.runId || null;
       state.researchAgent = recoveredResearchAgent(state.researchAgent);
@@ -112,7 +153,7 @@ export const migrateLocalC500TesterState = (state, { enabled = true } = {}) => {
     mission.researchAgent = structuredClone(state.researchAgent);
   }
 
-  const changed = policyChanged || recoverSourceBlock || recoverMaterializerBlock || stalePhase;
+  const changed = policyChanged || iterationPolicyChanged || recoverSourceBlock || recoverMaterializerBlock || recoverGenerationBlock || stalePhase;
   return {
     state,
     changed,
@@ -121,10 +162,14 @@ export const migrateLocalC500TesterState = (state, { enabled = true } = {}) => {
       previousMode: previousPolicy.mode || null,
       policyRevision: FLEXIBLE_SOURCE_POLICY_REVISION,
       materializerRevision: MATERIALIZER_DELIVERY_REVISION,
+      iterationPolicyRevision: iterationPolicyChanged ? FIXED_ITERATION_POLICY_REVISION : null,
+      previousGenerationLimit: iterationPolicyChanged ? previousGenerationLimit : null,
+      generationAttemptLimit: fixedProfileMission ? FIXED_GENERATION_ATTEMPT_LIMIT : null,
+      iterationPolicyChanged,
       previousBlocker: blockedReason,
       recoveredRunId,
     } : null,
   };
 };
 
-export { FLEXIBLE_SOURCE_POLICY_REVISION, MATERIALIZER_DELIVERY_REVISION };
+export { FLEXIBLE_SOURCE_POLICY_REVISION, MATERIALIZER_DELIVERY_REVISION, FIXED_ITERATION_POLICY_REVISION, FIXED_GENERATION_ATTEMPT_LIMIT };

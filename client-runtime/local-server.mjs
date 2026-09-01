@@ -1081,10 +1081,10 @@ const iterationDeps = {
       return { count: entries.filter((name) => name !== '.git').length };
     } catch { return { count: 0 }; }
   },
-  startMainRound: async ({ state, goal }) => {
+  startMainRound: async ({ state, goal, retryMode = 'generation' }) => {
     const runtimeDescriptor = await agentRuntime.describe();
     const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-    const generationSettlement = settleGenerationAttemptBeforeStart(state, mission);
+    const generationSettlement = settleGenerationAttemptBeforeStart(state, mission, { retryMode });
     if (generationSettlement.blocked) return state;
     const preflight = await buildRuntimePreflight(mission);
     if (!preflight.ready) return state;
@@ -1296,7 +1296,9 @@ const advanceTesterAutopilot = async (state) => {
     // Experience research is a side-channel. It is intentionally asynchronous;
     // a slow or unavailable web agent must never hold up candidate round 1.
     if (isResearchAgentActive(state.researchAgent || {}) && state.researchAgent?.synchronous) return { state, action: 'wait_experience_research' };    if (!state.agent?.runId && ['idle', 'ready', 'awaiting_action', 'completed', 'failed', 'cancelled'].includes(state.agent?.status)) {
-      return { state: await iterationDeps.startMainRound({ state, goal: mission.goal }), action: 'candidate_agent_started' };
+      const correctnessRepair = Number(state.iterationStats?.currentRoundCorrectnessAttempts || 0) > 0
+        && state.iterationStats?.correctnessEstablished !== true;
+      return { state: await iterationDeps.startMainRound({ state, goal: mission.goal, retryMode: correctnessRepair ? 'correctness' : 'generation' }), action: 'candidate_agent_started' };
     }
   }
 
@@ -1430,11 +1432,18 @@ const loadRuntimeState = async () => {
   const state = await loadState({ runtimeMode: runtime.mode, commandJournal, applyRegistry: commandRegistry });
   const sourcePolicyMigration = migrateLocalC500TesterState(state, { enabled: localC500Config.enabled });
   if (sourcePolicyMigration.changed) {
-    appendRuntimeEvent(state, 'mission.source_policy_migrated', sourcePolicyMigration.recovery, { kind: 'migration', mode: 'client' });
+    const iterationPolicyMigrated = sourcePolicyMigration.recovery?.iterationPolicyChanged === true;
+    appendRuntimeEvent(state, iterationPolicyMigrated ? 'mission.iteration_policy_migrated' : 'mission.source_policy_migrated', sourcePolicyMigration.recovery, { kind: 'migration', mode: 'client' });
     const materializerRecovered = sourcePolicyMigration.recovery?.previousBlocker === 'baseline_materializer_failed';
-    addAuditEvent(state, materializerRecovered ? 'C500 Materializer 交付协议已升级' : 'C500 来源策略已升级', sourcePolicyMigration.recovery?.previousBlocker
-      ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，${materializerRecovered ? 'Materializer' : 'Research'} 将自动重新执行`
-      : 'Research 将按本地、联网、语义 fallback 顺序执行', 'blue', 'RefreshCw');
+    const migrationTitle = iterationPolicyMigrated
+      ? '固定 Profile 重试策略已升级'
+      : materializerRecovered ? 'C500 Materializer 交付协议已升级' : 'C500 来源策略已升级';
+    const migrationDetail = iterationPolicyMigrated
+      ? `${sourcePolicyMigration.recovery?.previousBlocker ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，` : ''}候选生成上限调整为 ${sourcePolicyMigration.recovery.generationAttemptLimit}`
+      : sourcePolicyMigration.recovery?.previousBlocker
+        ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，${materializerRecovered ? 'Materializer' : 'Research'} 将自动重新执行`
+        : 'Research 将按本地、联网、语义 fallback 顺序执行';
+    addAuditEvent(state, migrationTitle, migrationDetail, 'blue', 'RefreshCw');
   }
   const baselineFailureProjected = reconcilePersistedBaselineFailure(state);
   const initialReconciliation = reconcileWorkflowState(state);

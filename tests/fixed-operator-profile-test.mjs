@@ -29,6 +29,8 @@ try {
   assert.equal(mqa.benchmark.length, 2);
   assert.equal(mla.benchmark.length, 2);
   for (const profile of [mqa, mla]) {
+    assert.equal(profile.iterationPolicy.maxGenerationAttempts, 3);
+    assert.equal(profile.iterationPolicy.maxCorrectnessAttempts, 4);
     for (const group of new Set(profile.correctness.map((item) => item.group))) {
       assert.deepEqual(profile.correctness.filter((item) => item.group === group).map((item) => item.dtype), ['float32', 'float16', 'bfloat16'], `${group} must run all three dtypes`);
     }

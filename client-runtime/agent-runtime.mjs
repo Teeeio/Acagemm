@@ -1252,7 +1252,9 @@ export function createAgentRuntime(options = {}) {
         const failed = run.status === 'failed';
         const completed = run.status === 'completed';
         const cancelled = run.status === 'cancelled';
-        const budgetExceeded = prev.startedAt && Date.now() - new Date(prev.startedAt).getTime() >= (prev.budgetMs || 0);
+        const budgetExceeded = Number(prev.budgetMs) > 0
+          && prev.startedAt
+          && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
         const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? 'cancelled' : (budgetExceeded && prev.status !== 'cancel_requested') ? 'timed_out' : prev.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         if (nextStatus === 'timed_out') {
           try { await runtimeEngine.invoke(mode, 'cancel', prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
@@ -1372,9 +1374,8 @@ export function createAgentRuntime(options = {}) {
 
     // 研究员子 Agent 是平行 run：只投影 state.researchAgent，绝不触碰主线程的
     // stage / candidateEvaluations / patchApplied，避免干扰候选验证路径。
-    // 只在研究活跃（running/cancel_requested）或终态待产笔记（synthesize 无笔记）时触发；
-    // 已定局的终态（采集完成/笔记已产）放行到主线程分支——否则研究分支会一直 return，
-    // 主 agent 完成的 run 永远不会被投影。
+    // 只有 synchronous 研究（baseline/source 获取）可以阻塞主线程；fixed profile 的
+    // experience 研究是旁路，即使预算耗尽或还在运行，也必须继续投影主 Agent。
     const researchNeedsProjection = ['running', 'cancel_requested'].includes(state.researchAgent?.status)
       || (['completed', 'failed', 'timed_out', 'cancelled'].includes(state.researchAgent?.status)
           && ['synthesize', 'experience'].includes(state.researchAgent?.runPhase) && !(state.researchAgent?.notes || []).length);
@@ -1389,7 +1390,9 @@ export function createAgentRuntime(options = {}) {
         const failed = run.status === 'failed';
         const completed = run.status === 'completed';
         const cancelled = run.status === 'cancelled';
-        const budgetExceeded = prev.startedAt && Date.now() - new Date(prev.startedAt).getTime() >= (prev.budgetMs || 0);
+        const budgetExceeded = Number(prev.budgetMs) > 0
+          && prev.startedAt
+          && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
         const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? 'cancelled' : (budgetExceeded && prev.status !== 'cancel_requested') ? 'timed_out' : prev.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         if (nextStatus === 'timed_out') {
           try { await runtimeEngine.invoke(mode, 'cancel', prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
@@ -1463,7 +1466,7 @@ export function createAgentRuntime(options = {}) {
         }
         const changed = runtimeChanged || usageChanged || JSON.stringify(nextResearchAgent) !== JSON.stringify(prev);
         state.researchAgent = nextResearchAgent;
-        return { state, changed };
+        if (prev.synchronous === true) return { state, changed };
       } catch (error) {
         appendRuntimeEvent(state, 'research.acquire_failed', {
           runId: state.researchAgent?.runId,
@@ -1472,7 +1475,7 @@ export function createAgentRuntime(options = {}) {
           details: error.details || null,
         }, { kind: 'research', mode });
         state.researchAgent = { ...state.researchAgent, status: 'failed', phase: '研究员处理失败', progress: 100, messages: [...(state.researchAgent.messages || []), { id: `research-projection-error-${state.researchAgent.runId}`, phase: 'research', status: 'waiting', title: '研究或来源处理失败', detail: error.message, time: '刚刚' }] };
-        return { state, changed: true };
+        if (state.researchAgent?.synchronous === true) return { state, changed: true };
       }
     }
     if (managedCliMode && state.agent?.runtimeKind === mode && state.agent?.runId) {
