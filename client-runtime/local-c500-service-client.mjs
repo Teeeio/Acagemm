@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,7 +37,20 @@ const correctnessPath = (taskId) => path.join(taskRoot, taskId, 'correctness.jso
 const runnerStatusPath = (taskId) => path.join(taskRoot, taskId, 'runner-status.json');
 const referenceCacheRoot = path.join(taskRoot, 'reference-cache');
 const activeExecutions = new Map();
+const taskWriteChains = new Map();
 const simulationEnabled = process.env.OPERATOR_LOCAL_C500_SIMULATION === '1';
+const terminalTaskStatuses = new Set(['completed', 'failed', 'cancelled']);
+
+export const reconcileLocalTaskSnapshot = (stored, incoming) => {
+  if (!stored) return incoming;
+  if (terminalTaskStatuses.has(stored.status)) return stored;
+  if (terminalTaskStatuses.has(incoming.status)) return incoming;
+  return {
+    ...incoming,
+    progress: Math.max(Number(stored.progress || 0), Number(incoming.progress || 0)),
+    logs: (stored.logs || []).length > (incoming.logs || []).length ? stored.logs : incoming.logs,
+  };
+};
 
 const fail = (message, code, status = 400) => {
   const error = new Error(message);
@@ -57,6 +70,7 @@ const terminateProcessTree = (child) => {
 
 const loadTask = async (taskId) => {
   try {
+    await taskWriteChains.get(taskId);
     return JSON.parse(await readFile(taskPath(taskId), 'utf8'));
   } catch (error) {
     if (error.code === 'ENOENT') throw fail(`Local C500 task not found: ${taskId}`, 'LOCAL_C500_TASK_NOT_FOUND', 404);
@@ -65,9 +79,33 @@ const loadTask = async (taskId) => {
 };
 
 const saveTask = async (task) => {
-  await mkdir(path.dirname(taskPath(task.taskId)), { recursive: true });
-  await writeFile(taskPath(task.taskId), `${JSON.stringify(task, null, 2)}\n`, 'utf8');
-  return task;
+  const snapshot = structuredClone(task);
+  const taskId = snapshot.taskId;
+  const previous = taskWriteChains.get(taskId) || Promise.resolve();
+  const current = previous.catch(() => {}).then(async () => {
+    const target = taskPath(taskId);
+    const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+    await mkdir(path.dirname(target), { recursive: true });
+    try {
+      let persisted = snapshot;
+      try {
+        const stored = JSON.parse(await readFile(target, 'utf8'));
+        persisted = reconcileLocalTaskSnapshot(stored, snapshot);
+      } catch (error) {
+        if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+      }
+      await writeFile(temporary, `${JSON.stringify(persisted, null, 2)}\n`, 'utf8');
+      await rename(temporary, target);
+      return persisted;
+    } finally {
+      await rm(temporary, { force: true }).catch(() => {});
+    }
+  });
+  taskWriteChains.set(taskId, current);
+  current.finally(() => {
+    if (taskWriteChains.get(taskId) === current) taskWriteChains.delete(taskId);
+  }).catch(() => {});
+  return current;
 };
 
 const taskView = (task) => ({
@@ -287,24 +325,31 @@ const executeTask = async (task) => {
 };
 
 const startTaskExecution = async (task) => {
-  if (activeExecutions.has(task.taskId)) return;
-  task.status = 'running';
-  task.startedAt ||= now();
-  task.progress = Math.max(10, Number(task.progress || 0));
-  task.logs = task.logs?.length ? task.logs : [{ sequence: 1, progress: 10, message: 'Local C500 backend started on the production Mission artifact.' }];
-  await saveTask(task);
-  const execution = { child: null, promise: null };
+  const active = activeExecutions.get(task.taskId);
+  if (active) return active.started;
+  const execution = { child: null, promise: null, started: null };
   activeExecutions.set(task.taskId, execution);
-  execution.promise = executeTask(task)
-    .catch(async (error) => {
-      const latest = await loadTask(task.taskId);
-      latest.status = 'failed';
-      latest.progress = 100;
-      latest.error = { code: error.code || 'LOCAL_C500_RUNNER_FAILED', message: error.message };
-      latest.completedAt = now();
-      await saveTask(latest);
-    })
-    .finally(() => activeExecutions.delete(task.taskId));
+  execution.started = (async () => {
+    task.status = 'running';
+    task.startedAt ||= now();
+    task.progress = Math.max(10, Number(task.progress || 0));
+    task.logs = task.logs?.length ? task.logs : [{ sequence: 1, progress: 10, message: 'Local C500 backend started on the production Mission artifact.' }];
+    const persisted = await saveTask(task);
+    execution.promise = executeTask(persisted)
+      .catch(async (error) => {
+        const latest = await loadTask(task.taskId);
+        latest.status = 'failed';
+        latest.progress = 100;
+        latest.error = { code: error.code || 'LOCAL_C500_RUNNER_FAILED', message: error.message };
+        latest.completedAt = now();
+        await saveTask(latest);
+      })
+      .finally(() => activeExecutions.delete(task.taskId));
+  })().catch((error) => {
+    activeExecutions.delete(task.taskId);
+    throw error;
+  });
+  return execution.started;
 };
 
 const refreshRunnerProgress = async (task) => {

@@ -1,10 +1,11 @@
-import { writeFile } from 'node:fs/promises';
+import { appendFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const taskDir = process.env.OPERATOR_LOCAL_C500_TASK_DIR;
 const resultPath = process.env.OPERATOR_LOCAL_C500_RESULT_JSON;
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+await appendFile(path.join(taskDir, 'runner-launches.log'), `${process.pid}\n`, 'utf8');
 await wait(250);
 await writeFile(path.join(taskDir, 'runner-status.json'), `${JSON.stringify({ progress: 60, stage: 'benchmark', message: 'Correctness passed; benchmark running.' })}\n`, 'utf8');
 await wait(450);
