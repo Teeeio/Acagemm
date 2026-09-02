@@ -20,7 +20,7 @@ for (const relative of removedLegacyModules) {
   assert.equal(await exists(relative), false, `legacy workflow module must stay removed: ${relative}`);
 }
 
-const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, roundArtifactGuard, baselineSourceService, materializerPolicyService, baselineFailureProjection, benchmarkProjectionService, repositoryAdoptionService, packageJson] = await Promise.all([
+const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, roundArtifactGuard, baselineSourceService, materializerPolicyService, baselineFailureProjection, benchmarkProjectionService, repositoryAdoptionService, autopilotCandidateService, packageJson] = await Promise.all([
   read('client-runtime/state-store.mjs'),
   read('client-runtime/iteration-loop.mjs'),
   read('client-runtime/local-server.mjs'),
@@ -67,6 +67,7 @@ const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, m
   read('client-runtime/application/baseline-failure-projection.mjs'),
   read('client-runtime/application/benchmark-projection-service.mjs'),
   read('client-runtime/application/repository-adoption-service.mjs'),
+  read('client-runtime/application/autopilot-candidate-service.mjs'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -117,6 +118,7 @@ assert.doesNotMatch(materializerPolicyService, /server\/|tools\/local-c500-teste
 assert.doesNotMatch(baselineFailureProjection, /server\/|tools\/local-c500-tester/, 'Baseline failure projection must not depend on transport or TUI');
 assert.doesNotMatch(benchmarkProjectionService, /server\/|tools\/local-c500-tester/, 'Benchmark projection service must not depend on transport or TUI');
 assert.doesNotMatch(repositoryAdoptionService, /server\/|tools\/local-c500-tester/, 'Repository adoption service must not depend on transport or TUI');
+assert.doesNotMatch(autopilotCandidateService, /server\/|tools\/local-c500-tester/, 'Autopilot candidate service must not depend on transport or TUI');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
@@ -164,6 +166,7 @@ for (const requiredDocument of [
   'client-runtime/application/baseline-failure-projection.md',
   'client-runtime/application/benchmark-projection-service.md',
   'client-runtime/application/repository-adoption-service.md',
+  'client-runtime/application/autopilot-candidate-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',

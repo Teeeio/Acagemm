@@ -98,6 +98,7 @@ import { createMaterializerPolicyService } from './application/materializer-poli
 import { projectBaselineFailure } from './application/baseline-failure-projection.mjs';
 import { createBenchmarkProjectionService } from './application/benchmark-projection-service.mjs';
 import { createRepositoryAdoptionService } from './application/repository-adoption-service.mjs';
+import { selectAutopilotCandidate } from './application/autopilot-candidate-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1186,9 +1187,7 @@ const advanceTesterAutopilot = async (state) => {
   if (process.env.OPERATOR_AUTO_TICK !== '1' || state.missionPaused) return { state, action: 'none' };
   const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
   const actionType = state.agent?.currentAction?.type;
-  const candidate = (state.candidateEvaluations || []).find((item) => item.patchDigest)
-    || (state.candidateEvaluations || []).find((item) => item.acceptGate?.passed === true || item.classification === 'eligible')
-    || (state.candidateEvaluations || [])[0];
+  const candidate = selectAutopilotCandidate(state);
 
   // 专用四算子路径：冻结语义和测试矩阵 -> baseline -> 可选经验调研 -> 三轮候选。
   // 经验调研的失败被记录，但不会改变 baseline 或使任务进入 needs_human。

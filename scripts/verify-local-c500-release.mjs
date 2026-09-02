@@ -45,6 +45,7 @@ const checks = [
   'test:baseline-failure-projection',
   'test:benchmark-projection-service',
   'test:repository-adoption-service',
+  'test:autopilot-candidate-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',

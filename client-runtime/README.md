@@ -54,6 +54,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/baseline-failure-projection.mjs` | baseline failure state projection | benchmark state | changed flag |
 | `application/benchmark-projection-service.mjs` | Operator Test snapshot projection | benchmark state | changed state |
 | `application/repository-adoption-service.mjs` | Accept Gate repository adoption | projected state | changed state |
+| `application/autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |
