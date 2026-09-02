@@ -44,6 +44,7 @@
 | `agent-round-service.mjs` | Agent round reset, checkpoint, and launch | round input | updated state |
 | `round-preflight-service.mjs` | generation settlement and runtime preflight composition | round input | round context |
 | `round-artifact-guard.mjs` | strict baseline artifact admission | mission/state | pass or stable error |
+| `baseline-source-service.mjs` | baseline source policy selection | mission/state | source selection |
 
 ## Dependency Direction
 

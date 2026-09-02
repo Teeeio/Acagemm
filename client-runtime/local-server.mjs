@@ -93,6 +93,7 @@ import { createRoundRecoveryService } from './application/round-recovery-service
 import { createAgentRoundService } from './application/agent-round-service.mjs';
 import { createRoundPreflightService } from './application/round-preflight-service.mjs';
 import { createRoundArtifactGuard } from './application/round-artifact-guard.mjs';
+import { createBaselineSourceService } from './application/baseline-source-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1033,6 +1034,7 @@ const roundRecoveryService = createRoundRecoveryService({ isManagedWorkspaceRunt
 const agentRoundService = createAgentRoundService({ resetMissionRunState, resetMissionWorkspace, createWorkspaceCheckpoint, startAgentRun, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, agentRuntime });
 const roundPreflightService = createRoundPreflightService({ settleGenerationAttemptBeforeStart, buildRuntimePreflight });
 const roundArtifactGuard = createRoundArtifactGuard({ isStrictZeroSourceMission });
+const baselineSourceService = createBaselineSourceService({ isFixedOperatorMission, isStrictZeroSourceMission, selectResearchBaselineSource, buildSemanticBaselineSource, inferAuthoritativeBaselineSource, isSemanticBaselineSource });
 
 const iterationDeps = {
   startResearch: iterationResearchService.startResearch,
@@ -1074,20 +1076,8 @@ const iterationDeps = {
     // 后续候选提示词增益，绝不能阻塞可复现的 reference benchmark。
     if (!fixedOperator && isResearchAgentActive(research)) return state;
     const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
-    const researchedSource = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources });
-    const semanticSource = mission.sourcePolicy?.allowSemanticFallback === true && researchTerminal
-      ? buildSemanticBaselineSource(mission, research)
-      : null;
-    const baselineSource = fixedOperator
-      ? state.baseline?.source || mission.baseline?.source
-      : strictZeroSource
-      ? researchedSource || semanticSource
-      : state.baseline?.source
-      || mission.baseline?.source
-      || researchedSource
-      || inferAuthoritativeBaselineSource(mission, { operator: mission.operator || mission.title, reason });
+    const { source: baselineSource, semanticFallback } = baselineSourceService.select({ state, mission, reason });
     if (!baselineSource) return state;
-    const semanticFallback = isSemanticBaselineSource(baselineSource);
     if (semanticFallback) {
       state.baseline = {
         ...(state.baseline || {}),

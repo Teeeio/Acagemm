@@ -40,6 +40,7 @@ const checks = [
   'test:agent-round-service',
   'test:round-preflight-service',
   'test:round-artifact-guard',
+  'test:baseline-source-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',
