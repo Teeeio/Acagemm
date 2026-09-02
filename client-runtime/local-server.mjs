@@ -97,6 +97,7 @@ import { createBaselineSourceService } from './application/baseline-source-servi
 import { createMaterializerPolicyService } from './application/materializer-policy-service.mjs';
 import { projectBaselineFailure } from './application/baseline-failure-projection.mjs';
 import { createBenchmarkProjectionService } from './application/benchmark-projection-service.mjs';
+import { createRepositoryAdoptionService } from './application/repository-adoption-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1039,6 +1040,7 @@ const roundPreflightService = createRoundPreflightService({ settleGenerationAtte
 const roundArtifactGuard = createRoundArtifactGuard({ isStrictZeroSourceMission });
 const baselineSourceService = createBaselineSourceService({ isFixedOperatorMission, isStrictZeroSourceMission, selectResearchBaselineSource, buildSemanticBaselineSource, inferAuthoritativeBaselineSource, isSemanticBaselineSource });
 const benchmarkProjectionService = createBenchmarkProjectionService({ operatorTestQueue, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path });
+const repositoryAdoptionService = createRepositoryAdoptionService({ isManagedWorkspaceRuntimeMode, adoptPatch: (...args) => workspaceManager.adoptPatch(...args), runAutomaticAdoption, runKnowledgeMaintenance, appendRuntimeEvent });
 const materializerPolicyService = createMaterializerPolicyService({ consumeWorkflowRecoveryBudget: (...args) => consumeWorkflowRecoveryBudget(...args) });
 
 const iterationDeps = {
@@ -1360,31 +1362,8 @@ const loadRuntimeState = async () => {
   let changed = baselineFailureProjected || sourcePolicyMigration.changed || projection.changed || initialReconciliation.changed;
   const benchmarkProjection = await benchmarkProjectionService.project({ state: projection.state });
   changed ||= benchmarkProjection.changed;
-  const mission = projection.state.missions?.find((item) => item.id === projection.state.activeMissionId);
-  const candidateId = projection.state.appliedCandidateId || projection.state.decisionReview?.candidateId;
-  const candidate = (projection.state.candidateEvaluations || []).find((item) => item.id === candidateId);
-  const shouldAdoptThreeLayer = isManagedWorkspaceRuntimeMode(projection.state.agent?.runtimeKind)
-    && mission?.projectRoot
-    && projection.state.stage === 'evidence'
-    && projection.state.benchmark?.status === 'complete'
-    && projection.state.decisionReview?.status === 'auto_ready'
-    && projection.state.decisionReview?.gate?.passed === true
-    && candidate?.artifacts?.patch
-    && !projection.state.workflowRecovery?.repositoryAdoption?.commit;
-  if (shouldAdoptThreeLayer) {
-    try {
-      const adoption = await workspaceManager.adoptPatch({ repository: mission.repository, patchPath: candidate.artifacts.patch, candidateId });
-      projection.state.workflowRecovery = { ...(projection.state.workflowRecovery || {}), repositoryAdoption: { status: 'completed', ...adoption } };
-      runAutomaticAdoption(projection.state, `Accept Gate 已通过，${candidateId} 已提交到 Iteration Repository。`);
-      runKnowledgeMaintenance(projection.state);
-      changed = true;
-    } catch (error) {
-      projection.state.workflowRecovery = { ...(projection.state.workflowRecovery || {}), repositoryAdoption: { status: 'blocked', code: error.code || 'ITERATION_REPOSITORY_ADOPTION_FAILED', detail: error.message, blockedAt: new Date().toISOString() } };
-      projection.state.agent = { ...projection.state.agent, status: 'failed', phase: 'Iteration Repository 采用失败', currentAction: null, messages: [...(projection.state.agent?.messages || []), { id: `repository-adoption-${Date.now()}`, phase: 'decision', status: 'waiting', title: '无法写回 Iteration Repository', detail: error.message, time: '刚刚', errorCode: error.code }] };
-      appendRuntimeEvent(projection.state, 'repository.adoption_blocked', { candidate: candidateId, code: error.code, detail: error.message }, { kind: 'repository', mode: 'client' });
-      changed = true;
-    }
-  }
+  const adoption = await repositoryAdoptionService.adopt({ state: projection.state });
+  changed ||= adoption.changed;
   const autopilot = await advanceTesterAutopilot(projection.state);
   projection.state = autopilot.state;
   if (autopilot.action !== 'none') changed = true;

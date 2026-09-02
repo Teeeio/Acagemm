@@ -48,6 +48,7 @@
 | `materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 | `baseline-failure-projection.mjs` | idempotent baseline failure projection | benchmark state | changed flag |
 | `benchmark-projection-service.mjs` | Operator Test queue snapshot and artifact projection | benchmark state | changed state |
+| `repository-adoption-service.mjs` | managed runtime candidate repository adoption | projected state | changed state |
 
 ## Dependency Direction
 
