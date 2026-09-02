@@ -90,6 +90,7 @@ import { createKnowledgeService } from './application/knowledge-service.mjs';
 import { createSourceService } from './application/source-service.mjs';
 import { createIterationResearchService } from './application/iteration-research-service.mjs';
 import { createRoundRecoveryService } from './application/round-recovery-service.mjs';
+import { createAgentRoundService } from './application/agent-round-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1027,6 +1028,7 @@ const knowledgeRoutes = createKnowledgeRoutes({ json, readJson, knowledge: knowl
 const sourceService = createSourceService({ readdir, stat, path, workspaceManager });
 const iterationResearchService = createIterationResearchService({ mkdir, agentRuntime, isManagedWorkspaceRuntimeMode });
 const roundRecoveryService = createRoundRecoveryService({ isManagedWorkspaceRuntimeMode, restoreWorkspaceCheckpoint, captureDiff: (...args) => workspaceManager.captureDiff(...args) });
+const agentRoundService = createAgentRoundService({ resetMissionRunState, resetMissionWorkspace, createWorkspaceCheckpoint, startAgentRun, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, agentRuntime });
 
 const iterationDeps = {
   startResearch: iterationResearchService.startResearch,
@@ -1051,23 +1053,12 @@ const iterationDeps = {
         throw error;
       }
     }
-    resetMissionRunState(state, goal, { referenceFixture: runtimeDescriptor.mode === 'reference-fixture' });
     if (rollback) {
       state.workflowRecovery = { ...(state.workflowRecovery || {}), lastRecovery: { type: 'round_rollback', ...rollback } };
       appendRuntimeEvent(state, 'workflow.round_rolled_back', rollback, { kind: 'recovery', mode: 'client' });
       addAuditEvent(state, '未采纳候选已回退', `${rollback.candidateId || 'candidate'} · ${rollback.checkpointId} · workspace clean`, 'warning', 'History');
     }
-    if (runtimeDescriptor.mode === 'reference-fixture') await resetMissionWorkspace(state.activeMissionId);
-    if (isManagedWorkspaceRuntimeMode(runtimeDescriptor.mode)) {
-      const baselineCheckpoint = await createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline');
-      state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), baselineCheckpoint].slice(-5) };
-    }
-    const runtimeRun = await agentRuntime.startRun({ state, mission, goal, resumeThreadId: null, workspace });
-    if (!runtimeRun.handled) {
-      startAgentRun(state, goal, { reset: false });
-      appendRuntimeEvent(state, 'mission.run_started', { runId: state.agent.runId, goal }, { kind: 'adapter', mode: 'reference-fixture' });
-    }
-    return runtimeRun.state || state;
+    return agentRoundService.startRound({ state, mission, goal, workspace, runtimeMode: runtimeDescriptor.mode });
   },
   startBaseline: async ({ state, mission, reason }) => {
     const matrix = inferMissionMatrix(mission, state.testMatrix || mission.testMatrix || {});

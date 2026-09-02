@@ -46,6 +46,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/source-service.mjs` | source repository registration and counting | Mission source root | source references/count |
 | `application/iteration-research-service.mjs` | Agent research start/cancel coordination | research command | updated state |
 | `application/round-recovery-service.mjs` | rejected-round checkpoint restoration | round state/workspace | recovery metadata |
+| `application/agent-round-service.mjs` | Agent round initialization and launch | round input | updated state |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |
