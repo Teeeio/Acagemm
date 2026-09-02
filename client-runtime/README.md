@@ -36,6 +36,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/review-action-service.mjs` | Mission resume and human review lifecycle | review command | command result or resolved outcome |
 | `application/decision-service.mjs` | adoption, rejection, and adoption reversal | decision command | command result and recovery metadata |
 | `application/candidate-validation-service.mjs` | Patch, Benchmark, and stage rollback orchestration | Candidate/Benchmark command | command result or validation response |
+| `application/baseline-service.mjs` | authoritative Baseline materialization orchestration | source and matrix command | command result and materializer run ID |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |

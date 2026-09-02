@@ -79,6 +79,8 @@ import { createDecisionRoutes } from './server/decision-routes.mjs';
 import { createDecisionService } from './application/decision-service.mjs';
 import { createCandidateValidationRoutes } from './server/candidate-validation-routes.mjs';
 import { createCandidateValidationService } from './application/candidate-validation-service.mjs';
+import { createBaselineRoutes } from './server/baseline-routes.mjs';
+import { createBaselineService } from './application/baseline-service.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -1022,6 +1024,8 @@ const decisionService = createDecisionService({ loadState: () => loadRuntimeStat
 const decisionRoutes = createDecisionRoutes({ json, readJson, decisions: decisionService });
 const candidateValidationService = createCandidateValidationService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, guardSupportedRuntimeAction, guardMutation: (...args) => guardMutation(...args), guardWorkflowTransition });
 const candidateValidationRoutes = createCandidateValidationRoutes({ json, readJson, workflow: candidateValidationService });
+const baselineService = createBaselineService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, guardMutation: (...args) => guardMutation(...args), guardWorkflowTransition });
+const baselineRoutes = createBaselineRoutes({ json, readJson, baseline: baselineService });
 
 const iterationDeps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
@@ -1520,6 +1524,7 @@ async function handleApi(request, response, url) {
   if (await reviewActionRoutes({ request, response, url })) return;
   if (await decisionRoutes({ request, response, url })) return;
   if (await candidateValidationRoutes({ request, response, url })) return;
+  if (await baselineRoutes({ request, response, url })) return;
 
   if (request.method === 'GET' && url.pathname === '/api/runtime/preflight') {
     const state = await loadRuntimeState();
@@ -1572,16 +1577,6 @@ async function handleApi(request, response, url) {
     }
     const cancelled = await agentRuntime.cancelRun({ state, runId });
     json(response, 202, { state: await persistState(cancelled.state), result: cancelled.result });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/materialize-baseline') {
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    guardWorkflowTransition(state, { stages: ['diagnosis', 'candidate', 'validation'], label: 'Baseline 单文件展开' });
-    const body = await readJson(request);
-    const result = await executeCommand({ journal: commandJournal, saveState: persistState, registry: commandRegistry, state, type: 'materialize-baseline', body, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 202, { state: result.state, materializer: result.state.baseline?.materializer, runId: result.result?.runId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'PATCH' && url.pathname.startsWith('/api/knowledge/drafts/')) {

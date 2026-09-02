@@ -37,6 +37,7 @@
 | `review-action-routes.mjs` | Resume and review request/cancel/resolve HTTP contexts | handled boolean and JSON response |
 | `decision-routes.mjs` | Adopt, reject, and adoption-reversal HTTP contexts | handled boolean and JSON response |
 | `candidate-validation-routes.mjs` | Patch, Benchmark, and rollback HTTP contexts | handled boolean and JSON response |
+| `baseline-routes.mjs` | Baseline materialization HTTP context | handled boolean and JSON response |
 
 ## Route Contract
 
@@ -53,6 +54,7 @@ Every route handler receives `{ request, response, url }` and returns `true` whe
 - Review routes only map transport fields; pending-review and outcome validation belongs to the application service.
 - Decision routes do not apply adoption, knowledge, validation, or recovery state changes.
 - Candidate validation routes do not inspect workspaces, submit test tasks, or restore checkpoints.
+- Baseline routes do not select source authority, start materializer Agents, or mutate Baseline state.
 
 ## Verification
 

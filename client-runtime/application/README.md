@@ -31,6 +31,7 @@
 | `review-action-service.mjs` | Resume and decision-review request/cancel/resolve actions | command result or resolved outcome |
 | `decision-service.mjs` | Candidate adoption, rejection, and adoption reversal | command result and recovery metadata |
 | `candidate-validation-service.mjs` | Patch application, Benchmark submission, and stage rollback | command result or stable validation response |
+| `baseline-service.mjs` | Authoritative Baseline single-file materialization | command result and materializer run ID |
 
 ## Dependency Direction
 

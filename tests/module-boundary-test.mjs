@@ -20,7 +20,7 @@ for (const relative of removedLegacyModules) {
   assert.equal(await exists(relative), false, `legacy workflow module must stay removed: ${relative}`);
 }
 
-const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, packageJson] = await Promise.all([
+const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, packageJson] = await Promise.all([
   read('client-runtime/state-store.mjs'),
   read('client-runtime/iteration-loop.mjs'),
   read('client-runtime/local-server.mjs'),
@@ -42,6 +42,8 @@ const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, m
   read('client-runtime/application/decision-service.mjs'),
   read('client-runtime/server/candidate-validation-routes.mjs'),
   read('client-runtime/application/candidate-validation-service.mjs'),
+  read('client-runtime/server/baseline-routes.mjs'),
+  read('client-runtime/application/baseline-service.mjs'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -67,11 +69,14 @@ assert.doesNotMatch(decisionRoutes, /state-store|agent-runtime|node:fs/, 'Decisi
 assert.doesNotMatch(decisionService, /server\/|tools\/local-c500-tester/, 'Decision service must not depend on transport or TUI');
 assert.doesNotMatch(candidateValidationRoutes, /state-store|agent-runtime|operator-test-queue|workspace-manager|node:fs/, 'Candidate validation routes must stay transport-only');
 assert.doesNotMatch(candidateValidationService, /server\/|tools\/local-c500-tester/, 'Candidate validation service must not depend on transport or TUI');
+assert.doesNotMatch(baselineRoutes, /state-store|agent-runtime|baseline-materializer|node:fs/, 'Baseline routes must stay transport-only');
+assert.doesNotMatch(baselineService, /server\/|tools\/local-c500-tester/, 'Baseline service must not depend on transport or TUI');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:adopt|reject|revert-adoption)['"]/, 'Decision routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:apply-patch|start-benchmark|rollback-stage)['"]/, 'Candidate validation routes must stay extracted');
+assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/materialize-baseline['"]/, 'Baseline routes must stay extracted');
 
 for (const requiredDocument of [
   'AGENTS.md',
@@ -89,6 +94,7 @@ for (const requiredDocument of [
   'client-runtime/application/review-action-service.md',
   'client-runtime/application/decision-service.md',
   'client-runtime/application/candidate-validation-service.md',
+  'client-runtime/application/baseline-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',
