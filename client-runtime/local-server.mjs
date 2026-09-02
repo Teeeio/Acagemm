@@ -92,6 +92,7 @@ import { createIterationResearchService } from './application/iteration-research
 import { createRoundRecoveryService } from './application/round-recovery-service.mjs';
 import { createAgentRoundService } from './application/agent-round-service.mjs';
 import { createRoundPreflightService } from './application/round-preflight-service.mjs';
+import { createRoundArtifactGuard } from './application/round-artifact-guard.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1031,6 +1032,7 @@ const iterationResearchService = createIterationResearchService({ mkdir, agentRu
 const roundRecoveryService = createRoundRecoveryService({ isManagedWorkspaceRuntimeMode, restoreWorkspaceCheckpoint, captureDiff: (...args) => workspaceManager.captureDiff(...args) });
 const agentRoundService = createAgentRoundService({ resetMissionRunState, resetMissionWorkspace, createWorkspaceCheckpoint, startAgentRun, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, agentRuntime });
 const roundPreflightService = createRoundPreflightService({ settleGenerationAttemptBeforeStart, buildRuntimePreflight });
+const roundArtifactGuard = createRoundArtifactGuard({ isStrictZeroSourceMission });
 
 const iterationDeps = {
   startResearch: iterationResearchService.startResearch,
@@ -1044,15 +1046,7 @@ const iterationDeps = {
     const { mission, preflight } = prepared;
     const workspace = preflight.workspace;
     const rollback = await roundRecoveryService.restoreRejectedRound({ state, workspace, runtimeMode: runtimeDescriptor.mode });
-    if (isStrictZeroSourceMission(mission)) {
-      const baselineRunPy = state.baseline?.materializer?.result?.runPy;
-      if (!baselineRunPy) {
-        const error = new Error('Iteration Agent 启动前缺少本轮 Materializer 生成的 baseline run.py。');
-        error.status = 409;
-        error.code = 'ITERATION_BASELINE_ARTIFACT_MISSING';
-        throw error;
-      }
-    }
+    roundArtifactGuard.assertReady({ mission, state });
     if (rollback) {
       state.workflowRecovery = { ...(state.workflowRecovery || {}), lastRecovery: { type: 'round_rollback', ...rollback } };
       appendRuntimeEvent(state, 'workflow.round_rolled_back', rollback, { kind: 'recovery', mode: 'client' });

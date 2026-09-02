@@ -48,6 +48,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/round-recovery-service.mjs` | rejected-round checkpoint restoration | round state/workspace | recovery metadata |
 | `application/agent-round-service.mjs` | Agent round initialization and launch | round input | updated state |
 | `application/round-preflight-service.mjs` | generation settlement and runtime preflight | round input | round context |
+| `application/round-artifact-guard.mjs` | strict baseline artifact admission | mission/state | pass or stable error |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |
