@@ -40,6 +40,7 @@
 | `baseline-routes.mjs` | Baseline materialization HTTP context | handled boolean and JSON response |
 | `operator-test-routes.mjs` | Operator Test list/detail/cancel HTTP contexts | handled boolean and JSON response |
 | `mission-control-routes.mjs` | Run cancel, human feedback, and Mission stop contexts | handled boolean and JSON response |
+| `knowledge-routes.mjs` | Knowledge draft, reference, and retired publication HTTP contexts | handled boolean and JSON response |
 
 ## Route Contract
 
@@ -58,6 +59,7 @@ Every route handler receives `{ request, response, url }` and returns `true` whe
 - Candidate validation routes do not inspect workspaces, submit test tasks, or restore checkpoints.
 - Baseline routes do not select source authority, start materializer Agents, or mutate Baseline state.
 - Operator Test routes do not implement queue locking, polling, retry, cancellation, or hardware rules.
+- Knowledge routes do not enforce draft mutability, writable fields, reference uniqueness, or publication policy.
 
 ## Verification
 

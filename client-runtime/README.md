@@ -39,6 +39,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/baseline-service.mjs` | authoritative Baseline materialization orchestration | source and matrix command | command result and materializer run ID |
 | `application/operator-test-service.mjs` | serialized test task queries and cancellation | task ID and queue port | task DTO or queue metadata |
 | `application/mission-control-service.mjs` | explicit Mission lifecycle controls | IDs or feedback body | persisted state and control result |
+| `application/knowledge-service.mjs` | Knowledge draft editing and asset references | draft/reference command | persisted state or governance response |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |

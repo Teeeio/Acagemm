@@ -85,6 +85,8 @@ import { createOperatorTestRoutes } from './server/operator-test-routes.mjs';
 import { createOperatorTestService } from './application/operator-test-service.mjs';
 import { createMissionControlRoutes } from './server/mission-control-routes.mjs';
 import { createMissionControlService } from './application/mission-control-service.mjs';
+import { createKnowledgeRoutes } from './server/knowledge-routes.mjs';
+import { createKnowledgeService } from './application/knowledge-service.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -375,13 +377,6 @@ const guardSupportedRuntimeAction = async (action) => {
   error.code = 'RUNTIME_ACTION_UNAVAILABLE';
   throw error;
 };
-
-const knowledgeDraftWritableFields = new Set([
-  'title', 'conclusion', 'scope', 'hardware', 'operator', 'dtype', 'layout', 'shape', 'runtime',
-  'trigger', 'procedure', 'expectedGain', 'validation', 'constraints', 'contraindications',
-  'failedAttempts', 'evidenceLevel', 'confidence', 'evidenceRefs', 'sourceMission',
-  'sourceCandidate', 'sourceCommit', 'owner',
-]);
 
 const guardWorkflowTransition = (state, { stages, actionType, label }) => {
   const stageAllowed = stages.includes(state.stage);
@@ -1034,6 +1029,8 @@ const operatorTestService = createOperatorTestService({ queue: operatorTestQueue
 const operatorTestRoutes = createOperatorTestRoutes({ json, operatorTests: operatorTestService });
 const missionControlService = createMissionControlService({ loadState: () => loadRuntimeState(), persistState, agentRuntime, operatorTestQueue, appendRuntimeEvent, addAuditEvent });
 const missionControlRoutes = createMissionControlRoutes({ json, readJson, missionControl: missionControlService });
+const knowledgeService = createKnowledgeService({ loadState: () => loadRuntimeState(), persistState, guardMutation: (...args) => guardMutation(...args), appendRuntimeEvent, addAuditEvent });
+const knowledgeRoutes = createKnowledgeRoutes({ json, readJson, knowledge: knowledgeService });
 
 const iterationDeps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
@@ -1535,6 +1532,7 @@ async function handleApi(request, response, url) {
   if (await baselineRoutes({ request, response, url })) return;
   if (await operatorTestRoutes({ request, response, url })) return;
   if (await missionControlRoutes({ request, response, url })) return;
+  if (await knowledgeRoutes({ request, response, url })) return;
 
   if (request.method === 'GET' && url.pathname === '/api/runtime/preflight') {
     const state = await loadRuntimeState();
@@ -1558,62 +1556,6 @@ async function handleApi(request, response, url) {
     const activeWorkspace = await ensureMissionWorkspace(state.activeMissionId, mission?.repository, { projectRoot: mission?.projectRoot, sourceRoot: mission?.sourceRoot });
     const hasDeclaredPatch = (state.candidateEvaluations || []).some((candidate) => String(candidate.files || '').trim());
     json(response, 200, { patchApplied: state.patchApplied, workspace: path.relative(rootDir, activeWorkspace).replaceAll('\\', '/'), files: hasDeclaredPatch ? workspaceFiles : [] });
-    return;
-  }
-  if (request.method === 'PATCH' && url.pathname.startsWith('/api/knowledge/drafts/')) {
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    const draftId = decodeURIComponent(url.pathname.slice('/api/knowledge/drafts/'.length));
-    const body = await readJson(request);
-    const index = state.knowledgeDrafts.findIndex((draft) => draft.id === draftId);
-    if (index === -1) {
-      json(response, 404, { error: '知识草稿不存在。' });
-      return;
-    }
-    if (state.publishedAssets.some((asset) => asset.id === draftId) || state.knowledgeMaintenance?.changes?.some((change) => change.draftId === draftId && change.outcome === 'auto_published')) {
-      const error = new Error('知识资产已生成固定版本，不能静默修改；请通过新的维护版本修订。');
-      error.status = 409;
-      error.code = 'KNOWLEDGE_IMMUTABLE';
-      throw error;
-    }
-    const unsupportedFields = Object.keys(body).filter((field) => !knowledgeDraftWritableFields.has(field));
-    if (unsupportedFields.length) {
-      const error = new Error(`知识草稿包含不可修改字段：${unsupportedFields.join('、')}。`);
-      error.status = 400;
-      error.code = 'KNOWLEDGE_PATCH_REJECTED';
-      throw error;
-    }
-    state.knowledgeDrafts[index] = { ...state.knowledgeDrafts[index], ...body, id: draftId };
-    json(response, 200, { state: await persistState(state) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/knowledge/publish') {
-    json(response, 410, { error: '手工知识发布接口已退役；知识由效果决策触发并按治理策略自动维护。', code: 'KNOWLEDGE_PUBLISH_RETIRED' });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/knowledge/publish-all') {
-    json(response, 410, { error: '批量手工发布接口已退役；知识由效果决策触发并按治理策略自动维护。', code: 'KNOWLEDGE_PUBLISH_RETIRED' });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/knowledge/references') {
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    const body = await readJson(request);
-    if (!body.assetId || !body.title || !body.version) {
-      json(response, 400, { error: '引用知识资产需要 assetId、title 和 version。' });
-      return;
-    }
-    const reference = {
-      assetId: body.assetId,
-      missionId: state.activeMissionId,
-      version: body.version,
-      referencedAt: new Date().toISOString(),
-      reason: body.reason || '由工程师从组织知识库引用',
-    };
-    state.knowledgeReferences = [reference, ...(state.knowledgeReferences || []).filter((item) => !(item.assetId === reference.assetId && item.missionId === reference.missionId))];
-    appendRuntimeEvent(state, 'knowledge.referenced', reference, { kind: 'knowledge', mode: 'client' });
-    addAuditEvent(state, '知识资产已引用到当前任务', `${body.assetId}@${body.version} · ${body.title}`, 'green', 'BookOpen');
-    json(response, 200, { state: await persistState(state), reference });
     return;
   }
   if (request.method === 'PATCH' && url.pathname === '/api/state') {

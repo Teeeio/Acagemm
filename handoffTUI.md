@@ -137,7 +137,7 @@ The following completed locally on 2026-09-02 after removing the standalone lega
 npm run verify:local-c500-release
 ```
 
-Result: `PASS: 57 checks completed`, including module boundaries, application-service contracts, workflow kernel, Claude adapter/workflow, iteration loop, Gate, workspace, queue, async local runner, fixed Profiles, C550 detection, language contract, test specification, TUI randomized snapshots, spinner, viewport, refresh ordering, terminal lifecycle, and Vite build.
+Result: `PASS: 58 checks completed`, including module boundaries, application-service contracts, workflow kernel, Claude adapter/workflow, iteration loop, Gate, workspace, queue, async local runner, fixed Profiles, C550 detection, language contract, test specification, TUI randomized snapshots, spinner, viewport, refresh ordering, terminal lifecycle, and Vite build.
 
 The hardware-free robustness suite also completed on 2026-09-02:
 
@@ -145,7 +145,7 @@ The hardware-free robustness suite also completed on 2026-09-02:
 npm run verify:non-hardware-robustness
 ```
 
-Result: `PASS: 25 checks completed without physical hardware`; its first check reruns the complete local C500 release suite. The full hardware-free suite was last run at the 54-check baseline; subsequent Baseline, Operator Test, and Mission Control service extractions passed the 57-check release suite and Mission Smoke.
+Result: `PASS: 25 checks completed without physical hardware`; its first check reruns the complete local C500 release suite. The full hardware-free suite was last run at the 54-check baseline; subsequent Baseline, Operator Test, Mission Control, and Knowledge service extractions passed the 58-check release suite and Mission Smoke.
 
 This is not proof that generated Triton kernels are fast or even compilable on C550. No C550 hardware exists in the local Windows verification environment. Actual PyTorch/Triton/MXMACA behavior, memory usage, compiler behavior, and latency must be verified on the remote machine.
 
