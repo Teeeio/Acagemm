@@ -31,6 +31,7 @@ const checks = [
   'test:operator-test-service',
   'test:mission-control-service',
   'test:knowledge-service',
+  'test:runtime-query-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',

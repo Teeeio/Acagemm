@@ -87,6 +87,8 @@ import { createMissionControlRoutes } from './server/mission-control-routes.mjs'
 import { createMissionControlService } from './application/mission-control-service.mjs';
 import { createKnowledgeRoutes } from './server/knowledge-routes.mjs';
 import { createKnowledgeService } from './application/knowledge-service.mjs';
+import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
+import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -201,6 +203,22 @@ const hasSourceContent = async (sourceRoot) => {
   } catch { return false; }
 };
 
+const runtimeQueryService = createRuntimeQueryService({
+  loadState: () => loadRuntimeState(),
+  ensureMissionWorkspace,
+  inspectWorkspace: (...args) => workspaceManager.inspect(...args),
+  inspectSources: (...args) => workspaceManager.inspectSources(...args),
+  preflightAgent: (...args) => agentRuntime.preflight(...args),
+  inspectSourceContent: hasSourceContent,
+  artifactDirForMission,
+  isStrictZeroSourceMission,
+  isSimulationRuntime: () => agentRuntime.mode === 'reference-fixture' && localC500Config.simulation,
+  presentWorkspacePath: (workspace) => path.relative(rootDir, workspace).replaceAll('\\', '/'),
+  workspaceFiles,
+});
+const runtimeQueryRoutes = createRuntimeQueryRoutes({ json, runtimeQuery: runtimeQueryService });
+const buildRuntimePreflight = (mission) => runtimeQueryService.buildPreflight(mission);
+
 const readMissionRunPy = async (missionId, repository, projectRoot = null, implementation = null, operatorProfile = null) => {
   const workspace = await ensureMissionWorkspace(missionId, repository, { projectRoot });
   const candidates = [
@@ -226,43 +244,6 @@ const readMissionRunPy = async (missionId, repository, projectRoot = null, imple
     }
   }
   return { content: null, source: null };
-};
-
-const buildRuntimePreflight = async (mission) => {
-  const workspace = await ensureMissionWorkspace(mission.id, mission.repository, { projectRoot: mission.projectRoot, sourceRoot: mission.sourceRoot });
-  let [workspaceCheck, agentCheck] = await Promise.all([
-    workspaceManager.inspect(workspace, { refresh: true }),
-    agentRuntime.preflight({ workspace }),
-  ]);
-  // 空基线：若 sources/（Source Registry）已有参考资料（研究员已拉取），视为"从参考迁移"场景，
-  // 允许主 agent 从空工作区起步、从 sources/ 参考资料构建迁移对象；否则阻断。
-  // 注意：inspect 返回的是缓存对象，绝不能原地改（会污染 inspectionCache，导致后续 loadState 抛错）；
-  // 用副本标记 ready:false。
-  const sourceInspection = isStrictZeroSourceMission(mission)
-    ? await workspaceManager.inspectSources(mission.sourceRoot)
-    : null;
-  const migrationFromSource = workspaceCheck.baselineEmpty && (isStrictZeroSourceMission(mission)
-    ? sourceInspection?.ready === true && sourceInspection.sources.length > 0
-    : await hasSourceContent(mission.sourceRoot));
-  const simulationRuntime = agentRuntime.mode === 'reference-fixture' && localC500Config.simulation;
-  if (workspaceCheck.ready && workspaceCheck.baselineEmpty && !migrationFromSource && !simulationRuntime) {
-    workspaceCheck = { ...workspaceCheck, ready: false, code: 'WORKSPACE_BASELINE_EMPTY', detail: 'Iteration Repository 基线为空，Mission 工作区没有可供 Agent 检查的源码或测试文件。请先把项目文件放入 repository，或重新选择包含代码的 Git 仓库。' };
-  }
-  return {
-    ready: workspaceCheck.ready && agentCheck.ready,
-    missionId: mission.id,
-    workspace,
-    layers: {
-      repository: mission.repository,
-      sources: mission.sourceRoot || null,
-      snapshot: workspace,
-      artifacts: artifactDirForMission(mission.id, mission.repository, mission.projectRoot),
-    },
-    workspaceCheck,
-    sourceInspection,
-    agentCheck,
-    checkedAt: new Date().toISOString(),
-  };
 };
 
 const streamMissionEvents = async (request, response, missionId, after = 0) => {
@@ -1533,31 +1514,8 @@ async function handleApi(request, response, url) {
   if (await operatorTestRoutes({ request, response, url })) return;
   if (await missionControlRoutes({ request, response, url })) return;
   if (await knowledgeRoutes({ request, response, url })) return;
+  if (await runtimeQueryRoutes({ request, response, url })) return;
 
-  if (request.method === 'GET' && url.pathname === '/api/runtime/preflight') {
-    const state = await loadRuntimeState();
-    const missionId = url.searchParams.get('missionId') || state.activeMissionId;
-    const mission = state.missions.find((item) => item.id === missionId);
-    if (!mission) {
-      json(response, 404, { error: 'Mission 不存在。', code: 'MISSION_NOT_FOUND' });
-      return;
-    }
-    const preflight = await buildRuntimePreflight(mission);
-    json(response, 200, { preflight });
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/state') {
-    json(response, 200, { state: await loadRuntimeState() });
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/workspace') {
-    const state = await loadRuntimeState();
-    const mission = state.missions.find((item) => item.id === state.activeMissionId);
-    const activeWorkspace = await ensureMissionWorkspace(state.activeMissionId, mission?.repository, { projectRoot: mission?.projectRoot, sourceRoot: mission?.sourceRoot });
-    const hasDeclaredPatch = (state.candidateEvaluations || []).some((candidate) => String(candidate.files || '').trim());
-    json(response, 200, { patchApplied: state.patchApplied, workspace: path.relative(rootDir, activeWorkspace).replaceAll('\\', '/'), files: hasDeclaredPatch ? workspaceFiles : [] });
-    return;
-  }
   if (request.method === 'PATCH' && url.pathname === '/api/state') {
     const state = await loadRuntimeState();
     const body = await readJson(request);

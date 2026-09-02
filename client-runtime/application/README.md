@@ -35,6 +35,7 @@
 | `operator-test-service.mjs` | Operator Test Queue queries and cancellation | task DTOs and queue path |
 | `mission-control-service.mjs` | Agent cancellation, human feedback, and Mission stop | persisted state and control result |
 | `knowledge-service.mjs` | Knowledge draft editing, asset references, and retired manual publication | persisted state or governance response |
+| `runtime-query-service.mjs` | Runtime state, preflight, and active workspace queries | state/workspace query | transport-neutral query DTOs |
 
 ## Dependency Direction
 
