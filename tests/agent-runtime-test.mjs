@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { appendRuntimeEvent, createAgentRuntime } from '../client-runtime/agent-runtime.mjs';
+import { createAgentRuntime } from '../client-runtime/agent-runtime.mjs';
+import { appendRuntimeEvent } from '../client-runtime/runtime-events.mjs';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'operator-runtime-'));
 

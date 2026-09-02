@@ -8,7 +8,7 @@ import { Dashboard } from '../tools/local-c500-tester/components/Dashboard.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(path.join(root, relative), 'utf8');
 
-const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, backend, runner, hardwareMockE2e, hardwareMockContract, runtimeRegistry, codexClient, packageJson] = await Promise.all([
+const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, systemRoutes, backend, runner, hardwareMockE2e, hardwareMockContract, runtimeRegistry, codexClient, packageJson] = await Promise.all([
   read('tools/local-c500-tester/tui.mjs'),
   read('tools/local-c500-tester/tui-state.mjs'),
   read('tools/local-c500-tester/components/WorkflowTopology.mjs'),
@@ -16,6 +16,7 @@ const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, prod
   read('tools/local-c500-tester/terminal-screen.mjs'),
   read('tools/local-c500-tester/production-api.mjs'),
   read('client-runtime/local-server.mjs'),
+  read('client-runtime/server/system-routes.mjs'),
   read('client-runtime/local-c500-service-client.mjs'),
   read('tools/local-c500-runner.py'),
   read('scripts/e2e-agent-runtime-hardware-mock.mjs'),
@@ -86,7 +87,8 @@ assert.match(server, /OPERATOR_LOCAL_C500_TIMEOUT_SECONDS \|\| 600/);
 assert.match(backend, /terminateProcessTree/);
 assert.match(backend, /taskkill\.exe/);
 assert.match(backend, /detached: process\.platform !== 'win32'/);
-assert.match(server, /url\.pathname === '\/api\/health'/);
+assert.match(server, /createSystemRoutes/);
+assert.match(systemRoutes, /url\.pathname === '\/api\/health'/);
 assert.match(tui, /OPERATOR_TUI_REFRESH_MS/);
 assert.match(tui, /if \(args\[0\] === '--snapshot'\)[\s\S]*stopProductionRuntime/);
 assert.match(tui, /if \(args\[0\] === 'panel' && args\.includes\('--once'\)\)[\s\S]*stopProductionRuntime/);

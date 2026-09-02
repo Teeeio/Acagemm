@@ -2,7 +2,6 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeOperatorLanguage } from './operator-language.mjs';
@@ -13,8 +12,6 @@ import {
   createCurrentBestState,
   createDecisionReviewState,
   createWorkflowRecoveryState,
-  createMission,
-  createProject,
   createWorkspaceCheckpoint,
   ensureMissionWorkspace,
   ensureProjectLayout,
@@ -22,7 +19,7 @@ import {
   baselineDirForMission,
   ensureStorage,
   buildBenchmarkLogsForMatrix,
-  loadState,
+  loadState as loadPersistedState,
   resetDemoData,
   rebuildMissionWorkspaceFromRepository,
   resetMissionWorkspace,
@@ -32,20 +29,18 @@ import {
   normalizeMissionBudgetMs,
   resetMissionRunState,
   runKnowledgeMaintenance,
-  deleteProject,
-  saveState,
+  saveState as savePersistedState,
   selectMission,
   resumeMissionState,
-  selectProject,
   startAgentRun,
-  updateProject,
   runtimeDir,
-  workspaceDirForMission,
   workspaceFiles,
   researchDirForMission,
   createResearchAgentState,
 } from './state-store.mjs';
-import { agentRuntime, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, isResearchAgentActive } from './agent-runtime.mjs';
+import { agentRuntime, isResearchAgentActive } from './agent-runtime.mjs';
+import { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
+import { appendRuntimeEvent } from './runtime-events.mjs';
 import { advanceIteration, selectResearchDirection, settleGenerationAttemptBeforeStart } from './iteration-loop.mjs';
 import { createCommandJournal, executeCommand, hashKey } from './command-journal.mjs';
 import { testServiceClient } from './test-service-client.mjs';
@@ -61,6 +56,29 @@ import { nativeDirectoryPicker } from './native-directory-picker.mjs';
 import { dataDir } from './storage-paths.mjs';
 import { isFixedOperatorMission } from './fixed-operator-profiles.mjs';
 import { createSemanticSnapshot, createSemanticTaskBinding, freezeSemanticSnapshot } from './semantic-snapshot.mjs';
+import { createStateRepository } from './state-repository.mjs';
+import { createJsonResponder, createStaticFileHandler, readJson, sendSse as sse } from './server/http.mjs';
+import { createSystemRoutes } from './server/system-routes.mjs';
+import { createFilesystemService, directoryExists } from './server/filesystem-service.mjs';
+import { createFilesystemRoutes } from './server/filesystem-routes.mjs';
+import { createProjectRoutes } from './server/project-routes.mjs';
+import { createMissionRoutes } from './server/mission-routes.mjs';
+import { createProjectsService } from './application/projects-service.mjs';
+import { createMissionsService } from './application/missions-service.mjs';
+import { createMissionQueryService } from './application/mission-query-service.mjs';
+import { createMissionQueryRoutes } from './server/mission-query-routes.mjs';
+import { createSemanticRoutes } from './server/semantic-routes.mjs';
+import { createSemanticService } from './application/semantic-service.mjs';
+import { createResearchService } from './application/research-service.mjs';
+import { createRunService } from './application/run-service.mjs';
+import { createResearchRoutes } from './server/research-routes.mjs';
+import { createRunRoutes } from './server/run-routes.mjs';
+import { createReviewActionRoutes } from './server/review-action-routes.mjs';
+import { createReviewActionService } from './application/review-action-service.mjs';
+import { createDecisionRoutes } from './server/decision-routes.mjs';
+import { createDecisionService } from './application/decision-service.mjs';
+import { createCandidateValidationRoutes } from './server/candidate-validation-routes.mjs';
+import { createCandidateValidationService } from './application/candidate-validation-service.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -103,6 +121,44 @@ const activeTestServiceClient = localC500Config.enabled
   : testServiceClient;
 const operatorTestQueue = createOperatorTestQueue({ serviceClient: activeTestServiceClient });
 const commandJournal = createCommandJournal({ filePath: path.join(runtimeDir, 'command-journal.jsonl') });
+const stateRepository = createStateRepository({ load: loadPersistedState, save: savePersistedState });
+const persistState = stateRepository.persist;
+const json = createJsonResponder(bridge);
+const testBackendDescriptor = localC500Config.enabled
+  ? localC500Config
+  : { kind: 'operator-test-service', liveHardware: false };
+const systemRoutes = createSystemRoutes({
+  json,
+  describeRuntime: () => agentRuntime.describe(),
+  testBackend: testBackendDescriptor,
+});
+const filesystemService = createFilesystemService({ picker: nativeDirectoryPicker });
+const filesystemRoutes = createFilesystemRoutes({ json, readJson, filesystem: filesystemService });
+const projectsService = createProjectsService({
+  loadState: () => loadRuntimeState(),
+  persistState,
+  ensureProjectLayout,
+  workspace: workspaceManager,
+  filesystem: { directoryExists, mkdir, readFile, readdir, rename },
+  guardMutation: (...args) => guardMutation(...args),
+  createWorkflowRecoveryState,
+  addAuditEvent,
+  ensureMissionWorkspace,
+  rebuildMissionWorkspaceFromRepository,
+});
+const projectRoutes = createProjectRoutes({ json, readJson, projects: projectsService });
+const missionsService = createMissionsService({
+  loadState: () => loadRuntimeState(),
+  persistState,
+  ensureMissionWorkspace,
+  validateMissionBudgetInput: (...args) => validateMissionBudgetInput(...args),
+});
+const missionRoutes = createMissionRoutes({ json, readJson, missions: missionsService });
+const missionQuery = createMissionQueryService({ loadState: () => loadRuntimeState(), persistState });
+const missionQueryRoutes = createMissionQueryRoutes({ json, missionQuery, streamEvents: (...args) => streamMissionEvents(...args) });
+const semanticService = createSemanticService({ loadState: () => loadRuntimeState(), persistState, guardMutation: (...args) => guardMutation(...args), appendRuntimeEvent, addAuditEvent });
+const semanticRoutes = createSemanticRoutes({ json, readJson, semantic: semanticService });
+const serveStatic = createStaticFileHandler({ distDir, serveWeb, json });
 
 const inferMissionMatrix = (mission = {}, fallback = {}) => {
   const text = `${mission.title || ''} ${mission.goal || ''} ${(mission.hardware || []).join(' ')}`.toLowerCase();
@@ -201,72 +257,6 @@ const buildRuntimePreflight = async (mission) => {
   };
 };
 
-const json = (response, status, payload) => {
-  response.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store',
-    'X-Operator-Studio-Bridge': `${bridge.pid}:${bridge.port}`,
-  });
-  response.end(JSON.stringify({ ...payload, __bridge: bridge }));
-};
-
-const directoryExists = async (target) => {
-  try { return (await stat(target)).isDirectory(); } catch { return false; }
-};
-
-const resetLinkedMissionsAfterRepositoryBootstrap = async (state, project, bootstrap) => {
-  const linkedMissions = state.missions.filter((mission) => mission.projectId === project.id || mission.repository === project.repository);
-  project.repositoryBootstrap = bootstrap;
-  project.updatedAt = new Date().toISOString();
-  for (const mission of linkedMissions) {
-    mission.repository = project.repository;
-    mission.projectRoot = project.root;
-    mission.sourceRoot = project.sourceRoot;
-    mission.stage = 'diagnosis';
-    mission.status = 'ready';
-    mission.patchApplied = false;
-    mission.candidateEvaluations = [];
-    mission.benchmark = { ...(mission.benchmark || {}), status: 'idle', progress: 0, runId: null, startedAt: null, logs: [] };
-    mission.workflowRecovery = createWorkflowRecoveryState(mission.id, project.repository, project.root);
-    mission.agent = { ...(mission.agent || {}), status: 'idle', phase: '等待启动', progress: 0, runId: null, threadId: null, startedAt: null, currentAction: null, toolCalls: [], messages: [], artifacts: [], result: null, candidateValidation: null };
-  }
-  const activeMission = linkedMissions.find((mission) => mission.id === state.activeMissionId);
-  if (activeMission) {
-    state.stage = 'diagnosis';
-    state.patchApplied = false;
-    state.candidateEvaluations = [];
-    state.benchmark = structuredClone(activeMission.benchmark);
-    state.workflowRecovery = structuredClone(activeMission.workflowRecovery);
-    state.agent = structuredClone(activeMission.agent);
-  }
-  addAuditEvent(state, 'Iteration Repository 基线已补齐', `${project.name} · ${bootstrap.origin || bootstrap.repository} @ ${bootstrap.head}`, 'green', 'GitBranch');
-  const saved = await saveState(state);
-  for (const mission of linkedMissions) await rebuildMissionWorkspaceFromRepository(mission);
-  return { state: saved, linkedMissionCount: linkedMissions.length };
-};
-
-const readDirectoryListing = async (requestedPath) => {
-  const target = path.resolve(requestedPath || os.homedir());
-  if (!await directoryExists(target)) {
-    const error = new Error('目录不存在或当前用户无权访问。');
-    error.status = 404;
-    throw error;
-  }
-  const entries = await readdir(target, { withFileTypes: true });
-  return {
-    path: target,
-    parent: path.dirname(target) === target ? null : path.dirname(target),
-    entries: entries.filter((entry) => entry.isDirectory()).map((entry) => ({ name: entry.name, path: path.join(target, entry.name) })).sort((left, right) => left.name.localeCompare(right.name, 'zh-CN')),
-  };
-};
-
-const sse = (response, event, payload) => {
-  if (response.destroyed || response.writableEnded) return false;
-  response.write(`event: ${event}\n`);
-  response.write(`data: ${JSON.stringify(payload)}\n\n`);
-  return true;
-};
-
 const streamMissionEvents = async (request, response, missionId, after = 0) => {
   response.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -293,7 +283,7 @@ const streamMissionEvents = async (request, response, missionId, after = 0) => {
     if (closed || busy) return;
     busy = true;
     try {
-      const state = await loadRuntimeState();
+      const state = await stateRepository.runExclusive(() => loadRuntimeState());
       const events = (state.runtimeEvents || []).filter((event) => event.missionId === missionId && event.sequence > nextSequence);
       for (const event of events) {
         if (!sse(response, 'runtime', event)) return close();
@@ -314,23 +304,6 @@ const streamMissionEvents = async (request, response, missionId, after = 0) => {
   sse(response, 'ready', { missionId, nextSequence });
   await tick();
   if (!closed) timer = setInterval(tick, 500);
-};
-
-const readJson = async (request) => {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of request) {
-    size += chunk.length;
-    if (size > 1_000_000) {
-      const error = new Error('Request body exceeds the 1 MB limit.');
-      error.status = 413;
-      error.code = 'REQUEST_BODY_TOO_LARGE';
-      throw error;
-    }
-    chunks.push(chunk);
-  }
-  if (!chunks.length) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 };
 
 const guardMutation = (state) => {
@@ -1039,6 +1012,17 @@ const commandRegistry = {
 };
 
 // 循环驱动依赖：advanceIteration 编排器通过 deps 拿到 agentRuntime 能力与目录函数。
+const researchService = createResearchService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, agentRuntime, guardMutation: (...args) => guardMutation(...args) });
+const researchRoutes = createResearchRoutes({ json, readJson, research: researchService });
+const runService = createRunService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, agentRuntime, buildRuntimePreflight, guardMutation: (...args) => guardMutation(...args), assertMissionIntent, isStrictZeroSourceMission, isFixedOperatorMission, selectResearchBaselineSource });
+const runRoutes = createRunRoutes({ json, readJson, runs: runService });
+const reviewActionService = createReviewActionService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, guardSupportedRuntimeAction, guardMutation: (...args) => guardMutation(...args), guardWorkflowTransition });
+const reviewActionRoutes = createReviewActionRoutes({ json, readJson, actions: reviewActionService });
+const decisionService = createDecisionService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, guardSupportedRuntimeAction, guardMutation: (...args) => guardMutation(...args), guardWorkflowTransition });
+const decisionRoutes = createDecisionRoutes({ json, readJson, decisions: decisionService });
+const candidateValidationService = createCandidateValidationService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, guardSupportedRuntimeAction, guardMutation: (...args) => guardMutation(...args), guardWorkflowTransition });
+const candidateValidationRoutes = createCandidateValidationRoutes({ json, readJson, workflow: candidateValidationService });
+
 const iterationDeps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
     // 非受管理 Workspace CLI 模式不支持研究员，避免 reference-fixture 等模式进入真实调研链路。
@@ -1229,7 +1213,7 @@ const iterationDeps = {
         }
         const materialized = await executeCommand({
           journal: commandJournal,
-          saveState,
+          saveState: persistState,
           registry: commandRegistry,
           state,
           type: 'materialize-baseline',
@@ -1241,7 +1225,7 @@ const iterationDeps = {
     }
     const result = await executeCommand({
       journal: commandJournal,
-      saveState,
+      saveState: persistState,
       registry: commandRegistry,
       state,
       type: 'start-benchmark',
@@ -1366,7 +1350,7 @@ const advanceTesterAutopilot = async (state) => {
     if (agentRuntime.mode === 'reference-fixture' && candidate?.id && !candidate.patchDigest && actionType === 'candidate.plan') {
       const result = await executeCommand({
         journal: commandJournal,
-        saveState,
+        saveState: persistState,
         registry: commandRegistry,
         state,
         type: 'apply-patch',
@@ -1378,7 +1362,7 @@ const advanceTesterAutopilot = async (state) => {
     if (candidate?.patchDigest && actionType === 'candidate.plan') {
       const result = await executeCommand({
         journal: commandJournal,
-        saveState,
+        saveState: persistState,
         registry: commandRegistry,
         state,
         type: 'apply-patch',
@@ -1401,7 +1385,7 @@ const advanceTesterAutopilot = async (state) => {
     const matrix = inferMissionMatrix(mission, state.testMatrix || mission.testMatrix || {});
     const result = await executeCommand({
       journal: commandJournal,
-      saveState,
+      saveState: persistState,
       registry: commandRegistry,
       state,
       type: 'start-benchmark',
@@ -1429,7 +1413,7 @@ const loadRuntimeState = async () => {
   if (runtimeStateInFlight) return structuredClone(await runtimeStateInFlight);
   runtimeStateInFlight = (async () => {
   const runtime = await agentRuntime.describe();
-  const state = await loadState({ runtimeMode: runtime.mode, commandJournal, applyRegistry: commandRegistry });
+  const state = await stateRepository.read({ runtimeMode: runtime.mode, commandJournal, applyRegistry: commandRegistry });
   const sourcePolicyMigration = migrateLocalC500TesterState(state, { enabled: localC500Config.enabled });
   if (sourcePolicyMigration.changed) {
     const iterationPolicyMigrated = sourcePolicyMigration.recovery?.iterationPolicyChanged === true;
@@ -1519,26 +1503,24 @@ const loadRuntimeState = async () => {
   if (['research_timeout', 'research_injected', 'research_noted', 'round_counted', 'correctness_attempt_counted', 'generation_attempt_counted', 'resumed_agent', 'research_escalated', 'baseline_started', 'resumed_after_baseline', 'failed_candidate_recorded'].includes(looped.action)) changed = true;
   const finalReconciliation = reconcileWorkflowState(looped.state);
   changed ||= finalReconciliation.changed;
-  return changed ? saveState(finalReconciliation.state) : finalReconciliation.state;
+  return changed ? persistState(finalReconciliation.state) : finalReconciliation.state;
   })().finally(() => { runtimeStateInFlight = null; });
   return structuredClone(await runtimeStateInFlight);
 };
 
 async function handleApi(request, response, url) {
-  if (request.method === 'OPTIONS') {
-    response.writeHead(204, { Allow: 'GET,POST,PATCH,DELETE,OPTIONS' });
-    response.end();
-    return;
-  }
+  if (await systemRoutes({ request, response, url })) return;
+  if (await filesystemRoutes({ request, response, url })) return;
+  if (await projectRoutes({ request, response, url })) return;
+  if (await missionRoutes({ request, response, url })) return;
+  if (await missionQueryRoutes({ request, response, url })) return;
+  if (await semanticRoutes({ request, response, url })) return;
+  if (await researchRoutes({ request, response, url })) return;
+  if (await runRoutes({ request, response, url })) return;
+  if (await reviewActionRoutes({ request, response, url })) return;
+  if (await decisionRoutes({ request, response, url })) return;
+  if (await candidateValidationRoutes({ request, response, url })) return;
 
-  if (request.method === 'GET' && url.pathname === '/api/health') {
-    json(response, 200, { status: 'ok', service: 'operator-studio-client-runtime', persistence: 'local-disk', runtime: await agentRuntime.describe(), testBackend: localC500Config.enabled ? localC500Config : { kind: 'operator-test-service', liveHardware: false }, time: new Date().toISOString() });
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/runtime') {
-    json(response, 200, { runtime: await agentRuntime.describe(), testBackend: localC500Config.enabled ? localC500Config : { kind: 'operator-test-service', liveHardware: false } });
-    return;
-  }
   if (request.method === 'GET' && url.pathname === '/api/runtime/preflight') {
     const state = await loadRuntimeState();
     const missionId = url.searchParams.get('missionId') || state.activeMissionId;
@@ -1563,260 +1545,6 @@ async function handleApi(request, response, url) {
     json(response, 200, { patchApplied: state.patchApplied, workspace: path.relative(rootDir, activeWorkspace).replaceAll('\\', '/'), files: hasDeclaredPatch ? workspaceFiles : [] });
     return;
   }
-  if (request.method === 'GET' && url.pathname === '/api/missions') {
-    const state = await loadRuntimeState();
-    json(response, 200, { missions: state.missions, activeMissionId: state.activeMissionId });
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/projects') {
-    const state = await loadRuntimeState();
-    const projects = state.projects.map((project) => ({
-      ...project,
-      missionCount: state.missions.filter((mission) => mission.projectId === project.id).length,
-      runningMissionCount: state.missions.filter((mission) => mission.projectId === project.id && mission.status === 'running').length,
-    }));
-    json(response, 200, { projects, activeProjectId: state.activeProjectId });
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/filesystem/directories') {
-    json(response, 200, { directory: await readDirectoryListing(url.searchParams.get('path') || '') });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/filesystem/select-directory') {
-    const body = await readJson(request);
-    json(response, 200, await nativeDirectoryPicker.select(String(body.initialPath || '')));
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/filesystem/directories') {
-    const body = await readJson(request);
-    const parent = path.resolve(String(body.parent || os.homedir()));
-    const name = String(body.name || '').trim();
-    if (!name || name === '.' || name === '..' || /[\\/:*?"<>|]/.test(name)) {
-      json(response, 400, { error: '文件夹名称不能为空，且不能包含路径分隔符或系统保留字符。' });
-      return;
-    }
-    if (!await directoryExists(parent)) {
-      json(response, 404, { error: '父目录不存在或当前用户无权访问。' });
-      return;
-    }
-    const target = path.join(parent, name);
-    await mkdir(target);
-    json(response, 201, { directory: await readDirectoryListing(target) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/projects') {
-    const state = await loadRuntimeState();
-    const body = await readJson(request);
-    const requestedPath = String(body.root || '').trim();
-    if (!path.isAbsolute(requestedPath)) {
-      json(response, 400, { error: '项目根目录必须是本机绝对路径。' });
-      return;
-    }
-    if (!await directoryExists(requestedPath)) {
-      if (body.initializeGit !== true) {
-        json(response, 404, { error: '目录不存在。请选择“创建项目结构并初始化 Git”后重试。' });
-        return;
-      }
-      await mkdir(requestedPath, { recursive: true });
-    }
-    const projectRoot = requestedPath;
-    const repository = path.join(projectRoot, 'repository');
-    const sourceRoot = path.join(projectRoot, 'sources');
-    const layout = await ensureProjectLayout({ root: projectRoot, repository, sourceRoot });
-    if (!await directoryExists(repository)) await mkdir(repository, { recursive: true });
-    let inspection = await workspaceManager.inspect(repository, { refresh: true });
-    if (!inspection.ready && body.initializeGit === true) {
-      await workspaceManager.git(['init'], repository);
-      await workspaceManager.git(['config', 'user.name', 'Operator Studio'], repository);
-      await workspaceManager.git(['config', 'user.email', 'operator-studio@local.invalid'], repository);
-      await workspaceManager.git(['add', '-A'], repository);
-      await workspaceManager.git(['commit', '--allow-empty', '-m', 'Operator Studio iteration baseline'], repository);
-      inspection = await workspaceManager.inspect(repository, { refresh: true });
-    }
-    let bootstrap = null;
-    if (String(body.gitUrl || '').trim()) {
-      bootstrap = await workspaceManager.bootstrapRepository({ target: repository, source: body.gitUrl, ref: body.gitRef || body.defaultBranch || 'HEAD' });
-      inspection = await workspaceManager.inspect(repository, { refresh: true });
-    }
-    if (!inspection.ready) {
-      json(response, 400, { error: `无法登记仓库：${inspection.detail || '目录不是可用的 Git 仓库。'}`, code: inspection.code });
-      return;
-    }
-    const project = createProject(state, { ...body, root: projectRoot, repository: inspection.gitRoot, sourceRoot, runtimeRoot: layout.runtimeRoot, layout: 'three-layer' });
-    if (bootstrap) project.repositoryBootstrap = bootstrap;
-    await ensureProjectLayout({ root: projectRoot, repository: inspection.gitRoot, sourceRoot, projectId: project.id });
-    json(response, 201, { state: await saveState(state), project });
-    return;
-  }
-  const projectMatch = url.pathname.match(/^\/api\/projects\/([^/]+)$/);
-  const projectSelectMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/select$/);
-  const projectSourcesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/sources$/);
-  const projectReinitializeMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/reinitialize$/);
-  const projectBootstrapMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/bootstrap$/);
-  if (request.method === 'POST' && projectBootstrapMatch) {
-    const runtime = await agentRuntime.describe();
-    const state = await loadState({ runtimeMode: runtime.mode, ensureWorkspace: false, commandJournal, applyRegistry: commandRegistry });
-    guardMutation(state);
-    const project = state.projects.find((item) => item.id === decodeURIComponent(projectBootstrapMatch[1]));
-    if (!project) {
-      json(response, 404, { error: '项目不存在。', code: 'PROJECT_NOT_FOUND' });
-      return;
-    }
-    if (project.layout !== 'three-layer' || !project.root || !project.repository || !project.sourceRoot || !project.runtimeRoot) {
-      json(response, 409, { error: '项目尚未初始化为严格三层结构。', code: 'PROJECT_REINITIALIZATION_REQUIRED' });
-      return;
-    }
-    const body = await readJson(request);
-    const inspection = await workspaceManager.inspect(project.repository, { refresh: true });
-    if (inspection.ready && !inspection.baselineEmpty) {
-      json(response, 409, { error: 'Iteration Repository 已包含代码，不能再次自动补齐基线。', code: 'ITERATION_REPOSITORY_NOT_EMPTY' });
-      return;
-    }
-    const bootstrap = await workspaceManager.bootstrapRepository({ target: project.repository, source: body.gitUrl, ref: body.gitRef || project.defaultBranch || 'HEAD' });
-    const result = await resetLinkedMissionsAfterRepositoryBootstrap(state, project, bootstrap);
-    json(response, 200, { ...result, project, bootstrap });
-    return;
-  }
-  if (request.method === 'POST' && projectReinitializeMatch) {
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    const project = state.projects.find((item) => item.id === decodeURIComponent(projectReinitializeMatch[1]));
-    if (!project) {
-      json(response, 404, { error: '项目不存在。', code: 'PROJECT_NOT_FOUND' });
-      return;
-    }
-    if (project.layout === 'three-layer' && project.root && project.sourceRoot && project.runtimeRoot) {
-      json(response, 409, { error: '项目已经是严格三层结构，无需重新初始化。', code: 'PROJECT_ALREADY_THREE_LAYER' });
-      return;
-    }
-    const linkedMissions = state.missions.filter((mission) => mission.projectId === project.id || mission.repository === project.repository);
-    const hasDurableResults = linkedMissions.some((mission) => mission.patchApplied
-      || mission.benchmark?.status !== 'idle'
-      || mission.candidateEvaluations?.length
-      || mission.publishedAssets?.length);
-    if (hasDurableResults) {
-      json(response, 409, { error: '项目已有 Candidate、Patch、Benchmark 或发布成果，不能自动重初始化。', code: 'PROJECT_REINITIALIZATION_BLOCKED' });
-      return;
-    }
-    const projectRoot = path.resolve(project.root || project.repository);
-    if (!path.isAbsolute(projectRoot) || !await directoryExists(projectRoot)) {
-      json(response, 409, { error: '项目根目录不存在，无法重新初始化。', code: 'PROJECT_ROOT_UNAVAILABLE' });
-      return;
-    }
-    const repository = path.join(projectRoot, 'repository');
-    const sourceRoot = path.join(projectRoot, 'sources');
-    if (await directoryExists(repository)) {
-      json(response, 409, { error: '项目根目录已存在 repository 子目录，请先确认目录内容。', code: 'ITERATION_REPOSITORY_ALREADY_EXISTS' });
-      return;
-    }
-    const backupName = `.operator-studio-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-    const oldRuntime = path.join(projectRoot, '.operator-studio');
-    const backupRuntime = path.join(projectRoot, backupName);
-    if (await directoryExists(oldRuntime)) await rename(oldRuntime, backupRuntime);
-    await mkdir(repository, { recursive: true });
-    await mkdir(sourceRoot, { recursive: true });
-    for (const entry of await readdir(projectRoot, { withFileTypes: true })) {
-      if (['repository', 'sources', backupName, '.operator-studio'].includes(entry.name)) continue;
-      await rename(path.join(projectRoot, entry.name), path.join(repository, entry.name));
-    }
-    let inspection = await workspaceManager.inspect(repository, { refresh: true });
-    if (!inspection.ready) {
-      await workspaceManager.git(['init'], repository);
-      await workspaceManager.git(['config', 'user.name', 'Operator Studio'], repository);
-      await workspaceManager.git(['config', 'user.email', 'operator-studio@local.invalid'], repository);
-      await workspaceManager.git(['add', '-A'], repository);
-      await workspaceManager.git(['commit', '--allow-empty', '-m', 'Operator Studio iteration baseline'], repository);
-      inspection = await workspaceManager.inspect(repository, { refresh: true });
-    }
-    const layout = await ensureProjectLayout({ root: projectRoot, repository: inspection.gitRoot, sourceRoot, projectId: project.id });
-    project.root = projectRoot;
-    project.repository = inspection.gitRoot;
-    project.sourceRoot = sourceRoot;
-    project.runtimeRoot = layout.runtimeRoot;
-    project.layout = 'three-layer';
-    project.updatedAt = new Date().toISOString();
-    for (const mission of linkedMissions) {
-      mission.repository = inspection.gitRoot;
-      mission.projectRoot = projectRoot;
-      mission.sourceRoot = sourceRoot;
-      mission.stage = 'diagnosis';
-      mission.status = 'ready';
-      mission.patchApplied = false;
-      mission.candidateEvaluations = [];
-      mission.workflowRecovery = createWorkflowRecoveryState(mission.id, inspection.gitRoot, projectRoot);
-      mission.agent = { ...(mission.agent || {}), status: 'idle', phase: '等待启动', progress: 0, runId: null, threadId: null, startedAt: null, currentAction: null, toolCalls: [], messages: [], artifacts: [], result: null, candidateValidation: null };
-    }
-    const activeMission = linkedMissions.find((mission) => mission.id === state.activeMissionId);
-    if (activeMission) {
-      state.stage = 'diagnosis';
-      state.patchApplied = false;
-      state.candidateEvaluations = [];
-      state.workflowRecovery = structuredClone(activeMission.workflowRecovery);
-      state.agent = structuredClone(activeMission.agent);
-    }
-    addAuditEvent(state, '项目已重新初始化为三层结构', `${project.name} · repository / sources / Mission Snapshot`, 'green', 'Layers3');
-    const saved = await saveState(state);
-    for (const mission of linkedMissions) await ensureMissionWorkspace(mission.id, inspection.gitRoot, { projectRoot: mission.projectRoot, sourceRoot: mission.sourceRoot });
-    json(response, 200, { state: saved, project, backupRuntime: await directoryExists(backupRuntime) ? backupRuntime : null });
-    return;
-  }
-  if (request.method === 'GET' && projectSourcesMatch) {
-    const state = await loadRuntimeState();
-    const project = state.projects.find((item) => item.id === decodeURIComponent(projectSourcesMatch[1]));
-    if (!project) {
-      json(response, 404, { error: '项目不存在。', code: 'PROJECT_NOT_FOUND' });
-      return;
-    }
-    if (project.layout !== 'three-layer' || !project.root || !project.sourceRoot || !project.runtimeRoot) {
-      json(response, 409, { error: '项目尚未初始化为严格三层结构。', code: 'PROJECT_REINITIALIZATION_REQUIRED' });
-      return;
-    }
-    const [repositoryInspection, inspection] = await Promise.all([
-      workspaceManager.inspect(project.repository, { refresh: true }),
-      workspaceManager.inspectSources(project.sourceRoot, []),
-    ]);
-    let registry = { schemaVersion: 1, sources: [] };
-    if (project.runtimeRoot) {
-      try { registry = JSON.parse(await readFile(path.join(project.runtimeRoot, 'source-registry.json'), 'utf8')); } catch { /* 新项目可能尚未引用来源 */ }
-    }
-    const projectMissions = state.missions.filter((mission) => mission.projectId === project.id);
-    const selectedMission = projectMissions.find((mission) => mission.id === state.activeMissionId) || projectMissions[0] || null;
-    json(response, 200, {
-      projectId: project.id,
-      layout: 'three-layer',
-      sourceConfigured: true,
-      layers: {
-        root: project.root || null,
-        repository: project.repository,
-        sources: project.sourceRoot || null,
-        snapshots: project.runtimeRoot ? path.join(project.runtimeRoot, 'workspaces') : null,
-        activeSnapshot: selectedMission ? workspaceDirForMission(selectedMission.id, selectedMission.repository, selectedMission.projectRoot) : null,
-        artifacts: project.runtimeRoot ? path.join(project.runtimeRoot, 'artifacts') : null,
-      },
-      repositoryInspection,
-      inspection,
-      registry,
-    });
-    return;
-  }
-  if (request.method === 'POST' && projectSelectMatch) {
-    const state = await loadRuntimeState();
-    const selection = selectProject(state, decodeURIComponent(projectSelectMatch[1]));
-    json(response, 200, { state: await saveState(state), project: selection.project, selectedMissionId: selection.selectedMission?.id || null });
-    return;
-  }
-  if (request.method === 'PATCH' && projectMatch) {
-    const state = await loadRuntimeState();
-    const project = updateProject(state, decodeURIComponent(projectMatch[1]), await readJson(request));
-    json(response, 200, { state: await saveState(state), project });
-    return;
-  }
-  if (request.method === 'DELETE' && projectMatch) {
-    const state = await loadRuntimeState();
-    const project = deleteProject(state, decodeURIComponent(projectMatch[1]));
-    json(response, 200, { state: await saveState(state), project });
-    return;
-  }
   if (request.method === 'GET' && url.pathname === '/api/operator-tests') {
     json(response, 200, { tasks: await operatorTestQueue.list(), queueFile: operatorTestQueue.path });
     return;
@@ -1831,110 +1559,6 @@ async function handleApi(request, response, url) {
     json(response, 200, { task: await operatorTestQueue.cancel(decodeURIComponent(operatorTestCancelMatch[1])) });
     return;
   }
-  if (request.method === 'POST' && url.pathname === '/api/missions') {
-    const state = await loadRuntimeState();
-    const body = await readJson(request);
-    if (!body.goal?.trim()) {
-      json(response, 400, { error: '请输入一个可执行的优化目标。' });
-      return;
-    }
-    const budgetInput = validateMissionBudgetInput(body);
-    if (!budgetInput.ok) {
-      json(response, 400, { error: 'missionBudgetMs 必须是正数毫秒；传 null、空值或 0 表示不启用时间限制。', code: 'INVALID_MISSION_BUDGET' });
-      return;
-    }
-    const nextState = createMission(state, body);
-    const mission = nextState.missions.find((item) => item.id === nextState.activeMissionId);
-    await ensureMissionWorkspace(mission.id, mission.repository, { projectRoot: mission.projectRoot, sourceRoot: mission.sourceRoot });
-    json(response, 201, { state: await saveState(nextState) });
-    return;
-  }
-  const semanticFreezeMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/semantic\/freeze$/);
-  if (request.method === 'POST' && semanticFreezeMatch) {
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    const missionId = decodeURIComponent(semanticFreezeMatch[1]);
-    const mission = state.missions.find((item) => item.id === missionId);
-    if (!mission) {
-      json(response, 404, { error: 'Mission 不存在。', code: 'MISSION_NOT_FOUND' });
-      return;
-    }
-    const body = await readJson(request);
-    try {
-      const draft = createSemanticSnapshot({ mission, semanticDraft: body.semanticDraft || {}, snapshot: body.snapshot || mission.semanticSnapshot || null });
-      const frozen = freezeSemanticSnapshot(draft);
-      mission.semanticSnapshot = frozen;
-      mission.status = mission.status === 'ready' ? 'ready' : mission.status;
-      mission.updatedLabel = '语义已冻结';
-      if (state.activeMissionId === missionId) state.semanticSnapshot = structuredClone(frozen);
-      appendRuntimeEvent(state, 'semantic.snapshot_frozen', { missionId, snapshotId: frozen.snapshotId, semanticDigest: frozen.digest, version: frozen.version }, { kind: 'semantic', mode: 'client' });
-      addAuditEvent(state, '语义快照已冻结', `${mission.title || missionId} · ${frozen.digest}`, 'green', 'LockKeyhole');
-      json(response, 200, { snapshot: frozen, state: await saveState(state) });
-    } catch (error) {
-      json(response, error.status || 409, { error: error.message, code: error.code || 'SEMANTIC_FREEZE_BLOCKED', issues: error.issues || [] });
-    }
-    return;
-  }
-  const missionRunMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/runs$/);
-  if (request.method === 'POST' && missionRunMatch) {
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    const missionId = decodeURIComponent(missionRunMatch[1]);
-    if (state.activeMissionId !== missionId) selectMission(state, missionId);
-    const body = await readJson(request);
-    const mission = state.missions.find((item) => item.id === missionId);
-    let goal = body.goal?.trim() || mission.goal;
-    if (!body.goal && state.iterationStats?.pendingInjection) {
-      goal = `${goal}\n【调研注入】${state.iterationStats.pendingInjection.briefing}`;
-      state.iterationStats = { ...state.iterationStats, pendingInjection: null };
-    }
-    // 操作员手动启动 run = 人工接管：恢复循环自动流转（若此前命中全局兜底标记）
-    if (state.iterationStats) {
-      state.iterationStats = { ...state.iterationStats, loopStatus: 'running', loopStatusReason: null };
-    }
-    if (isStrictZeroSourceMission(mission)
-        && state.baseline?.status !== 'complete'
-        && !selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title })) {
-      assertMissionIntent(goal, mission);
-      if (state.researchAgent?.runId && ['running', 'cancel_requested'].includes(state.researchAgent?.status)) {
-        json(response, 202, { state, research: state.researchAgent, runId: state.researchAgent.runId, idempotent: true });
-        return;
-      }
-      const direction = `从零研究 ${mission.title || mission.goal}：在官方上游仓库中固定可验证的 MLA paged attention baseline source，记录 repository、commit、path 和 operator；不得生成候选代码。`;
-      const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'research', body: { direction, synchronous: true }, expectedVersion: state.stateVersion });
-      if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-      json(response, 202, { state: result.state, research: result.state.researchAgent, runId: result.result?.runId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-      return;
-    }
-    const runtimeDescriptor = await agentRuntime.describe();
-    const preflight = await buildRuntimePreflight(mission);
-    if (!preflight.ready) {
-      const failure = !preflight.workspaceCheck.ready ? preflight.workspaceCheck : preflight.agentCheck;
-      const error = new Error(failure.detail || 'Agent Runtime 预检失败。');
-      error.status = 503;
-      error.code = failure.code || 'RUNTIME_PREFLIGHT_FAILED';
-      error.details = preflight;
-      throw error;
-    }
-    assertMissionIntent(goal, mission);
-    // Fixed operator profiles are driven by the autopilot. The public run
-    // command only arms the mission; starting an iteration here would race
-    // the deterministic baseline and produce a phantom first round.
-    if (isFixedOperatorMission(mission)) {
-      state.agent = { ...(state.agent || {}), runId: null, status: 'idle', phase: '等待固定 baseline', progress: 0, currentAction: null, goal };
-      state.stage = 'candidate';
-      await saveState(state);
-      json(response, 202, { state, runId: null, armed: true });
-      return;
-    }
-    const resumeThreadId = body.resume === true
-      ? state.agent?.threadId || state.runHistory?.find((run) => run.runtimeKind === runtimeDescriptor.mode && run.threadId)?.threadId || null
-      : null;
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'runs', body: { ...body, goal, resumeThreadId, workspace: preflight.workspace }, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 202, { state: result.state, runId: result.result?.runId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
   const missionRunCancelMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/runs\/([^/]+)\/cancel$/);
   if (request.method === 'POST' && missionRunCancelMatch) {
     const state = await loadRuntimeState();
@@ -1947,94 +1571,7 @@ async function handleApi(request, response, url) {
       throw error;
     }
     const cancelled = await agentRuntime.cancelRun({ state, runId });
-    json(response, 202, { state: await saveState(cancelled.state), result: cancelled.result });
-    return;
-  }
-  const missionResearchMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/research$/);
-  if (request.method === 'POST' && missionResearchMatch) {
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    const missionId = decodeURIComponent(missionResearchMatch[1]);
-    if (state.activeMissionId !== missionId) selectMission(state, missionId);
-    const mission = state.missions.find((item) => item.id === missionId);
-    if (!mission) {
-      json(response, 404, { error: 'Mission 不存在。', code: 'MISSION_NOT_FOUND' });
-      return;
-    }
-    const body = await readJson(request);
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'research', body, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 202, { state: result.state, research: result.state.researchAgent, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  const missionResearchNotesMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/research\/notes$/);
-  if (request.method === 'GET' && missionResearchNotesMatch) {
-    const state = await loadRuntimeState();
-    const missionId = decodeURIComponent(missionResearchNotesMatch[1]);
-    if (state.activeMissionId !== missionId) selectMission(state, missionId);
-    json(response, 200, { missionId, notes: state.researchNotes || [], researchAgent: state.researchAgent || createResearchAgentState() });
-    return;
-  }
-  const missionResearchCancelMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/research\/([^/]+)\/cancel$/);
-  if (request.method === 'POST' && missionResearchCancelMatch) {
-    const state = await loadRuntimeState();
-    const missionId = decodeURIComponent(missionResearchCancelMatch[1]);
-    const runId = decodeURIComponent(missionResearchCancelMatch[2]);
-    if (state.activeMissionId !== missionId) {
-      const error = new Error('The requested research run does not belong to the active Mission.');
-      error.status = 409;
-      error.code = 'AGENT_MISSION_MISMATCH';
-      throw error;
-    }
-    const cancelled = await agentRuntime.cancelRun({ state, runId });
-    json(response, 202, { state: await saveState(cancelled.state), result: cancelled.result });
-    return;
-  }
-  const missionSelectMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/select$/);
-  if (request.method === 'POST' && missionSelectMatch) {
-    const state = await loadRuntimeState();
-    const missionId = decodeURIComponent(missionSelectMatch[1]);
-    json(response, 200, { state: await saveState(selectMission(state, missionId)) });
-    return;
-  }
-  const missionEventsMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/events$/);
-  if (request.method === 'GET' && missionEventsMatch) {
-    const state = await loadRuntimeState();
-    const missionId = decodeURIComponent(missionEventsMatch[1]);
-    const after = Number(url.searchParams.get('after') || 0);
-    const events = (state.runtimeEvents || []).filter((event) => event.missionId === missionId && event.sequence > after);
-    json(response, 200, { missionId, events, nextSequence: events.at(-1)?.sequence || after });
-    return;
-  }
-  const missionEventsStreamMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/events\/stream$/);
-  if (request.method === 'GET' && missionEventsStreamMatch) {
-    await streamMissionEvents(request, response, decodeURIComponent(missionEventsStreamMatch[1]), Number(url.searchParams.get('after') || 0));
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/resume-mission') {
-    await guardSupportedRuntimeAction('Mission Resume');
-    const state = await loadRuntimeState();
-    const body = await readJson(request);
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'resume-mission', body, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 200, { state: result.state, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/apply-patch') {
-    await guardSupportedRuntimeAction('Patch');
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    guardWorkflowTransition(state, { stages: ['candidate'], actionType: 'candidate.plan', label: 'Patch 自动策略检查' });
-    const body = await readJson(request);
-    if (!body.candidate) {
-      const error = new Error('候选标识不能为空。');
-      error.status = 409;
-      error.code = 'CANDIDATE_MISMATCH';
-      throw error;
-    }
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'apply-patch', body, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 200, { state: result.state, workspace: result.result?.workspace, policyChecks: result.result?.policyChecks, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
+    json(response, 202, { state: await persistState(cancelled.state), result: cancelled.result });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/materialize-baseline') {
@@ -2042,165 +1579,9 @@ async function handleApi(request, response, url) {
     guardMutation(state);
     guardWorkflowTransition(state, { stages: ['diagnosis', 'candidate', 'validation'], label: 'Baseline 单文件展开' });
     const body = await readJson(request);
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'materialize-baseline', body, expectedVersion: state.stateVersion });
+    const result = await executeCommand({ journal: commandJournal, saveState: persistState, registry: commandRegistry, state, type: 'materialize-baseline', body, expectedVersion: state.stateVersion });
     if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
     json(response, 202, { state: result.state, materializer: result.state.baseline?.materializer, runId: result.result?.runId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/start-benchmark') {
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    const body = await readJson(request);
-    const purpose = body.purpose === 'baseline' || body.testPurpose === 'baseline' ? 'baseline' : 'candidate';
-    if (purpose === 'baseline') {
-      guardWorkflowTransition(state, { stages: ['diagnosis', 'candidate', 'validation'], label: 'Baseline 提交' });
-    } else {
-      guardWorkflowTransition(state, { stages: ['validation'], actionType: 'test.plan', label: 'Benchmark 提交' });
-      if (!state.patchApplied) {
-        json(response, 409, { error: '请先应用候选补丁。', code: 'PATCH_REQUIRED_BEFORE_CANDIDATE_BENCHMARK' });
-        return;
-      }
-    }
-    const matrix = body.matrix || state.testMatrix;
-    if (!Array.isArray(matrix?.environments) || !matrix.environments.length || !Array.isArray(matrix?.stages) || !matrix.stages.length) {
-      json(response, 400, { error: '本次测试矩阵至少需要一个环境和一个验证阶段。', code: 'TEST_MATRIX_INVALID' });
-      return;
-    }
-    const candidateId = body.candidate || state.appliedCandidateId;
-    if (purpose !== 'baseline' && !candidateId) {
-      json(response, 409, { error: '无法确定本次测试对应的候选，请重新应用候选 Patch。', code: 'TEST_CANDIDATE_MISSING' });
-      return;
-    }
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'start-benchmark', body, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 202, { state: result.state, runId: result.result?.runId, taskId: result.result?.taskId, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/rollback-stage') {
-    await guardSupportedRuntimeAction('Workflow Rollback');
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    if (state.decisionReview?.status === 'awaiting_review') {
-      const error = new Error('请先撤回待处理的人工意见，再返回上一步。');
-      error.status = 409;
-      error.code = 'DECISION_REVIEW_PENDING';
-      throw error;
-    }
-    guardWorkflowTransition(state, { stages: ['validation', 'evidence'], label: '返回上一步' });
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'rollback-stage', body: {}, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 200, { state: result.state, recovery: result.result?.recovery, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/adopt') {
-    await guardSupportedRuntimeAction('Decision');
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    if (state.knowledgeMaintenance?.status === 'completed' && state.publishedAssets?.length === state.knowledgeDrafts?.length) {
-      json(response, 200, { state, maintenance: state.knowledgeMaintenance, idempotent: true });
-      return;
-    }
-    if (state.decisionReview?.status === 'awaiting_review') {
-      const error = new Error('流程已因人工审批意见阻塞，请先处理或撤回该意见。');
-      error.status = 409;
-      error.code = 'DECISION_REVIEW_PENDING';
-      throw error;
-    }
-    guardWorkflowTransition(state, { stages: ['evidence'], actionType: 'adoption.decision', label: '候选采用' });
-    if (state.benchmark.status !== 'complete') {
-      json(response, 409, { error: 'Full Benchmark 尚未完成。' });
-      return;
-    }
-    const body = await readJson(request);
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'adopt', body, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 200, { state: result.state, maintenance: result.state.knowledgeMaintenance, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/request-review') {
-    await guardSupportedRuntimeAction('Decision Review');
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    guardWorkflowTransition(state, { stages: ['candidate', 'validation', 'evidence'], label: '人工介入发起' });
-    if (state.decisionReview?.status === 'awaiting_review') {
-      const error = new Error('当前已有待处理的人工介入事项。');
-      error.status = 409;
-      error.code = 'DECISION_REVIEW_PENDING';
-      throw error;
-    }
-    const body = await readJson(request);
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'request-review', body, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 202, { state: result.state, review: result.state.decisionReview, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/cancel-review') {
-    await guardSupportedRuntimeAction('Decision Review');
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    guardWorkflowTransition(state, { stages: ['candidate', 'validation', 'evidence'], actionType: 'review.resolve', label: '人工介入撤回' });
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'cancel-review', body: {}, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 200, { state: result.state, review: result.state.decisionReview, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/resolve-review') {
-    await guardSupportedRuntimeAction('Decision Review');
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    guardWorkflowTransition(state, { stages: ['candidate', 'validation', 'evidence'], actionType: 'review.resolve', label: '人工介入处理' });
-    if (state.decisionReview?.status !== 'awaiting_review' || !state.decisionReview.request) {
-      const error = new Error('当前没有待处理的效果决策审批意见。');
-      error.status = 409;
-      error.code = 'DECISION_REVIEW_NOT_PENDING';
-      throw error;
-    }
-    const body = await readJson(request);
-    const outcome = body.outcome || state.decisionReview.request.outcome;
-    if (outcome === 'adopt' && (state.stage !== 'evidence' || state.benchmark.status !== 'complete')) {
-      const error = new Error('当前尚未形成可采用的 Level 3 证据。');
-      error.status = 409;
-      error.code = 'INTERVENTION_ADOPTION_UNAVAILABLE';
-      throw error;
-    }
-    if (!['adopt', 'supplement', 'redirect'].includes(outcome)) {
-      const error = new Error('人工介入处理结果仅支持采用、补充验证或调整优化方向。');
-      error.status = 400;
-      error.code = 'DECISION_REVIEW_OUTCOME_INVALID';
-      throw error;
-    }
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'resolve-review', body, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 200, {
-      state: result.state,
-      ...(outcome === 'adopt' ? { maintenance: result.state.knowledgeMaintenance } : { review: result.state.decisionReview }),
-      ...(outcome === 'redirect' ? { recovery: result.result?.recovery } : {}),
-      ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}),
-    });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/reject') {
-    await guardSupportedRuntimeAction('Decision');
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    guardWorkflowTransition(state, { stages: ['evidence'], actionType: 'adoption.decision', label: '候选退回' });
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'reject', body: {}, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 200, { state: result.state, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/revert-adoption') {
-    await guardSupportedRuntimeAction('Adoption Revert');
-    const state = await loadRuntimeState();
-    guardMutation(state);
-    if (state.decisionReview?.resolution?.outcome === 'reverted') {
-      json(response, 200, { state, idempotent: true });
-      return;
-    }
-    guardWorkflowTransition(state, { stages: ['published'], label: '回退到上一版本' });
-    const result = await executeCommand({ journal: commandJournal, saveState, registry: commandRegistry, state, type: 'revert-adoption', body: {}, expectedVersion: state.stateVersion });
-    if (result.status === 'conflict') return json(response, 409, { error: '状态已变更，请刷新后重试。', code: 'STATE_VERSION_CONFLICT', retryable: true });
-    json(response, 200, { state: result.state, recovery: result.result?.recovery, repositoryRevert: result.result?.repositoryRevert, ...(result.status === 'skipped_idempotent' ? { idempotent: true } : {}) });
     return;
   }
   if (request.method === 'PATCH' && url.pathname.startsWith('/api/knowledge/drafts/')) {
@@ -2227,7 +1608,7 @@ async function handleApi(request, response, url) {
       throw error;
     }
     state.knowledgeDrafts[index] = { ...state.knowledgeDrafts[index], ...body, id: draftId };
-    json(response, 200, { state: await saveState(state) });
+    json(response, 200, { state: await persistState(state) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/knowledge/publish') {
@@ -2256,7 +1637,7 @@ async function handleApi(request, response, url) {
     state.knowledgeReferences = [reference, ...(state.knowledgeReferences || []).filter((item) => !(item.assetId === reference.assetId && item.missionId === reference.missionId))];
     appendRuntimeEvent(state, 'knowledge.referenced', reference, { kind: 'knowledge', mode: 'client' });
     addAuditEvent(state, '知识资产已引用到当前任务', `${body.assetId}@${body.version} · ${body.title}`, 'green', 'BookOpen');
-    json(response, 200, { state: await saveState(state), reference });
+    json(response, 200, { state: await persistState(state), reference });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/human-feedback') {
@@ -2289,7 +1670,7 @@ async function handleApi(request, response, url) {
     if (activeMission) activeMission.status = 'running';
     appendRuntimeEvent(state, 'mission.human_feedback_added', feedback, { kind: 'human-feedback', mode: 'client' });
     addAuditEvent(state, '已添加人工意见', note, 'blue', 'UserRound');
-    json(response, 202, { state: await saveState(state), feedback });
+    json(response, 202, { state: await persistState(state), feedback });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/actions/stop-mission') {
@@ -2312,7 +1693,7 @@ async function handleApi(request, response, url) {
     activeMission.status = 'stopped';
     appendRuntimeEvent(state, 'mission.stopped', { missionId: activeMission.id, source: 'local-c500-tui' }, { kind: 'mission', mode: 'client' });
     addAuditEvent(state, 'Mission 已停止', `${activeMission.id} · 测试人员停止`, 'warning', 'Square');
-    json(response, 200, { state: await saveState(state) });
+    json(response, 200, { state: await persistState(state) });
     return;
   }
   if (request.method === 'PATCH' && url.pathname === '/api/state') {
@@ -2336,7 +1717,7 @@ async function handleApi(request, response, url) {
     }
     if (body.missionPaused === true) state.missionPaused = true;
     if (body.missionPaused === false) resumeMissionState(state, { source: 'local-c500-tui' });
-    json(response, 200, { state: await saveState(state) });
+    json(response, 200, { state: await persistState(state) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/reset') {
@@ -2347,44 +1728,15 @@ async function handleApi(request, response, url) {
   json(response, 404, { error: 'API endpoint not found.' });
 }
 
-const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json; charset=utf-8' };
-
-async function serveStatic(response, url) {
-  if (!serveWeb) {
-    json(response, 404, { error: 'Web serving disabled in API-only mode.' });
-    return;
-  }
-  const requested = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
-  let target = path.resolve(distDir, requested);
-  if (target !== distDir && !target.startsWith(`${distDir}${path.sep}`)) {
-    json(response, 403, { error: 'Forbidden path.' });
-    return;
-  }
-  try {
-    if (!(await stat(target)).isFile()) throw new Error('not a file');
-  } catch {
-    target = path.join(distDir, 'index.html');
-  }
-  const content = await readFile(target);
-  response.writeHead(200, { 'Content-Type': mimeTypes[path.extname(target)] || 'application/octet-stream' });
-  response.end(content);
-}
-
 await ensureStorage();
 await mkdir(path.dirname(serverPidPath), { recursive: true });
-let apiQueue = Promise.resolve();
-const enqueueApiRequest = (task) => {
-  const queued = apiQueue.then(task, task);
-  apiQueue = queued.catch(() => {});
-  return queued;
-};
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || '127.0.0.1'}`);
   try {
     if (url.pathname.match(/^\/api\/missions\/[^/]+\/events\/stream$/)
       || url.pathname === '/api/health'
       || url.pathname === '/api/runtime') await handleApi(request, response, url);
-    else if (url.pathname.startsWith('/api/')) await enqueueApiRequest(() => handleApi(request, response, url));
+    else if (url.pathname.startsWith('/api/')) await stateRepository.runExclusive(() => handleApi(request, response, url));
     else await serveStatic(response, url);
   } catch (error) {
     console.error('[client-runtime]', error);
@@ -2440,7 +1792,7 @@ const runAutoTick = async () => {
       shutdown();
       return;
     }
-    await enqueueApiRequest(() => loadRuntimeState());
+    await stateRepository.runExclusive(() => loadRuntimeState());
   } catch (error) {
     console.error('[client-runtime:auto-tick]', error);
   } finally {

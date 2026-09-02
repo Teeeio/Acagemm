@@ -2,7 +2,8 @@ import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { appendRuntimeEvent, isManagedWorkspaceRuntimeMode } from './agent-runtime.mjs';
+import { appendRuntimeEvent } from './runtime-events.mjs';
+import { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
 import {
   dataDir,
   legacyDataDir,

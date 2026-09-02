@@ -1,22 +1,20 @@
 # TUI Branch Handoff
 
-Updated: 2026-08-28 (Asia/Shanghai)
+Updated: 2026-09-02 (Asia/Shanghai)
 
 ## 1. Scope and branch boundary
 
 This handoff is only for continued development and debugging of the `TUI` branch.
 
-- Worktree: `F:\设计\快速项目\acagemm原型\.worktrees\local-c500-tester`
 - Branch: `TUI`
-- Code baseline before this handoff document: `2006b36 fix(tui): recover Claude cold-start candidates`
-- Do not edit, merge, rebase, or commit against `main` or the original project checkout.
-- Run every edit, test, and Git command from the worktree above.
+- Active checkout: any clean checkout whose current branch is `TUI`; do not rely on the removed `.worktrees/local-c500-tester` path.
+- Do not edit, merge, rebase, or commit against `main`.
+- Run every edit, test, and Git command from the active `TUI` checkout.
 - Preserve persisted test data and unrelated user changes. Do not delete `.local-c500-production` unless the user explicitly authorizes a destructive reset.
 
 Before changing code, verify:
 
 ```powershell
-cd 'F:\设计\快速项目\acagemm原型\.worktrees\local-c500-tester'
 git branch --show-current   # must print TUI
 git status --short --branch
 ```
@@ -133,13 +131,21 @@ Important state-machine behavior now expected:
 
 ## 7. Current verification evidence
 
-At code baseline `2006b36`, the following completed locally on 2026-08-28:
+The following completed locally on 2026-09-02 after removing the standalone legacy CLI workflow and extracting the first production application/HTTP modules:
 
 ```powershell
 npm run verify:local-c500-release
 ```
 
-Result: `PASS: 39 checks completed`, including workflow kernel, Claude adapter/workflow, iteration loop, Gate, workspace, queue, async local runner, fixed Profiles, C550 detection, language contract, test specification, TUI randomized snapshots, spinner, viewport, refresh ordering, terminal lifecycle, and Vite build.
+Result: `PASS: 54 checks completed`, including module boundaries, application-service contracts, workflow kernel, Claude adapter/workflow, iteration loop, Gate, workspace, queue, async local runner, fixed Profiles, C550 detection, language contract, test specification, TUI randomized snapshots, spinner, viewport, refresh ordering, terminal lifecycle, and Vite build.
+
+The hardware-free robustness suite also completed on 2026-09-02:
+
+```powershell
+npm run verify:non-hardware-robustness
+```
+
+Result: `PASS: 25 checks completed without physical hardware`; its first check reruns the complete 54-check local C500 release suite.
 
 This is not proof that generated Triton kernels are fast or even compilable on C550. No C550 hardware exists in the local Windows verification environment. Actual PyTorch/Triton/MXMACA behavior, memory usage, compiler behavior, and latency must be verified on the remote machine.
 

@@ -17,6 +17,11 @@ import { fixedOperatorPrompt } from './fixed-operator-profiles.mjs';
 import { recordRunTokenUsage } from './token-usage.mjs';
 import { runtimeRegistry } from './agent-runtime/registry.mjs';
 import { createAgentRuntimeEngine } from './agent-runtime/engine.mjs';
+import { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
+import { appendRuntimeEvent } from './runtime-events.mjs';
+
+export { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
+export { appendRuntimeEvent } from './runtime-events.mjs';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(serverDir, '..');
@@ -362,25 +367,6 @@ const DEFAULT_MAIN_AGENT_STALL_MS = 2 * 60 * 1000;
 
 export const isMainAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_MAIN_AGENT_STATUSES.has(agent?.status));
 export const isResearchAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_RESEARCH_AGENT_STATUSES.has(agent?.status));
-export const isManagedWorkspaceRuntimeMode = (runtimeMode) => runtimeRegistry.get(runtimeMode)?.managedWorkspace === true;
-
-export function appendRuntimeEvent(state, type, payload = {}, source = { kind: 'adapter' }) {
-  if (!state) return null; // 防御：编排器边界可能出现瞬态 undefined，不崩循环
-  const events = Array.isArray(state.runtimeEvents) ? state.runtimeEvents : [];
-  const sequence = events.reduce((maximum, event) => Math.max(maximum, Number(event.sequence) || 0), 0) + 1;
-  const event = {
-    eventId: `evt_${Date.now().toString(36).toUpperCase()}_${sequence}`,
-    missionId: state.activeMissionId,
-    sequence,
-    type,
-    timestamp: new Date().toISOString(),
-    source,
-    payload,
-  };
-  state.runtimeEvents = [...events, event].slice(-500);
-  return event;
-}
-
 export function createAgentRuntime(options = {}) {
   // Claude Code is the production tester default. Codex remains available as
   // an explicit compatibility override via OPERATOR_RUNTIME_MODE=codex-cli.

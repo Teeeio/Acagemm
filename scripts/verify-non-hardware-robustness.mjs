@@ -37,7 +37,6 @@ const checks = [
   'test:semantic-tui',
   'test:semantic-tui-extreme',
   'test:module-extreme-contract',
-  'test:legacy-run-stop-recovery',
   'test:runtime',
   'test:agent-boundary',
   'test:baseline-materializer',
@@ -55,7 +54,6 @@ const checks = [
   'test:workflow-summary',
   'test:release',
   'test:smoke',
-  'test:local-c500-e2e',
 ];
 
 console.log(`[non-hardware-check] runtime ${process.version}; physical hardware execution is disabled`);
@@ -74,4 +72,4 @@ for (const check of checks) {
   }
 }
 
-console.log('\n[non-hardware-check] PASS: 76 checks completed without physical hardware');
+console.log(`\n[non-hardware-check] PASS: ${checks.length} checks completed without physical hardware`);

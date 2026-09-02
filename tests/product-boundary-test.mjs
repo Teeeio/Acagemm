@@ -9,8 +9,10 @@ const testRoot = path.join(rootDir, 'runtime', `boundary-${process.pid}`);
 const port = 4202;
 const baseUrl = `http://127.0.0.1:${port}`;
 const localServerSource = await readFile(path.join(rootDir, 'client-runtime', 'local-server.mjs'), 'utf8');
-assert.match(localServerSource, /body\.resume === true/, 'Codex thread resume must require an explicit resume=true request');
-assert.doesNotMatch(localServerSource, /body\.resume === false \? null/, 'rerun must not resume a previous Codex thread by default');
+const runServiceSource = await readFile(path.join(rootDir, 'client-runtime', 'application', 'run-service.mjs'), 'utf8');
+assert.match(runServiceSource, /body\.resume === true/, 'Codex thread resume must require an explicit resume=true request');
+assert.doesNotMatch(runServiceSource, /body\.resume === false \? null/, 'rerun must not resume a previous Codex thread by default');
+assert.doesNotMatch(localServerSource, /body\.resume === true/, 'Mission run policy must stay in the Run application service');
 const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
   cwd: rootDir,
   stdio: 'ignore',

@@ -1,5 +1,5 @@
 import { addAuditEvent, isInfrastructureTestFailure, isMaximizeMission } from './state-store.mjs';
-import { appendRuntimeEvent } from './agent-runtime.mjs';
+import { appendRuntimeEvent } from './runtime-events.mjs';
 
 // 研究员子 Agent 的循环策略：停滞检测、价值闸、调研简报、单轮预算、自动流转。
 // 纯函数可单测；advanceIteration 通过 deps 注入 agentRuntime 能力，避免模块反向耦合。

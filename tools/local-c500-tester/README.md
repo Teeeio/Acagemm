@@ -132,7 +132,23 @@ Mission intent
 -> budget-aware iteration loop
 ```
 
-`tools/local-c500-tester/cli.mjs` 及同目录旧 workflow 文件仅作为历史原型保留，不在 TUI 正常路径中执行。
+旧版独立 CLI workflow 已删除。当前目录只保留生产 TUI、Production API client、launcher、环境诊断和生产报告能力。任何新的 CLI 入口都必须调用 Production API，不得重新实现 Mission、Candidate、Gate 或迭代循环。
+
+## 模块开发合同
+
+| 文件/目录 | 职责 | 输入 | 输出/副作用 |
+|---|---|---|---|
+| `launcher.cjs` | 选择 Node、准备依赖并启动 TUI | CLI 参数、环境变量 | TUI 进程 |
+| `tui.mjs` | Ink 交互和本地 UI 状态 | 键盘、只读 snapshot | Ink UI、Production API 命令 |
+| `tui-state.mjs` | Runtime state 到 ViewModel 的纯投影 | state/mission/tasks | ViewModel/文本 snapshot |
+| `production-api.mjs` | Runtime 生命周期和 HTTP client | TUI command DTO | API response、受控 Runtime 进程 |
+| `tui-refresh.mjs` | 并发刷新仲裁 | 当前/新 snapshot | 最新可见 snapshot |
+| `tui-layout.mjs` | 响应式终端布局 | columns/rows | layout DTO |
+| `terminal-screen.mjs` | alternate-screen 生命周期 | stdout | ANSI enter/leave |
+| `components/` | 展示组件 | ViewModel/viewport | Ink element tree |
+| `workflow-summary.mjs` | 冷启动/E2E 报告 | state/tasks | Markdown summary |
+
+TUI 不允许直接读取或写入持久化 state 文件，不允许调用 Agent provider 或 C550 runner，也不拥有工作流状态转换规则。契约变化必须同步更新本 README 和对应测试。
 
 ## TUI 操作
 
