@@ -51,6 +51,7 @@
 | `repository-adoption-service.mjs` | managed runtime candidate repository adoption | projected state | changed state |
 | `autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `autopilot-context-service.mjs` | auto-tick context preparation | state | autopilot context |
+| `autopilot-candidate-action-service.mjs` | candidate patch apply and recovery | candidate state | updated state |
 
 ## Dependency Direction
 

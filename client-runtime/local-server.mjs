@@ -100,6 +100,7 @@ import { createBenchmarkProjectionService } from './application/benchmark-projec
 import { createRepositoryAdoptionService } from './application/repository-adoption-service.mjs';
 import { selectAutopilotCandidate } from './application/autopilot-candidate-service.mjs';
 import { createAutopilotContextService } from './application/autopilot-context-service.mjs';
+import { createAutopilotCandidateActionService } from './application/autopilot-candidate-action-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1044,6 +1045,7 @@ const baselineSourceService = createBaselineSourceService({ isFixedOperatorMissi
 const benchmarkProjectionService = createBenchmarkProjectionService({ operatorTestQueue, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path });
 const repositoryAdoptionService = createRepositoryAdoptionService({ isManagedWorkspaceRuntimeMode, adoptPatch: (...args) => workspaceManager.adoptPatch(...args), runAutomaticAdoption, runKnowledgeMaintenance, appendRuntimeEvent });
 const autopilotContextService = createAutopilotContextService({ isFixedOperatorMission, selectCandidate: selectAutopilotCandidate });
+const autopilotCandidateActionService = createAutopilotCandidateActionService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const materializerPolicyService = createMaterializerPolicyService({ consumeWorkflowRecoveryBudget: (...args) => consumeWorkflowRecoveryBudget(...args) });
 
 const iterationDeps = {
@@ -1285,32 +1287,13 @@ const advanceTesterAutopilot = async (state) => {
 
   if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status === 'complete') {
     if (agentRuntime.mode === 'reference-fixture' && candidate?.id && !candidate.patchDigest && actionType === 'candidate.plan') {
-      const result = await executeCommand({
-        journal: commandJournal,
-        saveState: persistState,
-        registry: commandRegistry,
-        state,
-        type: 'apply-patch',
-        body: { candidate: candidate.id },
-        expectedVersion: state.stateVersion,
-      });
-      return { state: result.state || state, action: 'simulation_candidate_applied' };
+      return { state: await autopilotCandidateActionService.applyCandidate({ state, candidateId: candidate.id }), action: 'simulation_candidate_applied' };
     }
     if (candidate?.patchDigest && actionType === 'candidate.plan') {
-      const result = await executeCommand({
-        journal: commandJournal,
-        saveState: persistState,
-        registry: commandRegistry,
-        state,
-        type: 'apply-patch',
-        body: { candidate: candidate.id },
-        expectedVersion: state.stateVersion,
-      });
-      return { state: result.state || state, action: 'candidate_applied' };
+      return { state: await autopilotCandidateActionService.applyCandidate({ state, candidateId: candidate.id }), action: 'candidate_applied' };
     }
     if (!candidate?.patchDigest) {
-      const goal = `${mission.goal || state.agent?.goal || ''}\n【系统恢复】同 runner / 同 shape baseline 已完成，请生成一个有真实工作区 Diff 的 run.py 优化候选。`;
-      return { state: await iterationDeps.startMainRound({ state, goal }), action: 'candidate_resumed' };
+      return { state: await autopilotCandidateActionService.resumeCandidate({ state, mission, startMainRound: iterationDeps.startMainRound }), action: 'candidate_resumed' };
     }
   }
 
