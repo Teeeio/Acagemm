@@ -105,6 +105,7 @@ import { createAutopilotValidationService } from './application/autopilot-valida
 import { createAutopilotService } from './application/autopilot-service.mjs';
 import { createAutopilotBaselineResearchService } from './application/autopilot-baseline-research-service.mjs';
 import { createAutopilotFixedProfileService } from './application/autopilot-fixed-profile-service.mjs';
+import { createAutopilotStrictSourceService } from './application/autopilot-strict-source-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1194,6 +1195,7 @@ const iterationDeps = {
 
 const autopilotBaselineResearchService = createAutopilotBaselineResearchService({ isManagedWorkspaceRuntimeMode, isResearchAgentActive, startResearch: iterationDeps.startResearch, researchDirForMission, appendRuntimeEvent, addAuditEvent, agentRuntime });
 const autopilotFixedProfileService = createAutopilotFixedProfileService({ isResearchAgentActive, startResearch: iterationDeps.startResearch, startMainRound: iterationDeps.startMainRound, researchDirForMission, appendRuntimeEvent });
+const autopilotStrictSourceService = createAutopilotStrictSourceService({ isStrictZeroSourceMission, isResearchAgentActive, selectResearchBaselineSource, buildSemanticBaselineSource, startResearch: iterationDeps.startResearch, startBaseline: iterationDeps.startBaseline, startMainRound: iterationDeps.startMainRound, researchDirForMission });
 
 const advanceTesterAutopilot = async (state) => {
   const context = autopilotContextService.prepare(state);
@@ -1236,6 +1238,8 @@ const advanceTesterAutopilot = async (state) => {
   }
 
   if (isStrictZeroSourceMission(mission)) {
+    const strictSourceResult = await autopilotStrictSourceService.advance({ state, mission, candidate });
+    if (strictSourceResult) return strictSourceResult;
     const research = state.researchAgent || {};
     if (state.baseline?.status !== 'complete' && isResearchAgentActive(research)) {
       return { state, action: 'wait_research' };
