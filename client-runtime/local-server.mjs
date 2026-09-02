@@ -101,6 +101,7 @@ import { createRepositoryAdoptionService } from './application/repository-adopti
 import { selectAutopilotCandidate } from './application/autopilot-candidate-service.mjs';
 import { createAutopilotContextService } from './application/autopilot-context-service.mjs';
 import { createAutopilotCandidateActionService } from './application/autopilot-candidate-action-service.mjs';
+import { createAutopilotValidationService } from './application/autopilot-validation-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1046,6 +1047,7 @@ const benchmarkProjectionService = createBenchmarkProjectionService({ operatorTe
 const repositoryAdoptionService = createRepositoryAdoptionService({ isManagedWorkspaceRuntimeMode, adoptPatch: (...args) => workspaceManager.adoptPatch(...args), runAutomaticAdoption, runKnowledgeMaintenance, appendRuntimeEvent });
 const autopilotContextService = createAutopilotContextService({ isFixedOperatorMission, selectCandidate: selectAutopilotCandidate });
 const autopilotCandidateActionService = createAutopilotCandidateActionService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
+const autopilotValidationService = createAutopilotValidationService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry, inferMissionMatrix });
 const materializerPolicyService = createMaterializerPolicyService({ consumeWorkflowRecoveryBudget: (...args) => consumeWorkflowRecoveryBudget(...args) });
 
 const iterationDeps = {
@@ -1302,17 +1304,7 @@ const advanceTesterAutopilot = async (state) => {
       && state.baseline?.status === 'complete'
       && state.agent?.status === 'awaiting_action'
       && actionType === 'test.plan') {
-    const matrix = inferMissionMatrix(mission, state.testMatrix || mission.testMatrix || {});
-    const result = await executeCommand({
-      journal: commandJournal,
-      saveState: persistState,
-      registry: commandRegistry,
-      state,
-      type: 'start-benchmark',
-      body: { purpose: 'candidate', candidate: state.appliedCandidateId, matrix },
-      expectedVersion: state.stateVersion,
-    });
-    return { state: result.state || state, action: 'candidate_test_started' };
+    return { state: await autopilotValidationService.startCandidateTest({ state, mission }), action: 'candidate_test_started' };
   }
 
   return { state, action: 'none' };

@@ -57,6 +57,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `application/autopilot-context-service.mjs` | automatic iteration context preparation | state | autopilot context |
 | `application/autopilot-candidate-action-service.mjs` | automatic candidate apply/resume actions | candidate state | updated state |
+| `application/autopilot-validation-service.mjs` | automatic candidate benchmark start | candidate state | updated state |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |

@@ -52,6 +52,7 @@
 | `autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `autopilot-context-service.mjs` | auto-tick context preparation | state | autopilot context |
 | `autopilot-candidate-action-service.mjs` | candidate patch apply and recovery | candidate state | updated state |
+| `autopilot-validation-service.mjs` | candidate benchmark start | candidate state | updated state |
 
 ## Dependency Direction
 

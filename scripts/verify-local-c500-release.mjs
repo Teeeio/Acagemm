@@ -48,6 +48,7 @@ const checks = [
   'test:autopilot-candidate-service',
   'test:autopilot-context-service',
   'test:autopilot-candidate-action-service',
+  'test:autopilot-validation-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',
