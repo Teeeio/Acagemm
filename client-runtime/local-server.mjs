@@ -87,6 +87,7 @@ import { createMissionControlRoutes } from './server/mission-control-routes.mjs'
 import { createMissionControlService } from './application/mission-control-service.mjs';
 import { createKnowledgeRoutes } from './server/knowledge-routes.mjs';
 import { createKnowledgeService } from './application/knowledge-service.mjs';
+import { createSourceService } from './application/source-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1021,6 +1022,7 @@ const missionControlService = createMissionControlService({ loadState: () => loa
 const missionControlRoutes = createMissionControlRoutes({ json, readJson, missionControl: missionControlService });
 const knowledgeService = createKnowledgeService({ loadState: () => loadRuntimeState(), persistState, guardMutation: (...args) => guardMutation(...args), appendRuntimeEvent, addAuditEvent });
 const knowledgeRoutes = createKnowledgeRoutes({ json, readJson, knowledge: knowledgeService });
+const sourceService = createSourceService({ readdir, stat, path, workspaceManager });
 
 const iterationDeps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
@@ -1032,38 +1034,8 @@ const iterationDeps = {
     return started.state;
   },
   cancelResearch: async ({ state, runId }) => agentRuntime.cancelRun({ state, runId }),
-  registerSources: async ({ state, mission }) => {
-    if (!mission?.sourceRoot) return { count: 0, errors: ['sourceRoot 未配置'] };
-    // mission 记录可能没存 runtimeRoot；three-layer 项目由 projectRoot 推导
-    const runtimeRoot = mission.runtimeRoot || (mission.projectRoot ? path.join(mission.projectRoot, '.operator-studio') : null);
-    if (!runtimeRoot) return { count: 0, errors: ['runtimeRoot 未配置'] };
-    try {
-      const entries = await readdir(mission.sourceRoot).catch(() => []);
-      const repos = entries.filter((name) => name !== '.git');
-      const references = [];
-      for (const name of repos) {
-        const repoPath = path.join(mission.sourceRoot, name);
-        const isRepo = await stat(path.join(repoPath, '.git')).then(() => true).catch(() => false);
-        if (!isRepo) continue;
-        const head = await workspaceManager.git(['rev-parse', 'HEAD'], repoPath).then((result) => result.stdout.trim()).catch(() => null);
-        const origin = await workspaceManager.git(['remote', 'get-url', 'origin'], repoPath).then((result) => result.stdout.trim()).catch(() => '');
-        if (head) references.push({ repository: origin || repoPath, commit: head, path: '' });
-      }
-      if (references.length) {
-        await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot, missionId: state.activeMissionId, references });
-      }
-      return { count: references.length, references };
-    } catch (error) {
-      return { count: 0, errors: [error.message] };
-    }
-  },
-  countSources: async ({ state, mission }) => {
-    if (!mission?.sourceRoot) return { count: 0 };
-    try {
-      const entries = await readdir(mission.sourceRoot).catch(() => []);
-      return { count: entries.filter((name) => name !== '.git').length };
-    } catch { return { count: 0 }; }
-  },
+  registerSources: sourceService.registerSources,
+  countSources: sourceService.countSources,
   startMainRound: async ({ state, goal, retryMode = 'generation' }) => {
     const runtimeDescriptor = await agentRuntime.describe();
     const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};

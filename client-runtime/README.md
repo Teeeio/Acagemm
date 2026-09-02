@@ -43,6 +43,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/runtime-query-service.mjs` | Runtime state, preflight, and active workspace projections | Mission ID or query | state, readiness, or workspace DTO |
 | `application/runtime-state-service.mjs` | TUI state patch and pause/budget commands | state command body | persisted state or stable validation error |
 | `application/reset-service.mjs` | guarded Demo Reset orchestration | reset command | reset product state |
+| `application/source-service.mjs` | source repository registration and counting | Mission source root | source references/count |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |
