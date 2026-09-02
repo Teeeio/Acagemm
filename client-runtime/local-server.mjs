@@ -89,6 +89,7 @@ import { createKnowledgeRoutes } from './server/knowledge-routes.mjs';
 import { createKnowledgeService } from './application/knowledge-service.mjs';
 import { createSourceService } from './application/source-service.mjs';
 import { createIterationResearchService } from './application/iteration-research-service.mjs';
+import { createRoundRecoveryService } from './application/round-recovery-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1025,6 +1026,7 @@ const knowledgeService = createKnowledgeService({ loadState: () => loadRuntimeSt
 const knowledgeRoutes = createKnowledgeRoutes({ json, readJson, knowledge: knowledgeService });
 const sourceService = createSourceService({ readdir, stat, path, workspaceManager });
 const iterationResearchService = createIterationResearchService({ mkdir, agentRuntime, isManagedWorkspaceRuntimeMode });
+const roundRecoveryService = createRoundRecoveryService({ isManagedWorkspaceRuntimeMode, restoreWorkspaceCheckpoint, captureDiff: (...args) => workspaceManager.captureDiff(...args) });
 
 const iterationDeps = {
   startResearch: iterationResearchService.startResearch,
@@ -1039,27 +1041,7 @@ const iterationDeps = {
     const preflight = await buildRuntimePreflight(mission);
     if (!preflight.ready) return state;
     const workspace = preflight.workspace;
-    const previousCheckpoint = state.workflowRecovery?.checkpoints?.at(-1) || null;
-    const previousGate = state.decisionReview?.gate || null;
-    const previousCandidateId = state.appliedCandidateId || state.decisionReview?.candidateId || state.benchmark?.candidate?.id || null;
-    const previousCandidateDigest = state.benchmark?.candidate?.digest
-      || (state.candidateEvaluations || []).find((item) => item.id === previousCandidateId)?.patchDigest
-      || null;
-    const shouldRestoreRejectedRound = isManagedWorkspaceRuntimeMode(runtimeDescriptor.mode)
-      && previousCheckpoint
-      && (previousGate?.passed === false || state.decisionReview?.resolution?.outcome === 'reject');
-    let rollback = null;
-    if (shouldRestoreRejectedRound) {
-      const recovery = await restoreWorkspaceCheckpoint(previousCheckpoint, state.activeMissionId);
-      const restoredDiff = await workspaceManager.captureDiff(workspace);
-      if (!previousCheckpoint.stableDigest || restoredDiff.digest !== previousCheckpoint.stableDigest) {
-        const error = new Error('上一轮候选恢复后工作区未回到 baseline checkpoint，已阻止下一轮 Agent。');
-        error.status = 409;
-        error.code = 'ROUND_ROLLBACK_WORKSPACE_DIRTY';
-        throw error;
-      }
-      rollback = { checkpointId: previousCheckpoint.id, candidateId: previousCandidateId, candidateDigest: previousCandidateDigest, workspaceClean: true, restoredAt: recovery.restoredAt };
-    }
+    const rollback = await roundRecoveryService.restoreRejectedRound({ state, workspace, runtimeMode: runtimeDescriptor.mode });
     if (isStrictZeroSourceMission(mission)) {
       const baselineRunPy = state.baseline?.materializer?.result?.runPy;
       if (!baselineRunPy) {

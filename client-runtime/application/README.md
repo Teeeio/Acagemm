@@ -40,6 +40,7 @@
 | `reset-service.mjs` | Runtime capability guard and Demo Reset orchestration | reset command | reset product state |
 | `source-service.mjs` | Git source registration and source counting | `{ state, mission }` | source references/count |
 | `iteration-research-service.mjs` | Agent/Workspace research lifecycle coordination | research start/cancel input | updated state |
+| `round-recovery-service.mjs` | rejected iteration checkpoint restoration | round state/workspace | recovery metadata |
 
 ## Dependency Direction
 
