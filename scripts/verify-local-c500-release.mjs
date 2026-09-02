@@ -41,6 +41,7 @@ const checks = [
   'test:round-preflight-service',
   'test:round-artifact-guard',
   'test:baseline-source-service',
+  'test:materializer-policy-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',

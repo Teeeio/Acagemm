@@ -50,6 +50,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/round-preflight-service.mjs` | generation settlement and runtime preflight | round input | round context |
 | `application/round-artifact-guard.mjs` | strict baseline artifact admission | mission/state | pass or stable error |
 | `application/baseline-source-service.mjs` | baseline source policy selection | mission/state | source selection |
+| `application/materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |

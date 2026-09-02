@@ -45,6 +45,7 @@
 | `round-preflight-service.mjs` | generation settlement and runtime preflight composition | round input | round context |
 | `round-artifact-guard.mjs` | strict baseline artifact admission | mission/state | pass or stable error |
 | `baseline-source-service.mjs` | baseline source policy selection | mission/state | source selection |
+| `materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 
 ## Dependency Direction
 

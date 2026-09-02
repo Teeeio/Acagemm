@@ -20,7 +20,7 @@ for (const relative of removedLegacyModules) {
   assert.equal(await exists(relative), false, `legacy workflow module must stay removed: ${relative}`);
 }
 
-const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, roundArtifactGuard, baselineSourceService, packageJson] = await Promise.all([
+const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, roundArtifactGuard, baselineSourceService, materializerPolicyService, packageJson] = await Promise.all([
   read('client-runtime/state-store.mjs'),
   read('client-runtime/iteration-loop.mjs'),
   read('client-runtime/local-server.mjs'),
@@ -63,6 +63,7 @@ const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, m
   read('client-runtime/application/round-preflight-service.mjs'),
   read('client-runtime/application/round-artifact-guard.mjs'),
   read('client-runtime/application/baseline-source-service.mjs'),
+  read('client-runtime/application/materializer-policy-service.mjs'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -109,6 +110,7 @@ assert.doesNotMatch(agentRoundService, /server\/|tools\/local-c500-tester/, 'Age
 assert.doesNotMatch(roundPreflightService, /server\/|tools\/local-c500-tester/, 'Round preflight service must not depend on transport or TUI');
 assert.doesNotMatch(roundArtifactGuard, /server\/|tools\/local-c500-tester/, 'Round artifact guard must not depend on transport or TUI');
 assert.doesNotMatch(baselineSourceService, /server\/|tools\/local-c500-tester/, 'Baseline source service must not depend on transport or TUI');
+assert.doesNotMatch(materializerPolicyService, /server\/|tools\/local-c500-tester/, 'Materializer policy service must not depend on transport or TUI');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
@@ -152,6 +154,7 @@ for (const requiredDocument of [
   'client-runtime/application/round-preflight-service.md',
   'client-runtime/application/round-artifact-guard.md',
   'client-runtime/application/baseline-source-service.md',
+  'client-runtime/application/materializer-policy-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',

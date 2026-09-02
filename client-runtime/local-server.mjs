@@ -94,6 +94,7 @@ import { createAgentRoundService } from './application/agent-round-service.mjs';
 import { createRoundPreflightService } from './application/round-preflight-service.mjs';
 import { createRoundArtifactGuard } from './application/round-artifact-guard.mjs';
 import { createBaselineSourceService } from './application/baseline-source-service.mjs';
+import { createMaterializerPolicyService } from './application/materializer-policy-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1035,6 +1036,7 @@ const agentRoundService = createAgentRoundService({ resetMissionRunState, resetM
 const roundPreflightService = createRoundPreflightService({ settleGenerationAttemptBeforeStart, buildRuntimePreflight });
 const roundArtifactGuard = createRoundArtifactGuard({ isStrictZeroSourceMission });
 const baselineSourceService = createBaselineSourceService({ isFixedOperatorMission, isStrictZeroSourceMission, selectResearchBaselineSource, buildSemanticBaselineSource, inferAuthoritativeBaselineSource, isSemanticBaselineSource });
+const materializerPolicyService = createMaterializerPolicyService({ consumeWorkflowRecoveryBudget: (...args) => consumeWorkflowRecoveryBudget(...args) });
 
 const iterationDeps = {
   startResearch: iterationResearchService.startResearch,
@@ -1101,6 +1103,11 @@ const iterationDeps = {
         }
       }
       const materializer = state.baseline?.materializer || {};
+      const materializerPolicy = materializerPolicyService.inspect({ state, materializer, baselineSource });
+      if (materializerPolicy.action === 'wait') return state;
+      if (materializerPolicy.action === 'continue') {
+        // fall through to benchmark submission below
+      }
       if (materializer.status !== 'completed' || !materializer.result?.runPy) {
         if (['running', 'cancel_requested'].includes(materializer.status)) return state;
         if (['failed', 'cancelled', 'timed_out'].includes(materializer.status)) {
