@@ -42,6 +42,7 @@
 | `iteration-research-service.mjs` | Agent/Workspace research lifecycle coordination | research start/cancel input | updated state |
 | `round-recovery-service.mjs` | rejected iteration checkpoint restoration | round state/workspace | recovery metadata |
 | `agent-round-service.mjs` | Agent round reset, checkpoint, and launch | round input | updated state |
+| `round-preflight-service.mjs` | generation settlement and runtime preflight composition | round input | round context |
 
 ## Dependency Direction
 

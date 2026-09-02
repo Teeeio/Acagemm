@@ -20,7 +20,7 @@ for (const relative of removedLegacyModules) {
   assert.equal(await exists(relative), false, `legacy workflow module must stay removed: ${relative}`);
 }
 
-const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, packageJson] = await Promise.all([
+const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, packageJson] = await Promise.all([
   read('client-runtime/state-store.mjs'),
   read('client-runtime/iteration-loop.mjs'),
   read('client-runtime/local-server.mjs'),
@@ -60,6 +60,7 @@ const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, m
   read('client-runtime/application/iteration-research-service.mjs'),
   read('client-runtime/application/round-recovery-service.mjs'),
   read('client-runtime/application/agent-round-service.mjs'),
+  read('client-runtime/application/round-preflight-service.mjs'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -103,6 +104,7 @@ assert.doesNotMatch(sourceService, /server\/|tools\/local-c500-tester/, 'Source 
 assert.doesNotMatch(iterationResearchService, /server\/|tools\/local-c500-tester/, 'Iteration research service must not depend on transport or TUI');
 assert.doesNotMatch(roundRecoveryService, /server\/|tools\/local-c500-tester/, 'Round recovery service must not depend on transport or TUI');
 assert.doesNotMatch(agentRoundService, /server\/|tools\/local-c500-tester/, 'Agent round service must not depend on transport or TUI');
+assert.doesNotMatch(roundPreflightService, /server\/|tools\/local-c500-tester/, 'Round preflight service must not depend on transport or TUI');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
@@ -143,6 +145,7 @@ for (const requiredDocument of [
   'client-runtime/application/iteration-research-service.md',
   'client-runtime/application/round-recovery-service.md',
   'client-runtime/application/agent-round-service.md',
+  'client-runtime/application/round-preflight-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',

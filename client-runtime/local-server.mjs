@@ -91,6 +91,7 @@ import { createSourceService } from './application/source-service.mjs';
 import { createIterationResearchService } from './application/iteration-research-service.mjs';
 import { createRoundRecoveryService } from './application/round-recovery-service.mjs';
 import { createAgentRoundService } from './application/agent-round-service.mjs';
+import { createRoundPreflightService } from './application/round-preflight-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1029,6 +1030,7 @@ const sourceService = createSourceService({ readdir, stat, path, workspaceManage
 const iterationResearchService = createIterationResearchService({ mkdir, agentRuntime, isManagedWorkspaceRuntimeMode });
 const roundRecoveryService = createRoundRecoveryService({ isManagedWorkspaceRuntimeMode, restoreWorkspaceCheckpoint, captureDiff: (...args) => workspaceManager.captureDiff(...args) });
 const agentRoundService = createAgentRoundService({ resetMissionRunState, resetMissionWorkspace, createWorkspaceCheckpoint, startAgentRun, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, agentRuntime });
+const roundPreflightService = createRoundPreflightService({ settleGenerationAttemptBeforeStart, buildRuntimePreflight });
 
 const iterationDeps = {
   startResearch: iterationResearchService.startResearch,
@@ -1037,11 +1039,9 @@ const iterationDeps = {
   countSources: sourceService.countSources,
   startMainRound: async ({ state, goal, retryMode = 'generation' }) => {
     const runtimeDescriptor = await agentRuntime.describe();
-    const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-    const generationSettlement = settleGenerationAttemptBeforeStart(state, mission, { retryMode });
-    if (generationSettlement.blocked) return state;
-    const preflight = await buildRuntimePreflight(mission);
-    if (!preflight.ready) return state;
+    const prepared = await roundPreflightService.prepare({ state, goal, retryMode });
+    if (prepared.blocked) return state;
+    const { mission, preflight } = prepared;
     const workspace = preflight.workspace;
     const rollback = await roundRecoveryService.restoreRejectedRound({ state, workspace, runtimeMode: runtimeDescriptor.mode });
     if (isStrictZeroSourceMission(mission)) {

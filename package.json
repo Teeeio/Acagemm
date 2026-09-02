@@ -75,6 +75,7 @@
     "test:iteration-research-service": "node tests/iteration-research-service-test.mjs",
     "test:round-recovery-service": "node tests/round-recovery-service-test.mjs",
     "test:agent-round-service": "node tests/agent-round-service-test.mjs",
+    "test:round-preflight-service": "node tests/round-preflight-service-test.mjs",
     "test:workflow-summary": "node tests/workflow-summary-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
     "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",
