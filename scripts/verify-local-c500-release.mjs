@@ -46,6 +46,7 @@ const checks = [
   'test:benchmark-projection-service',
   'test:repository-adoption-service',
   'test:autopilot-candidate-service',
+  'test:autopilot-context-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',

@@ -50,6 +50,7 @@
 | `benchmark-projection-service.mjs` | Operator Test queue snapshot and artifact projection | benchmark state | changed state |
 | `repository-adoption-service.mjs` | managed runtime candidate repository adoption | projected state | changed state |
 | `autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
+| `autopilot-context-service.mjs` | auto-tick context preparation | state | autopilot context |
 
 ## Dependency Direction
 

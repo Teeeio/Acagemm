@@ -99,6 +99,7 @@ import { projectBaselineFailure } from './application/baseline-failure-projectio
 import { createBenchmarkProjectionService } from './application/benchmark-projection-service.mjs';
 import { createRepositoryAdoptionService } from './application/repository-adoption-service.mjs';
 import { selectAutopilotCandidate } from './application/autopilot-candidate-service.mjs';
+import { createAutopilotContextService } from './application/autopilot-context-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1042,6 +1043,7 @@ const roundArtifactGuard = createRoundArtifactGuard({ isStrictZeroSourceMission 
 const baselineSourceService = createBaselineSourceService({ isFixedOperatorMission, isStrictZeroSourceMission, selectResearchBaselineSource, buildSemanticBaselineSource, inferAuthoritativeBaselineSource, isSemanticBaselineSource });
 const benchmarkProjectionService = createBenchmarkProjectionService({ operatorTestQueue, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path });
 const repositoryAdoptionService = createRepositoryAdoptionService({ isManagedWorkspaceRuntimeMode, adoptPatch: (...args) => workspaceManager.adoptPatch(...args), runAutomaticAdoption, runKnowledgeMaintenance, appendRuntimeEvent });
+const autopilotContextService = createAutopilotContextService({ isFixedOperatorMission, selectCandidate: selectAutopilotCandidate });
 const materializerPolicyService = createMaterializerPolicyService({ consumeWorkflowRecoveryBudget: (...args) => consumeWorkflowRecoveryBudget(...args) });
 
 const iterationDeps = {
@@ -1184,10 +1186,11 @@ const iterationDeps = {
 };
 
 const advanceTesterAutopilot = async (state) => {
-  if (process.env.OPERATOR_AUTO_TICK !== '1' || state.missionPaused) return { state, action: 'none' };
-  const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+  const context = autopilotContextService.prepare(state);
+  if (!context.enabled) return { state, action: 'none' };
+  const { mission } = context;
   const actionType = state.agent?.currentAction?.type;
-  const candidate = selectAutopilotCandidate(state);
+  const { candidate } = context;
 
   // 专用四算子路径：冻结语义和测试矩阵 -> baseline -> 可选经验调研 -> 三轮候选。
   // 经验调研的失败被记录，但不会改变 baseline 或使任务进入 needs_human。

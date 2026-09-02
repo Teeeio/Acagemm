@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { createAutopilotContextService } from '../client-runtime/application/autopilot-context-service.mjs';
+const service = createAutopilotContextService({ isFixedOperatorMission: () => true, selectCandidate: (state) => state.candidateEvaluations?.[0] || null });
+const state = { activeMissionId: 'm', missions: [{ id: 'm' }], candidateEvaluations: [{ id: 'c' }] };
+assert.equal(service.prepare(state, { autoTick: '0' }).enabled, false);
+const context = service.prepare(state, { autoTick: '1' });
+assert.equal(context.enabled, true);
+assert.equal(context.candidate.id, 'c');
+assert.equal(context.fixedOperator, true);
+console.log('[autopilot-context-service] auto-tick context contract passed');
