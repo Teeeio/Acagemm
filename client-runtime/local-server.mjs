@@ -91,6 +91,8 @@ import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
 import { createRuntimeStateService } from './application/runtime-state-service.mjs';
+import { createResetRoutes } from './server/reset-routes.mjs';
+import { createResetService } from './application/reset-service.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -362,6 +364,9 @@ const guardSupportedRuntimeAction = async (action) => {
   error.code = 'RUNTIME_ACTION_UNAVAILABLE';
   throw error;
 };
+
+const resetService = createResetService({ guardSupportedRuntimeAction, resetDemoData });
+const resetRoutes = createResetRoutes({ json, reset: resetService });
 
 const guardWorkflowTransition = (state, { stages, actionType, label }) => {
   const stageAllowed = stages.includes(state.stage);
@@ -1520,11 +1525,7 @@ async function handleApi(request, response, url) {
   if (await knowledgeRoutes({ request, response, url })) return;
   if (await runtimeQueryRoutes({ request, response, url })) return;
   if (await runtimeStateRoutes({ request, response, url })) return;
-  if (request.method === 'POST' && url.pathname === '/api/reset') {
-    await guardSupportedRuntimeAction('Demo Reset');
-    json(response, 200, { state: await resetDemoData() });
-    return;
-  }
+  if (await resetRoutes({ request, response, url })) return;
   json(response, 404, { error: 'API endpoint not found.' });
 }
 

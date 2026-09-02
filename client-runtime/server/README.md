@@ -43,6 +43,7 @@
 | `knowledge-routes.mjs` | Knowledge draft, reference, and retired publication HTTP contexts | handled boolean and JSON response |
 | `runtime-query-routes.mjs` | Runtime state, preflight, and workspace GET contexts | handled boolean and JSON response |
 | `runtime-state-routes.mjs` | Runtime state PATCH context | handled boolean and JSON response |
+| `reset-routes.mjs` | Demo Reset POST context | handled boolean and JSON response |
 
 ## Route Contract
 
@@ -62,6 +63,7 @@ Every route handler receives `{ request, response, url }` and returns `true` whe
 - Baseline routes do not select source authority, start materializer Agents, or mutate Baseline state.
 - Operator Test routes do not implement queue locking, polling, retry, cancellation, or hardware rules.
 - Knowledge routes do not enforce draft mutability, writable fields, reference uniqueness, or publication policy.
+- Reset routes do not select providers, check runtime capability, or mutate persisted state directly.
 
 ## Verification
 

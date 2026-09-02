@@ -20,7 +20,7 @@ for (const relative of removedLegacyModules) {
   assert.equal(await exists(relative), false, `legacy workflow module must stay removed: ${relative}`);
 }
 
-const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, packageJson] = await Promise.all([
+const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, packageJson] = await Promise.all([
   read('client-runtime/state-store.mjs'),
   read('client-runtime/iteration-loop.mjs'),
   read('client-runtime/local-server.mjs'),
@@ -54,6 +54,8 @@ const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, m
   read('client-runtime/application/runtime-query-service.mjs'),
   read('client-runtime/server/runtime-state-routes.mjs'),
   read('client-runtime/application/runtime-state-service.mjs'),
+  read('client-runtime/server/reset-routes.mjs'),
+  read('client-runtime/application/reset-service.mjs'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -91,6 +93,8 @@ assert.doesNotMatch(runtimeQueryRoutes, /state-store|node:fs/, 'Runtime query ro
 assert.doesNotMatch(runtimeQueryService, /server\/|tools\/local-c500-tester/, 'Runtime query service must not depend on transport or TUI');
 assert.doesNotMatch(runtimeStateRoutes, /state-store|node:fs/, 'Runtime state routes must stay transport-only');
 assert.doesNotMatch(runtimeStateService, /server\/|tools\/local-c500-tester/, 'Runtime state service must not depend on transport or TUI');
+assert.doesNotMatch(resetRoutes, /state-store|node:fs/, 'Reset routes must stay transport-only');
+assert.doesNotMatch(resetService, /server\/|tools\/local-c500-tester/, 'Reset service must not depend on transport or TUI');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
@@ -102,6 +106,7 @@ assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:human
 assert.doesNotMatch(localServer, /url\.pathname(?:\.startsWith\()?['"]\/api\/knowledge/, 'Knowledge routes must stay extracted');
 assert.doesNotMatch(localServer, /request\.method === ['"]GET['"] && url\.pathname === ['"]\/api\/(?:runtime\/preflight|state|workspace)['"]/, 'Runtime query routes must stay extracted');
 assert.doesNotMatch(localServer, /request\.method === ['"]PATCH['"] && url\.pathname === ['"]\/api\/state['"]/, 'Runtime state routes must stay extracted');
+assert.doesNotMatch(localServer, /request\.method === ['"]POST['"] && url\.pathname === ['"]\/api\/reset['"]/, 'Reset routes must stay extracted');
 
 for (const requiredDocument of [
   'AGENTS.md',
@@ -125,6 +130,7 @@ for (const requiredDocument of [
   'client-runtime/application/knowledge-service.md',
   'client-runtime/application/runtime-query-service.md',
   'client-runtime/application/runtime-state-service.md',
+  'client-runtime/application/reset-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',
