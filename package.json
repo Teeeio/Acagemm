@@ -93,6 +93,7 @@
     "test:autopilot-candidate-baseline-service": "node tests/autopilot-candidate-baseline-service-test.mjs",
     "test:baseline-benchmark-service": "node tests/baseline-benchmark-service-test.mjs",
     "test:baseline-materializer-command-service": "node tests/baseline-materializer-command-service-test.mjs",
+    "test:baseline-source-inspection-service": "node tests/baseline-source-inspection-service-test.mjs",
     "test:workflow-summary": "node tests/workflow-summary-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
     "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",

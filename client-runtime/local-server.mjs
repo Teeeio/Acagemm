@@ -109,6 +109,7 @@ import { createAutopilotStrictSourceService } from './application/autopilot-stri
 import { createAutopilotCandidateBaselineService } from './application/autopilot-candidate-baseline-service.mjs';
 import { createBaselineBenchmarkService } from './application/baseline-benchmark-service.mjs';
 import { createBaselineMaterializerCommandService } from './application/baseline-materializer-command-service.mjs';
+import { createBaselineSourceInspectionService } from './application/baseline-source-inspection-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1114,12 +1115,8 @@ const iterationDeps = {
     }
     if (strictZeroSource) {
       if (!semanticFallback) {
-        const inspection = await workspaceManager.inspectSources(mission.sourceRoot, [baselineSource]);
-        if (!inspection.ready || inspection.references.some((reference) => !reference.verified)) {
-          state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unverified' };
-          appendRuntimeEvent(state, 'baseline.source_unverified', { missionId: state.activeMissionId, errors: inspection.errors }, { kind: 'baseline', mode: 'client' });
-          return state;
-        }
+        const inspection = await baselineSourceInspectionService.inspect({ state, mission, baselineSource });
+        if (!inspection.valid) return inspection.state;
       }
       const materializer = state.baseline?.materializer || {};
       const materializerPolicy = materializerPolicyService.inspect({ state, materializer, baselineSource });
@@ -1174,6 +1171,7 @@ const autopilotStrictSourceService = createAutopilotStrictSourceService({ isStri
 const autopilotCandidateBaselineService = createAutopilotCandidateBaselineService({ isManagedWorkspaceRuntimeMode, startBaseline: iterationDeps.startBaseline, startResearch: iterationDeps.startResearch, researchDirForMission, agentRuntime, appendRuntimeEvent, addAuditEvent });
 const baselineBenchmarkService = createBaselineBenchmarkService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const baselineMaterializerCommandService = createBaselineMaterializerCommandService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
+const baselineSourceInspectionService = createBaselineSourceInspectionService({ inspectSources: (...args) => workspaceManager.inspectSources(...args), appendRuntimeEvent });
 
 const advanceTesterAutopilot = async (state) => {
   const context = autopilotContextService.prepare(state);

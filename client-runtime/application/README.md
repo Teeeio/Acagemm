@@ -60,6 +60,7 @@
 | `autopilot-candidate-baseline-service.mjs` | ordinary candidate baseline progression | Mission state | state/action result |
 | `baseline-benchmark-service.mjs` | baseline benchmark command submission | baseline context | updated state |
 | `baseline-materializer-command-service.mjs` | baseline materializer command submission | baseline context | updated state |
+| `baseline-source-inspection-service.mjs` | strict baseline source verification | baseline context | validation/state |
 
 ## Dependency Direction
 

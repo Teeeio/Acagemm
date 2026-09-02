@@ -56,6 +56,7 @@ const checks = [
   'test:autopilot-candidate-baseline-service',
   'test:baseline-benchmark-service',
   'test:baseline-materializer-command-service',
+  'test:baseline-source-inspection-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',
