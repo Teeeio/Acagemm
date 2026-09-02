@@ -60,6 +60,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/autopilot-validation-service.mjs` | automatic candidate benchmark start | candidate state | updated state |
 | `application/autopilot-service.mjs` | automatic iteration progression boundary | runtime state | state/action result |
 | `application/autopilot-baseline-research-service.mjs` | baseline research and unresolved-source handling | Mission state | state/action result |
+| `application/autopilot-fixed-profile-service.mjs` | fixed Profile post-baseline progression | Mission state | state/action result |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |

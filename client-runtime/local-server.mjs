@@ -104,6 +104,7 @@ import { createAutopilotCandidateActionService } from './application/autopilot-c
 import { createAutopilotValidationService } from './application/autopilot-validation-service.mjs';
 import { createAutopilotService } from './application/autopilot-service.mjs';
 import { createAutopilotBaselineResearchService } from './application/autopilot-baseline-research-service.mjs';
+import { createAutopilotFixedProfileService } from './application/autopilot-fixed-profile-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1192,6 +1193,7 @@ const iterationDeps = {
 };
 
 const autopilotBaselineResearchService = createAutopilotBaselineResearchService({ isManagedWorkspaceRuntimeMode, isResearchAgentActive, startResearch: iterationDeps.startResearch, researchDirForMission, appendRuntimeEvent, addAuditEvent, agentRuntime });
+const autopilotFixedProfileService = createAutopilotFixedProfileService({ isResearchAgentActive, startResearch: iterationDeps.startResearch, startMainRound: iterationDeps.startMainRound, researchDirForMission, appendRuntimeEvent });
 
 const advanceTesterAutopilot = async (state) => {
   const context = autopilotContextService.prepare(state);
@@ -1207,6 +1209,8 @@ const advanceTesterAutopilot = async (state) => {
       const nextState = await iterationDeps.startBaseline({ state, mission, reason: 'fixed operator profile baseline' });
       return { state: nextState, action: nextState.benchmark?.status === 'running' ? 'baseline_started' : 'wait_baseline' };
     }
+    const fixedProfileResult = await autopilotFixedProfileService.advance({ state, mission });
+    if (fixedProfileResult) return fixedProfileResult;
     const research = state.researchAgent || {};
     const researchEnabled = mission.sourcePolicy?.researchEnabled !== false;
     let experienceStarted = false;
