@@ -96,6 +96,7 @@ import { createRoundArtifactGuard } from './application/round-artifact-guard.mjs
 import { createBaselineSourceService } from './application/baseline-source-service.mjs';
 import { createMaterializerPolicyService } from './application/materializer-policy-service.mjs';
 import { projectBaselineFailure } from './application/baseline-failure-projection.mjs';
+import { createBenchmarkProjectionService } from './application/benchmark-projection-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1037,6 +1038,7 @@ const agentRoundService = createAgentRoundService({ resetMissionRunState, resetM
 const roundPreflightService = createRoundPreflightService({ settleGenerationAttemptBeforeStart, buildRuntimePreflight });
 const roundArtifactGuard = createRoundArtifactGuard({ isStrictZeroSourceMission });
 const baselineSourceService = createBaselineSourceService({ isFixedOperatorMission, isStrictZeroSourceMission, selectResearchBaselineSource, buildSemanticBaselineSource, inferAuthoritativeBaselineSource, isSemanticBaselineSource });
+const benchmarkProjectionService = createBenchmarkProjectionService({ operatorTestQueue, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path });
 const materializerPolicyService = createMaterializerPolicyService({ consumeWorkflowRecoveryBudget: (...args) => consumeWorkflowRecoveryBudget(...args) });
 
 const iterationDeps = {
@@ -1356,44 +1358,8 @@ const loadRuntimeState = async () => {
   const initialReconciliation = reconcileWorkflowState(state);
   const projection = await agentRuntime.projectState({ ...initialReconciliation.state, runtime });
   let changed = baselineFailureProjected || sourcePolicyMigration.changed || projection.changed || initialReconciliation.changed;
-  if (projection.state.benchmark?.status === 'running' && projection.state.benchmark?.testTaskId) {
-    try {
-      const before = JSON.stringify(projection.state.benchmark);
-      let snapshot;
-      try {
-        snapshot = await operatorTestQueue.get(projection.state.benchmark.testTaskId);
-      } catch (error) {
-        if (error.code !== 'OPERATOR_TEST_QUEUE_NOT_FOUND') throw error;
-        snapshot = await testServiceClient.get(projection.state.benchmark.testTaskId);
-      }
-      applyOperatorTestSnapshot(projection.state, snapshot);
-      if (projection.state.benchmark?.status === 'complete' && projection.state.benchmark?.result) {
-        const mission = projection.state.missions.find((item) => item.id === projection.state.activeMissionId) || {};
-        const artifactDir = artifactDirForMission(projection.state.activeMissionId, mission.repository, mission.projectRoot);
-        await mkdir(artifactDir, { recursive: true });
-        const result = projection.state.benchmark.result;
-        await Promise.all([
-          writeFile(path.join(artifactDir, 'benchmark.json'), `${JSON.stringify(result.benchmark || [], null, 2)}\n`, 'utf8'),
-          writeFile(path.join(artifactDir, 'tracer.json'), `${JSON.stringify(result.tracer || {}, null, 2)}\n`, 'utf8'),
-          writeFile(path.join(artifactDir, 'profiler.json'), `${JSON.stringify(result.profiler || {}, null, 2)}\n`, 'utf8'),
-          writeFile(path.join(artifactDir, 'test-result.json'), `${JSON.stringify({ taskId: snapshot.taskId, candidate: projection.state.benchmark.candidate, result, completedAt: snapshot.completedAt }, null, 2)}\n`, 'utf8'),
-        ]);
-        projection.state.benchmark.artifacts = {
-          root: artifactDir,
-          benchmark: path.join(artifactDir, 'benchmark.json'),
-          tracer: path.join(artifactDir, 'tracer.json'),
-          profiler: path.join(artifactDir, 'profiler.json'),
-        };
-      }
-      changed ||= before !== JSON.stringify(projection.state.benchmark);
-    } catch (error) {
-      const serviceError = { code: error.code || 'OPERATOR_TEST_SERVICE_ERROR', message: error.message, observedAt: new Date().toISOString() };
-      if (projection.state.benchmark.lastServiceError?.code !== serviceError.code) {
-        projection.state.benchmark.lastServiceError = serviceError;
-        changed = true;
-      }
-    }
-  }
+  const benchmarkProjection = await benchmarkProjectionService.project({ state: projection.state });
+  changed ||= benchmarkProjection.changed;
   const mission = projection.state.missions?.find((item) => item.id === projection.state.activeMissionId);
   const candidateId = projection.state.appliedCandidateId || projection.state.decisionReview?.candidateId;
   const candidate = (projection.state.candidateEvaluations || []).find((item) => item.id === candidateId);

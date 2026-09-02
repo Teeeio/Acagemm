@@ -43,6 +43,7 @@ const checks = [
   'test:baseline-source-service',
   'test:materializer-policy-service',
   'test:baseline-failure-projection',
+  'test:benchmark-projection-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',

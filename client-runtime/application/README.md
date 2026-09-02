@@ -47,6 +47,7 @@
 | `baseline-source-service.mjs` | baseline source policy selection | mission/state | source selection |
 | `materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 | `baseline-failure-projection.mjs` | idempotent baseline failure projection | benchmark state | changed flag |
+| `benchmark-projection-service.mjs` | Operator Test queue snapshot and artifact projection | benchmark state | changed state |
 
 ## Dependency Direction
 
