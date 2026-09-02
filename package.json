@@ -65,6 +65,7 @@
     "test:decision-service": "node tests/decision-service-test.mjs",
     "test:candidate-validation-service": "node tests/candidate-validation-service-test.mjs",
     "test:baseline-service": "node tests/baseline-service-test.mjs",
+    "test:operator-test-service": "node tests/operator-test-service-test.mjs",
     "test:workflow-summary": "node tests/workflow-summary-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
     "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",

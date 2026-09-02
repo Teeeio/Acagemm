@@ -32,6 +32,7 @@
 | `decision-service.mjs` | Candidate adoption, rejection, and adoption reversal | command result and recovery metadata |
 | `candidate-validation-service.mjs` | Patch application, Benchmark submission, and stage rollback | command result or stable validation response |
 | `baseline-service.mjs` | Authoritative Baseline single-file materialization | command result and materializer run ID |
+| `operator-test-service.mjs` | Operator Test Queue queries and cancellation | task DTOs and queue path |
 
 ## Dependency Direction
 

@@ -81,6 +81,8 @@ import { createCandidateValidationRoutes } from './server/candidate-validation-r
 import { createCandidateValidationService } from './application/candidate-validation-service.mjs';
 import { createBaselineRoutes } from './server/baseline-routes.mjs';
 import { createBaselineService } from './application/baseline-service.mjs';
+import { createOperatorTestRoutes } from './server/operator-test-routes.mjs';
+import { createOperatorTestService } from './application/operator-test-service.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -1026,6 +1028,8 @@ const candidateValidationService = createCandidateValidationService({ loadState:
 const candidateValidationRoutes = createCandidateValidationRoutes({ json, readJson, workflow: candidateValidationService });
 const baselineService = createBaselineService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, guardMutation: (...args) => guardMutation(...args), guardWorkflowTransition });
 const baselineRoutes = createBaselineRoutes({ json, readJson, baseline: baselineService });
+const operatorTestService = createOperatorTestService({ queue: operatorTestQueue });
+const operatorTestRoutes = createOperatorTestRoutes({ json, operatorTests: operatorTestService });
 
 const iterationDeps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
@@ -1525,6 +1529,7 @@ async function handleApi(request, response, url) {
   if (await decisionRoutes({ request, response, url })) return;
   if (await candidateValidationRoutes({ request, response, url })) return;
   if (await baselineRoutes({ request, response, url })) return;
+  if (await operatorTestRoutes({ request, response, url })) return;
 
   if (request.method === 'GET' && url.pathname === '/api/runtime/preflight') {
     const state = await loadRuntimeState();
@@ -1548,20 +1553,6 @@ async function handleApi(request, response, url) {
     const activeWorkspace = await ensureMissionWorkspace(state.activeMissionId, mission?.repository, { projectRoot: mission?.projectRoot, sourceRoot: mission?.sourceRoot });
     const hasDeclaredPatch = (state.candidateEvaluations || []).some((candidate) => String(candidate.files || '').trim());
     json(response, 200, { patchApplied: state.patchApplied, workspace: path.relative(rootDir, activeWorkspace).replaceAll('\\', '/'), files: hasDeclaredPatch ? workspaceFiles : [] });
-    return;
-  }
-  if (request.method === 'GET' && url.pathname === '/api/operator-tests') {
-    json(response, 200, { tasks: await operatorTestQueue.list(), queueFile: operatorTestQueue.path });
-    return;
-  }
-  const operatorTestMatch = url.pathname.match(/^\/api\/operator-tests\/([^/]+)$/);
-  if (request.method === 'GET' && operatorTestMatch) {
-    json(response, 200, { task: await operatorTestQueue.get(decodeURIComponent(operatorTestMatch[1])) });
-    return;
-  }
-  const operatorTestCancelMatch = url.pathname.match(/^\/api\/operator-tests\/([^/]+)\/cancel$/);
-  if (request.method === 'POST' && operatorTestCancelMatch) {
-    json(response, 200, { task: await operatorTestQueue.cancel(decodeURIComponent(operatorTestCancelMatch[1])) });
     return;
   }
   const missionRunCancelMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/runs\/([^/]+)\/cancel$/);
