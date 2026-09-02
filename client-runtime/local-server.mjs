@@ -1268,6 +1268,8 @@ const advanceTesterAutopilot = async (state) => {
   }
 
   if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status !== 'complete') {
+    const baselineResearch = await autopilotBaselineResearchService.advance({ state, mission });
+    if (baselineResearch) return baselineResearch;
     const nextState = await iterationDeps.startBaseline({ state, mission, reason: state.agent?.currentAction?.reason || state.agent?.result?.summary || '' });
     if (nextState.benchmark?.status === 'running' || nextState.baseline?.status === 'running') return { state: nextState, action: 'baseline_started' };
     const runtime = await agentRuntime.describe();
