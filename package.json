@@ -86,6 +86,7 @@
     "test:autopilot-context-service": "node tests/autopilot-context-service-test.mjs",
     "test:autopilot-candidate-action-service": "node tests/autopilot-candidate-action-service-test.mjs",
     "test:autopilot-validation-service": "node tests/autopilot-validation-service-test.mjs",
+    "test:autopilot-service": "node tests/autopilot-service-test.mjs",
     "test:workflow-summary": "node tests/workflow-summary-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
     "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",

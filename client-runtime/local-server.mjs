@@ -102,6 +102,7 @@ import { selectAutopilotCandidate } from './application/autopilot-candidate-serv
 import { createAutopilotContextService } from './application/autopilot-context-service.mjs';
 import { createAutopilotCandidateActionService } from './application/autopilot-candidate-action-service.mjs';
 import { createAutopilotValidationService } from './application/autopilot-validation-service.mjs';
+import { createAutopilotService } from './application/autopilot-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1310,6 +1311,8 @@ const advanceTesterAutopilot = async (state) => {
   return { state, action: 'none' };
 };
 
+const autopilotService = createAutopilotService({ advance: advanceTesterAutopilot });
+
 let runtimeStateInFlight = null;
 const reconcilePersistedBaselineFailure = (state) => projectBaselineFailure({ state, appendRuntimeEvent });
 
@@ -1341,7 +1344,7 @@ const loadRuntimeState = async () => {
   changed ||= benchmarkProjection.changed;
   const adoption = await repositoryAdoptionService.adopt({ state: projection.state });
   changed ||= adoption.changed;
-  const autopilot = await advanceTesterAutopilot(projection.state);
+  const autopilot = await autopilotService.advance(projection.state);
   projection.state = autopilot.state;
   if (autopilot.action !== 'none') changed = true;
   const looped = await advanceIteration(projection.state, iterationDeps);
