@@ -89,6 +89,8 @@ import { createKnowledgeRoutes } from './server/knowledge-routes.mjs';
 import { createKnowledgeService } from './application/knowledge-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
+import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
+import { createRuntimeStateService } from './application/runtime-state-service.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -218,6 +220,8 @@ const runtimeQueryService = createRuntimeQueryService({
 });
 const runtimeQueryRoutes = createRuntimeQueryRoutes({ json, runtimeQuery: runtimeQueryService });
 const buildRuntimePreflight = (mission) => runtimeQueryService.buildPreflight(mission);
+const runtimeStateService = createRuntimeStateService({ loadState: () => loadRuntimeState(), persistState, resumeMissionState, normalizeMissionBudgetMs });
+const runtimeStateRoutes = createRuntimeStateRoutes({ json, readJson, runtimeState: runtimeStateService });
 
 const readMissionRunPy = async (missionId, repository, projectRoot = null, implementation = null, operatorProfile = null) => {
   const workspace = await ensureMissionWorkspace(missionId, repository, { projectRoot });
@@ -1515,31 +1519,7 @@ async function handleApi(request, response, url) {
   if (await missionControlRoutes({ request, response, url })) return;
   if (await knowledgeRoutes({ request, response, url })) return;
   if (await runtimeQueryRoutes({ request, response, url })) return;
-
-  if (request.method === 'PATCH' && url.pathname === '/api/state') {
-    const state = await loadRuntimeState();
-    const body = await readJson(request);
-    if (body.testMatrix && (!Array.isArray(body.testMatrix.environments) || !body.testMatrix.environments.length || !Array.isArray(body.testMatrix.stages) || !body.testMatrix.stages.length)) {
-      json(response, 400, { error: '测试矩阵至少需要一个环境和一个验证阶段。' });
-      return;
-    }
-    if (hasMissionBudgetInput(body)) {
-      const budgetInput = validateMissionBudgetInput(body);
-      if (!budgetInput.ok) {
-        json(response, 400, { error: 'missionBudgetMs 必须是正数毫秒；传 null、空值或 0 表示不启用时间限制。', code: 'INVALID_MISSION_BUDGET' });
-        return;
-      }
-      state.missionBudgetMs = budgetInput.value;
-      if (!budgetInput.value) state.missionBudgetStartedAt = null;
-    }
-    for (const key of ['testMatrix', 'workspace', 'unreadCount']) {
-      if (Object.hasOwn(body, key)) state[key] = body[key];
-    }
-    if (body.missionPaused === true) state.missionPaused = true;
-    if (body.missionPaused === false) resumeMissionState(state, { source: 'local-c500-tui' });
-    json(response, 200, { state: await persistState(state) });
-    return;
-  }
+  if (await runtimeStateRoutes({ request, response, url })) return;
   if (request.method === 'POST' && url.pathname === '/api/reset') {
     await guardSupportedRuntimeAction('Demo Reset');
     json(response, 200, { state: await resetDemoData() });

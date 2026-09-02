@@ -42,6 +42,7 @@
 | `mission-control-routes.mjs` | Run cancel, human feedback, and Mission stop contexts | handled boolean and JSON response |
 | `knowledge-routes.mjs` | Knowledge draft, reference, and retired publication HTTP contexts | handled boolean and JSON response |
 | `runtime-query-routes.mjs` | Runtime state, preflight, and workspace GET contexts | handled boolean and JSON response |
+| `runtime-state-routes.mjs` | Runtime state PATCH context | handled boolean and JSON response |
 
 ## Route Contract
 
