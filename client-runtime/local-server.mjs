@@ -107,6 +107,7 @@ import { createAutopilotBaselineResearchService } from './application/autopilot-
 import { createAutopilotFixedProfileService } from './application/autopilot-fixed-profile-service.mjs';
 import { createAutopilotStrictSourceService } from './application/autopilot-strict-source-service.mjs';
 import { createAutopilotCandidateBaselineService } from './application/autopilot-candidate-baseline-service.mjs';
+import { createBaselineBenchmarkService } from './application/baseline-benchmark-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1170,26 +1171,7 @@ const iterationDeps = {
         return materialized.state || state;
       }
     }
-    const result = await executeCommand({
-      journal: commandJournal,
-      saveState: persistState,
-      registry: commandRegistry,
-      state,
-      type: 'start-benchmark',
-      body: {
-        purpose: 'baseline',
-        operator: mission.operator || mission.title || 'operator',
-        baselineSource,
-        ...((strictZeroSource || fixedOperator) ? { strictZeroSource: strictZeroSource, materializerResult: state.baseline?.materializer?.result } : {}),
-        matrix,
-        warmup: matrix.warmup,
-        repeats: matrix.repeats,
-        correctnessCases: matrix.correctnessCases,
-        timeoutSeconds: Number(process.env.OPERATOR_LOCAL_C500_TIMEOUT_SECONDS || 600),
-      },
-      expectedVersion: state.stateVersion,
-    });
-    return result.state || state;
+    return baselineBenchmarkService.start({ state, mission, baselineSource, matrix, strictZeroSource, fixedOperator });
   },
   researchDirForMission,
 };
@@ -1198,6 +1180,7 @@ const autopilotBaselineResearchService = createAutopilotBaselineResearchService(
 const autopilotFixedProfileService = createAutopilotFixedProfileService({ isResearchAgentActive, startResearch: iterationDeps.startResearch, startMainRound: iterationDeps.startMainRound, researchDirForMission, appendRuntimeEvent });
 const autopilotStrictSourceService = createAutopilotStrictSourceService({ isStrictZeroSourceMission, isResearchAgentActive, selectResearchBaselineSource, buildSemanticBaselineSource, startResearch: iterationDeps.startResearch, startBaseline: iterationDeps.startBaseline, startMainRound: iterationDeps.startMainRound, researchDirForMission });
 const autopilotCandidateBaselineService = createAutopilotCandidateBaselineService({ isManagedWorkspaceRuntimeMode, startBaseline: iterationDeps.startBaseline, startResearch: iterationDeps.startResearch, researchDirForMission, agentRuntime, appendRuntimeEvent, addAuditEvent });
+const baselineBenchmarkService = createBaselineBenchmarkService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 
 const advanceTesterAutopilot = async (state) => {
   const context = autopilotContextService.prepare(state);

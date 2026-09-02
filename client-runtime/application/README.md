@@ -58,6 +58,7 @@
 | `autopilot-fixed-profile-service.mjs` | fixed Profile post-baseline progression | Mission state | state/action result |
 | `autopilot-strict-source-service.mjs` | strict source autopilot progression | Mission state | state/action result |
 | `autopilot-candidate-baseline-service.mjs` | ordinary candidate baseline progression | Mission state | state/action result |
+| `baseline-benchmark-service.mjs` | baseline benchmark command submission | baseline context | updated state |
 
 ## Dependency Direction
 

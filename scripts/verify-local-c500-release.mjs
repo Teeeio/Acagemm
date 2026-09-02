@@ -54,6 +54,7 @@ const checks = [
   'test:autopilot-fixed-profile-service',
   'test:autopilot-strict-source-service',
   'test:autopilot-candidate-baseline-service',
+  'test:baseline-benchmark-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',
