@@ -39,6 +39,7 @@
 | `candidate-validation-routes.mjs` | Patch, Benchmark, and rollback HTTP contexts | handled boolean and JSON response |
 | `baseline-routes.mjs` | Baseline materialization HTTP context | handled boolean and JSON response |
 | `operator-test-routes.mjs` | Operator Test list/detail/cancel HTTP contexts | handled boolean and JSON response |
+| `mission-control-routes.mjs` | Run cancel, human feedback, and Mission stop contexts | handled boolean and JSON response |
 
 ## Route Contract
 

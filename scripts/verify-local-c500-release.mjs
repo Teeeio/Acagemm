@@ -29,6 +29,7 @@ const checks = [
   'test:candidate-validation-service',
   'test:baseline-service',
   'test:operator-test-service',
+  'test:mission-control-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',

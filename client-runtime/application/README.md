@@ -33,6 +33,7 @@
 | `candidate-validation-service.mjs` | Patch application, Benchmark submission, and stage rollback | command result or stable validation response |
 | `baseline-service.mjs` | Authoritative Baseline single-file materialization | command result and materializer run ID |
 | `operator-test-service.mjs` | Operator Test Queue queries and cancellation | task DTOs and queue path |
+| `mission-control-service.mjs` | Agent cancellation, human feedback, and Mission stop | persisted state and control result |
 
 ## Dependency Direction
 

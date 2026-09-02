@@ -20,7 +20,7 @@ for (const relative of removedLegacyModules) {
   assert.equal(await exists(relative), false, `legacy workflow module must stay removed: ${relative}`);
 }
 
-const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, packageJson] = await Promise.all([
+const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, packageJson] = await Promise.all([
   read('client-runtime/state-store.mjs'),
   read('client-runtime/iteration-loop.mjs'),
   read('client-runtime/local-server.mjs'),
@@ -46,6 +46,8 @@ const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, m
   read('client-runtime/application/baseline-service.mjs'),
   read('client-runtime/server/operator-test-routes.mjs'),
   read('client-runtime/application/operator-test-service.mjs'),
+  read('client-runtime/server/mission-control-routes.mjs'),
+  read('client-runtime/application/mission-control-service.mjs'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -75,6 +77,8 @@ assert.doesNotMatch(baselineRoutes, /state-store|agent-runtime|baseline-material
 assert.doesNotMatch(baselineService, /server\/|tools\/local-c500-tester/, 'Baseline service must not depend on transport or TUI');
 assert.doesNotMatch(operatorTestRoutes, /operator-test-queue|local-c500-service-client|node:fs/, 'Operator Test routes must stay transport-only');
 assert.doesNotMatch(operatorTestService, /server\/|local-c500-service-client|tools\/local-c500-tester/, 'Operator Test service must depend only on the injected queue port');
+assert.doesNotMatch(missionControlRoutes, /state-store|agent-runtime|operator-test-queue|node:fs/, 'Mission Control routes must stay transport-only');
+assert.doesNotMatch(missionControlService, /server\/|tools\/local-c500-tester/, 'Mission Control service must not depend on transport or TUI');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
@@ -82,6 +86,7 @@ assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:adopt
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:apply-patch|start-benchmark|rollback-stage)['"]/, 'Candidate validation routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/materialize-baseline['"]/, 'Baseline routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/operator-tests['"]|url\.pathname\.match\(\/\^\\\/api\\\/operator-tests/, 'Operator Test routes must stay extracted');
+assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:human-feedback|stop-mission)['"]|missionRunCancelMatch/, 'Mission Control routes must stay extracted');
 
 for (const requiredDocument of [
   'AGENTS.md',
@@ -101,6 +106,7 @@ for (const requiredDocument of [
   'client-runtime/application/candidate-validation-service.md',
   'client-runtime/application/baseline-service.md',
   'client-runtime/application/operator-test-service.md',
+  'client-runtime/application/mission-control-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',

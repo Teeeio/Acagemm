@@ -83,6 +83,8 @@ import { createBaselineRoutes } from './server/baseline-routes.mjs';
 import { createBaselineService } from './application/baseline-service.mjs';
 import { createOperatorTestRoutes } from './server/operator-test-routes.mjs';
 import { createOperatorTestService } from './application/operator-test-service.mjs';
+import { createMissionControlRoutes } from './server/mission-control-routes.mjs';
+import { createMissionControlService } from './application/mission-control-service.mjs';
 import {
   baselineMatchesMatrix,
   buildSemanticBaselineSource,
@@ -1030,6 +1032,8 @@ const baselineService = createBaselineService({ loadState: () => loadRuntimeStat
 const baselineRoutes = createBaselineRoutes({ json, readJson, baseline: baselineService });
 const operatorTestService = createOperatorTestService({ queue: operatorTestQueue });
 const operatorTestRoutes = createOperatorTestRoutes({ json, operatorTests: operatorTestService });
+const missionControlService = createMissionControlService({ loadState: () => loadRuntimeState(), persistState, agentRuntime, operatorTestQueue, appendRuntimeEvent, addAuditEvent });
+const missionControlRoutes = createMissionControlRoutes({ json, readJson, missionControl: missionControlService });
 
 const iterationDeps = {
   startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
@@ -1530,6 +1534,7 @@ async function handleApi(request, response, url) {
   if (await candidateValidationRoutes({ request, response, url })) return;
   if (await baselineRoutes({ request, response, url })) return;
   if (await operatorTestRoutes({ request, response, url })) return;
+  if (await missionControlRoutes({ request, response, url })) return;
 
   if (request.method === 'GET' && url.pathname === '/api/runtime/preflight') {
     const state = await loadRuntimeState();
@@ -1553,21 +1558,6 @@ async function handleApi(request, response, url) {
     const activeWorkspace = await ensureMissionWorkspace(state.activeMissionId, mission?.repository, { projectRoot: mission?.projectRoot, sourceRoot: mission?.sourceRoot });
     const hasDeclaredPatch = (state.candidateEvaluations || []).some((candidate) => String(candidate.files || '').trim());
     json(response, 200, { patchApplied: state.patchApplied, workspace: path.relative(rootDir, activeWorkspace).replaceAll('\\', '/'), files: hasDeclaredPatch ? workspaceFiles : [] });
-    return;
-  }
-  const missionRunCancelMatch = url.pathname.match(/^\/api\/missions\/([^/]+)\/runs\/([^/]+)\/cancel$/);
-  if (request.method === 'POST' && missionRunCancelMatch) {
-    const state = await loadRuntimeState();
-    const missionId = decodeURIComponent(missionRunCancelMatch[1]);
-    const runId = decodeURIComponent(missionRunCancelMatch[2]);
-    if (state.activeMissionId !== missionId) {
-      const error = new Error('The requested Agent run does not belong to the active Mission.');
-      error.status = 409;
-      error.code = 'AGENT_MISSION_MISMATCH';
-      throw error;
-    }
-    const cancelled = await agentRuntime.cancelRun({ state, runId });
-    json(response, 202, { state: await persistState(cancelled.state), result: cancelled.result });
     return;
   }
   if (request.method === 'PATCH' && url.pathname.startsWith('/api/knowledge/drafts/')) {
@@ -1624,62 +1614,6 @@ async function handleApi(request, response, url) {
     appendRuntimeEvent(state, 'knowledge.referenced', reference, { kind: 'knowledge', mode: 'client' });
     addAuditEvent(state, '知识资产已引用到当前任务', `${body.assetId}@${body.version} · ${body.title}`, 'green', 'BookOpen');
     json(response, 200, { state: await persistState(state), reference });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/human-feedback') {
-    const state = await loadRuntimeState();
-    const body = await readJson(request);
-    const note = String(body.note || '').trim();
-    if (note.length < 2) {
-      json(response, 400, { error: '人工意见至少需要 2 个字符。', code: 'HUMAN_FEEDBACK_REQUIRED' });
-      return;
-    }
-    const feedback = {
-      id: `feedback_${Date.now().toString(36)}`,
-      note,
-      submittedAt: new Date().toISOString(),
-      source: 'local-c500-tui',
-    };
-    state.missionPaused = false;
-    state.iterationStats = {
-      ...(state.iterationStats || {}),
-      loopStatus: 'running',
-      loopStatusReason: null,
-      pendingInjection: {
-        noteId: feedback.id,
-        direction: 'human_feedback',
-        briefing: `人工意见：${note}`,
-        value: 'high',
-      },
-    };
-    const activeMission = state.missions?.find((item) => item.id === state.activeMissionId);
-    if (activeMission) activeMission.status = 'running';
-    appendRuntimeEvent(state, 'mission.human_feedback_added', feedback, { kind: 'human-feedback', mode: 'client' });
-    addAuditEvent(state, '已添加人工意见', note, 'blue', 'UserRound');
-    json(response, 202, { state: await persistState(state), feedback });
-    return;
-  }
-  if (request.method === 'POST' && url.pathname === '/api/actions/stop-mission') {
-    const state = await loadRuntimeState();
-    const mission = state.missions?.find((item) => item.id === state.activeMissionId);
-    if (!mission) {
-      json(response, 404, { error: '当前没有可停止的 Mission。', code: 'MISSION_NOT_FOUND' });
-      return;
-    }
-    if (state.benchmark?.status === 'running' && state.benchmark?.testTaskId) {
-      await operatorTestQueue.cancel(state.benchmark.testTaskId).catch(() => null);
-    }
-    if (state.agent?.runId && ['running', 'executing', 'awaiting_action', 'cancel_requested'].includes(state.agent.status)) {
-      const cancelled = await agentRuntime.cancelRun({ state, runId: state.agent.runId }).catch(() => null);
-      if (cancelled?.state) Object.assign(state, cancelled.state);
-    }
-    state.missionPaused = true;
-    state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'stopped', loopStatusReason: 'stopped_by_tester', stoppedAt: new Date().toISOString() };
-    const activeMission = state.missions?.find((item) => item.id === state.activeMissionId) || mission;
-    activeMission.status = 'stopped';
-    appendRuntimeEvent(state, 'mission.stopped', { missionId: activeMission.id, source: 'local-c500-tui' }, { kind: 'mission', mode: 'client' });
-    addAuditEvent(state, 'Mission 已停止', `${activeMission.id} · 测试人员停止`, 'warning', 'Square');
-    json(response, 200, { state: await persistState(state) });
     return;
   }
   if (request.method === 'PATCH' && url.pathname === '/api/state') {
