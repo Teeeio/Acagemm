@@ -64,6 +64,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/autopilot-strict-source-service.mjs` | strict source autopilot progression | Mission state | state/action result |
 | `application/autopilot-candidate-baseline-service.mjs` | ordinary candidate baseline progression | Mission state | state/action result |
 | `application/baseline-benchmark-service.mjs` | baseline benchmark command submission | baseline context | updated state |
+| `application/baseline-materializer-command-service.mjs` | baseline materializer command submission | baseline context | updated state |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |
