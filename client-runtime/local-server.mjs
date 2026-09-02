@@ -103,6 +103,7 @@ import { createAutopilotContextService } from './application/autopilot-context-s
 import { createAutopilotCandidateActionService } from './application/autopilot-candidate-action-service.mjs';
 import { createAutopilotValidationService } from './application/autopilot-validation-service.mjs';
 import { createAutopilotService } from './application/autopilot-service.mjs';
+import { createAutopilotBaselineResearchService } from './application/autopilot-baseline-research-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1189,6 +1190,8 @@ const iterationDeps = {
   },
   researchDirForMission,
 };
+
+const autopilotBaselineResearchService = createAutopilotBaselineResearchService({ isManagedWorkspaceRuntimeMode, isResearchAgentActive, startResearch: iterationDeps.startResearch, researchDirForMission, appendRuntimeEvent, addAuditEvent, agentRuntime });
 
 const advanceTesterAutopilot = async (state) => {
   const context = autopilotContextService.prepare(state);

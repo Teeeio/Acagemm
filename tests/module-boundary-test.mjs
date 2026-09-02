@@ -20,7 +20,7 @@ for (const relative of removedLegacyModules) {
   assert.equal(await exists(relative), false, `legacy workflow module must stay removed: ${relative}`);
 }
 
-const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, roundArtifactGuard, baselineSourceService, materializerPolicyService, baselineFailureProjection, benchmarkProjectionService, repositoryAdoptionService, autopilotCandidateService, autopilotContextService, autopilotCandidateActionService, autopilotValidationService, autopilotService, packageJson] = await Promise.all([
+const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, roundArtifactGuard, baselineSourceService, materializerPolicyService, baselineFailureProjection, benchmarkProjectionService, repositoryAdoptionService, autopilotCandidateService, autopilotContextService, autopilotCandidateActionService, autopilotValidationService, autopilotService, autopilotBaselineResearchService, packageJson] = await Promise.all([
   read('client-runtime/state-store.mjs'),
   read('client-runtime/iteration-loop.mjs'),
   read('client-runtime/local-server.mjs'),
@@ -72,6 +72,7 @@ const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, m
   read('client-runtime/application/autopilot-candidate-action-service.mjs'),
   read('client-runtime/application/autopilot-validation-service.mjs'),
   read('client-runtime/application/autopilot-service.mjs'),
+  read('client-runtime/application/autopilot-baseline-research-service.mjs'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -127,6 +128,7 @@ assert.doesNotMatch(autopilotContextService, /server\/|tools\/local-c500-tester/
 assert.doesNotMatch(autopilotCandidateActionService, /server\/|tools\/local-c500-tester/, 'Autopilot candidate action service must not depend on transport or TUI');
 assert.doesNotMatch(autopilotValidationService, /server\/|tools\/local-c500-tester/, 'Autopilot validation service must not depend on transport or TUI');
 assert.doesNotMatch(autopilotService, /server\/|tools\/local-c500-tester/, 'Autopilot service must not depend on transport or TUI');
+assert.doesNotMatch(autopilotBaselineResearchService, /server\/|tools\/local-c500-tester/, 'Autopilot baseline research service must not depend on transport or TUI');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
@@ -179,6 +181,7 @@ for (const requiredDocument of [
   'client-runtime/application/autopilot-candidate-action-service.md',
   'client-runtime/application/autopilot-validation-service.md',
   'client-runtime/application/autopilot-service.md',
+  'client-runtime/application/autopilot-baseline-research-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',

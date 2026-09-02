@@ -54,6 +54,7 @@
 | `autopilot-candidate-action-service.mjs` | candidate patch apply and recovery | candidate state | updated state |
 | `autopilot-validation-service.mjs` | candidate benchmark start | candidate state | updated state |
 | `autopilot-service.mjs` | automatic iteration progression boundary | runtime state | state/action result |
+| `autopilot-baseline-research-service.mjs` | baseline research branch coordination | Mission state | state/action result |
 
 ## Dependency Direction
 
