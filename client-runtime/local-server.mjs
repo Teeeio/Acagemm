@@ -106,6 +106,7 @@ import { createAutopilotService } from './application/autopilot-service.mjs';
 import { createAutopilotBaselineResearchService } from './application/autopilot-baseline-research-service.mjs';
 import { createAutopilotFixedProfileService } from './application/autopilot-fixed-profile-service.mjs';
 import { createAutopilotStrictSourceService } from './application/autopilot-strict-source-service.mjs';
+import { createAutopilotCandidateBaselineService } from './application/autopilot-candidate-baseline-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1196,6 +1197,7 @@ const iterationDeps = {
 const autopilotBaselineResearchService = createAutopilotBaselineResearchService({ isManagedWorkspaceRuntimeMode, isResearchAgentActive, startResearch: iterationDeps.startResearch, researchDirForMission, appendRuntimeEvent, addAuditEvent, agentRuntime });
 const autopilotFixedProfileService = createAutopilotFixedProfileService({ isResearchAgentActive, startResearch: iterationDeps.startResearch, startMainRound: iterationDeps.startMainRound, researchDirForMission, appendRuntimeEvent });
 const autopilotStrictSourceService = createAutopilotStrictSourceService({ isStrictZeroSourceMission, isResearchAgentActive, selectResearchBaselineSource, buildSemanticBaselineSource, startResearch: iterationDeps.startResearch, startBaseline: iterationDeps.startBaseline, startMainRound: iterationDeps.startMainRound, researchDirForMission });
+const autopilotCandidateBaselineService = createAutopilotCandidateBaselineService({ isManagedWorkspaceRuntimeMode, startBaseline: iterationDeps.startBaseline, startResearch: iterationDeps.startResearch, researchDirForMission, agentRuntime, appendRuntimeEvent, addAuditEvent });
 
 const advanceTesterAutopilot = async (state) => {
   const context = autopilotContextService.prepare(state);
@@ -1276,6 +1278,8 @@ const advanceTesterAutopilot = async (state) => {
   }
 
   if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status !== 'complete') {
+    const candidateBaselineResult = await autopilotCandidateBaselineService.advance({ state, mission });
+    if (candidateBaselineResult) return candidateBaselineResult;
     const baselineResearch = await autopilotBaselineResearchService.advance({ state, mission });
     if (baselineResearch) return baselineResearch;
     const nextState = await iterationDeps.startBaseline({ state, mission, reason: state.agent?.currentAction?.reason || state.agent?.result?.summary || '' });

@@ -57,6 +57,7 @@
 | `autopilot-baseline-research-service.mjs` | baseline research branch coordination | Mission state | state/action result |
 | `autopilot-fixed-profile-service.mjs` | fixed Profile post-baseline progression | Mission state | state/action result |
 | `autopilot-strict-source-service.mjs` | strict source autopilot progression | Mission state | state/action result |
+| `autopilot-candidate-baseline-service.mjs` | ordinary candidate baseline progression | Mission state | state/action result |
 
 ## Dependency Direction
 
