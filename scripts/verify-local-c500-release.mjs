@@ -42,6 +42,7 @@ const checks = [
   'test:round-artifact-guard',
   'test:baseline-source-service',
   'test:materializer-policy-service',
+  'test:baseline-failure-projection',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',

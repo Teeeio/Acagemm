@@ -95,6 +95,7 @@ import { createRoundPreflightService } from './application/round-preflight-servi
 import { createRoundArtifactGuard } from './application/round-artifact-guard.mjs';
 import { createBaselineSourceService } from './application/baseline-source-service.mjs';
 import { createMaterializerPolicyService } from './application/materializer-policy-service.mjs';
+import { projectBaselineFailure } from './application/baseline-failure-projection.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1329,15 +1330,7 @@ const advanceTesterAutopilot = async (state) => {
 };
 
 let runtimeStateInFlight = null;
-const reconcilePersistedBaselineFailure = (state) => {
-  if (state.benchmark?.purpose !== 'baseline' || state.benchmark?.status !== 'failed' || state.baseline?.status === 'failed') return false;
-  const error = state.benchmark.lastServiceError || { code: 'BASELINE_TEST_FAILED', message: 'Baseline operator test failed.' };
-  state.baseline = { ...(state.baseline || {}), status: 'failed', error: structuredClone(error), failedAt: state.benchmark.completedAt || new Date().toISOString() };
-  if (!(state.runtimeEvents || []).some((event) => event.type === 'baseline.failure_projected')) {
-    appendRuntimeEvent(state, 'baseline.failure_projected', { error }, { kind: 'migration', mode: 'client' });
-  }
-  return true;
-};
+const reconcilePersistedBaselineFailure = (state) => projectBaselineFailure({ state, appendRuntimeEvent });
 
 const loadRuntimeState = async () => {
   if (runtimeStateInFlight) return structuredClone(await runtimeStateInFlight);

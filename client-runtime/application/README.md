@@ -46,6 +46,7 @@
 | `round-artifact-guard.mjs` | strict baseline artifact admission | mission/state | pass or stable error |
 | `baseline-source-service.mjs` | baseline source policy selection | mission/state | source selection |
 | `materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
+| `baseline-failure-projection.mjs` | idempotent baseline failure projection | benchmark state | changed flag |
 
 ## Dependency Direction
 
