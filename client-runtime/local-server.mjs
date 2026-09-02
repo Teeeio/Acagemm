@@ -88,6 +88,7 @@ import { createMissionControlService } from './application/mission-control-servi
 import { createKnowledgeRoutes } from './server/knowledge-routes.mjs';
 import { createKnowledgeService } from './application/knowledge-service.mjs';
 import { createSourceService } from './application/source-service.mjs';
+import { createIterationResearchService } from './application/iteration-research-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1023,17 +1024,11 @@ const missionControlRoutes = createMissionControlRoutes({ json, readJson, missio
 const knowledgeService = createKnowledgeService({ loadState: () => loadRuntimeState(), persistState, guardMutation: (...args) => guardMutation(...args), appendRuntimeEvent, addAuditEvent });
 const knowledgeRoutes = createKnowledgeRoutes({ json, readJson, knowledge: knowledgeService });
 const sourceService = createSourceService({ readdir, stat, path, workspaceManager });
+const iterationResearchService = createIterationResearchService({ mkdir, agentRuntime, isManagedWorkspaceRuntimeMode });
 
 const iterationDeps = {
-  startResearch: async ({ state, mission, direction, workspace, synchronous = true, runPhase = 'acquire' }) => {
-    // 非受管理 Workspace CLI 模式不支持研究员，避免 reference-fixture 等模式进入真实调研链路。
-    if (!isManagedWorkspaceRuntimeMode(agentRuntime.mode)) return state;
-    await mkdir(workspace, { recursive: true });
-    // 停滞升级 → synchronous:true（主循环串行等待）；隧道视野 → synchronous:false（主线程继续，并行审查）
-    const started = await agentRuntime.startResearch({ state, mission, direction, workspace, synchronous, runPhase });
-    return started.state;
-  },
-  cancelResearch: async ({ state, runId }) => agentRuntime.cancelRun({ state, runId }),
+  startResearch: iterationResearchService.startResearch,
+  cancelResearch: iterationResearchService.cancelResearch,
   registerSources: sourceService.registerSources,
   countSources: sourceService.countSources,
   startMainRound: async ({ state, goal, retryMode = 'generation' }) => {

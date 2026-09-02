@@ -39,6 +39,7 @@
 | `runtime-state-service.mjs` | TUI state patch, budget validation, and pause/resume command | state command body | persisted state or stable validation error |
 | `reset-service.mjs` | Runtime capability guard and Demo Reset orchestration | reset command | reset product state |
 | `source-service.mjs` | Git source registration and source counting | `{ state, mission }` | source references/count |
+| `iteration-research-service.mjs` | Agent/Workspace research lifecycle coordination | research start/cancel input | updated state |
 
 ## Dependency Direction
 
