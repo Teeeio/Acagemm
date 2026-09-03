@@ -110,6 +110,7 @@ import { createAutopilotCandidateBaselineService } from './application/autopilot
 import { createBaselineBenchmarkService } from './application/baseline-benchmark-service.mjs';
 import { createBaselineMaterializerCommandService } from './application/baseline-materializer-command-service.mjs';
 import { createBaselineSourceInspectionService } from './application/baseline-source-inspection-service.mjs';
+import { createBaselineMaterializerRecoveryService } from './application/baseline-materializer-recovery-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1127,35 +1128,8 @@ const iterationDeps = {
       if (materializer.status !== 'completed' || !materializer.result?.runPy) {
         if (['running', 'cancel_requested'].includes(materializer.status)) return state;
         if (['failed', 'cancelled', 'timed_out'].includes(materializer.status)) {
-          const recovery = consumeWorkflowRecoveryBudget(state, { component: 'baseline-materializer', limit: 1 });
-          if (recovery.allowed && materializer.status !== 'cancelled') {
-            const rejectedSource = {
-              ...(materializer.source || baselineSource),
-              errorCode: materializer.error?.code || 'BASELINE_MATERIALIZER_FAILED',
-              reason: materializer.error?.details?.summary || materializer.error?.message || 'Materializer could not construct the required artifact.',
-            };
-            state.baseline = {
-              ...(state.baseline || {}),
-              source: null,
-              rejectedSources: [...(state.baseline?.rejectedSources || []), rejectedSource],
-              materializer: { ...materializer, status: 'redirected', phase: '返回 Source 调研', recoveryAttempt: recovery.attempt },
-            };
-            const unsupported = Array.isArray(materializer.error?.details?.unsupported)
-              ? materializer.error.details.unsupported.slice(0, 6).join('；')
-              : materializer.error?.message || 'source evidence was insufficient';
-            const direction = [
-              `上一权威 Source 无法物化为 ${mission.title || mission.operator || '目标算子'} baseline，必须选择不同的 source path 或补齐真正定义数学语义的实现文件。`,
-              `已拒绝 Source：${rejectedSource.repository}@${rejectedSource.commit}:${rejectedSource.path}。`,
-              `Materializer 反馈：${unsupported}。`,
-              '重新从官方上游中固定 repository、commit、path 和 operator；不要再次选择已拒绝的包装层。',
-            ].join('\n');
-            const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
-            const redirected = await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true });
-            appendRuntimeEvent(redirected, 'workflow.recovery_redirected', { component: recovery.component, attempt: recovery.attempt, limit: recovery.limit, from: 'materializer', to: 'research', rejectedSource }, { kind: 'workflow-kernel', mode: 'client' });
-            return redirected;
-          }
-          state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_materializer_failed' };
-          return state;
+          const recovered = await baselineMaterializerRecoveryService.recover({ state, mission, baselineSource, materializer });
+          return recovered.state;
         }
         return baselineMaterializerCommandService.start({ state, baselineSource, matrix });
       }
@@ -1172,6 +1146,7 @@ const autopilotCandidateBaselineService = createAutopilotCandidateBaselineServic
 const baselineBenchmarkService = createBaselineBenchmarkService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const baselineMaterializerCommandService = createBaselineMaterializerCommandService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const baselineSourceInspectionService = createBaselineSourceInspectionService({ inspectSources: (...args) => workspaceManager.inspectSources(...args), appendRuntimeEvent });
+const baselineMaterializerRecoveryService = createBaselineMaterializerRecoveryService({ consumeWorkflowRecoveryBudget, startResearch: iterationDeps.startResearch, researchDirForMission, appendRuntimeEvent });
 
 const advanceTesterAutopilot = async (state) => {
   const context = autopilotContextService.prepare(state);
