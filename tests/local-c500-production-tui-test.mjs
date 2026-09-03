@@ -126,7 +126,7 @@ assert.match(productionApi, /resolveLocalC500LaunchMode/);
 assert.doesNotMatch(productionApi, /OPERATOR_LOCAL_C500_MOCK:\s*'1'/);
 assert.match(server, /createLocalC500ServiceClient/);
 assert.match(server, /createOperatorTestQueue\(\{ serviceClient: activeTestServiceClient \}\)/);
-assert.match(server, /advanceIteration\(projection\.state, iterationDeps\)/);
+assert.match(server, /advanceIteration\(projection\.state, iterationService\)/);
 assert.match(server, /advanceTesterAutopilot/);
 assert.match(candidateActions, /type:\s*'apply-patch'/);
 assert.match(validationActions, /type:\s*'start-benchmark'/);
