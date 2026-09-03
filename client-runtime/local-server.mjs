@@ -113,6 +113,7 @@ import { createBaselineMaterializerRecoveryService } from './application/baselin
 import { createIterationService } from './application/iteration-service.mjs';
 import { createRuntimeProjectionService } from './application/runtime-projection-service.mjs';
 import { createRuntimeAdvanceService } from './application/runtime-advance-service.mjs';
+import { createBaselineOrchestrationService } from './application/baseline-orchestration-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1081,63 +1082,7 @@ const iterationPorts = {
     }
     return agentRoundService.startRound({ state, mission, goal, workspace, runtimeMode: runtimeDescriptor.mode });
   },
-  startBaseline: async ({ state, mission, reason }) => {
-    const matrix = inferMissionMatrix(mission, state.testMatrix || mission.testMatrix || {});
-    const fixedOperator = isFixedOperatorMission(mission);
-    const strictZeroSource = isStrictZeroSourceMission(mission);
-    // A fixed-profile Mission may be resumed from an older failed state. Once a
-    // fresh baseline is being submitted, clear the stale human-block marker.
-    if (fixedOperator && state.iterationStats?.loopStatus === 'needs_human') {
-      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'running', loopStatusReason: null };
-      appendRuntimeEvent(state, 'workflow.stale_block_cleared', { reason: 'fixed-profile baseline restarted' }, { kind: 'workflow-kernel', mode: 'client' });
-    }
-    if (state.benchmark?.purpose === 'baseline' && ['queued', 'running'].includes(state.benchmark.status)) return state;
-    if (state.benchmark?.purpose === 'baseline' && state.benchmark.status === 'failed') {
-      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_test_failed' };
-      return state;
-    }
-    const research = state.researchAgent || {};
-    // 四算子测试包的 baseline 由发布时冻结的 profile 提供；经验调研只给
-    // 后续候选提示词增益，绝不能阻塞可复现的 reference benchmark。
-    if (!fixedOperator && isResearchAgentActive(research)) return state;
-    const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
-    const { source: baselineSource, semanticFallback } = baselineSourceService.select({ state, mission, reason });
-    if (!baselineSource) return state;
-    if (semanticFallback) {
-      state.baseline = {
-        ...(state.baseline || {}),
-        source: baselineSource,
-        sourcePolicy: {
-          ...(state.baseline?.sourcePolicy || {}),
-          requireAuthority: false,
-          requireSingleFileExpansion: true,
-          allowAgentSemantic: true,
-        },
-      };
-      appendRuntimeEvent(state, 'baseline.semantic_fallback_selected', { missionId: state.activeMissionId, reason: baselineSource.reason }, { kind: 'baseline', mode: 'agent-semantic' });
-    }
-    if (strictZeroSource) {
-      if (!semanticFallback) {
-        const inspection = await baselineSourceInspectionService.inspect({ state, mission, baselineSource });
-        if (!inspection.valid) return inspection.state;
-      }
-      const materializer = state.baseline?.materializer || {};
-      const materializerPolicy = materializerPolicyService.inspect({ state, materializer, baselineSource });
-      if (materializerPolicy.action === 'wait') return state;
-      if (materializerPolicy.action === 'continue') {
-        // fall through to benchmark submission below
-      }
-      if (materializer.status !== 'completed' || !materializer.result?.runPy) {
-        if (['running', 'cancel_requested'].includes(materializer.status)) return state;
-        if (['failed', 'cancelled', 'timed_out'].includes(materializer.status)) {
-          const recovered = await baselineMaterializerRecoveryService.recover({ state, mission, baselineSource, materializer });
-          return recovered.state;
-        }
-        return baselineMaterializerCommandService.start({ state, baselineSource, matrix });
-      }
-    }
-    return baselineBenchmarkService.start({ state, mission, baselineSource, matrix, strictZeroSource, fixedOperator });
-  },
+  startBaseline: (...args) => baselineOrchestrationService.start(...args),
   researchDirForMission,
 };
 
@@ -1148,6 +1093,7 @@ const baselineBenchmarkService = createBaselineBenchmarkService({ executeCommand
 const baselineMaterializerCommandService = createBaselineMaterializerCommandService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const baselineSourceInspectionService = createBaselineSourceInspectionService({ inspectSources: (...args) => workspaceManager.inspectSources(...args), appendRuntimeEvent });
 const baselineMaterializerRecoveryService = createBaselineMaterializerRecoveryService({ consumeWorkflowRecoveryBudget, startResearch: iterationPorts.startResearch, researchDirForMission, appendRuntimeEvent });
+const baselineOrchestrationService = createBaselineOrchestrationService({ inferMissionMatrix, isFixedOperatorMission, isStrictZeroSourceMission, isResearchAgentActive, sourceService: baselineSourceService, sourceInspection: baselineSourceInspectionService, materializerPolicy: materializerPolicyService, materializerRecovery: baselineMaterializerRecoveryService, materializerCommand: baselineMaterializerCommandService, benchmark: baselineBenchmarkService, appendRuntimeEvent });
 
 const iterationService = createIterationService(iterationPorts);
 const runtimeProjectionService = createRuntimeProjectionService({ reconcileWorkflowState, projectState: (...args) => agentRuntime.projectState(...args) });

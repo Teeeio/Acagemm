@@ -70,6 +70,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/iteration-service.mjs` | formal iteration dependency boundary | iteration ports | immutable iteration API |
 | `application/runtime-projection-service.mjs` | workflow and Agent state projection | state/runtime | projected state |
 | `application/runtime-advance-service.mjs` | Autopilot, iteration, and reconcile tail | projected state | advanced state |
+| `application/baseline-orchestration-service.mjs` | complete Baseline workflow orchestration | baseline command | updated state |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |

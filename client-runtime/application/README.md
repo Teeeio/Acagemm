@@ -65,6 +65,7 @@
 | `iteration-service.mjs` | formal iteration dependency boundary | iteration ports | immutable iteration API |
 | `runtime-projection-service.mjs` | workflow and Agent state projection | state/runtime | projected state |
 | `runtime-advance-service.mjs` | Autopilot, iteration, and reconcile tail | projected state | advanced state |
+| `baseline-orchestration-service.mjs` | complete Baseline workflow orchestration | baseline command | updated state |
 
 ## Dependency Direction
 

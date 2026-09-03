@@ -164,6 +164,9 @@ assert.doesNotMatch(localServer, /request\.method === ['"]POST['"] && url\.pathn
 assert.doesNotMatch(localServer, /EXPERIENCE_RESEARCH_FAILED|baseline_source_unresolved/, 'Autopilot research policy must stay extracted');
 assert.doesNotMatch(localServer, /const advanceTesterAutopilot/, 'Autopilot decision table must stay extracted');
 assert.doesNotMatch(localServer, /iterationDeps/, 'Transitional iterationDeps must stay removed');
+assert.doesNotMatch(localServer, /baseline\.semantic_fallback_selected/, 'Baseline orchestration policy must stay extracted');
+const baselineOrchestrationSource = await read('client-runtime/application/baseline-orchestration-service.mjs');
+assert.doesNotMatch(baselineOrchestrationSource, /server\/|tools\/local-c500-tester/, 'Baseline orchestration service must not depend on transport or TUI');
 
 for (const requiredDocument of [
   'AGENTS.md',
@@ -215,6 +218,7 @@ for (const requiredDocument of [
   'client-runtime/application/iteration-service.md',
   'client-runtime/application/runtime-projection-service.md',
   'client-runtime/application/runtime-advance-service.md',
+  'client-runtime/application/baseline-orchestration-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',

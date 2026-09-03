@@ -61,6 +61,7 @@ const checks = [
   'test:iteration-service',
   'test:runtime-projection-service',
   'test:runtime-advance-service',
+  'test:baseline-orchestration-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',
