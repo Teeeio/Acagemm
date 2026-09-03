@@ -100,6 +100,7 @@
     "test:runtime-advance-service": "node tests/runtime-advance-service-test.mjs",
     "test:baseline-orchestration-service": "node tests/baseline-orchestration-service-test.mjs",
     "test:runtime-state-pipeline-service": "node tests/runtime-state-pipeline-service-test.mjs",
+    "test:main-round-orchestration-service": "node tests/main-round-orchestration-service-test.mjs",
     "test:workflow-summary": "node tests/workflow-summary-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
     "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",

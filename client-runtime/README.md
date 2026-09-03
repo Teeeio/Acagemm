@@ -72,6 +72,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/runtime-advance-service.mjs` | Autopilot, iteration, and reconcile tail | projected state | advanced state |
 | `application/baseline-orchestration-service.mjs` | complete Baseline workflow orchestration | baseline command | updated state |
 | `application/runtime-state-pipeline-service.mjs` | loaded-state migration and projection pipeline | state/runtime snapshot | projected state and changed flag |
+| `application/main-round-orchestration-service.mjs` | main Agent round preflight/recovery/launch | round command | updated state |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |

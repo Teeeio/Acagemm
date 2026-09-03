@@ -115,6 +115,7 @@ import { createRuntimeProjectionService } from './application/runtime-projection
 import { createRuntimeAdvanceService } from './application/runtime-advance-service.mjs';
 import { createBaselineOrchestrationService } from './application/baseline-orchestration-service.mjs';
 import { createRuntimeStatePipelineService } from './application/runtime-state-pipeline-service.mjs';
+import { createMainRoundOrchestrationService } from './application/main-round-orchestration-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1055,6 +1056,7 @@ const roundRecoveryService = createRoundRecoveryService({ isManagedWorkspaceRunt
 const agentRoundService = createAgentRoundService({ resetMissionRunState, resetMissionWorkspace, createWorkspaceCheckpoint, startAgentRun, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, agentRuntime });
 const roundPreflightService = createRoundPreflightService({ settleGenerationAttemptBeforeStart, buildRuntimePreflight });
 const roundArtifactGuard = createRoundArtifactGuard({ isStrictZeroSourceMission });
+const mainRoundOrchestrationService = createMainRoundOrchestrationService({ agentRuntime, preflight: roundPreflightService, recovery: roundRecoveryService, artifactGuard: roundArtifactGuard, agentRound: agentRoundService, appendRuntimeEvent, addAuditEvent });
 const baselineSourceService = createBaselineSourceService({ isFixedOperatorMission, isStrictZeroSourceMission, selectResearchBaselineSource, buildSemanticBaselineSource, inferAuthoritativeBaselineSource, isSemanticBaselineSource });
 const benchmarkProjectionService = createBenchmarkProjectionService({ operatorTestQueue, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path });
 const repositoryAdoptionService = createRepositoryAdoptionService({ isManagedWorkspaceRuntimeMode, adoptPatch: (...args) => workspaceManager.adoptPatch(...args), runAutomaticAdoption, runKnowledgeMaintenance, appendRuntimeEvent });
@@ -1068,21 +1070,7 @@ const iterationPorts = {
   cancelResearch: iterationResearchService.cancelResearch,
   registerSources: sourceService.registerSources,
   countSources: sourceService.countSources,
-  startMainRound: async ({ state, goal, retryMode = 'generation' }) => {
-    const runtimeDescriptor = await agentRuntime.describe();
-    const prepared = await roundPreflightService.prepare({ state, goal, retryMode });
-    if (prepared.blocked) return state;
-    const { mission, preflight } = prepared;
-    const workspace = preflight.workspace;
-    const rollback = await roundRecoveryService.restoreRejectedRound({ state, workspace, runtimeMode: runtimeDescriptor.mode });
-    roundArtifactGuard.assertReady({ mission, state });
-    if (rollback) {
-      state.workflowRecovery = { ...(state.workflowRecovery || {}), lastRecovery: { type: 'round_rollback', ...rollback } };
-      appendRuntimeEvent(state, 'workflow.round_rolled_back', rollback, { kind: 'recovery', mode: 'client' });
-      addAuditEvent(state, '未采纳候选已回退', `${rollback.candidateId || 'candidate'} · ${rollback.checkpointId} · workspace clean`, 'warning', 'History');
-    }
-    return agentRoundService.startRound({ state, mission, goal, workspace, runtimeMode: runtimeDescriptor.mode });
-  },
+  startMainRound: mainRoundOrchestrationService.start,
   startBaseline: (...args) => baselineOrchestrationService.start(...args),
   researchDirForMission,
 };

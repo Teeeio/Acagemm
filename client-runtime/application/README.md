@@ -67,6 +67,7 @@
 | `runtime-advance-service.mjs` | Autopilot, iteration, and reconcile tail | projected state | advanced state |
 | `baseline-orchestration-service.mjs` | complete Baseline workflow orchestration | baseline command | updated state |
 | `runtime-state-pipeline-service.mjs` | ordered loaded-state projection pipeline | state/runtime snapshot | projected state and changed flag |
+| `main-round-orchestration-service.mjs` | complete main Agent round orchestration | round command | updated state |
 
 ## Dependency Direction
 
