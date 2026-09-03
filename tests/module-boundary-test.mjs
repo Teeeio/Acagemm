@@ -159,6 +159,7 @@ assert.doesNotMatch(localServer, /url\.pathname(?:\.startsWith\()?['"]\/api\/kno
 assert.doesNotMatch(localServer, /request\.method === ['"]GET['"] && url\.pathname === ['"]\/api\/(?:runtime\/preflight|state|workspace)['"]/, 'Runtime query routes must stay extracted');
 assert.doesNotMatch(localServer, /request\.method === ['"]PATCH['"] && url\.pathname === ['"]\/api\/state['"]/, 'Runtime state routes must stay extracted');
 assert.doesNotMatch(localServer, /request\.method === ['"]POST['"] && url\.pathname === ['"]\/api\/reset['"]/, 'Reset routes must stay extracted');
+assert.doesNotMatch(localServer, /EXPERIENCE_RESEARCH_FAILED|baseline_source_unresolved/, 'Autopilot research policy must stay extracted');
 
 for (const requiredDocument of [
   'AGENTS.md',

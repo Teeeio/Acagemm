@@ -103,7 +103,6 @@ import { createAutopilotContextService } from './application/autopilot-context-s
 import { createAutopilotCandidateActionService } from './application/autopilot-candidate-action-service.mjs';
 import { createAutopilotValidationService } from './application/autopilot-validation-service.mjs';
 import { createAutopilotService } from './application/autopilot-service.mjs';
-import { createAutopilotBaselineResearchService } from './application/autopilot-baseline-research-service.mjs';
 import { createAutopilotFixedProfileService } from './application/autopilot-fixed-profile-service.mjs';
 import { createAutopilotStrictSourceService } from './application/autopilot-strict-source-service.mjs';
 import { createAutopilotCandidateBaselineService } from './application/autopilot-candidate-baseline-service.mjs';
@@ -1141,7 +1140,6 @@ const iterationDeps = {
   researchDirForMission,
 };
 
-const autopilotBaselineResearchService = createAutopilotBaselineResearchService({ isManagedWorkspaceRuntimeMode, isResearchAgentActive, startResearch: iterationDeps.startResearch, researchDirForMission, appendRuntimeEvent, addAuditEvent, agentRuntime });
 const autopilotFixedProfileService = createAutopilotFixedProfileService({ isResearchAgentActive, startResearch: iterationDeps.startResearch, startMainRound: iterationDeps.startMainRound, researchDirForMission, appendRuntimeEvent });
 const autopilotStrictSourceService = createAutopilotStrictSourceService({ isStrictZeroSourceMission, isResearchAgentActive, selectResearchBaselineSource, buildSemanticBaselineSource, startResearch: iterationDeps.startResearch, startBaseline: iterationDeps.startBaseline, startMainRound: iterationDeps.startMainRound, researchDirForMission });
 const autopilotCandidateBaselineService = createAutopilotCandidateBaselineService({ isManagedWorkspaceRuntimeMode, startBaseline: iterationDeps.startBaseline, startResearch: iterationDeps.startResearch, researchDirForMission, agentRuntime, appendRuntimeEvent, addAuditEvent });
@@ -1164,96 +1162,15 @@ const advanceTesterAutopilot = async (state) => {
       const nextState = await iterationDeps.startBaseline({ state, mission, reason: 'fixed operator profile baseline' });
       return { state: nextState, action: nextState.benchmark?.status === 'running' ? 'baseline_started' : 'wait_baseline' };
     }
-    const fixedProfileResult = await autopilotFixedProfileService.advance({ state, mission });
-    if (fixedProfileResult) return fixedProfileResult;
-    const research = state.researchAgent || {};
-    const researchEnabled = mission.sourcePolicy?.researchEnabled !== false;
-    let experienceStarted = false;
-    if (researchEnabled && !research.runId) {
-      const direction = `为 ${mission.title || mission.operator} 搜寻 C500 / ${mission.operatorProfile?.language || 'target'} 的实现经验。只输出优化方向与参考；不得修改冻结语义、Correctness 或 Benchmark。`;
-      const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
-      try {
-        const started = await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: false, runPhase: 'experience' });
-        state = started;
-        experienceStarted = true;
-      } catch (error) {
-        state.researchAgent = { ...research, status: 'failed', runPhase: 'experience', phase: '经验调研不可用（不阻塞）', progress: 100, error: { code: error.code || 'EXPERIENCE_RESEARCH_FAILED', message: error.message } };
-        appendRuntimeEvent(state, 'research.experience_unavailable', { missionId: state.activeMissionId, error: error.message }, { kind: 'research', mode: 'client' });
-      }
-    }
-    // Experience research is a side-channel. It is intentionally asynchronous;
-    // a slow or unavailable web agent must never hold up candidate round 1.
-    if (isResearchAgentActive(state.researchAgent || {}) && state.researchAgent?.synchronous) return { state, action: 'wait_experience_research' };    if (!state.agent?.runId && ['idle', 'ready', 'awaiting_action', 'completed', 'failed', 'cancelled'].includes(state.agent?.status)) {
-      const correctnessRepair = Number(state.iterationStats?.currentRoundCorrectnessAttempts || 0) > 0
-        && state.iterationStats?.correctnessEstablished !== true;
-      return { state: await iterationDeps.startMainRound({ state, goal: mission.goal, retryMode: correctnessRepair ? 'correctness' : 'generation' }), action: 'candidate_agent_started' };
-    }
+    return autopilotFixedProfileService.advance({ state, mission });
   }
 
   if (isStrictZeroSourceMission(mission)) {
-    const strictSourceResult = await autopilotStrictSourceService.advance({ state, mission, candidate });
-    if (strictSourceResult) return strictSourceResult;
-    const research = state.researchAgent || {};
-    if (state.baseline?.status !== 'complete' && isResearchAgentActive(research)) {
-      return { state, action: 'wait_research' };
-    }
-    const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
-    const source = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources })
-      || (mission.sourcePolicy?.allowSemanticFallback === true && researchTerminal && (research.runPhase === 'synthesize' || research.acquireHandled === true)
-        ? buildSemanticBaselineSource(mission, research)
-        : null);
-    if (state.baseline?.status !== 'complete' && !source) {
-      if (!research.runId) {
-        const direction = `从零研究 ${mission.title || mission.goal}：在官方上游仓库中固定可验证的 MLA paged attention baseline source，记录 repository、commit、path 和 operator；不得生成候选代码。`;
-        const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
-        return { state: await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true }), action: 'baseline_research_started' };
-      }
-      if (researchTerminal) {
-        if (research.runPhase === 'acquire' && research.acquireHandled !== true) return { state, action: 'none' };
-        state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unresolved' };
-        return { state, action: 'needs_human' };
-      }
-      return { state, action: 'wait_research' };
-    }
-    if (state.baseline?.status !== 'complete') {
-      const nextState = await iterationDeps.startBaseline({ state, mission, reason: 'strict zero-source workflow' });
-      const materializerStatus = nextState.baseline?.materializer?.status;
-      const action = materializerStatus === 'running' ? 'baseline_materializer_started' : nextState.baseline?.status === 'running' ? 'baseline_started' : 'none';
-      return { state: nextState, action };
-    }
-    if (!candidate
-        && !state.agent?.runId
-        && ['idle', 'ready', 'awaiting_action', 'completed'].includes(state.agent?.status)) {
-      return { state: await iterationDeps.startMainRound({ state, goal: mission.goal }), action: 'candidate_agent_started' };
-    }
+    return (await autopilotStrictSourceService.advance({ state, mission, candidate })) || { state, action: 'none' };
   }
 
   if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status !== 'complete') {
-    const candidateBaselineResult = await autopilotCandidateBaselineService.advance({ state, mission });
-    if (candidateBaselineResult) return candidateBaselineResult;
-    const baselineResearch = await autopilotBaselineResearchService.advance({ state, mission });
-    if (baselineResearch) return baselineResearch;
-    const nextState = await iterationDeps.startBaseline({ state, mission, reason: state.agent?.currentAction?.reason || state.agent?.result?.summary || '' });
-    if (nextState.benchmark?.status === 'running' || nextState.baseline?.status === 'running') return { state: nextState, action: 'baseline_started' };
-    const runtime = await agentRuntime.describe();
-    const research = state.researchAgent || {};
-    if (isManagedWorkspaceRuntimeMode(runtime.mode) && !research.runId && research.status !== 'running') {
-      const direction = [
-        `为 Mission ${mission.id} 查找可验证的权威 baseline：${mission.goal}`,
-        '优先检查本地 Source Registry，再检索上游官方仓库、测试和 benchmark。',
-        '必须在研究笔记的 baselineSources 中记录 repository、固定 commit、path、operator、confidence 和语义依据。',
-        '不能用无关算子、smoke template 或没有固定版本的网页片段代替。',
-      ].join('\n');
-      const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
-      return { state: await iterationDeps.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true }), action: 'baseline_research_started' };
-    }
-    const researchTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
-    if (isManagedWorkspaceRuntimeMode(runtime.mode) && research.runId && researchTerminal && research.runPhase !== 'acquire') {
-      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'baseline_source_unresolved' };
-      appendRuntimeEvent(state, 'baseline.source_unresolved', { missionId: state.activeMissionId, researchRunId: research.runId }, { kind: 'baseline', mode: 'client' });
-      addAuditEvent(state, 'Baseline 来源需要人工确认', 'Research Agent 未找到可固定版本且语义可验证的权威 baseline。', 'warning', 'UserRound');
-      return { state, action: 'needs_human' };
-    }
+    return (await autopilotCandidateBaselineService.advance({ state, mission })) || { state, action: 'none' };
   }
 
   if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status === 'complete') {
