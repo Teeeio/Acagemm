@@ -8,7 +8,7 @@ import { Dashboard } from '../tools/local-c500-tester/components/Dashboard.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(path.join(root, relative), 'utf8');
 
-const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, candidateActions, validationActions, systemRoutes, backend, runner, hardwareMockE2e, hardwareMockContract, runtimeRegistry, codexClient, packageJson] = await Promise.all([
+const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, candidateActions, validationActions, strictSourceAutopilot, candidateBaselineAutopilot, systemRoutes, backend, runner, hardwareMockE2e, hardwareMockContract, runtimeRegistry, codexClient, packageJson] = await Promise.all([
   read('tools/local-c500-tester/tui.mjs'),
   read('tools/local-c500-tester/tui-state.mjs'),
   read('tools/local-c500-tester/components/WorkflowTopology.mjs'),
@@ -18,6 +18,8 @@ const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, prod
   read('client-runtime/local-server.mjs'),
   read('client-runtime/application/autopilot-candidate-action-service.mjs'),
   read('client-runtime/application/autopilot-validation-service.mjs'),
+  read('client-runtime/application/autopilot-strict-source-service.mjs'),
+  read('client-runtime/application/autopilot-candidate-baseline-service.mjs'),
   read('client-runtime/server/system-routes.mjs'),
   read('client-runtime/local-c500-service-client.mjs'),
   read('tools/local-c500-runner.py'),
@@ -130,8 +132,8 @@ assert.match(server, /advanceIteration\(projection\.state, iterationService\)/);
 assert.match(server, /autopilotService\.advance/);
 assert.match(candidateActions, /type:\s*'apply-patch'/);
 assert.match(validationActions, /type:\s*'start-benchmark'/);
-assert.match(server, /baseline_research_started/);
-assert.match(server, /baseline_source_unresolved/);
+assert.match(`${strictSourceAutopilot}\n${candidateBaselineAutopilot}`, /baseline_research_started/);
+assert.match(`${strictSourceAutopilot}\n${candidateBaselineAutopilot}`, /baseline_source_unresolved/);
 assert.match(backend, /kind:\s*'local-c500'/);
 assert.match(runner, /shutil\.which\("mx-smi"\)/);
 assert.doesNotMatch(runner, /ixsmi/i);
