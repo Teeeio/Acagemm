@@ -24,7 +24,7 @@ export const createBaselineOrchestrationService = ({ inferMissionMatrix, isFixed
       const materializer = state.baseline?.materializer || {};
       const policy = materializerPolicy.inspect({ state, materializer, baselineSource });
       if (policy.action === 'wait') return state;
-      if (policy.action === 'redirect' || policy.action === 'needs_human') return (await materializerRecovery.recover({ state, mission, baselineSource, materializer })).state;
+      if (policy.action === 'recover') return (await materializerRecovery.recover({ state, mission, baselineSource, materializer })).state;
       if (policy.action === 'materialize') return materializerCommand.start({ state, baselineSource, matrix });
     }
     return benchmark.start({ state, mission, baselineSource, matrix, strictZeroSource, fixedOperator });

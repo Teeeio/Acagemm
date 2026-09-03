@@ -1060,7 +1060,7 @@ const repositoryAdoptionService = createRepositoryAdoptionService({ isManagedWor
 const autopilotContextService = createAutopilotContextService({ isFixedOperatorMission, selectCandidate: selectAutopilotCandidate });
 const autopilotCandidateActionService = createAutopilotCandidateActionService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const autopilotValidationService = createAutopilotValidationService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry, inferMissionMatrix });
-const materializerPolicyService = createMaterializerPolicyService({ consumeWorkflowRecoveryBudget: (...args) => consumeWorkflowRecoveryBudget(...args) });
+const materializerPolicyService = createMaterializerPolicyService();
 
 const iterationPorts = {
   startResearch: iterationResearchService.startResearch,
