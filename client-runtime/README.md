@@ -67,6 +67,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/baseline-materializer-command-service.mjs` | baseline materializer command submission | baseline context | updated state |
 | `application/baseline-source-inspection-service.mjs` | strict baseline source verification | baseline context | validation/state |
 | `application/baseline-materializer-recovery-service.mjs` | materializer failure recovery and research redirect | materializer state | state/action |
+| `application/iteration-service.mjs` | formal iteration dependency boundary | iteration ports | immutable iteration API |
 | `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |

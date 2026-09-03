@@ -62,6 +62,7 @@
 | `baseline-materializer-command-service.mjs` | baseline materializer command submission | baseline context | updated state |
 | `baseline-source-inspection-service.mjs` | strict baseline source verification | baseline context | validation/state |
 | `baseline-materializer-recovery-service.mjs` | materializer failure recovery and research redirect | materializer state | state/action |
+| `iteration-service.mjs` | formal iteration dependency boundary | iteration ports | immutable iteration API |
 
 ## Dependency Direction
 

@@ -111,6 +111,7 @@ import { createBaselineBenchmarkService } from './application/baseline-benchmark
 import { createBaselineMaterializerCommandService } from './application/baseline-materializer-command-service.mjs';
 import { createBaselineSourceInspectionService } from './application/baseline-source-inspection-service.mjs';
 import { createBaselineMaterializerRecoveryService } from './application/baseline-materializer-recovery-service.mjs';
+import { createIterationService } from './application/iteration-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1276,6 +1277,7 @@ const advanceTesterAutopilot = async (state) => {
 
   return { state, action: 'none' };
 };
+const iterationService = createIterationService(iterationDeps);
 
 const autopilotService = createAutopilotService({ advance: advanceTesterAutopilot });
 
@@ -1313,7 +1315,7 @@ const loadRuntimeState = async () => {
   const autopilot = await autopilotService.advance(projection.state);
   projection.state = autopilot.state;
   if (autopilot.action !== 'none') changed = true;
-  const looped = await advanceIteration(projection.state, iterationDeps);
+  const looped = await advanceIteration(projection.state, iterationService);
   if (['research_timeout', 'research_injected', 'research_noted', 'round_counted', 'correctness_attempt_counted', 'generation_attempt_counted', 'resumed_agent', 'research_escalated', 'baseline_started', 'resumed_after_baseline', 'failed_candidate_recorded'].includes(looped.action)) changed = true;
   const finalReconciliation = reconcileWorkflowState(looped.state);
   changed ||= finalReconciliation.changed;
