@@ -59,7 +59,6 @@ All external outcomes must be normalized before changing Mission state.
 | `application/autopilot-candidate-action-service.mjs` | automatic candidate apply/resume actions | candidate state | updated state |
 | `application/autopilot-validation-service.mjs` | automatic candidate benchmark start | candidate state | updated state |
 | `application/autopilot-service.mjs` | automatic iteration progression boundary | runtime state | state/action result |
-| `application/autopilot-baseline-research-service.mjs` | baseline research and unresolved-source handling | Mission state | state/action result |
 | `application/autopilot-fixed-profile-service.mjs` | fixed Profile post-baseline progression | Mission state | state/action result |
 | `application/autopilot-strict-source-service.mjs` | strict source autopilot progression | Mission state | state/action result |
 | `application/autopilot-candidate-baseline-service.mjs` | ordinary candidate baseline progression | Mission state | state/action result |

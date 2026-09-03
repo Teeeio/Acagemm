@@ -54,7 +54,6 @@
 | `autopilot-candidate-action-service.mjs` | candidate patch apply and recovery | candidate state | updated state |
 | `autopilot-validation-service.mjs` | candidate benchmark start | candidate state | updated state |
 | `autopilot-service.mjs` | automatic iteration progression boundary | runtime state | state/action result |
-| `autopilot-baseline-research-service.mjs` | baseline research branch coordination | Mission state | state/action result |
 | `autopilot-fixed-profile-service.mjs` | fixed Profile post-baseline progression | Mission state | state/action result |
 | `autopilot-strict-source-service.mjs` | strict source autopilot progression | Mission state | state/action result |
 | `autopilot-candidate-baseline-service.mjs` | ordinary candidate baseline progression | Mission state | state/action result |
