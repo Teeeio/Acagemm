@@ -64,6 +64,7 @@
 | `baseline-materializer-recovery-service.mjs` | materializer failure recovery and research redirect | materializer state | state/action |
 | `iteration-service.mjs` | formal iteration dependency boundary | iteration ports | immutable iteration API |
 | `runtime-projection-service.mjs` | workflow and Agent state projection | state/runtime | projected state |
+| `runtime-advance-service.mjs` | Autopilot, iteration, and reconcile tail | projected state | advanced state |
 
 ## Dependency Direction
 

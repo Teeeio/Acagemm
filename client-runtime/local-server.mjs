@@ -112,6 +112,7 @@ import { createBaselineSourceInspectionService } from './application/baseline-so
 import { createBaselineMaterializerRecoveryService } from './application/baseline-materializer-recovery-service.mjs';
 import { createIterationService } from './application/iteration-service.mjs';
 import { createRuntimeProjectionService } from './application/runtime-projection-service.mjs';
+import { createRuntimeAdvanceService } from './application/runtime-advance-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1163,6 +1164,7 @@ const autopilotService = createAutopilotService({
   isStrictZeroSourceMission,
   runtimeMode: () => agentRuntime.mode,
 });
+const runtimeAdvanceService = createRuntimeAdvanceService({ autopilot: autopilotService, advanceIteration, iteration: iterationService, reconcileWorkflowState });
 
 let runtimeStateInFlight = null;
 const reconcilePersistedBaselineFailure = (state) => projectBaselineFailure({ state, appendRuntimeEvent });
@@ -1194,14 +1196,9 @@ const loadRuntimeState = async () => {
   changed ||= benchmarkProjection.changed;
   const adoption = await repositoryAdoptionService.adopt({ state: projection.state });
   changed ||= adoption.changed;
-  const autopilot = await autopilotService.advance(projection.state);
-  projection.state = autopilot.state;
-  if (autopilot.action !== 'none') changed = true;
-  const looped = await advanceIteration(projection.state, iterationService);
-  if (['research_timeout', 'research_injected', 'research_noted', 'round_counted', 'correctness_attempt_counted', 'generation_attempt_counted', 'resumed_agent', 'research_escalated', 'baseline_started', 'resumed_after_baseline', 'failed_candidate_recorded'].includes(looped.action)) changed = true;
-  const finalReconciliation = reconcileWorkflowState(looped.state);
-  changed ||= finalReconciliation.changed;
-  return changed ? persistState(finalReconciliation.state) : finalReconciliation.state;
+  const advanced = await runtimeAdvanceService.advance({ state: projection.state });
+  changed ||= advanced.changed;
+  return changed ? persistState(advanced.state) : advanced.state;
   })().finally(() => { runtimeStateInFlight = null; });
   return structuredClone(await runtimeStateInFlight);
 };
