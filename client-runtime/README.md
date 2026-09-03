@@ -24,7 +24,7 @@ All external outcomes must be normalized before changing Mission state.
 
 | Module | Responsibility | Primary input | Primary output |
 |---|---|---|---|
-| `local-server.mjs` | Runtime bootstrap and transitional orchestration | HTTP request, current state | delegated route/service calls |
+| `local-server.mjs` | Runtime composition root and process bootstrap | HTTP request, runtime ports | assembled routes/services and process lifecycle |
 | `server/` | HTTP transport and thin route adapters | request/response and injected services | HTTP/SSE/static responses |
 | `application/` | transport-neutral use-case orchestration | commands, queries, injected ports | application results and stable errors |
 | `application/projects-service.mjs` | Project lifecycle and repository bootstrap | Project command/query | Project DTO or saved state |

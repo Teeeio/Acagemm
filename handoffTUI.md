@@ -1,6 +1,6 @@
 # TUI Branch Handoff
 
-Updated: 2026-09-02 (Asia/Shanghai)
+Updated: 2026-09-03 (Asia/Shanghai)
 
 ## 1. Scope and branch boundary
 
@@ -131,21 +131,21 @@ Important state-machine behavior now expected:
 
 ## 7. Current verification evidence
 
-The following completed locally on 2026-09-02 after removing the standalone legacy CLI workflow and extracting the first production application/HTTP modules:
+The following completed locally on 2026-09-03 after removing the standalone legacy CLI workflow and completing the production application/HTTP module extraction:
 
 ```powershell
 npm run verify:local-c500-release
 ```
 
-Result: `PASS: 61 checks completed`, including module boundaries, application-service contracts, workflow kernel, Claude adapter/workflow, iteration loop, Gate, workspace, queue, async local runner, fixed Profiles, C550 detection, language contract, test specification, TUI randomized snapshots, spinner, viewport, refresh ordering, terminal lifecycle, and Vite build.
+Result: `PASS: 90 checks completed`, including all application-service contracts, module boundaries, workflow kernel, Agent adapters/workflow, iteration loop, Gate, workspace, queue, async local runner, fixed Profiles, C550 detection, language contract, test specification, TUI randomized snapshots, spinner, viewport, refresh ordering, terminal lifecycle, and Vite build.
 
-The hardware-free robustness suite also completed on 2026-09-02:
+The hardware-free robustness suite also completed on 2026-09-03:
 
 ```powershell
 npm run verify:non-hardware-robustness
 ```
 
-Result: `PASS: 25 checks completed without physical hardware`; its first check reruns the complete local C500 release suite. The full hardware-free suite was last run at the 54-check baseline; subsequent Baseline, Operator Test, Mission Control, Knowledge, Runtime Query, Runtime State, and Reset service extractions passed the 61-check release suite and Mission Smoke.
+Result: `PASS: 25 checks completed without physical hardware`; its first check reran and passed the complete 90-check local C500 release suite. The remaining checks covered extreme semantic inputs, evidence binding, Agent providers, three-layer workspace boundaries, state projection, release guards, and the Mission smoke workflow.
 
 This is not proof that generated Triton kernels are fast or even compilable on C550. No C550 hardware exists in the local Windows verification environment. Actual PyTorch/Triton/MXMACA behavior, memory usage, compiler behavior, and latency must be verified on the remote machine.
 
@@ -219,12 +219,7 @@ Do not infer a runner failure from a static progress bar alone; inspect the task
 
 ## 10. Repository and delivery state
 
-At the time this handoff was written:
-
-- `TUI` was clean and matched GitHub tracking branch `origin/TUI` at `2006b36` before adding this document.
-- GitHub remote: `https://github.com/Teeeio/operator-studio-c500-tester.git`
-- Gitee remote: `https://gitee.com/kirinn99/operator-studio-c500-tester.git`
-- The local `gitee/TUI` tracking ref appeared 30 commits behind `TUI`. This observation may be stale until fetched, but the remote test machine previously pulled from Gitee, so synchronization must be verified explicitly.
+At the time this handoff was updated, the local `TUI` branch contained the completed extraction series and had not yet been pushed. Both configured remote names, `origin` and `gitee`, resolve to `https://gitee.com/kirinn99/operator-studio-c500-tester.git`; one successful push updates the shared destination. Verify this with `git remote -v` before assuming a separate GitHub mirror exists.
 
 Never put an access token in a remote URL, command history, source file, or this document. Use the operator's existing Git credential configuration.
 
@@ -234,7 +229,6 @@ After each accepted fix:
 git status --short --branch
 npm run verify:local-c500-release
 git push origin TUI:TUI
-git push gitee TUI:TUI
 ```
 
 Do not push `TUI` to `main`.
@@ -247,19 +241,19 @@ Open risks:
 
 - The largest frozen shapes can consume substantial C550 memory. An OOM must be shown accurately in TUI and task evidence; it must not cause a silent shape reduction.
 - Claude Code behavior is nondeterministic. The latest cold-start recovery handles missing-file and recoverable generation failures, but new tool-call/error shapes may still need normalization.
-- A local 39-check pass validates workflow contracts, not real Triton compilation or C550 performance.
+- A local 90-check pass validates workflow contracts, not real Triton compilation or C550 performance.
 - Persisted remote state may contain historical Missions and tasks. New Mission publication should isolate state, but do not destroy historical evidence to hide a lifecycle bug.
-- Gitee may not contain the latest branch even when GitHub does. Confirm the exact commit on the machine with `git rev-parse HEAD`.
+- The remote machine may have a stale `TUI` checkout. Confirm the exact commit on the machine with `git rev-parse HEAD` after pulling.
 - Exact correctness/benchmark Profile rules are intentionally strict. If the runner and Profile disagree, repair the contract plumbing; do not weaken the Profile to make a test pass.
 
 Recommended continuation sequence:
 
-1. Confirm the remote checkout is on `TUI` and at least `2006b36` plus later handoff/fix commits.
+1. Confirm the remote checkout is on `TUI` and matches `origin/TUI`.
 2. Run `bash scripts/c500-test.sh verify` and `doctor`.
 3. Publish one v0.1 Mission from TUI.
 4. Observe Agent generation, Diff admission, correctness, benchmark, Gate, rollback/adoption, and all three performance rounds.
 5. Export the Mission with `E` and retain the matching task directories.
-6. Fix the first reproducible workflow divergence in `TUI`, add an automated regression, rerun the 39-check release gate, and sync both remotes.
+6. Fix the first reproducible workflow divergence in `TUI`, add an automated regression, rerun the 90-check release gate, and push `origin/TUI`.
 
 ## 12. Acceptance criteria for the next Agent
 

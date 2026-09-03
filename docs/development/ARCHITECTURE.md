@@ -32,7 +32,7 @@ The removed standalone local CLI workflow is not a supported architecture. New c
 | `client-runtime/application` | transport-neutral use-case orchestration and injected effect ports | HTTP formatting, TUI rendering |
 | `client-runtime/server` | HTTP helpers and thin route adapters | workflow rules, persisted state mutation |
 
-Large flat modules are transitional. New behavior should be introduced through a small focused module with a local contract, then called by the transitional facade.
+`local-server.mjs` is the process composition root: it may construct services, bind effect ports, own process lifecycle, and wrap loaded-state projection in the State Repository lock. Workflow decisions and multi-step use cases belong in focused application/domain modules with local contracts. Existing large domain modules such as `state-store.mjs` and `iteration-loop.mjs` remain public domain boundaries; do not grow them with transport or adapter behavior.
 
 ## Shared Contracts
 
@@ -46,7 +46,7 @@ Large flat modules are transitional. New behavior should be introduced through a
 
 ## State Mutation Rule
 
-`state-repository.mjs` is the process-local coordination boundary. API requests, SSE state projection, and auto tick share its exclusive queue. The current handlers still call `read()` and `persist()` inside that boundary while application services are extracted; new command-style state changes should use `update()` with an expected state version. Do not add direct `loadState()` or `saveState()` calls to HTTP, TUI, Agent, or hardware adapter code.
+`state-repository.mjs` is the process-local coordination boundary. API requests, SSE state projection, and auto tick share its exclusive queue. New independent command-style state changes should use `update()` with an expected state version. Projection code that already runs inside `runExclusive()` must use the loaded snapshot plus `persist()`; calling `update()` there would recursively enter the queue and deadlock. Do not add direct `loadState()` or `saveState()` calls to HTTP, TUI, Agent, or hardware adapter code.
 
 ## Documentation Rule
 
