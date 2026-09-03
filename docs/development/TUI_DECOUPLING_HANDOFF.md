@@ -6,7 +6,7 @@ Production behavior remains `TUI -> HTTP API -> application services -> domain/p
 
 ## Remaining Transitional Surface
 
-`client-runtime/local-server.mjs` still assembles `iterationDeps`, contains the full `advanceTesterAutopilot` decision table, and owns `loadRuntimeState` orchestration. These are transitional facades, not new public APIs. Future extraction must preserve serialized tick ordering and call the existing application services.
+`client-runtime/local-server.mjs` still assembles `iterationDeps` and retains a compatibility decision table around Autopilot. Fixed Profile, strict-source, candidate-baseline, candidate actions, and validation branches now delegate to application services. The file still owns `loadRuntimeState` orchestration; these are transitional facades, not new public APIs.
 
 `stateRepository.update` is the atomic command boundary for mutations that can load state inside the operation. `loadRuntimeState` currently projects a previously-read snapshot and therefore must continue using its serialized `persist` path until projection is moved into an `update` callback; replacing it mechanically would overwrite concurrent projection changes.
 
