@@ -1148,53 +1148,6 @@ const baselineMaterializerCommandService = createBaselineMaterializerCommandServ
 const baselineSourceInspectionService = createBaselineSourceInspectionService({ inspectSources: (...args) => workspaceManager.inspectSources(...args), appendRuntimeEvent });
 const baselineMaterializerRecoveryService = createBaselineMaterializerRecoveryService({ consumeWorkflowRecoveryBudget, startResearch: iterationDeps.startResearch, researchDirForMission, appendRuntimeEvent });
 
-const advanceTesterAutopilot = async (state) => {
-  const context = autopilotContextService.prepare(state);
-  if (!context.enabled) return { state, action: 'none' };
-  const { mission } = context;
-  const actionType = state.agent?.currentAction?.type;
-  const { candidate } = context;
-
-  // 专用四算子路径：冻结语义和测试矩阵 -> baseline -> 可选经验调研 -> 三轮候选。
-  // 经验调研的失败被记录，但不会改变 baseline 或使任务进入 needs_human。
-  if (isFixedOperatorMission(mission)) {
-    if (state.baseline?.status !== 'complete') {
-      const nextState = await iterationDeps.startBaseline({ state, mission, reason: 'fixed operator profile baseline' });
-      return { state: nextState, action: nextState.benchmark?.status === 'running' ? 'baseline_started' : 'wait_baseline' };
-    }
-    return autopilotFixedProfileService.advance({ state, mission });
-  }
-
-  if (isStrictZeroSourceMission(mission)) {
-    return (await autopilotStrictSourceService.advance({ state, mission, candidate })) || { state, action: 'none' };
-  }
-
-  if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status !== 'complete') {
-    return (await autopilotCandidateBaselineService.advance({ state, mission })) || { state, action: 'none' };
-  }
-
-  if (state.stage === 'candidate' && state.agent?.status === 'awaiting_action' && state.baseline?.status === 'complete') {
-    if (agentRuntime.mode === 'reference-fixture' && candidate?.id && !candidate.patchDigest && actionType === 'candidate.plan') {
-      return { state: await autopilotCandidateActionService.applyCandidate({ state, candidateId: candidate.id }), action: 'simulation_candidate_applied' };
-    }
-    if (candidate?.patchDigest && actionType === 'candidate.plan') {
-      return { state: await autopilotCandidateActionService.applyCandidate({ state, candidateId: candidate.id }), action: 'candidate_applied' };
-    }
-    if (!candidate?.patchDigest) {
-      return { state: await autopilotCandidateActionService.resumeCandidate({ state, mission, startMainRound: iterationDeps.startMainRound }), action: 'candidate_resumed' };
-    }
-  }
-
-  if (state.stage === 'validation'
-      && state.patchApplied
-      && state.baseline?.status === 'complete'
-      && state.agent?.status === 'awaiting_action'
-      && actionType === 'test.plan') {
-    return { state: await autopilotValidationService.startCandidateTest({ state, mission }), action: 'candidate_test_started' };
-  }
-
-  return { state, action: 'none' };
-};
 const iterationService = createIterationService(iterationDeps);
 const runtimeProjectionService = createRuntimeProjectionService({ reconcileWorkflowState, projectState: (...args) => agentRuntime.projectState(...args) });
 
