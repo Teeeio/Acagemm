@@ -66,6 +66,7 @@
 | `runtime-projection-service.mjs` | workflow and Agent state projection | state/runtime | projected state |
 | `runtime-advance-service.mjs` | Autopilot, iteration, and reconcile tail | projected state | advanced state |
 | `baseline-orchestration-service.mjs` | complete Baseline workflow orchestration | baseline command | updated state |
+| `runtime-state-pipeline-service.mjs` | ordered loaded-state projection pipeline | state/runtime snapshot | projected state and changed flag |
 
 ## Dependency Direction
 

@@ -114,6 +114,7 @@ import { createIterationService } from './application/iteration-service.mjs';
 import { createRuntimeProjectionService } from './application/runtime-projection-service.mjs';
 import { createRuntimeAdvanceService } from './application/runtime-advance-service.mjs';
 import { createBaselineOrchestrationService } from './application/baseline-orchestration-service.mjs';
+import { createRuntimeStatePipelineService } from './application/runtime-state-pipeline-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1114,37 +1115,37 @@ const runtimeAdvanceService = createRuntimeAdvanceService({ autopilot: autopilot
 
 let runtimeStateInFlight = null;
 const reconcilePersistedBaselineFailure = (state) => projectBaselineFailure({ state, appendRuntimeEvent });
+const recordStateMigration = (state, sourcePolicyMigration) => {
+  const iterationPolicyMigrated = sourcePolicyMigration.recovery?.iterationPolicyChanged === true;
+  appendRuntimeEvent(state, iterationPolicyMigrated ? 'mission.iteration_policy_migrated' : 'mission.source_policy_migrated', sourcePolicyMigration.recovery, { kind: 'migration', mode: 'client' });
+  const materializerRecovered = sourcePolicyMigration.recovery?.previousBlocker === 'baseline_materializer_failed';
+  const migrationTitle = iterationPolicyMigrated
+    ? '固定 Profile 重试策略已升级'
+    : materializerRecovered ? 'C500 Materializer 交付协议已升级' : 'C500 来源策略已升级';
+  const migrationDetail = iterationPolicyMigrated
+    ? `${sourcePolicyMigration.recovery?.previousBlocker ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，` : ''}候选生成上限调整为 ${sourcePolicyMigration.recovery.generationAttemptLimit}`
+    : sourcePolicyMigration.recovery?.previousBlocker
+      ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，${materializerRecovered ? 'Materializer' : 'Research'} 将自动重新执行`
+      : 'Research 将按本地、联网、语义 fallback 顺序执行';
+  addAuditEvent(state, migrationTitle, migrationDetail, 'blue', 'RefreshCw');
+};
+const runtimeStatePipelineService = createRuntimeStatePipelineService({
+  migrateState: (state) => migrateLocalC500TesterState(state, { enabled: localC500Config.enabled }),
+  recordMigration: recordStateMigration,
+  projectBaselineFailure: reconcilePersistedBaselineFailure,
+  runtimeProjection: runtimeProjectionService,
+  benchmarkProjection: benchmarkProjectionService,
+  repositoryAdoption: repositoryAdoptionService,
+  runtimeAdvance: runtimeAdvanceService,
+});
 
 const loadRuntimeState = async () => {
   if (runtimeStateInFlight) return structuredClone(await runtimeStateInFlight);
   runtimeStateInFlight = (async () => {
   const runtime = await agentRuntime.describe();
   const state = await stateRepository.read({ runtimeMode: runtime.mode, commandJournal, applyRegistry: commandRegistry });
-  const sourcePolicyMigration = migrateLocalC500TesterState(state, { enabled: localC500Config.enabled });
-  if (sourcePolicyMigration.changed) {
-    const iterationPolicyMigrated = sourcePolicyMigration.recovery?.iterationPolicyChanged === true;
-    appendRuntimeEvent(state, iterationPolicyMigrated ? 'mission.iteration_policy_migrated' : 'mission.source_policy_migrated', sourcePolicyMigration.recovery, { kind: 'migration', mode: 'client' });
-    const materializerRecovered = sourcePolicyMigration.recovery?.previousBlocker === 'baseline_materializer_failed';
-    const migrationTitle = iterationPolicyMigrated
-      ? '固定 Profile 重试策略已升级'
-      : materializerRecovered ? 'C500 Materializer 交付协议已升级' : 'C500 来源策略已升级';
-    const migrationDetail = iterationPolicyMigrated
-      ? `${sourcePolicyMigration.recovery?.previousBlocker ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，` : ''}候选生成上限调整为 ${sourcePolicyMigration.recovery.generationAttemptLimit}`
-      : sourcePolicyMigration.recovery?.previousBlocker
-        ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，${materializerRecovered ? 'Materializer' : 'Research'} 将自动重新执行`
-        : 'Research 将按本地、联网、语义 fallback 顺序执行';
-    addAuditEvent(state, migrationTitle, migrationDetail, 'blue', 'RefreshCw');
-  }
-  const baselineFailureProjected = reconcilePersistedBaselineFailure(state);
-  const projection = await runtimeProjectionService.project({ state, runtime });
-  let changed = baselineFailureProjected || sourcePolicyMigration.changed || projection.changed;
-  const benchmarkProjection = await benchmarkProjectionService.project({ state: projection.state });
-  changed ||= benchmarkProjection.changed;
-  const adoption = await repositoryAdoptionService.adopt({ state: projection.state });
-  changed ||= adoption.changed;
-  const advanced = await runtimeAdvanceService.advance({ state: projection.state });
-  changed ||= advanced.changed;
-  return changed ? persistState(advanced.state) : advanced.state;
+  const projected = await runtimeStatePipelineService.project({ state, runtime });
+  return projected.changed ? persistState(projected.state) : projected.state;
   })().finally(() => { runtimeStateInFlight = null; });
   return structuredClone(await runtimeStateInFlight);
 };

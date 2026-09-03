@@ -8,7 +8,7 @@ import { Dashboard } from '../tools/local-c500-tester/components/Dashboard.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(path.join(root, relative), 'utf8');
 
-const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, candidateActions, validationActions, strictSourceAutopilot, candidateBaselineAutopilot, systemRoutes, backend, runner, hardwareMockE2e, hardwareMockContract, runtimeRegistry, codexClient, packageJson] = await Promise.all([
+const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, productionApi, server, runtimeAdvance, runtimeStatePipeline, candidateActions, validationActions, strictSourceAutopilot, candidateBaselineAutopilot, systemRoutes, backend, runner, hardwareMockE2e, hardwareMockContract, runtimeRegistry, codexClient, packageJson] = await Promise.all([
   read('tools/local-c500-tester/tui.mjs'),
   read('tools/local-c500-tester/tui-state.mjs'),
   read('tools/local-c500-tester/components/WorkflowTopology.mjs'),
@@ -16,6 +16,8 @@ const [tui, tuiState, topologyComponent, activityComponent, terminalScreen, prod
   read('tools/local-c500-tester/terminal-screen.mjs'),
   read('tools/local-c500-tester/production-api.mjs'),
   read('client-runtime/local-server.mjs'),
+  read('client-runtime/application/runtime-advance-service.mjs'),
+  read('client-runtime/application/runtime-state-pipeline-service.mjs'),
   read('client-runtime/application/autopilot-candidate-action-service.mjs'),
   read('client-runtime/application/autopilot-validation-service.mjs'),
   read('client-runtime/application/autopilot-strict-source-service.mjs'),
@@ -128,8 +130,11 @@ assert.match(productionApi, /resolveLocalC500LaunchMode/);
 assert.doesNotMatch(productionApi, /OPERATOR_LOCAL_C500_MOCK:\s*'1'/);
 assert.match(server, /createLocalC500ServiceClient/);
 assert.match(server, /createOperatorTestQueue\(\{ serviceClient: activeTestServiceClient \}\)/);
-assert.match(server, /advanceIteration\(projection\.state, iterationService\)/);
-assert.match(server, /autopilotService\.advance/);
+assert.match(server, /createRuntimeStatePipelineService/);
+assert.match(server, /runtimeStatePipelineService\.project/);
+assert.match(runtimeStatePipeline, /runtimeAdvance\.advance/);
+assert.match(runtimeAdvance, /advanceIteration\(automatic\.state, iteration\)/);
+assert.match(runtimeAdvance, /autopilot\.advance/);
 assert.match(candidateActions, /type:\s*'apply-patch'/);
 assert.match(validationActions, /type:\s*'start-benchmark'/);
 assert.match(`${strictSourceAutopilot}\n${candidateBaselineAutopilot}`, /baseline_research_started/);

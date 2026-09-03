@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(path.join(root, relative), 'utf8');
 const exists = async (relative) => access(path.join(root, relative)).then(() => true, () => false);
+const runtimeStatePipelineService = await read('client-runtime/application/runtime-state-pipeline-service.mjs');
 
 const removedLegacyModules = [
   'tools/local-c500-tester/cli.mjs',
@@ -149,6 +150,7 @@ assert.doesNotMatch(baselineMaterializerRecoveryService, /server\/|tools\/local-
 assert.doesNotMatch(iterationService, /server\/|tools\/local-c500-tester/, 'Iteration service must not depend on transport or TUI');
 assert.doesNotMatch(runtimeProjectionService, /server\/|tools\/local-c500-tester/, 'Runtime projection service must not depend on transport or TUI');
 assert.doesNotMatch(runtimeAdvanceService, /server\/|tools\/local-c500-tester/, 'Runtime advance service must not depend on transport or TUI');
+assert.doesNotMatch(runtimeStatePipelineService, /server\/|tools\/local-c500-tester|state-repository/, 'Runtime state pipeline must not depend on transport, TUI, or persistence');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
@@ -219,6 +221,7 @@ for (const requiredDocument of [
   'client-runtime/application/runtime-projection-service.md',
   'client-runtime/application/runtime-advance-service.md',
   'client-runtime/application/baseline-orchestration-service.md',
+  'client-runtime/application/runtime-state-pipeline-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',
