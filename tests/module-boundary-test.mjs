@@ -161,6 +161,7 @@ assert.doesNotMatch(localServer, /request\.method === ['"]PATCH['"] && url\.path
 assert.doesNotMatch(localServer, /request\.method === ['"]POST['"] && url\.pathname === ['"]\/api\/reset['"]/, 'Reset routes must stay extracted');
 assert.doesNotMatch(localServer, /EXPERIENCE_RESEARCH_FAILED|baseline_source_unresolved/, 'Autopilot research policy must stay extracted');
 assert.doesNotMatch(localServer, /const advanceTesterAutopilot/, 'Autopilot decision table must stay extracted');
+assert.doesNotMatch(localServer, /iterationDeps/, 'Transitional iterationDeps must stay removed');
 
 for (const requiredDocument of [
   'AGENTS.md',

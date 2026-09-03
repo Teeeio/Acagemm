@@ -1060,7 +1060,7 @@ const autopilotCandidateActionService = createAutopilotCandidateActionService({ 
 const autopilotValidationService = createAutopilotValidationService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry, inferMissionMatrix });
 const materializerPolicyService = createMaterializerPolicyService({ consumeWorkflowRecoveryBudget: (...args) => consumeWorkflowRecoveryBudget(...args) });
 
-const iterationDeps = {
+const iterationPorts = {
   startResearch: iterationResearchService.startResearch,
   cancelResearch: iterationResearchService.cancelResearch,
   registerSources: sourceService.registerSources,
@@ -1140,15 +1140,15 @@ const iterationDeps = {
   researchDirForMission,
 };
 
-const autopilotFixedProfileService = createAutopilotFixedProfileService({ isResearchAgentActive, startResearch: iterationDeps.startResearch, startMainRound: iterationDeps.startMainRound, researchDirForMission, appendRuntimeEvent });
-const autopilotStrictSourceService = createAutopilotStrictSourceService({ isStrictZeroSourceMission, isResearchAgentActive, selectResearchBaselineSource, buildSemanticBaselineSource, startResearch: iterationDeps.startResearch, startBaseline: iterationDeps.startBaseline, startMainRound: iterationDeps.startMainRound, researchDirForMission });
-const autopilotCandidateBaselineService = createAutopilotCandidateBaselineService({ isManagedWorkspaceRuntimeMode, startBaseline: iterationDeps.startBaseline, startResearch: iterationDeps.startResearch, researchDirForMission, agentRuntime, appendRuntimeEvent, addAuditEvent });
+const autopilotFixedProfileService = createAutopilotFixedProfileService({ isResearchAgentActive, startResearch: iterationPorts.startResearch, startMainRound: iterationPorts.startMainRound, researchDirForMission, appendRuntimeEvent });
+const autopilotStrictSourceService = createAutopilotStrictSourceService({ isStrictZeroSourceMission, isResearchAgentActive, selectResearchBaselineSource, buildSemanticBaselineSource, startResearch: iterationPorts.startResearch, startBaseline: iterationPorts.startBaseline, startMainRound: iterationPorts.startMainRound, researchDirForMission });
+const autopilotCandidateBaselineService = createAutopilotCandidateBaselineService({ isManagedWorkspaceRuntimeMode, startBaseline: iterationPorts.startBaseline, startResearch: iterationPorts.startResearch, researchDirForMission, agentRuntime, appendRuntimeEvent, addAuditEvent });
 const baselineBenchmarkService = createBaselineBenchmarkService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const baselineMaterializerCommandService = createBaselineMaterializerCommandService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const baselineSourceInspectionService = createBaselineSourceInspectionService({ inspectSources: (...args) => workspaceManager.inspectSources(...args), appendRuntimeEvent });
-const baselineMaterializerRecoveryService = createBaselineMaterializerRecoveryService({ consumeWorkflowRecoveryBudget, startResearch: iterationDeps.startResearch, researchDirForMission, appendRuntimeEvent });
+const baselineMaterializerRecoveryService = createBaselineMaterializerRecoveryService({ consumeWorkflowRecoveryBudget, startResearch: iterationPorts.startResearch, researchDirForMission, appendRuntimeEvent });
 
-const iterationService = createIterationService(iterationDeps);
+const iterationService = createIterationService(iterationPorts);
 const runtimeProjectionService = createRuntimeProjectionService({ reconcileWorkflowState, projectState: (...args) => agentRuntime.projectState(...args) });
 
 const autopilotService = createAutopilotService({
