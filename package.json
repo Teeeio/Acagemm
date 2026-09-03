@@ -96,6 +96,7 @@
     "test:baseline-source-inspection-service": "node tests/baseline-source-inspection-service-test.mjs",
     "test:baseline-materializer-recovery-service": "node tests/baseline-materializer-recovery-service-test.mjs",
     "test:iteration-service": "node tests/iteration-service-test.mjs",
+    "test:runtime-projection-service": "node tests/runtime-projection-service-test.mjs",
     "test:workflow-summary": "node tests/workflow-summary-test.mjs",
     "test:gate": "node tests/accept-gate-test.mjs",
     "test:local-c500-production-backend": "node tests/local-c500-production-backend-test.mjs",

@@ -20,7 +20,7 @@ for (const relative of removedLegacyModules) {
   assert.equal(await exists(relative), false, `legacy workflow module must stay removed: ${relative}`);
 }
 
-const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, roundArtifactGuard, baselineSourceService, materializerPolicyService, baselineFailureProjection, benchmarkProjectionService, repositoryAdoptionService, autopilotCandidateService, autopilotContextService, autopilotCandidateActionService, autopilotValidationService, autopilotService, autopilotBaselineResearchService, autopilotFixedProfileService, autopilotStrictSourceService, autopilotCandidateBaselineService, baselineBenchmarkService, baselineMaterializerCommandService, baselineSourceInspectionService, baselineMaterializerRecoveryService, iterationService, packageJson] = await Promise.all([
+const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, missionRoutes, missionsService, missionQueryRoutes, missionQueryService, semanticRoutes, semanticService, researchRoutes, researchService, runRoutes, runService, reviewRoutes, reviewService, decisionRoutes, decisionService, candidateValidationRoutes, candidateValidationService, baselineRoutes, baselineService, operatorTestRoutes, operatorTestService, missionControlRoutes, missionControlService, knowledgeRoutes, knowledgeService, runtimeQueryRoutes, runtimeQueryService, runtimeStateRoutes, runtimeStateService, resetRoutes, resetService, sourceService, iterationResearchService, roundRecoveryService, agentRoundService, roundPreflightService, roundArtifactGuard, baselineSourceService, materializerPolicyService, baselineFailureProjection, benchmarkProjectionService, repositoryAdoptionService, autopilotCandidateService, autopilotContextService, autopilotCandidateActionService, autopilotValidationService, autopilotService, autopilotBaselineResearchService, autopilotFixedProfileService, autopilotStrictSourceService, autopilotCandidateBaselineService, baselineBenchmarkService, baselineMaterializerCommandService, baselineSourceInspectionService, baselineMaterializerRecoveryService, iterationService, runtimeProjectionService, packageJson] = await Promise.all([
   read('client-runtime/state-store.mjs'),
   read('client-runtime/iteration-loop.mjs'),
   read('client-runtime/local-server.mjs'),
@@ -81,6 +81,7 @@ const [stateStore, iterationLoop, localServer, projectRoutes, projectsService, m
   read('client-runtime/application/baseline-source-inspection-service.mjs'),
   read('client-runtime/application/baseline-materializer-recovery-service.mjs'),
   read('client-runtime/application/iteration-service.mjs'),
+  read('client-runtime/application/runtime-projection-service.mjs'),
   read('package.json').then(JSON.parse),
 ]);
 
@@ -145,6 +146,7 @@ assert.doesNotMatch(baselineMaterializerCommandService, /server\/|tools\/local-c
 assert.doesNotMatch(baselineSourceInspectionService, /server\/|tools\/local-c500-tester/, 'Baseline source inspection service must not depend on transport or TUI');
 assert.doesNotMatch(baselineMaterializerRecoveryService, /server\/|tools\/local-c500-tester/, 'Baseline materializer recovery service must not depend on transport or TUI');
 assert.doesNotMatch(iterationService, /server\/|tools\/local-c500-tester/, 'Iteration service must not depend on transport or TUI');
+assert.doesNotMatch(runtimeProjectionService, /server\/|tools\/local-c500-tester/, 'Runtime projection service must not depend on transport or TUI');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/missions['"]/, 'Mission collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/projects['"]/, 'Project collection routes must stay extracted');
 assert.doesNotMatch(localServer, /url\.pathname === ['"]\/api\/actions\/(?:resume-mission|request-review|cancel-review|resolve-review)['"]/, 'Review action routes must stay extracted');
@@ -206,6 +208,7 @@ for (const requiredDocument of [
   'client-runtime/application/baseline-source-inspection-service.md',
   'client-runtime/application/baseline-materializer-recovery-service.md',
   'client-runtime/application/iteration-service.md',
+  'client-runtime/application/runtime-projection-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
   'tools/local-c500-tester/README.md',

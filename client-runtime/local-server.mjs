@@ -112,6 +112,7 @@ import { createBaselineMaterializerCommandService } from './application/baseline
 import { createBaselineSourceInspectionService } from './application/baseline-source-inspection-service.mjs';
 import { createBaselineMaterializerRecoveryService } from './application/baseline-materializer-recovery-service.mjs';
 import { createIterationService } from './application/iteration-service.mjs';
+import { createRuntimeProjectionService } from './application/runtime-projection-service.mjs';
 import { createRuntimeQueryRoutes } from './server/runtime-query-routes.mjs';
 import { createRuntimeQueryService } from './application/runtime-query-service.mjs';
 import { createRuntimeStateRoutes } from './server/runtime-state-routes.mjs';
@@ -1278,6 +1279,7 @@ const advanceTesterAutopilot = async (state) => {
   return { state, action: 'none' };
 };
 const iterationService = createIterationService(iterationDeps);
+const runtimeProjectionService = createRuntimeProjectionService({ reconcileWorkflowState, projectState: (...args) => agentRuntime.projectState(...args) });
 
 const autopilotService = createAutopilotService({ advance: advanceTesterAutopilot });
 
@@ -1305,9 +1307,8 @@ const loadRuntimeState = async () => {
     addAuditEvent(state, migrationTitle, migrationDetail, 'blue', 'RefreshCw');
   }
   const baselineFailureProjected = reconcilePersistedBaselineFailure(state);
-  const initialReconciliation = reconcileWorkflowState(state);
-  const projection = await agentRuntime.projectState({ ...initialReconciliation.state, runtime });
-  let changed = baselineFailureProjected || sourcePolicyMigration.changed || projection.changed || initialReconciliation.changed;
+  const projection = await runtimeProjectionService.project({ state, runtime });
+  let changed = baselineFailureProjected || sourcePolicyMigration.changed || projection.changed;
   const benchmarkProjection = await benchmarkProjectionService.project({ state: projection.state });
   changed ||= benchmarkProjection.changed;
   const adoption = await repositoryAdoptionService.adopt({ state: projection.state });

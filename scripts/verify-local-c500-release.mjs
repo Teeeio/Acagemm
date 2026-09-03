@@ -59,6 +59,7 @@ const checks = [
   'test:baseline-source-inspection-service',
   'test:baseline-materializer-recovery-service',
   'test:iteration-service',
+  'test:runtime-projection-service',
   'test:queue-stop-race',
   'test:operator-test-resilience',
   'test:intent',
