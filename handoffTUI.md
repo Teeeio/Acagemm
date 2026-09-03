@@ -219,7 +219,7 @@ Do not infer a runner failure from a static progress bar alone; inspect the task
 
 ## 10. Repository and delivery state
 
-At the time this handoff was updated, the local `TUI` branch contained the completed extraction series and had not yet been pushed. Both configured remote names, `origin` and `gitee`, resolve to `https://gitee.com/kirinn99/operator-studio-c500-tester.git`; one successful push updates the shared destination. Verify this with `git remote -v` before assuming a separate GitHub mirror exists.
+The completed extraction series is delivered through the `TUI` branch. Both configured remote names, `origin` and `gitee`, resolve to `https://gitee.com/kirinn99/operator-studio-c500-tester.git`; one successful push updates the shared destination. Verify this with `git remote -v` before assuming a separate GitHub mirror exists.
 
 Never put an access token in a remote URL, command history, source file, or this document. Use the operator's existing Git credential configuration.
 
