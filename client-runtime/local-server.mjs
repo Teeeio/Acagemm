@@ -1198,7 +1198,18 @@ const advanceTesterAutopilot = async (state) => {
 const iterationService = createIterationService(iterationDeps);
 const runtimeProjectionService = createRuntimeProjectionService({ reconcileWorkflowState, projectState: (...args) => agentRuntime.projectState(...args) });
 
-const autopilotService = createAutopilotService({ advance: advanceTesterAutopilot });
+const autopilotService = createAutopilotService({
+  contextService: autopilotContextService,
+  fixedProfileService: autopilotFixedProfileService,
+  strictSourceService: autopilotStrictSourceService,
+  candidateBaselineService: autopilotCandidateBaselineService,
+  candidateActionService: autopilotCandidateActionService,
+  validationService: autopilotValidationService,
+  iteration: iterationService,
+  isFixedOperatorMission,
+  isStrictZeroSourceMission,
+  runtimeMode: () => agentRuntime.mode,
+});
 
 let runtimeStateInFlight = null;
 const reconcilePersistedBaselineFailure = (state) => projectBaselineFailure({ state, appendRuntimeEvent });
