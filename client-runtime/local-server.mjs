@@ -518,7 +518,7 @@ const commandRegistry = {
         ...state.agent,
         status: 'awaiting_action',
         phase: '异构验证已就绪',
-        currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '运行 C500 + CUDA 测试矩阵', reason: 'Patch 自动策略检查已通过并写入隔离工作区，下一步验证正确性和完整性能。', expectedOutput: '24 / 24 Correctness · 2 个 Full Benchmark Run', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' },
+        currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '运行 C550 + CUDA 测试矩阵', reason: 'Patch 自动策略检查已通过并写入隔离工作区，下一步验证正确性和完整性能。', expectedOutput: '24 / 24 Correctness · 2 个 Full Benchmark Run', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' },
         messages: [...(state.agent?.messages || []), { id: `patch-${Date.now()}`, phase: 'candidate', status: 'completed', title: 'Patch 自动检查通过并应用', detail: '变更边界、工作区路径和风险策略均已通过，补丁已写入隔离工作区。', time: '刚刚' }],
       };
       appendRuntimeEvent(state, 'patch.applied', { workspace: payload.workspace.workspace, checkpointId: payload.checkpoint.id, files: payload.workspace.files.map((file) => file.path), digest: payload.digest || null, artifacts: payload.artifacts, sourceReferences: payload.sourceReferences, policyChecks: payload.policyChecks, approvalRequired: false, mock: false }, { kind: 'workspace', mode: isManagedWorkspaceRuntimeMode(payload.runtimeMode) ? payload.runtimeMode : 'client' });
@@ -1112,7 +1112,7 @@ const recordStateMigration = (state, sourcePolicyMigration) => {
   const materializerRecovered = sourcePolicyMigration.recovery?.previousBlocker === 'baseline_materializer_failed';
   const migrationTitle = iterationPolicyMigrated
     ? '固定 Profile 重试策略已升级'
-    : materializerRecovered ? 'C500 Materializer 交付协议已升级' : 'C500 来源策略已升级';
+    : materializerRecovered ? 'C550 Materializer 交付协议已升级' : 'C550 来源策略已升级';
   const migrationDetail = iterationPolicyMigrated
     ? `${sourcePolicyMigration.recovery?.previousBlocker ? `${sourcePolicyMigration.recovery.previousBlocker} 已解除，` : ''}候选生成上限调整为 ${sourcePolicyMigration.recovery.generationAttemptLimit}`
     : sourcePolicyMigration.recovery?.previousBlocker

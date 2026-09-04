@@ -144,7 +144,7 @@ try {
     '# Operator Optimization Mission',
     '',
     'Title: FlashInfer MLA Paged Attention',
-    'Hardware: MetaX C500',
+    'Hardware: MetaX C550',
     'Metric: latency p50',
     '',
     '从零研究并优化 FlashInfer MLA paged attention，相对 baseline 至少提升 20%。',
@@ -164,19 +164,19 @@ try {
   assert.equal(codeFiles.length, 0);
   assert.equal(sourceEntries.length, 0);
 
-  const goal = '从零研究并优化 FlashInfer MLA paged attention 在沐曦 C500 上的 latency p50，相对 baseline 至少提升 20%；每轮必须生成真实且独立的 run.py 工作区 Diff。';
+  const goal = '从零研究并优化 FlashInfer MLA paged attention 在沐曦 C550 上的 latency p50，相对 baseline 至少提升 20%；每轮必须生成真实且独立的 run.py 工作区 Diff。';
   const missionResponse = await request('/api/missions', {
     method: 'POST',
     body: {
       title: 'FlashInfer MLA Paged Attention',
       goal,
       projectId: project.id,
-      hardware: ['C500'],
+      hardware: ['C550'],
       metric: 'latency p50',
       sourcePolicy: { mode: 'agent-flexible', strictZeroSource: true, localFirst: true, allowDiscoveredSources: true, allowSemanticFallback: true },
       testScenario: { id: 'mla-three-round', hardwareMockOnly: true },
       objective: { mode: 'threshold', metric: 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.2 },
-      testMatrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'], warmup: 50, repeats: 200, correctnessCases: 24 },
+      testMatrix: { environments: ['C550'], stages: ['Correctness', 'Full Benchmark'], warmup: 50, repeats: 200, correctnessCases: 24 },
       missionBudgetMs: 45 * 60 * 1000,
     },
   });

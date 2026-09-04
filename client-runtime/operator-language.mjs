@@ -16,7 +16,7 @@ const adapters = [
     requiredFiles: ['run.py'],
     sourceExtensions: ['.py'],
     requiredContent: /(?:import|from)\s+triton\b|@triton\.jit/,
-    agentInstruction: 'Implement the optimized operator as a Triton kernel in run.py. The run(inputs) bridge must launch the @triton.jit kernel on C500 through the installed PyTorch/MXMACA environment.',
+    agentInstruction: 'Implement the optimized operator as a Triton kernel in run.py. The run(inputs) bridge must launch the @triton.jit kernel on C550 through the installed PyTorch/MXMACA environment.',
   },
   {
     id: 'cuda-cpp-extension',
@@ -36,7 +36,7 @@ const adapters = [
     requiredFiles: ['run.py'],
     requiredAny: ['operator.cu', 'operator.cpp'],
     sourceExtensions: ['.cu', '.cpp'],
-    agentInstruction: 'Implement the optimized operator as an MXMACA-compatible native extension in operator.cu/operator.cpp. run.py is only the build/load and fixed test-contract bridge. Use the C500 machine toolchain exposed by the test environment; do not replace the native operator with a PyTorch implementation.',
+    agentInstruction: 'Implement the optimized operator as an MXMACA-compatible native extension in operator.cu/operator.cpp. run.py is only the build/load and fixed test-contract bridge. Use the C550 machine toolchain exposed by the test environment; do not replace the native operator with a PyTorch implementation.',
   },
 ];
 

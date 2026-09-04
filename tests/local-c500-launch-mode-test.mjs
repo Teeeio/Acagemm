@@ -50,7 +50,7 @@ assert.deepEqual(resolveLocalC500LaunchMode({ OPERATOR_LOCAL_C500_SIMULATION: '1
   scenario: 'mla-three-round',
   label: 'full simulation',
 });
-assert.equal(resolveMuxiDevice({ OPERATOR_LOCAL_C500_SIMULATION: '1' }, () => { throw new Error('hardware probe must not run'); }), 'C500');
+assert.equal(resolveMuxiDevice({ OPERATOR_LOCAL_C500_SIMULATION: '1' }, () => { throw new Error('hardware probe must not run'); }), 'C550');
 assert.equal(resolveLocalC500LaunchMode({ OPERATOR_LOCAL_C500_MOCK: '0' }).mock, false);
 assert.equal(isCurrentLocalC500Runtime({ service: 'operator-studio-client-runtime', __bridge: { runtimeContractVersion: LOCAL_C500_RUNTIME_CONTRACT_VERSION } }), true);
 assert.equal(isCurrentLocalC500Runtime({ service: 'operator-studio-client-runtime', __bridge: { runtimeContractVersion: LOCAL_C500_RUNTIME_CONTRACT_VERSION - 1 } }), false);

@@ -17,6 +17,7 @@ try {
 
   const mqa = getFixedOperatorProfile('paged-mqa-logits-triton-v01');
   const mla = getFixedOperatorProfile('flash-mla-decode-triton-v01');
+  assert.deepEqual(fixedOperatorTestMatrix(mqa).environments, ['C550']);
   assert.equal(fixedOperatorProfiles.length, 6);
   assert.deepEqual(tuiOperatorProfiles.map((profile) => profile.id), ['paged-mqa-logits-triton-v01', 'flash-mla-decode-triton-v01']);
   assert.equal(isTuiOperatorProfile('paged-mqa-logits-triton-v01'), true);

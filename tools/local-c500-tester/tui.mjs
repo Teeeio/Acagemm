@@ -132,7 +132,7 @@ const App = () => {
   const showDoctor = async () => {
     if (busy) return;
     setBusy(true);
-    setMessage('正在检查 C500 环境 (Checking C500 environment...)');
+    setMessage('正在检查 C550 环境 (Checking C550 environment...)');
     try {
       setDoctorResult(await runDoctor());
       setMode('doctor');
@@ -200,7 +200,7 @@ const App = () => {
   if (mode === 'doctor') {
     const checks = doctorResult?.checks || {};
     return React.createElement(Box, { flexDirection: 'column', borderStyle: 'round', paddingX: 1 },
-      React.createElement(Text, { color: 'cyan', bold: true }, 'C500 环境诊断 (C500 Environment Doctor)'),
+      React.createElement(Text, { color: 'cyan', bold: true }, 'C550 环境诊断 (C550 Environment Doctor)'),
       React.createElement(Text, null, `运行时 (runtime)  ${doctorResult?.runtime?.runtime?.mode || displayStatus(doctorResult?.status || 'unknown')}`),
       React.createElement(Text, null, `后端 (backend)    ${doctorResult?.runtime?.testBackend?.kind || '--'}${doctorResult?.mock ? ' / 模拟 (simulation)' : ''}`),
       ...[['device', 'device'], ['python', 'python'], ['mxSmi', 'mx-smi'], ['mctracer', 'mctracer'], ['mcProfiler', 'mcProfiler'], ['sourceMirror', 'sourceMirror']]

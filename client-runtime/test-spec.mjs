@@ -46,7 +46,7 @@ export const normalizeMissionTestMatrix = (matrix = {}) => {
     : createMissionTestSpec(matrix);
   return {
     ...structuredClone(matrix),
-    environments: Array.isArray(matrix.environments) && matrix.environments.length ? matrix.environments : ['C500'],
+    environments: Array.isArray(matrix.environments) && matrix.environments.length ? matrix.environments : ['C550'],
     stages: Array.isArray(matrix.stages) && matrix.stages.length ? matrix.stages : ['Correctness', 'Full Benchmark'],
     correctnessCases: testSpec.correctness.requestedCases,
     warmup: testSpec.benchmark.warmup,

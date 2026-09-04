@@ -20,7 +20,7 @@ await mkdir(projectRoot, { recursive: true });
 
 // 1. 空项目 + mission
 const proj = await req('/api/projects', { method: 'POST', body: JSON.stringify({ name: 'e2ecl', root: projectRoot, initializeGit: true }) });
-const mission = await req('/api/missions', { method: 'POST', body: JSON.stringify({ title: 'e2ecl', goal: '将 flashinfer 的 paged decode 算子迁移到沐曦平台并达到加速比 0.8+，生成候选 Patch', projectId: proj.project.id, hardware: ['MetAX C500'], metric: 'speedup ratio' }) });
+const mission = await req('/api/missions', { method: 'POST', body: JSON.stringify({ title: 'e2ecl', goal: '将 flashinfer 的 paged decode 算子迁移到沐曦平台并达到加速比 0.8+，生成候选 Patch', projectId: proj.project.id, hardware: ['MetaX C550'], metric: 'speedup ratio' }) });
 const mid = mission.state.activeMissionId;
 const m = mission.state.missions.find((x) => x.id === mid);
 const sourceRoot = m.sourceRoot;

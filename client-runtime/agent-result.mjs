@@ -43,7 +43,7 @@ const normalizeCandidate = (candidate, index, source = 'codex-agent') => {
     status: candidate.status || '待验证',
     classification: candidate.classification || 'weak_candidate',
     acceptGate: candidate.acceptGate || { passed: false, result: 'pending', checks: [] },
-    c500: Number.isFinite(candidate.c500) ? candidate.c500 : null,
+    c550: Number.isFinite(candidate.c550) ? candidate.c550 : (Number.isFinite(candidate.c500) ? candidate.c500 : null),
     cuda: Number.isFinite(candidate.cuda) ? candidate.cuda : null,
     correctness: candidate.correctness || 'pending',
     decision: candidate.decision || 'pending',

@@ -172,12 +172,12 @@ export const knowledgeDrafts = [
   {
     id: 'exp.async-plan-cache', code: 'EXP-01', category: '通用优化经验', title: '短序列下的 Async plan descriptor cache',
     conclusion: '当设备 Kernel 已低于 50μs 时，缓存 plan descriptor 并将 host mirror 移出热路径，可以稳定降低固定开销。',
-    scope: 'C500 / CUDA · paged_attention · batch 1–8 · seq_len ≤ 1024', hardware: ['C500', 'CUDA'],
+    scope: 'C550 / CUDA · paged_attention · batch 1–8 · seq_len ≤ 1024', hardware: ['C550', 'CUDA'],
     operator: 'mla_paged_attention', dtype: 'FP16 / BF16', layout: 'paged KV · head_dim 128', shape: 'batch 1–8 · seq_len ≤ 1024', runtime: 'MXMACA 1.4+ / CUDA 12.4',
     trigger: 'Profile 显示 device kernel < 50μs，且 plan 构建、workspace 与 host mirror 合计占端到端延迟 30% 以上。',
     procedure: '按 operator、dtype、layout 与 shape bucket 生成稳定 signature\n缓存 plan descriptor，并为缓存设置容量上限\nhost mirror 仅在缓存未就绪时走异步回退\n环境指纹变化时强制失效并重建缓存',
     expectedGain: '端到端 P50 下降 8%–15%；本 Mission 实测下降 22.3%',
-    validation: 'C500 + CUDA · 24 / 24 Correctness · 2 个 Full Benchmark · 最大允许回归 2%',
+    validation: 'C550 + CUDA · 24 / 24 Correctness · 2 个 Full Benchmark · 最大允许回归 2%',
     constraints: '保留 host mirror fallback；必须通过 24 / 24 Correctness Gate。',
     contraindications: 'shape 基数高且复用率低；环境指纹频繁变化；Kernel 本身仍占端到端延迟 80% 以上。',
     failedAttempts: '仅复用 Workspace 的 Candidate 01 收益 7.8%，未达到 45μs 目标；融合 mirror preparation 的 Candidate 03 出现跨平台回归。',
@@ -186,33 +186,33 @@ export const knowledgeDrafts = [
     sourceMission: 'MIS_01JH7R', sourceCandidate: 'Candidate 02', sourceCommit: '8f3a7c2', owner: 'Experience Curator', status: 'validated',
   },
   {
-    id: 'exp.c500-plan-cache-boundary', code: 'EXP-02', category: '沐曦 C500 专项准则', title: '沐曦 C500 plan cache 与 host mirror 边界准则',
+    id: 'exp.c550-plan-cache-boundary', code: 'EXP-02', category: '沐曦 C550 专项准则', title: '沐曦 C550 plan cache 与 host mirror 边界准则',
     conclusion: '在 MXMACA 1.4+ 环境中，descriptor cache 应按 Shape signature 分桶，host mirror 仅在缓存未就绪时回退同步路径。',
-    scope: 'MetaX C500 · MXMACA 1.4+ · paged_attention · small batch', hardware: ['C500'],
-    operator: 'mla_paged_attention', dtype: 'FP16', layout: 'paged KV · contiguous descriptor', shape: 'batch 1–8 · seq_len 128–1024', runtime: 'MXMACA 1.4.0 · C500 driver 2.7.3',
-    trigger: 'C500 时间线中 host plan 与 mirror 准备占比超过 25%，同一 shape signature 在请求间重复出现。',
+    scope: 'MetaX C550 · MXMACA 1.4+ · paged_attention · small batch', hardware: ['C550'],
+    operator: 'mla_paged_attention', dtype: 'FP16', layout: 'paged KV · contiguous descriptor', shape: 'batch 1–8 · seq_len 128–1024', runtime: 'MXMACA 1.4.0 · C550 driver 2.7.3',
+    trigger: 'C550 时间线中 host plan 与 mirror 准备占比超过 25%，同一 shape signature 在请求间重复出现。',
     procedure: '使用 shape、dtype、layout、head_dim 组成 cache key\n限制每个算子最多保留 64 个 descriptor\n使用 stream event 标记 mirror ready，禁止热路径 host wait\nMXMACA、driver 或编译参数变化时清空缓存',
-    expectedGain: 'C500 P50 53.8μs → 41.8μs；固定开销减少 14.6μs',
-    validation: 'C500 Production 01 · warmup 50 · repeat 200 · 12/12 correctness · P50/P95',
+    expectedGain: 'C550 P50 53.8μs → 41.8μs；固定开销减少 14.6μs',
+    validation: 'C550 Production 01 · warmup 50 · repeat 200 · 12/12 correctness · P50/P95',
     constraints: '缓存容量受控；环境指纹变化后必须失效；保留同步回退。',
     contraindications: '动态 descriptor 内容无法由 signature 完整表达；超大 shape corpus 导致命中率低于 60%。',
     failedAttempts: '无界 LRU 在长尾流量中增加 18MB 峰值占用；固定单例 plan 在 head_dim 变化时产生错误结果。',
-    evidence: 'C500 41.8μs · Level 3', evidenceLevel: 'Level 3', confidence: '高',
-    evidenceRefs: ['MIS_01JH7R', 'env.c500-prod-01@8f3a', 'run_01JH8T', 'candidate-02'],
-    sourceMission: 'MIS_01JH7R', sourceCandidate: 'Candidate 02', sourceCommit: '8f3a7c2', owner: 'C500 Kernel Group', status: 'validated',
+    evidence: 'C550 41.8μs · Level 3', evidenceLevel: 'Level 3', confidence: '高',
+    evidenceRefs: ['MIS_01JH7R', 'env.c550-prod-01@8f3a', 'run_01JH8T', 'candidate-02'],
+    sourceMission: 'MIS_01JH7R', sourceCandidate: 'Candidate 02', sourceCommit: '8f3a7c2', owner: 'C550 Kernel Group', status: 'validated',
   },
   {
-    id: 'exp.cross-platform-adoption-gate', code: 'EXP-03', category: '跨平台验证准则', title: 'C500 / CUDA 跨平台候选采用门禁',
+    id: 'exp.cross-platform-adoption-gate', code: 'EXP-03', category: '跨平台验证准则', title: 'C550 / CUDA 跨平台候选采用门禁',
     conclusion: '跨平台候选只有在 Correctness、目标平台性能和固定环境证据同时通过后，才能替换 current best。',
-    scope: 'C500 / CUDA · operator candidate adoption · Full Benchmark', hardware: ['C500', 'CUDA'],
+    scope: 'C550 / CUDA · operator candidate adoption · Full Benchmark', hardware: ['C550', 'CUDA'],
     operator: 'all optimized operators', dtype: 'FP16 / BF16', layout: 'all registered layouts', shape: '完整基准矩阵与边界 shape', runtime: '固定 Environment Snapshot',
     trigger: '候选将替换 current best，或修改跨硬件共享的 runtime、layout、精度和同步路径。',
     procedure: '为每个平台固定 Environment Snapshot\n先运行边界与历史回归 Correctness Matrix\n再运行预热充分的 Full Benchmark\n按平台分别比较 current best，任何关键平台回归均阻止采用',
     expectedGain: '目标平台达到 Mission 门槛，非目标平台回归不超过 2%',
-    validation: '24 / 24 Correctness · C500/CUDA Full Benchmark · Environment Diff 为空 · Level 3',
+    validation: '24 / 24 Correctness · C550/CUDA Full Benchmark · Environment Diff 为空 · Level 3',
     constraints: 'Probe 结果不得用于最终采用；每个平台必须绑定 Environment Snapshot。',
     contraindications: '缺少目标平台 Worker；环境快照不一致；仅有 Probe 或单次 Run；正确性用例未覆盖边界 shape。',
-    failedAttempts: 'Candidate 03 在 C500 回退 3.3%、CUDA 回退 10.2%，即使正确性通过也不得采用。',
+    failedAttempts: 'Candidate 03 在 C550 回退 3.3%、CUDA 回退 10.2%，即使正确性通过也不得采用。',
     evidence: '24 / 24 · 2 个固定环境', evidenceLevel: 'Level 3', confidence: '高',
     evidenceRefs: ['MIS_01JH7R', 'decision.candidate-02', 'run_01JH8T', 'run_01JH91'],
     sourceMission: 'MIS_01JH7R', sourceCandidate: 'Candidate 02 / 03', sourceCommit: '8f3a7c2', owner: 'Performance Review Board', status: 'validated',
@@ -223,23 +223,23 @@ export const candidateEvaluations = [
   {
     id: 'candidate-01', label: 'Candidate 01', version: 'cnd.01', date: '08-03 09:36', classification: 'reference', status: '弱候选参考', tone: 'reference', title: 'Workspace pool reuse',
     hypothesis: '重复分配 Workspace 可能是小 Batch 延迟的主要来源。', change: '引入按 Shape 分桶的 Workspace pool，并保留同步 plan 构建。', files: '2 files · +24 −11',
-    c500: 49.6, cuda: 41.9, delta: '−7.8%', correctness: '24 / 24', evidence: '2 Full Benchmark Runs · Level 3', decision: '保留为弱候选参考',
-    decisionReason: '正确性与证据门禁通过，但 C500 未达到 45μs 目标；保留 Workspace pool 的局部复用价值。', knowledge: 'Workspace Allocation Tracker v1.2.0',
-    acceptGate: { passed: false, failedRules: ['performance.target.c500'], passedRules: ['correctness', 'runtime.stability', 'evidence.level3'], result: 'reference' },
+    c550: 49.6, cuda: 41.9, delta: '−7.8%', correctness: '24 / 24', evidence: '2 Full Benchmark Runs · Level 3', decision: '保留为弱候选参考',
+    decisionReason: '正确性与证据门禁通过，但 C550 未达到 45μs 目标；保留 Workspace pool 的局部复用价值。', knowledge: 'Workspace Allocation Tracker v1.2.0',
+    acceptGate: { passed: false, failedRules: ['performance.target.c550'], passedRules: ['correctness', 'runtime.stability', 'evidence.level3'], result: 'reference' },
   },
   {
     id: 'candidate-02', label: 'Candidate 02', version: 'cnd.02', date: '08-03 10:42', classification: 'eligible', status: '等待 Accept Gate', tone: 'eligible', title: 'Async plan descriptor cache',
     hypothesis: '缓存 plan descriptor，并将 host mirror 同步移出热路径。', change: '新增 plan cache 与异步 mirror fallback，保持 API 和回退路径不变。', files: '2 files · +37 −18',
-    c500: 41.8, cuda: 36.1, delta: '−22.3%', correctness: '24 / 24', evidence: '2 Full Benchmark Runs · Level 3', decision: '等待策略评估',
+    c550: 41.8, cuda: 36.1, delta: '−22.3%', correctness: '24 / 24', evidence: '2 Full Benchmark Runs · Level 3', decision: '等待策略评估',
     decisionReason: '验证完成后由 Accept Gate 自动判断，无需人工确认。', knowledge: '3 assets referenced · fixed versions',
-    acceptGate: { passed: true, failedRules: [], passedRules: ['correctness', 'performance.target.c500', 'cross_platform.no_regression', 'runtime.stability', 'evidence.level3'], result: 'eligible' },
+    acceptGate: { passed: true, failedRules: [], passedRules: ['correctness', 'performance.target.c550', 'cross_platform.no_regression', 'runtime.stability', 'evidence.level3'], result: 'eligible' },
   },
   {
     id: 'candidate-03', label: 'Candidate 03', version: 'cnd.03', date: '08-03 11:18', classification: 'reference', status: '弱候选参考', tone: 'reference', title: 'Fuse mirror preparation',
     hypothesis: '将 mirror preparation 与 Kernel 前处理融合可能继续压缩固定开销。', change: '合并两个 host/device 边界，并调整事件同步粒度。', files: '3 files · +61 −35',
-    c500: 43.2, cuda: 39.8, delta: '−19.7%', correctness: '24 / 24', evidence: '2 Full Benchmark Runs · Level 3', decision: '保留为弱候选参考',
-    decisionReason: '相对基线有效，但相对 current best 在 C500 回退 3.3%、CUDA 回退 10.2%；仅保留融合边界的参考价值。', knowledge: '异步流水线 Stall 归因规则 v1.4',
-    acceptGate: { passed: false, failedRules: ['current_best.no_regression'], passedRules: ['correctness', 'performance.target.c500', 'runtime.stability', 'evidence.level3'], result: 'reference' },
+    c550: 43.2, cuda: 39.8, delta: '−19.7%', correctness: '24 / 24', evidence: '2 Full Benchmark Runs · Level 3', decision: '保留为弱候选参考',
+    decisionReason: '相对基线有效，但相对 current best 在 C550 回退 3.3%、CUDA 回退 10.2%；仅保留融合边界的参考价值。', knowledge: '异步流水线 Stall 归因规则 v1.4',
+    acceptGate: { passed: false, failedRules: ['current_best.no_regression'], passedRules: ['correctness', 'performance.target.c550', 'runtime.stability', 'evidence.level3'], result: 'reference' },
   },
 ];
 
@@ -247,10 +247,10 @@ export const failureRecords = [
   {
     id: 'failure.run-04', recordType: 'failure', sourceAttempt: 'Attempt 04', label: 'Failure Record 04', version: 'fail.04', date: '08-03 13:05', status: '已退出候选池', tone: 'failed', title: 'Adaptive tile selection',
     hypothesis: '根据 Batch 与序列长度动态选择 tile，可改善长尾 Shape 的设备利用率。', change: '新增轻量 Shape classifier 和三组预验证 tile 配置。', files: '3 files · +82 −16',
-    c500: 40.9, cuda: null, delta: '−24.0%*', correctness: '20 / 24', evidence: 'Probe Run · Level 1', decision: 'Correctness Gate 失败，禁止形成候选',
+    c550: 40.9, cuda: null, delta: '−24.0%*', correctness: '20 / 24', evidence: 'Probe Run · Level 1', decision: 'Correctness Gate 失败，禁止形成候选',
     decisionReason: '4 个边界 Shape 出现数值偏差，硬门禁失败；代码提案和 worktree 已退出候选生命周期。',
     failure: { gate: 'Correctness Gate', code: 'CORRECTNESS_BOUNDARY_MISMATCH', affectedCases: 4, disposition: 'candidate_removed' },
-    retainedArtifacts: ['run.probe.c500.04', 'patch.digest.04', 'error.fingerprint.tile-boundary'],
+    retainedArtifacts: ['run.probe.c550.04', 'patch.digest.04', 'error.fingerprint.tile-boundary'],
     extractedExperience: {
       id: 'neg.adaptive-tile-boundary', status: 'extracted', title: 'Adaptive tile 必须先覆盖边界 Shape',
       rule: '动态 tile 选择器在进入性能比较前，必须覆盖 head_dim、seq_len 与尾块不对齐的边界组合；任何数值偏差直接终止候选化。',
@@ -261,8 +261,8 @@ export const failureRecords = [
 
 const knowledgeChangePlan = [
   { draftId: 'exp.async-plan-cache', action: 'update', targetId: 'exp.fixed-overhead', targetTitle: '短序列下优先量化固定开销', previousVersion: 'v1.2', nextVersion: 'v1.3', scopeDelta: '适用范围未扩大', reason: '命中已有固定开销经验，补充 plan cache、host mirror 与双平台证据。' },
-  { draftId: 'exp.c500-plan-cache-boundary', action: 'create', targetId: 'exp.c500-plan-cache-boundary', targetTitle: '沐曦 C500 plan cache 与 host mirror 边界准则', previousVersion: null, nextVersion: 'v1.0', scopeDelta: 'C500 专项范围', reason: '未发现等价硬件专项经验，创建新的 C500 经验资产。' },
-  { draftId: 'exp.cross-platform-adoption-gate', action: 'update', targetId: 'policy.cross-platform-adoption-gate', targetTitle: 'C500 / CUDA 跨平台候选采用门禁', previousVersion: 'v2.3', nextVersion: 'v2.4', scopeDelta: '策略适用范围未扩大', reason: '合并本次失败候选与 Level 3 双平台验证证据。' },
+  { draftId: 'exp.c550-plan-cache-boundary', action: 'create', targetId: 'exp.c550-plan-cache-boundary', targetTitle: '沐曦 C550 plan cache 与 host mirror 边界准则', previousVersion: null, nextVersion: 'v1.0', scopeDelta: 'C550 专项范围', reason: '未发现等价硬件专项经验，创建新的 C550 经验资产。' },
+  { draftId: 'exp.cross-platform-adoption-gate', action: 'update', targetId: 'policy.cross-platform-adoption-gate', targetTitle: 'C550 / CUDA 跨平台候选采用门禁', previousVersion: 'v2.3', nextVersion: 'v2.4', scopeDelta: '策略适用范围未扩大', reason: '合并本次失败候选与 Level 3 双平台验证证据。' },
 ];
 
 export const createKnowledgeMaintenanceState = (status = 'idle') => {
@@ -360,7 +360,7 @@ export function appendResearchNote(state, note) {
 }
 
 export const toPublishedKnowledgeAsset = (draft, version = 'v1.0') => {
-  const hardwareKeys = draft.hardware.map((item) => ({ C500: 'c500', CUDA: 'nvidia', 'ROCm MI300': 'amd' }[item])).filter(Boolean);
+  const hardwareKeys = draft.hardware.map((item) => ({ C550: 'c550', CUDA: 'nvidia', 'ROCm MI300': 'amd' }[item])).filter(Boolean);
   const publishable = draft.status === 'validated' && draft.evidenceLevel === 'Level 3';
   return {
     ...draft,
@@ -535,16 +535,16 @@ const capabilityRegistry = {
   ],
 };
 
-const createIdleAgent = (missionId = 'MIS_01JH7R', goal = '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟') => ({
+const createIdleAgent = (missionId = 'MIS_01JH7R', goal = '优化 MLA Paged KV Cache 在 C550 上的 small batch 延迟') => ({
   status: 'idle', phase: '待启动', progress: 0, missionId, runId: null, profileId: 'profile.operator-orchestrator', goal, startedAt: null, durationMs: 7200, currentAction: null, toolCalls: [],
   messages: [{ id: `agent-ready-${missionId}`, phase: 'Mission', status: 'ready', title: 'Mission 已准备就绪', detail: '目标、仓库和验证边界已固定。', time: '刚刚' }],
   artifacts: [
     { id: 'artifact-context', kind: 'Context Snapshot', title: 'Mission context', status: 'ready', meta: 'repository · constraints · baseline' },
-    { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: '3 条相关 Experience', status: 'ready', meta: 'C500 · paged_attention · validated' },
+    { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: '3 条相关 Experience', status: 'ready', meta: 'C550 · paged_attention · validated' },
   ],
 });
 
-const createAwaitingAgent = (missionId, goal, candidateName, hardware = 'C500') => ({
+const createAwaitingAgent = (missionId, goal, candidateName, hardware = 'C550') => ({
   ...createIdleAgent(missionId, goal),
   status: 'awaiting_action',
   phase: '等待自动策略检查',
@@ -619,7 +619,7 @@ const createMissionDomainState = (missionId, stage = 'diagnosis') => {
   const published = stage === 'published';
   const state = {
     baseline: createBaselineRequirementState(),
-    testMatrix: normalizeMissionTestMatrix({ environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] }),
+    testMatrix: normalizeMissionTestMatrix({ environments: ['C550', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] }),
     tokenUsage: emptyTokenUsage(),
     runtimeEvents: [],
     knowledgeDrafts: structuredClone(knowledgeDrafts),
@@ -649,9 +649,9 @@ const createMissionDomainState = (missionId, stage = 'diagnosis') => {
 };
 
 const createSeedMissions = () => [
-  { id: 'MIS_01JH7R', ...createMissionDomainState('MIS_01JH7R', 'candidate'), title: 'MLA Paged KV Cache', goal: '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟', repository: 'mla-kernels', hardware: ['C500', 'CUDA'], metric: 'latency p50', stage: 'candidate', status: 'awaiting_approval', updatedLabel: '刚刚', result: { value: '41.8 μs', improvement: '−22.3%' }, patchApplied: false, benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] }, agent: createAwaitingAgent('MIS_01JH7R', '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟', 'Async plan descriptor cache') },
-  { id: 'MIS_01JGA4', ...createMissionDomainState('MIS_01JGA4', 'validation'), title: 'Paged Decode Shape Fast Path', goal: '降低 Paged Decode 在 C500 长尾 shape 下的 P95 延迟', repository: 'flashinfer-c500', hardware: ['C500'], metric: 'latency p95', stage: 'validation', status: 'awaiting_approval', updatedLabel: '18 分钟前', result: { value: '2.87 ms', improvement: '−8.6%' }, patchApplied: true, benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] }, agent: { ...createAwaitingAgent('MIS_01JGA4', '降低 Paged Decode 在 C500 长尾 shape 下的 P95 延迟', 'Decode shape fast path'), phase: '异构验证', currentAction: { id: 'action.decode-validation', type: 'test.plan', title: '运行 C500 Full Benchmark', reason: '30 / 30 Correctness 已通过，需要确认长尾收益。', expectedOutput: 'Full Benchmark · P50 / P95 compare', risk: 'medium', approvalRequired: true } } },
-  { id: 'MIS_01JDX9', ...createMissionDomainState('MIS_01JDX9', 'published'), title: 'Ragged Prefill Vector Layout', goal: '优化 Ragged Prefill 的向量化访存和片上复用', repository: 'flashinfer-c500', hardware: ['C500'], metric: 'throughput', stage: 'published', status: 'completed', updatedLabel: '昨天', result: { value: '1.42×', improvement: '+42.1%' }, patchApplied: true, benchmark: { status: 'complete', progress: 100, runId: 'run_ARCHIVED', startedAt: null, durationMs: 2600, logs: [] }, agent: { ...createAwaitingAgent('MIS_01JDX9', '优化 Ragged Prefill 的向量化访存和片上复用', 'Vector layout reuse'), status: 'completed', phase: 'Mission 完成', progress: 100, currentAction: null } },
+  { id: 'MIS_01JH7R', ...createMissionDomainState('MIS_01JH7R', 'candidate'), title: 'MLA Paged KV Cache', goal: '优化 MLA Paged KV Cache 在 C550 上的 small batch 延迟', repository: 'mla-kernels', hardware: ['C550', 'CUDA'], metric: 'latency p50', stage: 'candidate', status: 'awaiting_approval', updatedLabel: '刚刚', result: { value: '41.8 μs', improvement: '−22.3%' }, patchApplied: false, benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] }, agent: createAwaitingAgent('MIS_01JH7R', '优化 MLA Paged KV Cache 在 C550 上的 small batch 延迟', 'Async plan descriptor cache') },
+  { id: 'MIS_01JGA4', ...createMissionDomainState('MIS_01JGA4', 'validation'), title: 'Paged Decode Shape Fast Path', goal: '降低 Paged Decode 在 C550 长尾 shape 下的 P95 延迟', repository: 'flashinfer-c550', hardware: ['C550'], metric: 'latency p95', stage: 'validation', status: 'awaiting_approval', updatedLabel: '18 分钟前', result: { value: '2.87 ms', improvement: '−8.6%' }, patchApplied: true, benchmark: { status: 'idle', progress: 0, runId: null, startedAt: null, durationMs: 2600, logs: [] }, agent: { ...createAwaitingAgent('MIS_01JGA4', '降低 Paged Decode 在 C550 长尾 shape 下的 P95 延迟', 'Decode shape fast path'), phase: '异构验证', currentAction: { id: 'action.decode-validation', type: 'test.plan', title: '运行 C550 Full Benchmark', reason: '30 / 30 Correctness 已通过，需要确认长尾收益。', expectedOutput: 'Full Benchmark · P50 / P95 compare', risk: 'medium', approvalRequired: true } } },
+  { id: 'MIS_01JDX9', ...createMissionDomainState('MIS_01JDX9', 'published'), title: 'Ragged Prefill Vector Layout', goal: '优化 Ragged Prefill 的向量化访存和片上复用', repository: 'flashinfer-c550', hardware: ['C550'], metric: 'throughput', stage: 'published', status: 'completed', updatedLabel: '昨天', result: { value: '1.42×', improvement: '+42.1%' }, patchApplied: true, benchmark: { status: 'complete', progress: 100, runId: 'run_ARCHIVED', startedAt: null, durationMs: 2600, logs: [] }, agent: { ...createAwaitingAgent('MIS_01JDX9', '优化 Ragged Prefill 的向量化访存和片上复用', 'Vector layout reuse'), status: 'completed', phase: 'Mission 完成', progress: 100, currentAction: null } },
 ];
 
 export const createSeedState = () => {
@@ -723,7 +723,7 @@ export const createProductState = () => {
     title: 'MLA Paged KV Cache',
     goal,
     repository: 'mla-kernels',
-    hardware: ['C500', 'CUDA'],
+    hardware: ['C550', 'CUDA'],
     metric: 'latency p50',
     stage: 'diagnosis',
     status: 'ready',
@@ -888,7 +888,7 @@ export async function ensureStorage({ ensureWorkspace = true } = {}) {
 function ensureDomainState(state) {
   ensureProjects(state);
   if (!Array.isArray(state.missions) || !state.missions.length) {
-    const fallback = { id: state.agent?.missionId || 'MIS_01JH7R', title: 'MLA Paged KV Cache', goal: state.agent?.goal || '优化 MLA Paged KV Cache 在 C500 上的 small batch 延迟', repository: 'mla-kernels', hardware: ['C500', 'CUDA'], metric: 'latency p50', stage: state.stage || 'diagnosis', status: state.agent?.status || 'ready', updatedLabel: '刚刚', result: { value: '41.8 μs', improvement: '−22.3%' }, patchApplied: Boolean(state.patchApplied), benchmark: structuredClone(state.benchmark || {}), agent: structuredClone(state.agent || createIdleAgent()) };
+    const fallback = { id: state.agent?.missionId || 'MIS_01JH7R', title: 'MLA Paged KV Cache', goal: state.agent?.goal || '优化 MLA Paged KV Cache 在 C550 上的 small batch 延迟', repository: 'mla-kernels', hardware: ['C550', 'CUDA'], metric: 'latency p50', stage: state.stage || 'diagnosis', status: state.agent?.status || 'ready', updatedLabel: '刚刚', result: { value: '41.8 μs', improvement: '−22.3%' }, patchApplied: Boolean(state.patchApplied), benchmark: structuredClone(state.benchmark || {}), agent: structuredClone(state.agent || createIdleAgent()) };
     state.missions = [fallback];
     state.activeMissionId = fallback.id;
   }
@@ -901,10 +901,10 @@ function ensureDomainState(state) {
     const realMission = {
       id: missionId,
       ...domain,
-      title: 'MLA Paged KV Cache / C500 P50 优化',
+      title: 'MLA Paged KV Cache / C550 P50 优化',
       goal: MLA_OPTIMIZATION_TEST_GOAL,
       repository: 'mla-kernels',
-      hardware: ['C500', 'CUDA'],
+      hardware: ['C550', 'CUDA'],
       metric: 'latency p50',
       stage: 'diagnosis',
       status: 'ready',
@@ -932,7 +932,7 @@ function ensureDomainState(state) {
   if (!Array.isArray(state.agentProfiles)) state.agentProfiles = structuredClone(agentProfiles);
   if (!state.capabilityRegistry) state.capabilityRegistry = structuredClone(capabilityRegistry);
   if (!Array.isArray(state.runtimeEvents)) state.runtimeEvents = [];
-  if (!state.testMatrix?.environments?.length || !state.testMatrix?.stages?.length) state.testMatrix = { environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] };
+  if (!state.testMatrix?.environments?.length || !state.testMatrix?.stages?.length) state.testMatrix = { environments: ['C550', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] };
   state.testMatrix = normalizeMissionTestMatrix(state.testMatrix);
   state.tokenUsage = normalizeTokenUsageLedger(state.tokenUsage);
   if (!Array.isArray(state.agent?.toolCalls)) state.agent = { ...state.agent, toolCalls: [] };
@@ -1175,7 +1175,7 @@ export function createMission(state, input) {
   projectActiveMission(state);
   const id = `MIS_${Date.now().toString(36).toUpperCase()}`;
   const title = input.title?.trim() || input.goal.trim().slice(0, 30);
-  const hardware = Array.isArray(input.hardware) && input.hardware.length ? input.hardware : ['C500'];
+  const hardware = Array.isArray(input.hardware) && input.hardware.length ? input.hardware : ['C550'];
   const project = state.projects?.find((item) => item.id === input.projectId) || state.projects?.find((item) => item.repository === input.repository);
   const repository = project?.repository || input.repository?.trim() || 'mla-kernels';
   const sourcePolicy = input.sourcePolicy ? structuredClone(input.sourcePolicy) : null;
@@ -1390,7 +1390,7 @@ function refreshBenchmark(state) {
     state.stage = 'evidence';
     if (!state.benchmark.completedAt) {
       state.benchmark.completedAt = new Date().toISOString();
-      addAuditEvent(state, 'Full Benchmark 已完成', 'C500 41.8μs · CUDA 36.1μs · 24/24', 'green', 'CheckCircle2');
+      addAuditEvent(state, 'Full Benchmark 已完成', 'C550 41.8μs · CUDA 36.1μs · 24/24', 'green', 'CheckCircle2');
       appendRuntimeEvent(state, 'test_task.completed', { runId: state.benchmark.runId, correctness: '24/24', evidenceLevel: 'Level 3' }, { kind: 'queue', mode: 'reference-fixture' });
     }
     if (state.decisionReview?.status === 'awaiting_review') {
@@ -1785,10 +1785,10 @@ export function evaluateAcceptGate(state, result = {}) {
     && Array.isArray(result.tracer?.events)
     && result.profiler?.format === 'operator-profile/v1'
     && result.profiler?.metrics && typeof result.profiler.metrics === 'object';
-  const localC500Evidence = result.environment?.service === 'local-c500-adapter';
-  const localC500ToolsCompleted = !localC500Evidence
+  const localC550Evidence = result.environment?.service === 'local-c500-adapter';
+  const localC550ToolsCompleted = !localC550Evidence
     || (result.tracer?.status === 'completed' && result.profiler?.status === 'completed');
-  const completeEvidence = measurements.length > 0 && (localC500Evidence || diagnosticEvidenceStructured);
+  const completeEvidence = measurements.length > 0 && (localC550Evidence || diagnosticEvidenceStructured);
   const liveEvidence = result.environment?.liveHardware === true;
   const absoluteThreshold = parsePerformanceThreshold(mission);
   const relativeTarget = parseRelativeImprovementTarget(mission);
@@ -1872,7 +1872,7 @@ export function evaluateAcceptGate(state, result = {}) {
   const rules = [
     { id: 'correctness.complete', label: 'Correctness 用例全部通过', required: true, passed: correctnessPassed, actual: measurements.map((item) => `${item.environment} ${item.correctness?.passed ? item.correctness.total : 0}/${item.correctness?.total || expectedCases}`).join(' · '), expected: `${expectedCases}/${expectedCases}` },
     { id: 'benchmark.profiles_complete', label: '固定 Benchmark Shape 完整', required: enforceBenchmarkProfiles, passed: benchmarkProfilesComplete, skipped: !enforceBenchmarkProfiles, actual: actualBenchmarkProfiles.join(', ') || '无 profile', expected: requiredBenchmarkProfiles.join(', ') || '未配置固定 profile' },
-    { id: 'evidence.complete', label: localC500Evidence ? 'Benchmark 核心证据完整' : 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: completeEvidence, actual: completeEvidence ? (localC500Evidence && !localC500ToolsCompleted ? 'Benchmark 完整；可选诊断工具未全部完成' : '证据完整') : 'Benchmark 或证据格式缺失', expected: localC500Evidence ? 'operator benchmark' : 'operator benchmark + trace/v1 + profile/v1' },
+    { id: 'evidence.complete', label: localC550Evidence ? 'Benchmark 核心证据完整' : 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: completeEvidence, actual: completeEvidence ? (localC550Evidence && !localC550ToolsCompleted ? 'Benchmark 完整；可选诊断工具未全部完成' : '证据完整') : 'Benchmark 或证据格式缺失', expected: localC550Evidence ? 'operator benchmark' : 'operator benchmark + trace/v1 + profile/v1' },
     { id: 'diagnostics.mctracer', label: 'mcTracer 可选诊断', required: false, passed: result.tracer?.status === 'completed', skipped: false, actual: result.tracer?.status || 'not_run', expected: 'best effort; failure does not block' },
     { id: 'diagnostics.mcprofiler', label: 'mcProfiler 可选诊断', required: false, passed: result.profiler?.status === 'completed', skipped: false, actual: result.profiler?.status || 'not_run', expected: 'best effort; failure does not block' },
     { id: 'baseline.current_reference', label: baselineLabel, required: Boolean(baseline.required), passed: baselineReady, skipped: !baseline.required, actual: baselineReady ? `${baselineEvidence?.environment} ${baselineEvidence?.value}${baselineEvidence?.unit}${baselineKind === 'naive_v0' ? ' · v0' : ''}` : (baselineEvidence ? 'baseline 与当前 runner/shape/source 不匹配' : '缺少 baseline 证据'), expected: baselineExpected },
@@ -1898,7 +1898,7 @@ export function evaluateAcceptGate(state, result = {}) {
     evaluatedRules: requiredRules.length,
     skippedRules: rules.filter((rule) => rule.skipped).map((rule) => rule.id),
     summary: passed
-      ? `${passedRules.length}/${requiredRules.length} 条必需规则通过；${localC500Evidence && !localC500ToolsCompleted ? 'mcTracer/mcProfiler 可选诊断未全部完成，不阻塞采用；' : ''}${liveEvidence ? '证据可用于正式发布。' : '当前为 Mock 证据，只能验证流程与生成预览资产。'}`
+      ? `${passedRules.length}/${requiredRules.length} 条必需规则通过；${localC550Evidence && !localC550ToolsCompleted ? 'mcTracer/mcProfiler 可选诊断未全部完成，不阻塞采用；' : ''}${liveEvidence ? '证据可用于正式发布。' : '当前为 Mock 证据，只能验证流程与生成预览资产。'}`
       : resultKind === 'reference'
         ? `正确性与证据完整，但未达到性能目标；候选保留为弱候选参考。`
         : `正确性或证据完整性未通过；候选退出候选池并保留失败记录。`,
@@ -2000,7 +2000,7 @@ function refreshAgent(state) {
   const progress = Math.min(100, Math.max(0, Math.floor((elapsed / agent.durationMs) * 100 / 10) * 10));
   const phases = [
     [0, '上下文读取', 'Context Agent 正在读取仓库、Git 状态和当前最佳。', 'context'],
-    [20, '知识检索', 'Research Agent 已找到 3 条适用于 C500 的 Experience。', 'research'],
+    [20, '知识检索', 'Research Agent 已找到 3 条适用于 C550 的 Experience。', 'research'],
     [40, '瓶颈分析', 'Bottleneck Agent 正在对齐 plan、workspace 和 host mirror 的时间线。', 'diagnosis'],
     [60, '候选规划', 'Candidate Agent 正在生成有界变更和验证约束。', 'candidate'],
     [80, '补丁准备', 'Candidate Plan 已生成，正在准备自动策略检查。', 'candidate'],
@@ -2108,7 +2108,7 @@ export function startAgentRun(state, goal, { reset = true } = {}) {
     messages: [{ id: `agent-start-${runId}`, phase: 'Mission', status: 'running', title: 'Orchestrator 已接管 Mission', detail: `Run ${runId} 已启动，正在建立 Context Snapshot。`, time: '刚刚' }],
     artifacts: [
       { id: 'artifact-context', kind: 'Context Snapshot', title: '正在读取仓库上下文', status: 'running', meta: 'repository · constraints · baseline' },
-      { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: '等待知识检索', status: 'queued', meta: 'C500 · paged_attention · validated' },
+      { id: 'artifact-knowledge', kind: 'Knowledge Pack', title: '等待知识检索', status: 'queued', meta: 'C550 · paged_attention · validated' },
     ],
   };
   addAuditEvent(state, 'Orchestrator 已启动 Agent Run', `${runId} · ${goal.trim()}`, 'blue', 'Activity');
@@ -2116,7 +2116,7 @@ export function startAgentRun(state, goal, { reset = true } = {}) {
 }
 
 export function buildBenchmarkLogsForMatrix(progress, matrix = {}) {
-  const environments = Array.isArray(matrix?.environments) && matrix.environments.length ? matrix.environments : ['C500', 'CUDA'];
+  const environments = Array.isArray(matrix?.environments) && matrix.environments.length ? matrix.environments : ['C550', 'CUDA'];
   const primary = environments[0];
   const secondary = environments[1] || environments[0];
   const entries = [
@@ -2133,9 +2133,9 @@ export function buildBenchmarkLogsForMatrix(progress, matrix = {}) {
 export function buildBenchmarkLogs(progress) {
   const entries = [
     [0, '调度器已锁定 2 个环境快照'],
-    [20, 'C500 Correctness 12 / 12 通过'],
+    [20, 'C550 Correctness 12 / 12 通过'],
     [40, 'CUDA Correctness 12 / 12 通过'],
-    [60, 'C500 Full Benchmark 完成：41.8μs'],
+    [60, 'C550 Full Benchmark 完成：41.8μs'],
     [80, 'CUDA Full Benchmark 完成：36.1μs'],
     [100, '证据包已生成：Level 3'],
   ];
@@ -2145,7 +2145,7 @@ export function buildBenchmarkLogs(progress) {
 export const workspaceFiles = [
   { id: 'paged_attention.cu', path: 'kernels/paged_attention.cu', status: 'M', lines: [['context', '188', 'auto plan = build_attention_plan(args);'], ['remove', '189', 'auto workspace = allocate_workspace(plan.size());'], ['remove', '190', 'mirror_to_host(plan, host_plan);'], ['add', '189', 'auto& plan = plan_cache.get_or_build(args.signature());'], ['add', '190', 'if (LIKELY(plan.host_mirror_ready())) {'], ['add', '191', '  launch_paged_kernel(plan.device_view(), kv_cache);'], ['add', '192', '} else {'], ['add', '193', '  plan_cache.enqueue_host_mirror(plan);'], ['add', '194', '}'], ['context', '195', 'return plan;']], rationale: '缓存 descriptor 避免热路径重复分配；同步回退只保留在 host mirror 尚未就绪的边界场景。' },
   { id: 'plan_cache.hpp', path: 'kernels/plan_cache.hpp', status: 'A', lines: [['context', '1', '#pragma once'], ['add', '2', 'class PlanCache {'], ['add', '3', ' public:'], ['add', '4', '  Plan& get_or_build(Signature signature);'], ['add', '5', '  void enqueue_host_mirror(const Plan& plan);'], ['add', '6', '};']], rationale: '新增轻量 descriptor cache，将 plan 生命周期与请求 signature 绑定，避免重复构建。' },
-  { id: 'paged_attention_cases.yaml', path: 'tests/paged_attention_cases.yaml', status: 'T', lines: [['context', '1', 'suite: paged_attention'], ['context', '2', 'platforms: [C500, CUDA]'], ['add', '3', 'correctness_cases: 24'], ['add', '4', 'shape: [1, 4, 128, 1024]'], ['add', '5', 'assert: max_abs_error <= 1e-3']], rationale: 'Correctness Gate 固定 24 个边界与回归用例，先通过正确性再进入性能阶段。' },
+  { id: 'paged_attention_cases.yaml', path: 'tests/paged_attention_cases.yaml', status: 'T', lines: [['context', '1', 'suite: paged_attention'], ['context', '2', 'platforms: [C550, CUDA]'], ['add', '3', 'correctness_cases: 24'], ['add', '4', 'shape: [1, 4, 128, 1024]'], ['add', '5', 'assert: max_abs_error <= 1e-3']], rationale: 'Correctness Gate 固定 24 个边界与回归用例，先通过正确性再进入性能阶段。' },
   { id: 'mla_paged_attention.yaml', path: 'benchmarks/mla_paged_attention.yaml', status: 'B', lines: [['context', '1', 'benchmark: mla_paged_attention'], ['context', '2', 'warmup: 50'], ['add', '3', 'repeats: 200'], ['add', '4', 'metric: latency_p50'], ['add', '5', 'environment_snapshot: fixed']], rationale: 'Benchmark 固定预热、重复次数与 Environment Snapshot，保证跨硬件结果可比。' },
 ];
 

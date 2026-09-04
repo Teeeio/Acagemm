@@ -1,4 +1,4 @@
-export const LOCAL_C500_RUNTIME_CONTRACT_VERSION = 6;
+export const LOCAL_C500_RUNTIME_CONTRACT_VERSION = 7;
 
 export const isCurrentLocalC500Runtime = (health = {}) => (
   health?.service === 'operator-studio-client-runtime'

@@ -62,7 +62,7 @@ export const renderWorkflowSummary = ({ state = {}, tasks = [], initialization =
     rows.push(row(
       'Baseline 测试',
       '固定工作流',
-      '执行 C500 硬件测量 mock，并保留仿真来源标记',
+      '执行 C550 硬件测量 mock，并保留仿真来源标记',
       baselineTask.status === 'completed' ? `${baselineValue} us（simulation）` : baselineTask.status,
       baselineTask.status === 'completed' ? 'Candidate 1' : '等待测试完成',
     ));
@@ -109,7 +109,7 @@ export const renderWorkflowSummary = ({ state = {}, tasks = [], initialization =
   return [
     '# Workflow Summary',
     '',
-    `Mission: ${mission.title || 'FlashInfer MLA paged attention on MetaX C500'}`,
+    `Mission: ${mission.title || 'FlashInfer MLA paged attention on MetaX C550'}`,
     `Result: ${overall}`,
     '',
     '| 阶段 | 执行者 | Workflow 做了什么 | 结果 | 下一步 |',

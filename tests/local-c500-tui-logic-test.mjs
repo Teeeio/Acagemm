@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { deriveTuiViewModel, deriveWorkflowTopology, renderDashboardSnapshot, renderWorkflowTopologySnapshot, resolveDashboardCommand } from '../tools/local-c500-tester/tui-state.mjs';
 
-const mission = (overrides = {}) => ({ id: 'MIS_TUI', title: 'MLA C500', goal: 'improve baseline by 20%', status: 'running', ...overrides });
+const mission = (overrides = {}) => ({ id: 'MIS_TUI', title: 'MLA C550', goal: 'improve baseline by 20%', status: 'running', ...overrides });
 const task = (purpose, status = 'completed', value = null) => ({
   taskId: `${purpose}-${status}-${value ?? 'none'}`,
   status,

@@ -3,7 +3,7 @@ export const createAutopilotFixedProfileService = ({ isResearchAgentActive, star
     if (state.baseline?.status !== 'complete') return null;
     const research = state.researchAgent || {};
     if (mission.sourcePolicy?.researchEnabled !== false && !research.runId) {
-      const direction = `为 ${mission.title || mission.operator} 搜寻 C500 / ${mission.operatorProfile?.language || 'target'} 的实现经验。只输出优化方向与参考；不得修改冻结语义、Correctness 或 Benchmark。`;
+      const direction = `为 ${mission.title || mission.operator} 搜寻 C550 / ${mission.operatorProfile?.language || 'target'} 的实现经验。只输出优化方向与参考；不得修改冻结语义、Correctness 或 Benchmark。`;
       try {
         state = await startResearch({ state, mission, direction, workspace: researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot), synchronous: false, runPhase: 'experience' });
       } catch (error) {

@@ -33,7 +33,7 @@ try {
     candidate: { id: 'candidate-02', digest: `sha256:${'a'.repeat(64)}` },
     runPy,
     baselineSource: { profileId: 'profile.mla-paged-attention', operator: 'mla_paged_attention' },
-    matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'], shapeKey: 'simulation-shape', correctnessCases: 24, repeats: 10 },
+    matrix: { environments: ['C550'], stages: ['Correctness', 'Full Benchmark'], shapeKey: 'simulation-shape', correctnessCases: 24, repeats: 10 },
   });
   const task = await adapter.get(submitted.taskId);
   assert.equal(task.status, 'completed');

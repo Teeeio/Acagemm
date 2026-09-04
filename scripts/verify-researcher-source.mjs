@@ -49,7 +49,7 @@ const exitCode = await (async () => {
       id: 'MIS_VERIFY',
       title: 'Verify researcher source-fetch',
       goal: '迁移 flashinfer 的 paged decode 算子到沐曦平台并达到加速比 0.8+',
-      hardware: ['MetAX C500'],
+      hardware: ['MetaX C550'],
       metric: 'speedup ratio',
       currentBest: { value: '47.0 μs' },
       sourceRoot,
@@ -71,7 +71,7 @@ const exitCode = await (async () => {
     // 分析式方向：不点名 clone 哪个仓库，要求研究员自己判断需要什么资料并拉进 Source Registry
     const direction = `这是 mission 目标：${mission.goal}。
 请在 ${Math.round(timeoutMs / 1000)} 秒内完成，只访问公开来源。
-请【分析】完成这个迁移需要哪些外部参考资料（例如 flashinfer 的 paged decode 上游实现、相关论文、MetAX/C500 平台文档），把它们拉进 Source Registry 目录（${sourceRoot}）作为只读参考：可 git clone 仓库或下载文档。
+请【分析】完成这个迁移需要哪些外部参考资料（例如 flashinfer 的 paged decode 上游实现、相关论文、MetaX/C550 平台文档），把它们拉进 Source Registry 目录（${sourceRoot}）作为只读参考：可 git clone 仓库或下载文档。
 绝对不要修改主工作区（${workspace}）或迭代仓库。`;
 
     // 用循环编排器驱动两阶段（采集 → 综合），保证笔记总能被综合阶段写出

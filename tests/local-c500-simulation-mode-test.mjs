@@ -20,7 +20,7 @@ assert.deepEqual(resolveLocalC500LaunchMode(simulationEnv), {
   scenario: 'mla-three-round',
   label: 'full simulation',
 });
-assert.equal(resolveMuxiDevice(simulationEnv, () => { throw new Error('hardware probe must not run'); }), 'C500');
+assert.equal(resolveMuxiDevice(simulationEnv, () => { throw new Error('hardware probe must not run'); }), 'C550');
 
 const runtime = createAgentRuntime({ mode: 'reference-fixture' });
 const descriptor = await runtime.describe();

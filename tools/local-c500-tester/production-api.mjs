@@ -19,7 +19,7 @@ export const apiBaseUrl = process.env.LOCAL_C500_API_URL || `http://127.0.0.1:${
 const simulationEnabled = (environment = process.env) => environment.OPERATOR_LOCAL_C500_SIMULATION === '1' || environment.OPERATOR_SIMULATION === '1';
 export const resolveAgentRuntimeMode = (environment = process.env) => simulationEnabled(environment) ? 'reference-fixture' : environment.OPERATOR_RUNTIME_MODE || 'claude-code';
 export const resolveMuxiDevice = (environment = process.env, spawn = spawnSync) => {
-  if (simulationEnabled(environment)) return environment.OPERATOR_MUXI_DEVICE || 'C500';
+  if (simulationEnabled(environment)) return environment.OPERATOR_MUXI_DEVICE || 'C550';
   if (environment.OPERATOR_LOCAL_C500_MOCK === '1') return environment.OPERATOR_MUXI_DEVICE || 'C550';
   return detectMuxiDevice(environment, spawn).device;
 };
@@ -272,12 +272,12 @@ export const ensureProductionRuntime = async ({ onExistingRuntime, existingRunti
         return current;
       }
       if (selectedPolicy === 'replace') {
-        await terminateProcess(ownerPid, '旧 C500 TUI');
+        await terminateProcess(ownerPid, '旧 C550 TUI');
         const activeAfterOwnerExit = await health();
         if (activeAfterOwnerExit) await restartStaleProductionRuntime(activeAfterOwnerExit);
         current = null;
       } else {
-        const error = new Error(`${apiBaseUrl} 已由旧 C500 测试实例占用（TUI PID ${ownerPid}，Runtime PID ${pid}）。交互终端可选择连接或替换；非交互运行请设置 OPERATOR_EXISTING_RUNTIME_POLICY=reuse 或 replace。`);
+        const error = new Error(`${apiBaseUrl} 已由旧 C550 测试实例占用（TUI PID ${ownerPid}，Runtime PID ${pid}）。交互终端可选择连接或替换；非交互运行请设置 OPERATOR_EXISTING_RUNTIME_POLICY=reuse 或 replace。`);
         error.code = 'LOCAL_C500_RUNTIME_CONFLICT';
         error.details = conflict;
         throw error;
@@ -443,7 +443,7 @@ export const ensureManagedProject = async (name) => {
     return existing;
   }
   await mkdir(root, { recursive: true });
-  const created = await api.post('/api/projects', { name: name || 'Local C500 Project', root, initializeGit: true });
+  const created = await api.post('/api/projects', { name: name || 'Local C550 Project', root, initializeGit: true });
   return created.project;
 };
 
@@ -665,7 +665,7 @@ export const assertProductionPreflight = (doctor) => {
   const runtime = doctor?.runtime?.runtime || {};
   const backend = doctor?.runtime?.testBackend || {};
   if (executionMode === 'full-simulation') {
-    if (runtime.mode === 'reference-fixture' && runtime.connected === true && backend.mock === true && backend.liveHardware === false) return doctor;
+    if (runtime.mode === 'reference-fixture' && runtime.connected === true && backend.device === 'C550' && backend.mock === true && backend.liveHardware === false) return doctor;
     const error = new Error('启动前检查失败：完整模拟必须使用 reference-fixture Agent 和 mock C550 backend');
     error.code = 'LOCAL_C500_PREFLIGHT_FAILED';
     error.details = doctor;
@@ -677,6 +677,7 @@ export const assertProductionPreflight = (doctor) => {
   if (!capabilityCheck.supported) failures.push(`Agent Runtime ${runtime.mode || 'unknown'} 缺少能力：${capabilityCheck.missing.join(', ')}`);
   if (executionMode === 'hardware-mock') {
     if (backend.mock !== true || backend.liveHardware !== false) failures.push('hardware-mock 必须使用不可发布的 mock C550 backend');
+    if (backend.device !== 'C550') failures.push(`hardware-mock 设备必须是 C550，当前为 ${backend.device || 'unknown'}`);
   } else {
     if (backend.mock === true || backend.liveHardware !== true) failures.push('测试后端不是 C550 实机模式');
     if (doctor?.checks?.python?.status !== 'ok') failures.push('Python 不可用');

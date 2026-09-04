@@ -36,7 +36,7 @@ def _torch_and_device():
     return torch, torch.cuda.current_device()
 
 
-def _probe_c500(torch, device):
+def _probe_c550(torch, device):
     mx_smi = shutil.which("mx-smi")
     if not mx_smi:
         raise RuntimeError("mx-smi is unavailable; C550 hardware provenance cannot be established")
@@ -381,7 +381,7 @@ def _run(args):
     oracle_path = os.environ.get("OPERATOR_LOCAL_C500_ORACLE_RUN_PY")
     oracle_module = _load_operator(Path(oracle_path).resolve()) if oracle_path else module
     torch, device = _torch_and_device()
-    hardware = _probe_c500(torch, device)
+    hardware = _probe_c550(torch, device)
     matrix = task.get("matrix") or {}
     correctness_cases = max(1, int(matrix.get("correctnessCases") or 24))
     warmup = max(0, int(matrix.get("warmup") or 50))
@@ -444,7 +444,7 @@ def _run(args):
         task_dir / "analysis" / "mcProfiler",
     )
     _write_runner_status(task_dir, 95, "optional_diagnostics", "Optional mcTracer/mcProfiler collection completed or was skipped.")
-    environment_name = str((matrix.get("environments") or ["C500"])[0])
+    environment_name = str((matrix.get("environments") or ["C550"])[0])
     result = {
         "benchmark": [{
             "environment": environment_name,
@@ -480,7 +480,7 @@ def _run(args):
             "artifacts": profile,
         },
         "environment": {
-            "requested": task.get("hardware") or matrix.get("environments") or ["C500"],
+            "requested": task.get("hardware") or matrix.get("environments") or ["C550"],
             "runtime": "local-c500-runner/v1",
             "service": "local-c500-adapter",
             "liveHardware": True,

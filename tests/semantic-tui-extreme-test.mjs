@@ -58,7 +58,7 @@ for (const viewport of [{ columns: 40, rows: 20 }, { columns: 120, rows: 40 }, {
   const rendered = renderDashboardSnapshot({
     state: { tokenUsage: { totalTokens: Number.MAX_SAFE_INTEGER, coverage: '1000/1000 runs exact' } },
     mission,
-    health: { testBackend: { kind: 'local', device: 'C500' } },
+    health: { testBackend: { kind: 'local', device: 'C550' } },
     tasks,
     viewport,
   });

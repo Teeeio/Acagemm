@@ -146,7 +146,7 @@ assert.equal(packageJson.scripts['tester:c500'], 'node tools/local-c500-tester/l
 assert.equal(packageJson.scripts['e2e:agent-runtime-hardware-mock'], 'node scripts/e2e-agent-runtime-hardware-mock.mjs');
 
 const rendered = renderDashboardSnapshot({
-  mission: { id: 'MIS_PRODUCTION', title: 'C500 operator optimization', goal: 'minimize latency', status: 'running' },
+  mission: { id: 'MIS_PRODUCTION', title: 'C550 operator optimization', goal: 'minimize latency', status: 'running' },
   state: {
     stage: 'validation',
     missionPaused: false,
@@ -160,7 +160,7 @@ const rendered = renderDashboardSnapshot({
   health: { testBackend: { kind: 'local-c500', mock: false }, __bridge: { apiUrl: 'http://127.0.0.1:4275' } },
   tasks: [{ taskId: 'local_c500_TASK', status: 'running' }],
 });
-assert.match(rendered, /C500 Production Workflow Tester/);
+assert.match(rendered, /C550 Production Workflow Tester/);
 assert.match(rendered, /MIS_PRODUCTION/);
 assert.match(rendered, /local_c500_TASK/);
 assert.match(rendered, /pytorch_reference/);

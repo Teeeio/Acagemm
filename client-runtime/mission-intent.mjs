@@ -19,7 +19,7 @@ const destructiveTerms = [
   '删除整个仓库', '清空整个仓库', '删除所有文件', '格式化磁盘', 'rm -rf', 'drop database',
 ];
 
-export const MLA_OPTIMIZATION_TEST_GOAL = '优化 mla_paged_attention 在沐曦 C500 和 CUDA 参考环境上的 small-batch P50 延迟：主场景为 batch=1、seq_len=512、head_dim=128、FP16；定位 plan、workspace 和 host mirror 固定开销，在隔离 Mission 工作区生成候选 Patch；随后通过串行测试队列运行 Correctness、Benchmark、Tracer 和 Profiler。Accept Gate 要求 C500 P50 < 45 μs、24/24 正确且 CUDA 回归不超过 2%。';
+export const MLA_OPTIMIZATION_TEST_GOAL = '优化 mla_paged_attention 在沐曦 C550 和 CUDA 参考环境上的 small-batch P50 延迟：主场景为 batch=1、seq_len=512、head_dim=128、FP16；定位 plan、workspace 和 host mirror 固定开销，在隔离 Mission 工作区生成候选 Patch；随后通过串行测试队列运行 Correctness、Benchmark、Tracer 和 Profiler。Accept Gate 要求 C550 P50 < 45 μs、24/24 正确且 CUDA 回归不超过 2%。';
 
 const includesAny = (text, terms) => terms.some((term) => text.includes(term));
 

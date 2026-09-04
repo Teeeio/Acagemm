@@ -99,6 +99,12 @@ All external outcomes must be normalized before changing Mission state.
 - Provider capability checks use the Agent Runtime registry.
 - `OPERATOR_LOCAL_CPU=1` is restricted to the deterministic CPU E2E runner. Its results use
   `source=cpu-e2e` and `liveHardware=false`; this mode must never satisfy C550 evidence requirements.
+- C550 is the only current MetaX production target. New Mission hardware, test-matrix environments,
+  simulation descriptors, and execution evidence use `C550`. C500 and C550 are distinct runner
+  identities and must never match each other.
+- `local-c500`, `LOCAL_C500_*`, and `OPERATOR_LOCAL_C500_*` remain stable compatibility identifiers.
+  Historical evidence that actually came from C500 retains its original label and cannot satisfy a
+  C550 Gate.
 
 ## CPU End-to-End Acceptance
 

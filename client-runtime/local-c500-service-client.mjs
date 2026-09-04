@@ -74,7 +74,7 @@ const loadTask = async (taskId) => {
     await taskWriteChains.get(taskId);
     return JSON.parse(await readFile(taskPath(taskId), 'utf8'));
   } catch (error) {
-    if (error.code === 'ENOENT') throw fail(`Local C500 task not found: ${taskId}`, 'LOCAL_C500_TASK_NOT_FOUND', 404);
+    if (error.code === 'ENOENT') throw fail(`Local C550 task not found: ${taskId}`, 'LOCAL_C500_TASK_NOT_FOUND', 404);
     throw error;
   }
 };
@@ -137,7 +137,7 @@ const validateIterativeMlaRunPy = (task) => {
       && /page_size|page_ids|kv_indices|block_tables?/i.test(text));
   if (missing.length || !identifiesOperator) {
     throw fail(
-      `Scripted C500 scenario rejected run.py: missing=${missing.join(',') || '-'} operatorIdentity=${identifiesOperator ? 'ok' : 'missing'}.`,
+      `Scripted C550 scenario rejected run.py: missing=${missing.join(',') || '-'} operatorIdentity=${identifiesOperator ? 'ok' : 'missing'}.`,
       'LOCAL_C500_SCENARIO_ARTIFACT_INVALID',
       422,
     );
@@ -195,7 +195,7 @@ const assignIterativeMlaMeasurement = async (task) => {
 };
 
 const mockResult = async (task) => {
-  const environment = task.matrix?.environments?.[0] || 'C500';
+  const environment = task.matrix?.environments?.[0] || 'C550';
   const assignment = isScriptedSequenceTask(task)
     ? await assignIterativeMlaMeasurement(task)
     : { ordinal: task.purpose === 'baseline' ? 0 : 1, value: 0, runPyDigest: runPyDigestFor(task.payload?.runPy), candidateDigest: task.candidate.digest };
@@ -241,10 +241,10 @@ const readRunnerResult = async (task) => {
   try {
     parsed = JSON.parse(await readFile(resultPath(task.taskId), 'utf8'));
   } catch (error) {
-    if (error.code !== 'ENOENT') throw fail(`Local C500 runner returned invalid result.json: ${error.message}`, 'LOCAL_C500_RESULT_INVALID');
+    if (error.code !== 'ENOENT') throw fail(`Local C550 runner returned invalid result.json: ${error.message}`, 'LOCAL_C500_RESULT_INVALID');
   }
   if (!parsed || !Array.isArray(parsed.benchmark) || !parsed.environment) {
-    throw fail('Local C500 runner must write result.json with benchmark[] and environment.', 'LOCAL_C500_RESULT_INVALID');
+    throw fail('Local C550 runner must write result.json with benchmark[] and environment.', 'LOCAL_C500_RESULT_INVALID');
   }
   return parsed;
 };
@@ -300,7 +300,7 @@ const executeTask = async (task) => {
         const command = renderCommand(commandTemplate, task);
         const processResult = await runCommand(command, task, Math.max(1, Number(task.payload?.limits?.timeoutSeconds || 120)) * 1000);
         if (processResult.status !== 0) {
-          throw fail(processResult.stderr || processResult.stdout || 'Local C500 runner failed.', 'LOCAL_C500_RUNNER_FAILED', 500);
+          throw fail(processResult.stderr || processResult.stdout || 'Local C550 runner failed.', 'LOCAL_C500_RUNNER_FAILED', 500);
         }
         return readRunnerResult(task);
       })();
@@ -316,7 +316,7 @@ const executeTask = async (task) => {
         ? 'Simulation result completed; it is not publishable as hardware evidence.'
         : cpuE2eEnabled
           ? 'Local CPU E2E runner completed the generated Mission artifact; the result is not hardware evidence.'
-          : 'Local C500 runner completed the generated Mission artifact.',
+          : 'Local C550 runner completed the generated Mission artifact.',
     }];
   } catch (error) {
     task = await loadTask(task.taskId);
@@ -342,7 +342,7 @@ const startTaskExecution = async (task) => {
     task.status = 'running';
     task.startedAt ||= now();
     task.progress = Math.max(10, Number(task.progress || 0));
-    task.logs = task.logs?.length ? task.logs : [{ sequence: 1, progress: 10, message: 'Local C500 backend started on the production Mission artifact.' }];
+    task.logs = task.logs?.length ? task.logs : [{ sequence: 1, progress: 10, message: 'Local C550 backend started on the production Mission artifact.' }];
     const persisted = await saveTask(task);
     execution.promise = executeTask(persisted)
       .catch(async (error) => {
@@ -373,12 +373,12 @@ const refreshRunnerProgress = async (task) => {
 
 export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
   if (root !== taskRoot) {
-    throw new Error('Local C500 client root override is not supported after runtime startup.');
+    throw new Error('Local C550 client root override is not supported after runtime startup.');
   }
   return {
     submit: async (payload) => {
-      if (!payload?.operator || !payload?.candidate?.digest) throw fail('Local C500 task requires operator and candidate.digest.', 'OPERATOR_TEST_TASK_INVALID');
-      if (!Array.isArray(payload.matrix?.environments) || !payload.matrix.environments.length) throw fail('Local C500 task requires matrix.environments.', 'OPERATOR_TEST_TASK_INVALID');
+      if (!payload?.operator || !payload?.candidate?.digest) throw fail('Local C550 task requires operator and candidate.digest.', 'OPERATOR_TEST_TASK_INVALID');
+      if (!Array.isArray(payload.matrix?.environments) || !payload.matrix.environments.length) throw fail('Local C550 task requires matrix.environments.', 'OPERATOR_TEST_TASK_INVALID');
       if (!payload.runPy) throw fail('The production Mission workspace did not provide generated run.py content.', 'LOCAL_C500_ARTIFACT_MISSING', 409);
       const scriptedTask = iterativeMlaScenario
         || Boolean(payload?.baselineSource?.profileId)
@@ -455,7 +455,7 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
 
 export const localC500Config = {
   kind: 'local-c500',
-  device: cpuE2eEnabled ? 'CPU' : process.env.OPERATOR_MUXI_DEVICE || (simulationEnabled ? 'C500' : 'C550'),
+  device: cpuE2eEnabled ? 'CPU' : process.env.OPERATOR_MUXI_DEVICE || 'C550',
   enabled: process.env.OPERATOR_TEST_BACKEND === 'local-c500',
   simulation: simulationEnabled,
   mock: mockEnabled,

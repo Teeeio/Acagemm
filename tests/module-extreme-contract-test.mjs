@@ -64,7 +64,7 @@ for (const input of [{ correctnessCases: 0, warmup: -1, repeats: 'NaN' }, { corr
   assert.equal(spec.generation.deterministic, true);
 }
 const normalized = normalizeMissionTestMatrix({ environments: [], stages: [], testSpec: { schemaVersion: 'operator-studio.test-spec/v1', correctness: { requestedCases: 3 }, benchmark: {} } });
-assert.deepEqual(normalized.environments, ['C500']);
+assert.deepEqual(normalized.environments, ['C550']);
 assert.equal(normalized.correctnessCases, 3);
 
 for (const input of [

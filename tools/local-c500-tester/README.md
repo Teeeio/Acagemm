@@ -1,6 +1,18 @@
-# Local C500 Production Workflow Tester
+# C550 Production Workflow Tester
 
-这是 Operator Studio 生产工作流的 TUI 测试入口。它复用生产 Mission、受管理 Agent、baseline、Mission Workspace、operator-test queue、Accept Gate、adoption 和连续迭代逻辑，只把 queue 后面的执行服务切换为本机沐曦 C550 backend（`local-c500` 是历史兼容名称）。
+这是 Operator Studio 生产工作流的 TUI 测试入口。它复用生产 Mission、受管理 Agent、baseline、Mission Workspace、operator-test queue、Accept Gate、adoption 和连续迭代逻辑，只把 queue 后面的执行服务切换为本机沐曦 C550 backend。
+
+## C500 与 C550 的边界
+
+- 当前唯一生产硬件型号是 `C550`。新 Mission、固定 Profile、测试矩阵、Mock/Simulation
+  设备描述和新执行结果均使用 `C550`。
+- C500 与 C550 是不同设备，不共享 Runner 身份；C500 结果不能通过 C550 的生产预检或
+  发布门禁。
+- 目录 `tools/local-c500-tester/`、命令 `tester:c500`、后端类型 `local-c500`、
+  `LOCAL_C500_*` / `OPERATOR_LOCAL_C500_*` 环境变量和 `LOCAL_C500_*` 错误码是为兼容已有
+  自动化保留的稳定程序标识，不代表目标硬件仍是 C500。
+- 已持久化的真实 C500 历史证据保持原标签，不进行型号改写；需要在 C550 上重新执行后
+  才能产生可发布的 C550 证据。
 
 ## 启动
 
@@ -135,7 +147,7 @@ Mission intent
 -> selected Agent Runtime candidate in isolated Mission Workspace
 -> Git diff admission
 -> production operator-test queue
--> local C500 runner
+-> C550 runner（兼容文件名 `tools/local-c500-runner.py`）
 -> Accept Gate
 -> adoption / rollback / knowledge
 -> budget-aware iteration loop

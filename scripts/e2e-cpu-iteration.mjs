@@ -156,7 +156,7 @@ try {
     (state) => state.activeMissionId === missionId && state.agent?.status === 'awaiting_action' && state.agent?.currentAction?.type === 'candidate.plan',
     'fixture candidate',
   );
-  assert.match(candidateState.agent.toolCalls.find((call) => call.name === 'Experience Search')?.summary || '', /CPU|C500/);
+  assert.match(candidateState.agent.toolCalls.find((call) => call.name === 'Experience Search')?.summary || '', /CPU|C550/);
 
   const applied = await request('/api/actions/apply-patch', { method: 'POST', body: { candidate: 'candidate-02' } });
   const candidate = applied.state.candidateEvaluations.find((item) => item.id === 'candidate-02');

@@ -61,7 +61,7 @@ function runNode(executable, environment) {
   } finally {
     if (temporarySimulationHome) fs.rmSync(temporarySimulationHome, { recursive: true, force: true });
   }
-  exitFrom(result, 'Unable to start the C500 tester');
+  exitFrom(result, 'Unable to start the C550 tester');
 }
 
 function dependenciesReady() {
@@ -118,13 +118,13 @@ if (process.platform !== 'linux') {
     installDependencies(process.execPath, process.env);
     runNode(process.execPath);
   }
-  console.error('The C500 tester requires Node.js 20+; current runtime is ' + process.version + '.');
+  console.error('The C550 tester requires Node.js 20+; current runtime is ' + process.version + '.');
   console.error('Automatic bundled Node fallback is available only on Linux x86_64.');
   process.exit(1);
 }
 
 if (process.arch !== 'x64') {
-  console.error('The bundled C500 tester supports Linux x86_64 only; current architecture is ' + process.arch + '.');
+  console.error('The bundled C550 tester supports Linux x86_64 only; current architecture is ' + process.arch + '.');
   process.exit(1);
 }
 

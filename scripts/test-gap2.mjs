@@ -22,7 +22,7 @@ await mkdir(projectRoot, { recursive: true });
 const proj = await req('/api/projects', { method: 'POST', body: JSON.stringify({ name: 'gap2-test', root: projectRoot, initializeGit: true }) });
 const projectId = proj.project.id;
 console.log('project:', projectId, '| sourceRoot:', proj.project.sourceRoot);
-const mission = await req('/api/missions', { method: 'POST', body: JSON.stringify({ title: 'gap2', goal: '迁移 flashinfer paged decode 算子到沐曦平台并达到加速比 0.8+', projectId, hardware: ['MetAX C500'], metric: 'speedup' }) });
+const mission = await req('/api/missions', { method: 'POST', body: JSON.stringify({ title: 'gap2', goal: '迁移 flashinfer paged decode 算子到沐曦平台并达到加速比 0.8+', projectId, hardware: ['MetaX C550'], metric: 'speedup' }) });
 const missionId = mission.state.activeMissionId;
 console.log('mission:', missionId);
 const m = mission.state.missions.find((x) => x.id === missionId);

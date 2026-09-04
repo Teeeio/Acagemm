@@ -43,6 +43,6 @@ assert.match(output, /BASELINE TEST.*1000 us/);
 assert.match(output, /candidate-01.*250 us.*\+75%/);
 assert.match(output, /candidate\s+candidate-01/);
 assert.match(output, /improvement 75%/);
-assert.match(output, /live C500\s+simulation/);
+assert.match(output, /live C550\s+simulation/);
 
 console.log('[mission-panel] current TUI baseline, improvement, and simulation evidence projection passed');

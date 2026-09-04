@@ -1,6 +1,6 @@
-# Local C500 真机测试手册
+# C550 真机测试手册
 
-本文用于测试人员从 Git 仓库拉取测试版后，在沐曦 C500 机器上运行完整算子迭代流程。真实模式只把算子测试交给本机 C500 runner；Research、Baseline、Candidate、Gate、Rollback 和 Adoption 均继续使用生产工作流。
+本文用于测试人员从 Git 仓库拉取测试版后，在沐曦 C550 机器上运行完整算子迭代流程。真实模式只把算子测试交给本机 C550 runner；Research、Baseline、Candidate、Gate、Rollback 和 Adoption 均继续使用生产工作流。文件名、命令和环境变量中的 `c500` 是兼容标识，不代表支持把 C500 结果作为 C550 证据。
 
 ## 1. 环境要求
 
@@ -8,7 +8,7 @@
 - 已安装并登录 Claude Code，且 `claude --version` 和 `claude auth status` 可执行
 - Python 3.12（现场目标版本 3.12.11）
 - PyTorch `2.8.0+metax3.3.0.2`，且 `torch.cuda.is_available()` 为 `True`
-- MACA、Triton 和 C500 驱动环境已生效
+- MACA、Triton 和 C550 驱动环境已生效
 - `mx-smi` 必须可执行；`mctracer`、`mcProfiler` 为可选诊断工具
 - 机器能够访问 Research Agent 所需的公开网络和 Claude Code 服务
 
@@ -148,7 +148,7 @@ Claude 模式还应看到 runtime mode 为 `claude-code`、status 为 `connected
 
 ## 4. 启动真机测试
 
-代码更新后直接重新运行启动命令即可。TUI 会通过 runtime 协议握手识别并重启属于当前 Tester Home 的旧后台服务；旧版本留下的 `baseline_source_unresolved` C500 测试 Mission 会自动解除来源阻塞并重新执行 Research，无需删除 `.local-c500-production`。
+代码更新后直接重新运行启动命令即可。TUI 会通过 runtime 协议握手识别并重启属于当前 Tester Home 的旧后台服务；旧版本留下的 `baseline_source_unresolved` 测试 Mission 会自动解除来源阻塞并重新执行 Research，无需删除 `.local-c500-production`。已有 C500 Mission 和证据仍保持原型号，不能用于 C550 发布。
 
 建议每次验收使用全新状态目录和独立端口：
 
@@ -174,7 +174,7 @@ npm run tester:c500
 
 ```text
 Source Research -> Source Verify -> Materializer -> Baseline Test
--> Candidate -> C500 Test -> Accept Gate -> Adopt 或 Rollback -> 下一轮
+-> Candidate -> C550 Test -> Accept Gate -> Adopt 或 Rollback -> 下一轮
 ```
 
 每次真实测试结果必须满足：
@@ -218,6 +218,6 @@ npm run tester:c500
 
 - 端口提示模式冲突：旧 runtime 仍在运行。停止旧进程，或更换端口和状态目录。
 - `torch.cuda is unavailable`：当前 Python 未加载 MetaX PyTorch/驱动环境。
-- `mx-smi is unavailable`：runner 无法确认沐曦 C500 来源，会拒绝生成真机证据。
+- `mx-smi is unavailable`：runner 无法确认沐曦 C550 来源，会拒绝生成真机证据。
 - `mctracer` 或 `mcProfiler` 失败：记录 `unavailable/failed` 诊断与工件，benchmark 和迭代继续运行。
 - Agent 无进展：检查 Claude Code 登录、额度和网络；不要用手工候选绕过 Research、Diff admission 或 Gate。

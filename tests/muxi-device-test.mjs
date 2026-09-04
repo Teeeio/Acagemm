@@ -50,20 +50,35 @@ assert.throws(() => assertProductionPreflight({ ...validDoctor, checks: { ...val
 for (const mode of ['claude-code', 'codex-cli']) {
   const hardwareMockDoctor = {
     executionMode: 'hardware-mock',
-    runtime: { runtime: { mode, connected: true }, testBackend: { mock: true, liveHardware: false } },
+    runtime: { runtime: { mode, connected: true }, testBackend: { device: 'C550', mock: true, liveHardware: false } },
     checks: {},
   };
   assert.equal(assertProductionPreflight(hardwareMockDoctor), hardwareMockDoctor);
 }
 assert.throws(() => assertProductionPreflight({
   executionMode: 'hardware-mock',
-  runtime: { runtime: { mode: 'opencode-server', connected: true }, testBackend: { mock: true, liveHardware: false } },
+  runtime: { runtime: { mode: 'opencode-server', connected: true }, testBackend: { device: 'C550', mock: true, liveHardware: false } },
   checks: {},
 }), /缺少能力.*research/);
 assert.throws(() => assertProductionPreflight({
   executionMode: 'hardware-mock',
-  runtime: { runtime: { mode: 'claude-code', connected: true }, testBackend: { mock: false, liveHardware: true } },
+  runtime: { runtime: { mode: 'claude-code', connected: true }, testBackend: { device: 'C550', mock: false, liveHardware: true } },
   checks: {},
 }), /hardware-mock/);
+assert.throws(() => assertProductionPreflight({
+  executionMode: 'hardware-mock',
+  runtime: { runtime: { mode: 'claude-code', connected: true }, testBackend: { device: 'C500', mock: true, liveHardware: false } },
+  checks: {},
+}), /设备必须是 C550/);
+
+const fullSimulationDoctor = {
+  executionMode: 'full-simulation',
+  runtime: { runtime: { mode: 'reference-fixture', connected: true }, testBackend: { device: 'C550', mock: true, liveHardware: false } },
+};
+assert.equal(assertProductionPreflight(fullSimulationDoctor), fullSimulationDoctor);
+assert.throws(() => assertProductionPreflight({
+  ...fullSimulationDoctor,
+  runtime: { ...fullSimulationDoctor.runtime, testBackend: { ...fullSimulationDoctor.runtime.testBackend, device: 'C500' } },
+}), /mock C550 backend/);
 
 console.log('[muxi-device] C550 detection and production preflight passed');

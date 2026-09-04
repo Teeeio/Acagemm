@@ -12,9 +12,9 @@ const RECOVERABLE_SOURCE_BLOCKERS = new Set([
 ]);
 const TERMINAL_RESEARCH_STATUSES = new Set(['completed', 'failed', 'cancelled', 'timed_out']);
 
-const isManagedC500TesterMission = (mission = {}) => (
+const isManagedTesterMission = (mission = {}) => (
   mission.testScenario?.id === 'mla-three-round'
-  && (mission.hardware || []).some((item) => String(item).toUpperCase() === 'C500')
+  && (mission.hardware || []).some((item) => ['C500', 'C550'].includes(String(item).toUpperCase()))
 );
 
 const isTuiFixedProfileMission = (mission = {}) => TUI_FIXED_PROFILE_IDS.has(
@@ -62,12 +62,12 @@ const recoveredResearchAgent = (current = {}) => ({
 export const migrateLocalC500TesterState = (state, { enabled = true } = {}) => {
   if (!enabled || !state?.activeMissionId || !Array.isArray(state.missions)) return { state, changed: false, recovery: null };
   const mission = state.missions.find((item) => item.id === state.activeMissionId);
-  const managedC500Mission = isManagedC500TesterMission(mission);
+  const managedTesterMission = isManagedTesterMission(mission);
   const fixedProfileMission = isTuiFixedProfileMission(mission);
-  if (!mission || (!managedC500Mission && !fixedProfileMission)) return { state, changed: false, recovery: null };
+  if (!mission || (!managedTesterMission && !fixedProfileMission)) return { state, changed: false, recovery: null };
 
   const previousPolicy = mission.sourcePolicy || {};
-  const policyChanged = managedC500Mission && (previousPolicy.mode !== 'agent-flexible'
+  const policyChanged = managedTesterMission && (previousPolicy.mode !== 'agent-flexible'
     || previousPolicy.localFirst !== true
     || previousPolicy.allowDiscoveredSources !== true
     || previousPolicy.allowSemanticFallback !== true

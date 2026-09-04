@@ -42,9 +42,9 @@ const basePayload = {
   schemaVersion: 1,
   missionId: 'MIS_MLA_SEQUENCE',
   operator: 'flashinfer_mla_paged_attention',
-  hardware: ['C500'],
+  hardware: ['C550'],
   metric: 'latency_p50',
-  matrix: { environments: ['C500'], stages: ['Correctness', 'Full Benchmark'], repeats: 3, warmup: 1, correctnessCases: 1 },
+  matrix: { environments: ['C550'], stages: ['Correctness', 'Full Benchmark'], repeats: 3, warmup: 1, correctnessCases: 1 },
 };
 
 const execute = async (client, payload) => {

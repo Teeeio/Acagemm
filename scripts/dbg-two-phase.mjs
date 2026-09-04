@@ -28,7 +28,7 @@ await execFileAsync('git', ['commit', '-m', 'baseline'], { cwd: workspace });
 
 const codex = createCodexClient({ bridgeDir: path.join(tmp, 'bridge') });
 const runtime = createAgentRuntime({ mode: 'codex-cli', codexClient: codex, codexWorkspace: workspace });
-const mission = { id: 'MIS_DBG', title: 'dbg', goal: '迁移 flashinfer paged decode 到沐曦', hardware: ['MetAX C500'], metric: 'speedup', currentBest: { value: 'x' }, sourceRoot };
+const mission = { id: 'MIS_DBG', title: 'dbg', goal: '迁移 flashinfer paged decode 到沐曦', hardware: ['MetaX C550'], metric: 'speedup', currentBest: { value: 'x' }, sourceRoot };
 let state = { activeMissionId: 'MIS_DBG', missions: [mission], runtimeEvents: [], stage: 'diagnosis', patchApplied: false, candidateEvaluations: [], failureRecords: [], agent: { status: 'idle', runId: null }, researchAgent: null, researchNotes: [] };
 const direction = '分析迁移 flashinfer paged decode 需要什么资料，拉进 Source Registry，不碰主工作区';
 state = (await runtime.startResearch({ state, mission, direction, workspace: researchDir, synchronous: true, runPhase: 'acquire' })).state;

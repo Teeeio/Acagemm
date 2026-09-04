@@ -38,7 +38,7 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
   const tokenCoverage = tokenUsage.coverage || '0/0 次精确统计';
   return React.createElement(Box, { flexDirection: 'column', height: layout.height, overflow: 'hidden' },
     React.createElement(Box, { justifyContent: 'space-between' },
-      React.createElement(Text, { bold: true, color: 'green' }, bilingual(`${health?.testBackend?.device || 'C500'} 生产工作流测试器`, `${health?.testBackend?.device || 'C500'} Production Workflow Tester`)),
+      React.createElement(Text, { bold: true, color: 'green' }, bilingual(`${health?.testBackend?.device || 'C550'} 生产工作流测试器`, `${health?.testBackend?.device || 'C550'} Production Workflow Tester`)),
       React.createElement(Text, null, `${backend.kind || '连接中'}${backend.simulation ? ' / 完整模拟 (FULL SIMULATION)' : backend.mock ? ' / 硬件模拟 (HARDWARE MOCK)' : ''} · 令牌 ${totalTokens} · ${tokenCoverage}`),
     ),
     React.createElement(Text, { color: view.needsHuman ? 'red' : view.paused ? 'yellow' : view.terminal ? 'green' : 'cyan', bold: true }, displayBanner(view.banner)),
@@ -57,7 +57,7 @@ export const Dashboard = ({ snapshot = {}, message = '', viewport = {} }) => {
         React.createElement(Text, null, `基线 (baseline)    ${displayStatus(state.baseline?.status)} / ${state.baseline?.kind || '--'}`),
         React.createElement(Text, null, `基准 (benchmark)   ${displayStatus(benchmark.status)} ${benchmark.progress ?? 0}%`),
         React.createElement(Text, null, `任务 (task)        ${benchmark.testTaskId || '--'}`),
-        React.createElement(Text, null, `真机 ${health?.testBackend?.device || 'C500'} (live)   ${displayEvidence(benchmark.result?.environment?.liveHardware === true ? true : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--')}`),
+        React.createElement(Text, null, `真机 ${health?.testBackend?.device || 'C550'} (live)   ${displayEvidence(benchmark.result?.environment?.liveHardware === true ? true : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--')}`),
         view.failure ? React.createElement(Text, { color: 'red' }, `错误 (error)      ${view.failure.code}: ${view.failure.message}`) : null,
       ),
       React.createElement(Panel, { title: bilingual('当前最优', 'Current Best'), width: 40 },

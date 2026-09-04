@@ -60,7 +60,7 @@ try {
   await request('/api/reset', { method: 'POST' });
   const initialProjects = await request('/api/projects');
   assert.ok(initialProjects.projects.some((project) => project.repository === 'mla-kernels'));
-  const alternateProject = initialProjects.projects.find((project) => project.repository === 'flashinfer-c500');
+  const alternateProject = initialProjects.projects.find((project) => project.repository === 'flashinfer-c550');
   const switchedProject = await request(`/api/projects/${alternateProject.id}/select`, { method: 'POST', body: '{}' });
   assert.equal(switchedProject.state.activeProjectId, alternateProject.id);
   assert.equal(switchedProject.state.missions.find((mission) => mission.id === switchedProject.state.activeMissionId).projectId, alternateProject.id);

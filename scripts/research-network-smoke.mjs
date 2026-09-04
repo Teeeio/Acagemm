@@ -43,8 +43,8 @@ const exitCode = await (async () => {
     const mission = {
       id: 'MIS_SMOKE',
       title: 'Research network smoke',
-      goal: '优化 MLA paged_attention 算子在 C500 上的 small batch 延迟',
-      hardware: ['C500'],
+      goal: '优化 MLA paged_attention 算子在 C550 上的 small batch 延迟',
+      hardware: ['C550'],
       metric: 'latency_p50',
       currentBest: { value: '47.0 μs' },
       sourceRoot: null,

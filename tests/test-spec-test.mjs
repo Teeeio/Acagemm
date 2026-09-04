@@ -7,6 +7,7 @@ assert.equal(spec.correctness.requestedCases, 12);
 assert.deepEqual(spec.correctness.requiredCategories, ['minimal', 'representative', 'boundary', 'ragged']);
 assert.deepEqual(spec.benchmark.requiredProfiles, ['primary', 'small', 'boundary']);
 assert.equal(spec.benchmark.primaryProfile, 'primary');
+assert.deepEqual(normalizeMissionTestMatrix({}).environments, ['C550']);
 
 const fixedLike = normalizeMissionTestMatrix({
   environments: ['C550'],

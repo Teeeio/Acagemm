@@ -417,7 +417,7 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
   const implementation = normalizeOperatorLanguage(active.implementation);
   const semantic = deriveSemanticAlignment({ state, mission: active });
   return [
-    'C500 Production Workflow Tester',
+    'C550 Production Workflow Tester',
     `  backend     ${health.testBackend?.kind || '--'}${health.testBackend?.mock ? ' (simulation)' : ''}`,
     `  api         ${health.__bridge?.apiUrl || '--'}`,
     `  workflow    ${view.banner}`,
@@ -447,7 +447,7 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
     `  task        ${benchmark.testTaskId || '--'}`,
     `  queue       ${view.activeTasks} active / ${tasks.length} total`,
     ...view.queue.map((entry) => `  queue item  ${entry.line}`),
-    `  live C500   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`,
+    `  live C550   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`,
     '',
     'Current Best',
     `  candidate   ${best.candidateId || '--'}`,
@@ -462,10 +462,10 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
 };
 
 export const renderPublishSnapshot = () => [
-  'C500 Production Workflow Tester',
+  'C550 Production Workflow Tester',
   '',
   'Publish Mission',
-  '  Goal          Run local C500 validation',
+  '  Goal          Run local C550 validation',
   '  Title         optional',
   '  Project       local-c500-project',
   '  Metric        latency p50',

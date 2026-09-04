@@ -55,7 +55,7 @@ const baselineRunPy = [
 ].join('\n');
 
 const matrix = {
-  environments: ['C500'],
+  environments: ['C550'],
   stages: ['Correctness', 'Full Benchmark'],
   warmup: 1,
   repeats: 2,
@@ -78,14 +78,14 @@ const main = async () => {
   await execFileAsync('git', ['add', '-A'], { cwd: project.repository });
   await execFileAsync('git', ['commit', '-m', 'vector add production baseline'], { cwd: project.repository });
 
-  const goal = '优化 run.py 中 vector_add 在沐曦 C500 上的 latency p50，目标低于 100 us；保持 get_inputs、run、reference 契约并通过 correctness 1/1 和生产 Accept Gate。必须在隔离 Mission 工作区修改 run.py 生成一个有界的真实代码候选，不要只返回分析。';
+  const goal = '优化 run.py 中 vector_add 在沐曦 C550 上的 latency p50，目标低于 100 us；保持 get_inputs、run、reference 契约并通过 correctness 1/1 和生产 Accept Gate。必须在隔离 Mission 工作区修改 run.py 生成一个有界的真实代码候选，不要只返回分析。';
   const missionResponse = await request('/api/missions', {
     method: 'POST',
     body: JSON.stringify({
-      title: 'Local C500 generated vector_add',
+      title: 'Local C550 generated vector_add',
       goal,
       projectId: project.id,
-      hardware: ['C500'],
+      hardware: ['C550'],
       metric: 'latency p50',
       testMatrix: matrix,
       missionBudgetMs: 10 * 60 * 1000,
