@@ -585,7 +585,9 @@ const commandRegistry = {
         ...(baselineSource ? { baselineSource } : {}),
         ...(baselinePlan?.materializationReport ? { baselineMaterialization: baselinePlan.materializationReport } : {}),
         ...(missionRunPy.content ? { runPy: missionRunPy.content, runPySource: missionRunPy.source } : {}),
-        ...(purpose !== 'baseline' && state.baseline?.materializer?.result?.runPy ? { oracleRunPy: state.baseline.materializer.result.runPy } : {}),
+        ...(purpose !== 'baseline' && (state.baseline?.oracleRunPy || state.baseline?.materializer?.result?.runPy)
+          ? { oracleRunPy: state.baseline.oracleRunPy || state.baseline.materializer.result.runPy }
+          : {}),
         ...(purpose !== 'baseline' && isFixedOperatorMission(mission) && (state.baseline?.source || mission.baseline?.source) ? { baselineSource: state.baseline?.source || mission.baseline?.source } : {}),
         ...(Object.keys(missionRunPy.implementationFiles || {}).length ? { implementationFiles: missionRunPy.implementationFiles } : {}),
         ...(body.packageId ? { packageId: body.packageId } : {}),
@@ -593,7 +595,7 @@ const commandRegistry = {
         ...(semanticBinding ? { semanticBinding } : {}),
       });
       return {
-        payload: { runId, taskId: submitted.taskId, purpose, baselineKind, baselineSource, semanticBinding, baselineResolution: baselinePlan?.resolution || null, baselineMaterialization: baselinePlan?.materializationReport || null, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages, submittedAt: submitted.submittedAt },
+        payload: { runId, taskId: submitted.taskId, purpose, baselineKind, baselineSource, baselineOracleRunPy: purpose === 'baseline' ? baselinePlan?.runPy || null : null, semanticBinding, baselineResolution: baselinePlan?.resolution || null, baselineMaterialization: baselinePlan?.materializationReport || null, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages, submittedAt: submitted.submittedAt },
         result: { runId, taskId: submitted.taskId },
       };
     },
@@ -620,6 +622,7 @@ const commandRegistry = {
           kind: normalizeBaselineKind(payload.baselineKind),
           status: 'running',
           source: payload.baselineSource ? structuredClone(payload.baselineSource) : state.baseline?.source || null,
+          oracleRunPy: payload.baselineOracleRunPy || state.baseline?.oracleRunPy || null,
           resolution: payload.baselineResolution
             ? structuredClone(payload.baselineResolution)
             : {

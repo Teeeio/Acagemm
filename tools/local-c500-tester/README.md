@@ -41,6 +41,15 @@ bash scripts/c500-test.sh mock
 - `hardware-mock`：真实 Agent Runtime + Mock C550；跳过硬件探测，但仍执行语义、baseline、真实 Agent 写入、Git Diff、三轮候选、队列和 Gate。证据永久标记 `liveHardware=false`。
 - `full-simulation`：Reference Fixture + Mock C550；不调用模型、硬件或 Python，只验证 TUI/API/状态机交互。
 
+开发机还可以运行 CPU 全迭代 E2E。该入口使用 Reference Fixture 快速生成 Candidate，
+但 Correctness 和 Benchmark 会由独立 Python CPU runner 实际执行；Queue、状态投影、Gate、
+自动采纳和经验治理仍走生产模块。结果固定标记为 `source=cpu-e2e`、
+`liveHardware=false`，只证明流程集成，不证明 C550 正确性或性能：
+
+```bash
+npm run e2e:cpu-iteration
+```
+
 兼容层 + Mock C550 的真实后端闭环命令：
 
 ```powershell

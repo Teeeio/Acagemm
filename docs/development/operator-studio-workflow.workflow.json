@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Operator Studio Mission Workflow",
+    "locale": "zh-CN",
+    "output": "operator-studio-workflow.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "main", "label": "Mission workflow · TUI → Application → Agent/C550 → Gate" },
+    { "id": "exceptions", "label": "Failure / Recovery", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "setup", "label": "发布与准备", "fromCol": 0, "toCol": 1 },
+    { "id": "validate", "label": "验证与决策", "fromCol": 2, "toCol": 5, "variant": "emphasis" }
+  ],
+  "groups": [],
+  "mainPath": ["publish", "research", "baseline", "candidate", "correctness", "benchmark", "gate", "keep"],
+  "nodes": [
+    { "id": "publish", "lane": "main", "col": 0, "width": 116, "type": "frontend", "label": "Publish", "sublabel": "intent + snapshot" },
+    { "id": "research", "lane": "main", "col": 1, "width": 116, "type": "backend", "label": "Research", "sublabel": "source resolution" },
+    { "id": "baseline", "lane": "main", "col": 2, "width": 116, "type": "backend", "label": "Baseline", "sublabel": "fixed matrix", "tag": "required" },
+    { "id": "candidate", "lane": "main", "col": 3, "width": 116, "type": "external", "label": "Candidate", "sublabel": "active workspace" },
+    { "id": "correctness", "lane": "main", "col": 4, "width": 116, "type": "security", "label": "Correctness", "sublabel": "cases + repair" },
+    { "id": "benchmark", "lane": "main", "col": 5, "width": 116, "type": "external", "label": "Benchmark", "sublabel": "×3 on C550" },
+    { "id": "gate", "lane": "main", "col": 5, "yOffset": -110, "width": 116, "type": "security", "label": "Accept Gate", "sublabel": "identity + evidence" },
+    { "id": "keep", "lane": "main", "col": 5, "yOffset": 82, "width": 116, "type": "database", "label": "KEEP", "sublabel": "adopt candidate" },
+    { "id": "retry", "lane": "exceptions", "col": 3, "yOffset": -45, "width": 116, "type": "messagebus", "label": "Retry", "sublabel": "bounded / same stage" },
+    { "id": "human", "lane": "exceptions", "col": 5, "yOffset": 45, "width": 116, "type": "security", "label": "Needs human", "sublabel": "invariant / budget" },
+    { "id": "discard", "lane": "exceptions", "col": 5, "yOffset": 125, "width": 116, "type": "security", "label": "DISCARD", "sublabel": "restore stable best" }
+  ],
+  "edges": [
+    { "from": "publish", "to": "research", "role": "main", "variant": "emphasis" },
+    { "from": "research", "to": "baseline", "role": "main", "variant": "emphasis" },
+    { "from": "baseline", "to": "candidate", "role": "main", "variant": "emphasis" },
+    { "from": "candidate", "to": "correctness", "role": "main", "variant": "emphasis" },
+    { "from": "correctness", "to": "benchmark", "role": "main", "variant": "emphasis" },
+    { "from": "benchmark", "to": "gate", "role": "main", "variant": "emphasis" },
+    { "from": "gate", "to": "keep", "role": "main", "variant": "emphasis" },
+    { "from": "baseline", "to": "retry", "label": "baseline failure", "role": "error", "variant": "security" },
+    { "from": "candidate", "to": "retry", "label": "candidate failure", "role": "error", "variant": "security" },
+    { "from": "correctness", "to": "retry", "label": "correctness failure", "role": "error", "variant": "security" },
+    { "from": "retry", "to": "candidate", "role": "return", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "from": "retry", "to": "human", "label": "budget / invariant", "role": "error", "variant": "security" },
+    { "from": "retry", "to": "discard", "label": "regression / unrecoverable", "role": "error", "variant": "security" }
+  ],
+  "semanticChecks": {
+    "allowedRoots": ["publish"],
+    "allowedTerminals": ["keep", "discard", "human"],
+    "requiredEdges": [
+      { "from": "publish", "to": "research" },
+      { "from": "research", "to": "baseline" },
+      { "from": "baseline", "to": "candidate" },
+      { "from": "candidate", "to": "correctness" },
+      { "from": "correctness", "to": "benchmark" },
+      { "from": "benchmark", "to": "gate" }
+    ]
+  },
+  "cards": [
+    { "dot": "amber", "title": "约束", "items": ["Candidate 证据必须绑定当前 applied candidate；固定 Profile 不可弱化；失败只能 Retry、Needs human 或 DISCARD。"] }
+  ]
+}

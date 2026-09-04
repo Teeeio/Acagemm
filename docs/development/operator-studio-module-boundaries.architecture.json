@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Operator Studio 模块解耦边界",
+    "locale": "zh-CN",
+    "output": "operator-studio-module-boundaries.html",
+    "quality_profile": "standard",
+    "viewBox": [1420, 820]
+  },
+  "components": [
+    { "id": "tui", "type": "frontend", "label": "终端界面（TUI）", "sublabel": "展示状态 / 接收操作", "tag": "不写持久化状态", "pos": [30, 90], "size": [170, 72] },
+    { "id": "http", "type": "backend", "label": "HTTP 接口层", "sublabel": "JSON / SSE / 静态资源", "tag": "只做传输适配", "pos": [250, 90], "size": [180, 72] },
+    { "id": "usecases", "type": "backend", "label": "业务用例编排层", "sublabel": "把一次用户操作完整串起来", "tag": "不依赖传输方式", "pos": [480, 90], "size": [220, 72] },
+    { "id": "rounds", "type": "backend", "label": "轮次与基线编排", "sublabel": "研究 / 预检 / 基线物化", "tag": "输入输出契约", "pos": [750, 90], "size": [220, 72] },
+    { "id": "autopilot", "type": "backend", "label": "自动推进决策", "sublabel": "候选 / 校验 / 轮次推进", "tag": "唯一决策边界", "pos": [1020, 90], "size": [220, 72] },
+    { "id": "domain", "type": "security", "label": "领域规则", "sublabel": "迭代 / 工作流 / Gate", "tag": "固定 Profile 不变量", "pos": [1280, 90], "size": [120, 72] },
+    { "id": "state", "type": "database", "label": "运行状态仓库", "sublabel": "加锁 / 版本 / 持久化", "tag": "锁内完成投影", "pos": [480, 300], "size": [220, 72] },
+    { "id": "workspace", "type": "database", "label": "Mission 工作区", "sublabel": "差异 / 检查点 / 采纳", "tag": "Agent 只能写这里", "pos": [750, 300], "size": [220, 72] },
+    { "id": "agent", "type": "external", "label": "智能体运行时", "sublabel": "Claude Code / Codex / OpenCode", "tag": "只产出候选变更", "pos": [1020, 300], "size": [220, 72] },
+    { "id": "queue", "type": "messagebus", "label": "算子测试队列", "sublabel": "串行执行 / 原子终态", "tag": "Correctness + Benchmark", "pos": [750, 510], "size": [220, 72] },
+    { "id": "runner", "type": "external", "label": "C550 执行器", "sublabel": "正确性 / 性能 / 诊断", "tag": "硬件证据出口", "pos": [480, 510], "size": [220, 72] },
+    { "id": "errors", "type": "security", "label": "统一错误契约", "sublabel": "归一化 / 可重试 / 停止策略", "tag": "跨层错误信封", "pos": [1020, 510], "size": [220, 72] }
+  ],
+  "connections": [
+    { "id": "tui-http", "from": "tui", "to": "http", "variant": "emphasis" },
+    { "id": "http-usecases", "from": "http", "to": "usecases", "variant": "emphasis" },
+    { "id": "usecases-rounds", "from": "usecases", "to": "rounds", "variant": "emphasis" },
+    { "id": "rounds-autopilot", "from": "rounds", "to": "autopilot", "variant": "emphasis" },
+    { "id": "autopilot-domain", "from": "autopilot", "to": "domain", "variant": "security" },
+    { "id": "usecases-state", "from": "usecases", "to": "state", "label": "loaded snapshot", "labelDy": 24 },
+    { "id": "rounds-agent", "from": "rounds", "to": "agent", "variant": "emphasis" },
+    { "id": "agent-workspace", "from": "agent", "to": "workspace", "variant": "emphasis" },
+    { "id": "workspace-queue", "from": "workspace", "to": "queue", "variant": "emphasis" },
+    { "id": "queue-runner", "from": "queue", "to": "runner", "variant": "emphasis" },
+    { "id": "runner-errors", "from": "runner", "to": "errors", "variant": "security", "fromSide": "bottom", "toSide": "bottom", "via": [[590, 620], [1130, 620]] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "解耦判断", "items": ["TUI 只消费 ViewModel 和 API DTO，不拥有工作流规则", "HTTP routes 只做传输映射，不直接读写 State Store", "Application services 通过注入端口调用 Agent、Workspace、Queue"] },
+    { "dot": "violet", "title": "唯一流程入口", "items": ["主轮次由 main-round orchestration 统一启动", "Baseline 由 baseline orchestration 统一处理", "Autopilot 只有一套决策边界，不存在并行旧流程"] },
+    { "dot": "rose", "title": "横切约束", "items": ["Workflow Error Contract 统一错误分类和恢复策略", "State Repository 统一锁、版本和持久化", "Fixed Profile 是 shape、dtype、测试矩阵和 retry 的唯一来源"] }
+  ]
+}

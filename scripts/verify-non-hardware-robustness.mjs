@@ -30,6 +30,7 @@ for (const key of [
 
 const checks = [
   'verify:local-c500-release',
+  'e2e:cpu-iteration',
   'test:local-c500-no-hardware-guard',
   'test:semantic-snapshot',
   'test:semantic-snapshot-extreme',

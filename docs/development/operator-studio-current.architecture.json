@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Operator Studio TUI 当前生产架构",
+    "locale": "zh-CN",
+    "output": "operator-studio-current-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1390, 780]
+  },
+  "components": [
+    { "id": "operatorTui", "type": "frontend", "label": "Ink TUI", "sublabel": "只读状态投影 + 操作命令", "pos": [20, 90], "size": [170, 72] },
+    { "id": "productionApi", "type": "frontend", "label": "Production API Client", "sublabel": "Runtime 生命周期 / HTTP DTO", "pos": [290, 90], "size": [180, 72] },
+    { "id": "httpRoutes", "type": "backend", "label": "HTTP Routes", "sublabel": "薄路由 + SSE + 静态资源", "pos": [570, 90], "size": [180, 72] },
+    { "id": "application", "type": "backend", "label": "Application Services", "sublabel": "45 个用例编排契约", "tag": "transport-neutral", "pos": [850, 90], "size": [190, 72] },
+    { "id": "domain", "type": "security", "label": "Domain Contracts", "sublabel": "Iteration / Workflow / Gate", "tag": "固定 Profile 与不变量", "pos": [1150, 90], "size": [210, 72] },
+    { "id": "agentRuntime", "type": "external", "label": "Agent Runtime", "sublabel": "Claude Code / Codex / OpenCode", "pos": [1150, 440], "size": [210, 72] },
+    { "id": "workspace", "type": "database", "label": "Mission Workspace", "sublabel": "隔离 Git Diff / checkpoint", "pos": [850, 440], "size": [190, 72] },
+    { "id": "testQueue", "type": "messagebus", "label": "Operator Test Queue", "sublabel": "串行任务 + 原子终态", "pos": [570, 440], "size": [180, 72] },
+    { "id": "c550Runner", "type": "external", "label": "C550 Runner", "sublabel": "Correctness / Benchmark / 诊断", "tag": "liveHardware 标记", "pos": [290, 440], "size": [180, 72] },
+    { "id": "acceptGate", "type": "security", "label": "Accept Gate", "sublabel": "证据绑定 + KEEP / DISCARD", "tag": "模拟不可发布", "pos": [20, 440], "size": [170, 72] },
+    { "id": "stateRepository", "type": "database", "label": "State Repository", "sublabel": "排他队列 + version + persist", "tag": "进程内一致性边界", "pos": [850, 250], "size": [190, 72] },
+    { "id": "workflowError", "type": "security", "label": "Workflow Error Contract", "sublabel": "category / retryable", "tag": "stopPolicy + action", "pos": [570, 250], "size": [180, 72] }
+  ],
+  "connections": [
+    { "id": "tuiToApi", "from": "operatorTui", "to": "productionApi", "label": "操作命令", "variant": "emphasis" },
+    { "id": "apiToHttp", "from": "productionApi", "to": "httpRoutes", "label": "HTTP / SSE", "variant": "emphasis" },
+    { "id": "httpToApplication", "from": "httpRoutes", "to": "application", "label": "调用公开用例", "variant": "emphasis" },
+    { "id": "applicationToDomain", "from": "application", "to": "domain", "label": "执行规则与不变量", "variant": "emphasis" },
+    { "id": "domainToAgent", "from": "domain", "to": "agentRuntime", "label": "受控 Provider 操作", "variant": "emphasis", "labelDy": 24 },
+    { "id": "agentToWorkspace", "from": "agentRuntime", "to": "workspace", "label": "仅写 active Mission", "variant": "emphasis" },
+    { "id": "workspaceToQueue", "from": "workspace", "to": "testQueue", "label": "候选 Diff + digest", "variant": "emphasis" },
+    { "id": "queueToRunner", "from": "testQueue", "to": "c550Runner", "label": "串行测试任务", "variant": "emphasis" },
+    { "id": "runnerToGate", "from": "c550Runner", "to": "acceptGate", "label": "绑定候选的证据", "variant": "emphasis" },
+    { "id": "applicationToState", "from": "application", "to": "stateRepository", "label": "锁内 read / persist", "labelDy": 24 },
+    { "id": "httpToWorkflowError", "from": "httpRoutes", "to": "workflowError", "label": "catch + normalize", "variant": "security", "labelDy": 24 },
+    { "id": "workflowErrorToState", "from": "workflowError", "to": "stateRepository", "label": "stopPolicy 投影", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "唯一生产路径", "items": ["TUI 只通过 Production API 进入 Runtime", "旧独立 CLI workflow 已删除", "HTTP routes 不复制 Mission、Gate 或硬件规则"] },
+    { "dot": "rose", "title": "错误与证据", "items": ["Workflow Error 统一 category、retryable 与 stopPolicy", "Route payload 与 SSE 错误信封尚未完全统一", "simulation evidence 永远不能成为 live-hardware evidence"] },
+    { "dot": "amber", "title": "多人开发边界", "items": ["依赖方向固定为 TUI → HTTP → application → domain → ports → adapters", "每个 application 模块都有同名输入/输出契约", "跨模块变更运行 npm run verify:local-c500-release"] }
+  ]
+}

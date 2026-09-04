@@ -612,6 +612,7 @@ const createBaselineRequirementState = (overrides = {}) => ({
   source: overrides.source || null,
   evidence: overrides.evidence || null,
   materializer: overrides.materializer || null,
+  oracleRunPy: overrides.oracleRunPy || overrides.materializer?.result?.runPy || null,
 });
 
 const createMissionDomainState = (missionId, stage = 'diagnosis') => {
@@ -2157,7 +2158,7 @@ export async function applyCandidatePatch(missionId, candidateId = 'candidate-02
   // The local adapter always validates the production run.py bridge, even in
   // full simulation. Keep the fixture native files for topology display, but
   // also materialize a unique, executable bridge for each candidate round.
-  const bridge = `# Simulation candidate ${candidateId}\n# The scripted backend requires explicit operator and paged-KV identity markers.\noperatorIdentity = 'mla_paged_attention'\npage_size = 1\npage_ids = [0]\nkv_indices = [0]\nblock_tables = [0]\n\ndef get_inputs():\n    return [1]\n\ndef get_test_cases():\n    return [{'name': 'simulation', 'inputs': [1]}]\n\ndef get_benchmark_inputs():\n    return [1]\n\ndef reference(inputs):\n    return inputs\n\ndef run(inputs):\n    return inputs\n`;
+  const bridge = `# Simulation candidate ${candidateId}\n# The scripted backend requires explicit operator and paged-KV identity markers.\noperatorIdentity = 'mla_paged_attention'\npage_size = 1\npage_ids = [0]\nkv_indices = [0]\nblock_tables = [0]\n\ndef get_inputs():\n    return {'values': list(range(64))}\n\ndef get_test_cases():\n    return [{'name': 'small-vector', 'category': 'minimal', 'inputs': {'values': [1, 2, 3, 4]}}]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}]\n\ndef reference(inputs):\n    return [value * 2 for value in inputs['values']]\n\ndef run(inputs):\n    return [value * 2 for value in inputs['values']]\n`;
   await writeFile(path.join(activeWorkspace, 'kernels', 'paged_attention.cu'), patchedSource, 'utf8');
   await writeFile(path.join(activeWorkspace, 'kernels', 'plan_cache.hpp'), cacheHeader, 'utf8');
   await writeFile(path.join(activeWorkspace, 'run.py'), bridge, 'utf8');

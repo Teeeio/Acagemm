@@ -12,6 +12,7 @@ const childEnvironment = {
   OPERATOR_AUTO_TICK: '0',
 };
 const checks = [
+  'test:cli-command',
   'test:workflow-kernel',
   'test:module-boundary',
   'test:workflow-error',

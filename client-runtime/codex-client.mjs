@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
 import { createScopedGitEnvironment } from './git-environment.mjs';
+import { resolveCliInvocation } from './cli-command.mjs';
 
 const defaultTimeoutMs = 12_000;
 
@@ -118,7 +119,9 @@ export const classifyCodexFailure = (run = {}, events = []) => {
 
 export const createCodexClient = (options = {}) => {
   const configuredCommand = options.command || process.env.CODEX_COMMAND || 'codex';
-  const command = process.platform === 'win32' && configuredCommand === 'codex' ? 'codex.cmd' : configuredCommand;
+  const invocation = resolveCliInvocation({ provider: 'codex', configuredCommand });
+  const command = invocation.command;
+  const commandArgs = (args) => [...invocation.prefixArgs, ...args];
   const spawnImpl = options.spawnImpl || nodeSpawn;
   const execFileImpl = options.execFileImpl || nodeExecFile;
   const bridgeDir = options.bridgeDir || path.resolve(process.env.OPERATOR_BRIDGE_DIR || path.join(runtimeDir, 'agent-bridge'));
@@ -140,7 +143,7 @@ export const createCodexClient = (options = {}) => {
     if (!refresh && descriptorCache && Date.now() - descriptorCachedAt < descriptorTtlMs) return descriptorCache;
     let version;
     try {
-      const result = await execFileAsync(execFileImpl, command, ['--version']);
+      const result = await execFileAsync(execFileImpl, command, commandArgs(['--version']));
       version = (result.stdout || result.stderr).trim().split(/\r?\n/)[0] || null;
     } catch (error) {
       descriptorCache = { installed: false, loggedIn: false, version: null, error: error.message, userContext: { userName, restricted: restrictedUserContext } };
@@ -150,7 +153,7 @@ export const createCodexClient = (options = {}) => {
     let loggedIn = false;
     let loginOutput = '';
     try {
-      const result = await execFileAsync(execFileImpl, command, ['login', 'status']);
+      const result = await execFileAsync(execFileImpl, command, commandArgs(['login', 'status']));
       loginOutput = `${result.stdout}\n${result.stderr}`.trim();
       loggedIn = !/not logged in|logged out|no credentials/i.test(loginOutput);
     } catch (error) {
@@ -208,7 +211,7 @@ export const createCodexClient = (options = {}) => {
     const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, {
       configDir: path.join(bridgeDir, 'git-trust'),
     });
-    const child = spawnImpl(command, args, {
+    const child = spawnImpl(command, commandArgs(args), {
       cwd: record.workspace,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,

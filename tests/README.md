@@ -26,3 +26,15 @@ Tests protect production contracts. A test must identify whether it is unit, con
 npm run verify:local-c500-release
 npm run verify:non-hardware-robustness
 ```
+
+`npm run e2e:cpu-iteration` is the deterministic full-workflow E2E. It uses the
+Reference Fixture for Candidate generation and executes lightweight Correctness
+and Benchmark work in the standard-library CPU runner. The result is always
+`source=cpu-e2e` and `liveHardware=false` and cannot prove C550 correctness or
+performance. The non-hardware verification entry point includes this E2E.
+
+`npm run e2e:cpu-agent-iteration` is the opt-in acceptance test that uses a real
+local Agent plus actual CPU correctness and benchmark execution. It verifies
+that an unmet Accept Gate closes the current round and starts the next Agent
+round without harness intervention. It is excluded from routine verification
+because it consumes a live Agent session.

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
 import { createScopedGitEnvironment } from './git-environment.mjs';
+import { resolveCliInvocation } from './cli-command.mjs';
 
 const defaultTimeoutMs = 12_000;
 
@@ -214,7 +215,9 @@ export const classifyClaudeFailure = (run = {}, events = []) => {
 
 export const createClaudeClient = (options = {}) => {
   const configuredCommand = options.command || process.env.CLAUDE_COMMAND || 'claude';
-  const command = process.platform === 'win32' && configuredCommand === 'claude' ? 'claude.cmd' : configuredCommand;
+  const invocation = resolveCliInvocation({ provider: 'claude', configuredCommand });
+  const command = invocation.command;
+  const commandArgs = (args) => [...invocation.prefixArgs, ...args];
   const spawnImpl = options.spawnImpl || nodeSpawn;
   const execFileImpl = options.execFileImpl || nodeExecFile;
   const bridgeDir = options.bridgeDir || path.resolve(process.env.OPERATOR_BRIDGE_DIR || path.join(runtimeDir, 'agent-bridge'));
@@ -259,12 +262,12 @@ export const createClaudeClient = (options = {}) => {
   const describe = async ({ refresh = false } = {}) => {
     if (!refresh && descriptorCache && Date.now() - descriptorCachedAt < descriptorTtlMs) return descriptorCache;
     try {
-      const result = await execFileAsync(execFileImpl, command, ['--version']);
+      const result = await execFileAsync(execFileImpl, command, commandArgs(['--version']));
       const version = (result.stdout || result.stderr).trim().split(/\r?\n/)[0] || null;
       let loggedIn = false;
       let authOutput = '';
       try {
-        const auth = await execFileAsync(execFileImpl, command, ['auth', 'status']);
+        const auth = await execFileAsync(execFileImpl, command, commandArgs(['auth', 'status']));
         authOutput = `${auth.stdout}\n${auth.stderr}`.trim();
         loggedIn = !/not logged in|logged out|no credentials|authentication required/i.test(authOutput);
       } catch (error) {
@@ -353,7 +356,7 @@ export const createClaudeClient = (options = {}) => {
       ...(resumeThreadId ? ['--resume', resumeThreadId] : []),
     ];
     const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, { configDir: path.join(bridgeDir, 'git-trust') });
-    const child = spawnImpl(command, args, {
+    const child = spawnImpl(command, commandArgs(args), {
       cwd: record.workspace,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,

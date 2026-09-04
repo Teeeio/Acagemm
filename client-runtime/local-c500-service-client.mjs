@@ -15,6 +15,7 @@ const taskRoot = process.env.OPERATOR_LOCAL_C500_DIR
 const commandTemplate = process.env.OPERATOR_LOCAL_C500_COMMAND || `python "${bundledRunner}"`;
 const explicitRunnerCommand = Boolean(process.env.OPERATOR_LOCAL_C500_COMMAND);
 const mockEnabled = process.env.OPERATOR_LOCAL_C500_MOCK === '1';
+const cpuE2eEnabled = process.env.OPERATOR_LOCAL_CPU === '1';
 const hardwareDisabled = process.env.OPERATOR_HARDWARE_DISABLED === '1';
 const mockScenario = process.env.OPERATOR_LOCAL_C500_MOCK_SCENARIO || '';
 const iterativeMlaScenario = mockScenario === 'mla-three-round';
@@ -308,7 +309,15 @@ const executeTask = async (task) => {
     task.status = 'completed';
     task.progress = 100;
     task.result = result;
-    task.logs = [...task.logs, { sequence: 2, progress: 100, message: mockEnabled ? 'Simulation result completed; it is not publishable as hardware evidence.' : 'Local C500 runner completed the generated Mission artifact.' }];
+    task.logs = [...task.logs, {
+      sequence: 2,
+      progress: 100,
+      message: mockEnabled
+        ? 'Simulation result completed; it is not publishable as hardware evidence.'
+        : cpuE2eEnabled
+          ? 'Local CPU E2E runner completed the generated Mission artifact; the result is not hardware evidence.'
+          : 'Local C500 runner completed the generated Mission artifact.',
+    }];
   } catch (error) {
     task = await loadTask(task.taskId);
     if (task.cancelRequested) return task;
@@ -446,11 +455,12 @@ export const createLocalC500ServiceClient = ({ root = taskRoot } = {}) => {
 
 export const localC500Config = {
   kind: 'local-c500',
-  device: process.env.OPERATOR_MUXI_DEVICE || (simulationEnabled ? 'C500' : 'C550'),
+  device: cpuE2eEnabled ? 'CPU' : process.env.OPERATOR_MUXI_DEVICE || (simulationEnabled ? 'C500' : 'C550'),
   enabled: process.env.OPERATOR_TEST_BACKEND === 'local-c500',
   simulation: simulationEnabled,
   mock: mockEnabled,
-  liveHardware: !mockEnabled,
+  liveHardware: !mockEnabled && !cpuE2eEnabled,
+  executionMode: cpuE2eEnabled ? 'cpu-e2e' : simulationEnabled ? 'full-simulation' : mockEnabled ? 'hardware-mock' : 'real-c550',
   taskRoot,
   commandConfigured: Boolean(commandTemplate),
   hardwareDisabled,
