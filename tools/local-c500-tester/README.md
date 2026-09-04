@@ -15,7 +15,7 @@ npm run tester:c500
 在目标机上推荐使用统一环境入口。它会固定当前 checkout 为 Tester Home、安装仓库内置 Node，并安装锁定依赖：
 
 ```bash
-bash scripts/c500-test.sh verify   # 76 项非硬件健壮性门禁与 mock 闭环
+bash scripts/c500-test.sh verify   # 非硬件健壮性门禁、构建与 mock 闭环
 bash scripts/c500-test.sh doctor   # 真机环境检查，不启动 Mission
 bash scripts/c500-test.sh start    # Agent Runtime + C550 真机 TUI（默认 Claude Code）
 ```
@@ -93,7 +93,7 @@ bash scripts/with-bundled-node.sh npm run tester:c500
 
 未设置 `OPERATOR_LOCAL_C500_MOCK` 时默认使用真实 C550 runner（`local-c500` 仅是兼容命名）。真机部署、验收项目和结果回传见 [`docs/local-c500-real-hardware-test.md`](../../docs/local-c500-real-hardware-test.md)。
 
-`TUI` 分支默认使用 Claude Code，也可显式选择 Codex。测试人员在启动 doctor/runtime 之前确认所选后端：
+`main` 分支的 TUI 默认使用 Claude Code，也可显式选择 Codex。测试人员在启动 doctor/runtime 之前确认所选后端：
 
 ```bash
 export OPERATOR_RUNTIME_MODE=claude-code
