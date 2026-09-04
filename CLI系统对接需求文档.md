@@ -323,7 +323,7 @@ completed -> awaiting_decision -> adopted | rejected | rolled_back
 
 ---
 
-## 10. 展会版验收标准
+## 10. 原型验收标准
 
 提交信息后，我们将以以下标准改造原型：
 
@@ -353,4 +353,3 @@ completed -> awaiting_decision -> adopted | rejected | rolled_back
 7. 如果已有 API、JSON Schema、数据库表或事件定义，也一并提供。
 
 最小可开始材料是：成功命令序列、关键日志、Patch 示例、Benchmark 结果和配置模板。有了这五类材料，就可以先做第一版真实 Agent Adapter。
-

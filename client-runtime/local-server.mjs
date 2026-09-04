@@ -20,7 +20,7 @@ import {
   ensureStorage,
   buildBenchmarkLogsForMatrix,
   loadState as loadPersistedState,
-  resetDemoData,
+  resetFixtureData,
   rebuildMissionWorkspaceFromRepository,
   resetMissionWorkspace,
   restoreWorkspaceCheckpoint,
@@ -394,7 +394,7 @@ const guardSupportedRuntimeAction = async (action) => {
   throw error;
 };
 
-const resetService = createResetService({ guardSupportedRuntimeAction, resetDemoData });
+const resetService = createResetService({ guardSupportedRuntimeAction, resetFixtureData });
 const resetRoutes = createResetRoutes({ json, reset: resetService });
 
 const guardWorkflowTransition = (state, { stages, actionType, label }) => {

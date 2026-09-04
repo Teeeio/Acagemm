@@ -5,15 +5,15 @@ import { createResetRoutes } from '../client-runtime/server/reset-routes.mjs';
 const calls = [];
 const service = createResetService({
   guardSupportedRuntimeAction: async (action) => calls.push(['guard', action]),
-  resetDemoData: async () => { calls.push(['reset']); return { stage: 'intake' }; },
+  resetFixtureData: async () => { calls.push(['reset']); return { stage: 'intake' }; },
 });
 assert.deepEqual(await service.reset(), { state: { stage: 'intake' } });
-assert.deepEqual(calls, [['guard', 'Demo Reset'], ['reset']]);
+assert.deepEqual(calls, [['guard', 'Test Fixture Reset'], ['reset']]);
 
 let resetCalled = false;
 const unavailable = createResetService({
   guardSupportedRuntimeAction: async () => { const error = new Error('unavailable'); error.status = 409; error.code = 'RUNTIME_ACTION_UNAVAILABLE'; throw error; },
-  resetDemoData: async () => { resetCalled = true; },
+  resetFixtureData: async () => { resetCalled = true; },
 });
 await assert.rejects(() => unavailable.reset(), (error) => error.code === 'RUNTIME_ACTION_UNAVAILABLE' && error.status === 409);
 assert.equal(resetCalled, false);

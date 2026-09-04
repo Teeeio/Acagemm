@@ -22,7 +22,7 @@
 
 - Demo Runtime 的 Agent、Benchmark 数值和知识变更计划仍是本地参考数据；`liveHardware=false`，不能作为真实硬件执行证明。
 - CLI 文件模式目前只支持 Mission request 和 Agent status projection；Patch、Benchmark、Decision 等动作仍返回 `RUNTIME_ACTION_UNAVAILABLE`。
-- 服务仍是 localhost 单进程 JSON 存储，没有认证、租户隔离或多进程锁；适用范围是本机展会演示和开发对接。
+- 服务仍是 localhost 单进程 JSON 存储，没有认证、租户隔离或多进程锁；适用范围是本机开发和受控测试。
 - 前端没有独立单元测试或视觉回归套件，本轮用生产构建和浏览器 DOM smoke 做最低限度验证。
 
 ## 验证结果

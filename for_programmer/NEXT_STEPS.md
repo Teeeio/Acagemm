@@ -3,7 +3,7 @@
 ## Current implementation baseline
 
 1. Local test queue and cancellation are implemented and contract-tested. The remaining production work is replacing the Mock Test Service worker, not moving queue or Agent logic to the server.
-2. Codex native process bridge is implemented and contract-tested. Exhibition validation requires a working local `codex exec`; Operator Studio must not own Provider URLs, model selection, or credentials.
+2. Codex native process bridge is implemented and contract-tested. Production validation requires a working local `codex exec`; Operator Studio must not own Provider URLs, model selection, or credentials.
 3. Candidate projection, authoritative Git Diff admission, client Decision/Intervention/Rollback, and Mock-safe knowledge maintenance are implemented. Do not add these responsibilities to the remote test service.
 
 ## P0：建立耐久 Harness 内核

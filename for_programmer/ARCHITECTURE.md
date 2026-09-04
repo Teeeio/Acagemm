@@ -60,7 +60,7 @@ sequenceDiagram
 
 ## 3. 运行模式
 
-| 模式 | 用途 | 是否可展会使用 |
+| 模式 | 用途 | 是否可用于生产流程 |
 | --- | --- | --- |
 | `codex-cli` | 默认模式；自动探测本机 Codex 登录并以 JSONL 投影运行事件 | 是，需本机完成 Codex 登录 |
 | `unavailable` | 显式禁用 Agent；不生成 Agent 数据 | 否 |

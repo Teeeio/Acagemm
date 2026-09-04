@@ -15,7 +15,7 @@ Agent 推理、工具调用、候选、工作区、流程、决策、知识和 c
 
 ## D-003 默认拒绝伪造 Agent 数据
 
-默认 Runtime 为 `codex-cli`，只自动探测本机 Codex 可执行文件；Provider、模型、base URL 和认证由本机 Codex 管理。命令不可用时显式降级，绝不生成 Agent 数据。只有自动化测试显式设置 `reference-fixture` 才生成参考数据；展会诊断拒绝该模式。
+默认 Runtime 为 `codex-cli`，只自动探测本机 Codex 可执行文件；Provider、模型、base URL 和认证由本机 Codex 管理。命令不可用时显式降级，绝不生成 Agent 数据。只有自动化测试显式设置 `reference-fixture` 才生成参考数据；生产验收拒绝该模式。
 
 ## D-004 Accept Gate 默认自动化
 
@@ -35,7 +35,7 @@ Agent 推理、工具调用、候选、工作区、流程、决策、知识和 c
 
 ## D-008 OpenCode 使用 Headless Server API
 
-OpenCode 集成使用其官方 Headless Server HTTP API，不解析终端彩色文本。Session、Message、Tool Part 和 Diff 都保留原始 OpenCode ID；第一阶段使用只读 `plan` Agent，Patch 和 Decision 回传完成前不允许通过展会诊断。
+OpenCode 集成使用其官方 Headless Server HTTP API，不解析终端彩色文本。Session、Message、Tool Part 和 Diff 都保留原始 OpenCode ID；第一阶段使用只读 `plan` Agent，Patch 和 Decision 回传完成前不满足生产工作流验收条件。
 
 ## D-009 Agent 动作与客户端工作流动作分离
 

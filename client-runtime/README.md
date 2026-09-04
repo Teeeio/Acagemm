@@ -42,7 +42,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/knowledge-service.mjs` | Knowledge draft editing and asset references | draft/reference command | persisted state or governance response |
 | `application/runtime-query-service.mjs` | Runtime state, preflight, and active workspace projections | Mission ID or query | state, readiness, or workspace DTO |
 | `application/runtime-state-service.mjs` | TUI state patch and pause/budget commands | state command body | persisted state or stable validation error |
-| `application/reset-service.mjs` | guarded Demo Reset orchestration | reset command | reset product state |
+| `application/reset-service.mjs` | guarded test-fixture reset orchestration | reset command | reset fixture state |
 | `application/source-service.mjs` | source repository registration and counting | Mission source root | source references/count |
 | `application/iteration-research-service.mjs` | Agent research start/cancel coordination | research command | updated state |
 | `application/round-recovery-service.mjs` | rejected-round checkpoint restoration | round state/workspace | recovery metadata |

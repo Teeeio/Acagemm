@@ -24,7 +24,7 @@ import { normalizeWorkflowError, serializeWorkflowError } from './workflow-error
 
 export { runtimeDir } from './storage-paths.mjs';
 const statePath = path.join(dataDir, 'mock-db.json');
-const workspaceTemplate = path.join(rootDir, 'demo-assets', 'mla-kernels');
+const workspaceTemplate = path.join(rootDir, 'test-fixtures', 'mla-kernels');
 export const workspaceDir = path.join(runtimeDir, 'mla-kernels');
 const missionWorkspaceRoot = path.join(runtimeDir, 'workspaces');
 const workspaceCheckpointRoot = path.join(runtimeDir, 'checkpoints');
@@ -1361,7 +1361,7 @@ export async function saveState(state) {
   return next;
 }
 
-export async function resetDemoData() {
+export async function resetFixtureData() {
   // 清空命令日志，避免旧命令在新 seed（stateVersion=0）上被崩溃恢复误回放。
   await rm(journalPathFor(runtimeDir), { force: true });
   const state = await saveState(createSeedState());

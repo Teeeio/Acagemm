@@ -1,6 +1,6 @@
 # Operator Studio
 
-> TUI 分支的 C550 生产工作流测试版入口为 `npm run tester:c500`。部署、三种运行模式、Agent Runtime 兼容层、TUI 操作、真实 C550 runner 和 Mock 边界见 `tools/local-c500-tester/README.md`；`local-c500` 为历史兼容命名。
+> `main` 分支的 C550 生产工作流入口为 `npm run tester:c500`。部署、运行模式、Agent Runtime 兼容层、TUI 操作、真实 C550 runner 和 Mock 边界见 `tools/local-c500-tester/README.md`；`local-c500` 为历史兼容命名。
 
 Operator Studio 是面向异构算子优化的本地 Agentic IDE。Agent 推理、工具调用、候选生成、代码工作区、流程状态、效果决策和知识维护都属于客户端；远端测试服务只接收算子测试任务并返回 Benchmark、Tracer 和 Profiler。
 
@@ -23,7 +23,7 @@ flowchart LR
 - `client-runtime/`：本地应用后端，负责能力驱动的 Agent Runtime Adapter、Mission、候选、工作区、决策、知识和本地持久化。
 - `test-service/`：远端测试服务契约的 Mock 实现，不提供 Mission、Agent、候选、决策或知识 API。
 - `tests/`：客户端运行时、产品边界、烟雾和发布守卫测试。
-- `reference-fixture`：仅供自动化测试使用，不能作为展会运行模式。
+- `reference-fixture`：仅供自动化测试使用，不能作为生产运行模式。
 
 ## 启动
 
@@ -103,7 +103,7 @@ $env:OPENCODE_MODEL='provider/model-id'
 npm start
 ```
 
-当前接入会创建 OpenCode Session、异步提交 Mission，并读取 Session Status、Message、Tool Part 和 Diff。`plan` Agent 用于只读分析；OpenCode 的 Patch 应用、权限响应和 Decision 回传尚未启用，因此该模式不能通过展会发布诊断。API key 由 OpenCode 自己管理，Operator Studio 不保存 Provider 密钥。
+当前接入会创建 OpenCode Session、异步提交 Mission，并读取 Session Status、Message、Tool Part 和 Diff。`plan` Agent 用于只读分析；OpenCode 的 Patch 应用、权限响应和 Decision 回传尚未启用，因此该模式不满足生产工作流验收条件。API key 由 OpenCode 自己管理，Operator Studio 不保存 Provider 密钥。
 
 ## 测试服务契约
 

@@ -33,4 +33,6 @@
 
 ## 发布验收
 
-运行 `npm run demo:package`。脚本会依次执行八组测试和 Build，再生成离线包及 SHA-256 清单。展机还必须运行 `展会诊断.cmd`；默认 `codex-cli` 必须可执行，Runtime authority 才能通过。Provider、模型与认证由本机 Codex 自行验证；`reference-fixture` 和 `opencode-server` 当前会被诊断明确拒绝。
+跨模块变更运行 `npm run verify:local-c500-release`；无硬件变更还应运行
+`npm run verify:non-hardware-robustness`。生产启动默认使用受支持的本地 Agent Runtime；
+`reference-fixture` 只允许用于自动化测试，不能作为生产证据来源。

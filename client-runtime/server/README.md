@@ -43,7 +43,7 @@
 | `knowledge-routes.mjs` | Knowledge draft, reference, and retired publication HTTP contexts | handled boolean and JSON response |
 | `runtime-query-routes.mjs` | Runtime state, preflight, and workspace GET contexts | handled boolean and JSON response |
 | `runtime-state-routes.mjs` | Runtime state PATCH context | handled boolean and JSON response |
-| `reset-routes.mjs` | Demo Reset POST context | handled boolean and JSON response |
+| `reset-routes.mjs` | test-fixture reset POST context | handled boolean and JSON response |
 
 ## Route Contract
 
