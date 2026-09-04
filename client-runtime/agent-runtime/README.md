@@ -1,5 +1,8 @@
 # Agent Runtime Module Contract
 
+模块归属：后端 Agent Runtime Adapter。完整的上下游边界和建议主责角色见
+[`docs/development/MODULE_OWNERSHIP.md`](../../docs/development/MODULE_OWNERSHIP.md)。
+
 ## Purpose
 
 This module defines provider-neutral Agent capabilities and dispatch. It lets production workflow code ask what a runtime supports and invoke a logical operation without branching on provider names.

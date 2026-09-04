@@ -1,5 +1,8 @@
 # Test Module Contract
 
+模块归属：跨模块 Verification。测试由对应生产模块主责共同维护，详细映射见
+[`docs/development/MODULE_OWNERSHIP.md`](../docs/development/MODULE_OWNERSHIP.md)。
+
 ## Purpose
 
 Tests protect production contracts. A test must identify whether it is unit, contract, integration, robustness, or end-to-end coverage.
@@ -11,6 +14,8 @@ Tests protect production contracts. A test must identify whether it is unit, con
 - Tests that spawn a Runtime must use an isolated tester home and disable ambient auto tick unless the test targets auto tick.
 - Temporary state must be cleaned in `finally` blocks.
 - Contract tests should assert stable behavior and error codes, not incidental implementation text.
+- `module-boundary-test.mjs` requires every Application service to appear in the central module
+  ownership index, so new services must update their local contract and the shared catalog together.
 - Hardware-free release checks must not invoke Python runner, `mx-smi`, `mctracer`, or `mcProfiler` unless explicitly mocked.
 
 ## Naming

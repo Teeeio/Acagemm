@@ -1,5 +1,8 @@
 # TUI Components Module Contract
 
+模块归属：TUI Presentation。完整的客户端分层和建议主责角色见
+[`docs/development/MODULE_OWNERSHIP.md`](../../../docs/development/MODULE_OWNERSHIP.md)。
+
 ## Purpose
 
 These Ink components render production Runtime snapshots. They are presentation-only components and must remain safe for empty, partial, loading, failed, and narrow-terminal states.

@@ -51,3 +51,7 @@ The removed standalone local CLI workflow is not a supported architecture. New c
 ## Documentation Rule
 
 Every module directory has a `README.md`. A new directory must include one based on `MODULE_CONTRACT_TEMPLATE.md`. Contract changes and their documentation belong in the same pull request.
+
+The Chinese module ownership and onboarding index is maintained in
+[`MODULE_OWNERSHIP.md`](MODULE_OWNERSHIP.md). Update it whenever responsibility moves between
+modules or a new first-class module is introduced.

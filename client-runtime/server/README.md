@@ -1,5 +1,8 @@
 # Server Module Contract
 
+模块归属：后端 HTTP Transport。完整的上下游边界和建议主责角色见
+[`docs/development/MODULE_OWNERSHIP.md`](../../docs/development/MODULE_OWNERSHIP.md)。
+
 ## Purpose
 
 `server/` owns HTTP transport concerns and thin route adapters. It translates HTTP requests into calls on injected services and translates results or errors into transport responses.

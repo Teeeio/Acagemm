@@ -1,5 +1,8 @@
 # Application Module Contract
 
+模块归属：后端 Application Use Cases。完整的子域分组和建议主责角色见
+[`docs/development/MODULE_OWNERSHIP.md`](../../docs/development/MODULE_OWNERSHIP.md)。
+
 ## Purpose
 
 `application/` contains use-case orchestration between HTTP routes and domain or adapter modules. Each service exposes commands and queries without depending on HTTP request/response objects.

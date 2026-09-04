@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -172,7 +172,9 @@ assert.doesNotMatch(baselineOrchestrationSource, /server\/|tools\/local-c500-tes
 
 for (const requiredDocument of [
   'AGENTS.md',
+  'docs/development/README.md',
   'docs/development/ARCHITECTURE.md',
+  'docs/development/MODULE_OWNERSHIP.md',
   'docs/development/MODULE_CONTRACT_TEMPLATE.md',
   'client-runtime/README.md',
   'client-runtime/state-repository.md',
@@ -229,6 +231,13 @@ for (const requiredDocument of [
   'tests/README.md',
 ]) {
   assert.equal(await exists(requiredDocument), true, `module contract is required: ${requiredDocument}`);
+}
+
+const ownershipIndex = await read('docs/development/MODULE_OWNERSHIP.md');
+const applicationModules = (await readdir(path.join(root, 'client-runtime', 'application')))
+  .filter((name) => name.endsWith('.mjs'));
+for (const moduleName of applicationModules) {
+  assert.match(ownershipIndex, new RegExp(`\\b${moduleName.replace('.mjs', '\\.md')}\\b`), `ownership index must classify ${moduleName}`);
 }
 
 assert.equal(Object.keys(packageJson.scripts).some((name) => /local-c500-(?:tester|adapter|workflow|discovery|generation|adoption|e2e)$/.test(name)), false);

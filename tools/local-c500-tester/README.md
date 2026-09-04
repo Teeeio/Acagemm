@@ -1,5 +1,8 @@
 # C550 Production Workflow Tester
 
+模块归属：当前 TUI 客户端、Production API Client 和启动/诊断工具。详细文件归属见
+[`docs/development/MODULE_OWNERSHIP.md`](../../docs/development/MODULE_OWNERSHIP.md)。
+
 这是 Operator Studio 生产工作流的 TUI 测试入口。它复用生产 Mission、受管理 Agent、baseline、Mission Workspace、operator-test queue、Accept Gate、adoption 和连续迭代逻辑，只把 queue 后面的执行服务切换为本机沐曦 C550 backend。
 
 ## C500 与 C550 的边界

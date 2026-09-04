@@ -260,6 +260,8 @@ npm run e2e:cpu-agent-iteration  # 真实 Agent + 实际 CPU 执行，手动验�
 
 ## 开发文档
 
+- [开发文档入口](docs/development/README.md)
+- [模块归属与功能索引](docs/development/MODULE_OWNERSHIP.md)
 - [开发架构与依赖方向](docs/development/ARCHITECTURE.md)
 - [Client Runtime 模块契约](client-runtime/README.md)
 - [Application 编排模块契约](client-runtime/application/README.md)

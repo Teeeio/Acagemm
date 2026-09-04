@@ -1,5 +1,9 @@
 # Client Runtime Module Contract
 
+模块归属：Operator Studio 共享后端，包含应用编排、领域规则、端口和适配器。各子模块的
+所有权与输入输出索引见
+[`docs/development/MODULE_OWNERSHIP.md`](../docs/development/MODULE_OWNERSHIP.md)。
+
 ## Purpose
 
 `client-runtime` is the local application backend. It owns Mission state, workflow orchestration, Agent coordination, isolated workspaces, serialized operator tests, evidence decisions, and local persistence.
