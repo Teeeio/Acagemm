@@ -1,4 +1,5 @@
 import { lstat, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { isExecutionReleased, assertResourcesReleased, reconcileResourceRelease } from './cancellation-contract.mjs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +12,10 @@ import { workspaceManager } from './workspace-manager.mjs';
 import { materializeBaselineSource } from './baseline-materializer.mjs';
 import { prepareAgentBoundary } from './agent-boundary.mjs';
 import { loadSourceMirrorPolicy, normalizeRepositoryIdentity, resolveSourceTransport, verifySourceTransportSnapshot } from './source-mirror-policy.mjs';
-import { operatorLanguageInstruction, validateOperatorLanguageCandidate } from './operator-language.mjs';
+import { buildCandidateGenerationPrompt } from './candidate-generation/prompt.mjs';
+import { candidateWorkspaceRequirements, finalizeCandidateAdmission, inspectCandidateDiff } from './candidate-generation/admission.mjs';
 import { testSpecAgentInstruction } from './test-spec.mjs';
+import { formatExperienceContext } from './experience-contract.mjs';
 import { fixedOperatorPrompt } from './fixed-operator-profiles.mjs';
 import { recordRunTokenUsage } from './token-usage.mjs';
 import { runtimeRegistry } from './agent-runtime/registry.mjs';
@@ -609,8 +612,12 @@ export function createAgentRuntime(options = {}) {
     return { ready: true, code: 'AGENT_RUNTIME_READY', runtime: descriptor, workspace };
   };
 
-  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null }) => {
+  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null }) => {
+    assertResourcesReleased(state);
     if (mode === 'reference-fixture') return { handled: false };
+    const experienceInstruction = experienceContext ? formatExperienceContext(experienceContext, {
+      projectId: mission.projectId, missionId: mission.id, roundId: state.iterationStats?.roundBudget?.roundId,
+    }) : '';
     if (mode === 'opencode-server') {
       if (!runtimeEngine.supports(mode, 'planning')) {
         const error = new Error(`Agent Runtime ${mode} does not support planning runs.`);
@@ -632,6 +639,7 @@ export function createAgentRuntime(options = {}) {
         `Goal: ${goal}`,
         `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
         `Metric: ${mission.metric || 'not specified'}`,
+        experienceInstruction,
         'Inspect the current OpenCode project in planning mode. Do not edit files in this pass.',
         'Return a concrete diagnosis, tool evidence, candidate options, risks, and the recommended next action.',
       ].join('\n');
@@ -693,10 +701,6 @@ export function createAgentRuntime(options = {}) {
       const workspace = requestedWorkspace;
       const sourceRoot = mission.sourceRoot || null;
       const baseline = state.baseline || mission.baseline || {};
-      const baselineRunPy = baseline.oracleRunPy || baseline.materializer?.result?.runPy || '';
-      const implementationInstruction = operatorLanguageInstruction(mission.implementation, mission.operatorProfile?.candidateContract);
-      const executableTestInstruction = testSpecAgentInstruction(mission.testMatrix || state.testMatrix || {});
-      const frozenProfileInstruction = mission.operatorProfile ? fixedOperatorPrompt(mission.operatorProfile) : '';
       if (sourceRoot) await mkdir(sourceRoot, { recursive: true });
       const boundary = await prepareAgentBoundary({
         workspace,
@@ -707,39 +711,16 @@ export function createAgentRuntime(options = {}) {
         ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
         workspace,
       ).then((result) => result.stdout.split('\0').map((file) => file.replaceAll('\\', '/')).filter(Boolean).sort());
-      const inventoryText = workspaceInventory.length
-        ? workspaceInventory.map((file) => `- ${file}`).join('\n')
-        : '- (empty workspace)';
-      const prompt = [
-        'You are the local optimization Agent for Operator Studio.',
-        `Mission ID: ${mission.id}`,
-        `Goal: ${goal}`,
-        `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
-        `Metric: ${mission.metric || 'not specified'}`,
-        `Workspace: ${workspace}`,
-        'The Workspace is the isolated snapshot of the project-owned Iteration Repository. Only files changed inside this Workspace may become Candidate files.',
-        'Read and write boundary: this Iteration Agent may access ONLY the Workspace above. Do not inspect parent directories, Source Registry, research/baseline directories, sibling projects, other test runs, or unrelated filesystem paths. Previous test-run code is forbidden input.',
-        'Workspace file inventory at run start (authoritative):',
-        inventoryText,
-        'The first round may start without implementation code. Contract deliverables such as run.py may therefore be absent from the inventory. Do not Read or Edit an absent path: create it directly with a file creation or patch tool. The inline baseline below is prompt evidence and is not guaranteed to exist as workspace/run.py. Later rounds start from the current stable candidate.',
-        'Inspect and edit only the configured implementation files. Do not search for another baseline. External references are optional implementation advice, not baseline authority.',
-        implementationInstruction,
-        frozenProfileInstruction ? `Frozen operator profile (immutable): ${frozenProfileInstruction}` : '',
-        'Hard baseline constraint: before any optimized operator candidate can be adopted, Operator Studio must have a current valid baseline measured on the same runner and the same input shape. Prefer a PyTorch reference baseline expanded into a single-file run.py. If no authoritative upstream implementation exists, use a clearly labeled naive_v0 baseline derived from a v0 version and do not confuse it with an upstream reference.',
-        `Baseline status: ${baseline.status || 'missing'}${baseline.evidence ? ` · ${baseline.evidence.environment} ${baseline.evidence.value}${baseline.evidence.unit}` : ''}${baseline.kind === 'naive_v0' ? ' · naive_v0' : ''}`,
-        'The following baseline was generated by this Mission\'s Materializer and measured by the fixed workflow. Preserve its get_inputs() and reference(inputs) semantics while optimizing run(inputs):',
-        '----- BEGIN CURRENT BASELINE RUN.PY -----',
-        baselineRunPy,
-        '----- END CURRENT BASELINE RUN.PY -----',
-        'Runner contract: every candidate root run.py MUST remain the executable bridge and define get_inputs(), get_test_cases(), get_benchmark_inputs(), run(inputs), and reference(inputs). Native/Triton implementation files are selected by the language contract. A CLI-only benchmark, main(), or differently named entrypoints is invalid. Keep test inputs and reference semantics aligned with the established baseline, and optimize only the implementation path called by run(inputs).',
-        mission.operatorProfile?.deliveryFiles?.length ? `Create and maintain these human-facing deliverables: ${mission.operatorProfile.deliveryFiles.join(', ')}. Update report.md with correctness, fixed benchmark measurements, the threshold chosen from the first correct Triton version, and each round's KEEP/DISCARD decision. run.py is an additional internal bridge and is not a substitute for any deliverable.` : '',
-        executableTestInstruction,
-        'Use the Mission baseline and iteration evidence embedded in this prompt. Create one bounded candidate patch inside the isolated Mission workspace. Do not call a remote benchmark service in this turn; Operator Studio owns the serialized test queue.',
-        'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.agent-result/v1","summary":"...","diagnosis":{"summary":"...","bottlenecks":[]},"candidates":[{"id":"candidate-01","title":"...","hypothesis":"...","change":"...","files":["relative/path"],"sourceReferences":[],"risks":[]}],"recommendedCandidate":"candidate-01","nextAction":{"type":"candidate.plan","title":"...","reason":"...","expectedOutput":"...","risk":"medium"},"risks":[]}. List only files actually changed in the Mission workspace. If no candidate is justified, do not edit files; return an empty candidates array and explain why in summary.',
-        'Do not decide whether human approval is required. Operator Studio applies its own policy to evidence and risk signals.',
-        'For a resumed thread, follow the new user goal while keeping all work inside this isolated Mission workspace.',
-        boundary.toolInstruction,
-      ].join('\n');
+      const prompt = buildCandidateGenerationPrompt({
+        mission,
+        goal,
+        workspace,
+        baseline,
+        testMatrix: mission.testMatrix || state.testMatrix || {},
+        workspaceInventory,
+        experienceInstruction,
+        boundaryInstruction: boundary.toolInstruction,
+      });
       const run = await runtimeEngine.invoke(mode, 'start', { runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
       state.stage = 'diagnosis';
       state.patchApplied = false;
@@ -785,6 +766,7 @@ export function createAgentRuntime(options = {}) {
       missionId: mission.id,
       repository: mission.repository,
       goal,
+      ...(experienceContext ? { experienceContext: structuredClone(experienceContext), experienceInstruction } : {}),
       targetHardware: mission.hardware,
       metric: mission.metric,
       status: 'requested',
@@ -899,6 +881,7 @@ export function createAgentRuntime(options = {}) {
   ].join('\n');
 
   const startBaselineMaterialization = async ({ state, mission, source, matrix = {}, workspace }) => {
+    assertResourcesReleased(state);
     if (!managedCliMode || !runtimeEngine.supports(mode, 'materializer')) {
       const error = new Error(`Baseline materializer requires a managed workspace CLI runtime (current: ${mode}).`);
       error.status = 503;
@@ -994,6 +977,7 @@ export function createAgentRuntime(options = {}) {
   };
 
   const startResearch = async ({ state, mission, direction, workspace, synchronous = false, runPhase = 'acquire' }) => {
+    assertResourcesReleased(state);
     if (!managedCliMode || !runtimeEngine.supports(mode, 'research')) {
       const error = new Error(`Research Agent requires a managed workspace CLI runtime (current: ${mode}).`);
       error.status = 503;
@@ -1088,6 +1072,55 @@ export function createAgentRuntime(options = {}) {
     return { handled: true, state };
   };
 
+  const cancellationCalls = new Map();
+  const cancellationTimeoutMs = Math.max(20, Number(options.cancellationTimeoutMs) || 5_000);
+  const requestCancellation = async (runId) => {
+    let operation = cancellationCalls.get(runId);
+    if (!operation) {
+      operation = Promise.resolve().then(() => runtimeEngine.invoke(mode, 'cancel', runId));
+      cancellationCalls.set(runId, operation);
+      operation.finally(() => { if (cancellationCalls.get(runId) === operation) cancellationCalls.delete(runId); }).catch(() => {});
+    }
+    // A timed-out port is quarantined, never treated as cancelled. Its eventual
+    // result has no reference to the mutable Mission snapshot.
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ status: 'cancel_requested', resourceRelease: {
+        confirmed: false, status: 'unconfirmed', code: 'AGENT_CANCEL_DEADLINE_EXCEEDED',
+        reason: 'Agent cancellation did not acknowledge before its deadline.',
+      } }), cancellationTimeoutMs);
+      operation.then(value => { clearTimeout(timer); resolve(value || { status: 'cancel_requested' }); },
+        error => { clearTimeout(timer); resolve({ status: 'cancel_requested', resourceRelease: {
+          confirmed: false, status: 'unconfirmed', code: error.code || 'AGENT_CANCEL_FAILED', reason: error.message,
+        } }); });
+    });
+  };
+  const cancellationProjection = (previous, resourceRelease = {}, { timedOut = previous.timedOut, reason = 'Agent cancellation awaits process exit.' } = {}) => ({
+    ...previous, status: 'cancel_requested', currentAction: null, completedAt: null,
+    phase: previous.phase?.startsWith('正在取消') ? previous.phase : '正在取消 Agent，等待执行资源释放',
+    timedOut: timedOut || undefined,
+    resourceRelease: { confirmed: false, status: 'pending', reason,
+      requestedAt: previous.resourceRelease?.requestedAt || new Date().toISOString(),
+      deadline: previous.resourceRelease?.deadline || new Date(Date.now() + cancellationTimeoutMs).toISOString(),
+      nextAction: 'Inspect cancellation status; no workspace mutation or new run is permitted until release is confirmed.',
+      ...resourceRelease, status: resourceRelease.status === 'unconfirmed' ? 'unconfirmed' : 'pending', confirmed: false },
+  });
+  const settleCancellation = async (previous, run, expired = false, logicalDone = false) => {
+    if (isExecutionReleased(run)) return { run, projection: null };
+    const cancelling = expired || logicalDone || previous.status === 'cancel_requested' || ['completed', 'failed', 'cancelled'].includes(run.status)
+      || ['pending', 'unconfirmed'].includes(run.resourceRelease?.status);
+    if (!cancelling) return { run, projection: null };
+    let outcome = run;
+    if (previous.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') {
+      outcome = await requestCancellation(previous.runId);
+      if (isExecutionReleased(outcome)) return { run: { ...run, ...outcome }, projection: null };
+    }
+    return { run, projection: cancellationProjection(previous, outcome.resourceRelease, { timedOut: expired || previous.timedOut }) };
+  };
+
+  const cancellationRelease = (previous, result) => isExecutionReleased(result)
+    ? { ...result.resourceRelease, confirmed: true, status: 'confirmed', reason: 'Agent process release is confirmed.', nextAction: 'No action required.' }
+    : cancellationProjection(previous, result.resourceRelease).resourceRelease;
+
   const cancelRun = async ({ state, runId }) => {
     if (state.baseline?.materializer?.runId && runId === state.baseline.materializer.runId) {
       if (!managedCliMode || !runtimeEngine.supports(mode, 'cancellation')) {
@@ -1096,10 +1129,10 @@ export function createAgentRuntime(options = {}) {
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await runtimeEngine.invoke(mode, 'cancel', runId);
+      const result = await requestCancellation(runId);
       state.baseline = {
         ...(state.baseline || {}),
-        materializer: { ...state.baseline.materializer, status: 'cancel_requested', phase: 'Baseline materializer 取消已请求' },
+        materializer: { ...state.baseline.materializer, status: isExecutionReleased(result) ? result.status : 'cancel_requested', phase: 'Baseline materializer 取消已请求', resourceRelease: cancellationRelease(state.baseline.materializer, result) },
       };
       appendRuntimeEvent(state, 'baseline.materializer_cancel_requested', { runId }, { kind: 'baseline-materializer', mode });
       return { state, result };
@@ -1111,8 +1144,8 @@ export function createAgentRuntime(options = {}) {
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await runtimeEngine.invoke(mode, 'cancel', runId);
-      state.researchAgent = { ...state.researchAgent, status: 'cancel_requested', phase: '研究员取消已请求' };
+      const result = await requestCancellation(runId);
+      state.researchAgent = { ...state.researchAgent, status: isExecutionReleased(result) ? result.status : 'cancel_requested', phase: '研究员取消已请求', resourceRelease: cancellationRelease(state.researchAgent, result) };
       appendRuntimeEvent(state, 'research.cancel_requested', { runId }, { kind: 'research', mode });
       return { state, result };
     }
@@ -1123,7 +1156,7 @@ export function createAgentRuntime(options = {}) {
       throw error;
     }
     let result;
-    if (runtimeDefinition && runtimeEngine.supports(mode, 'cancellation')) result = await runtimeEngine.invoke(mode, 'cancel', runId);
+    if (runtimeDefinition && runtimeEngine.supports(mode, 'cancellation')) result = await requestCancellation(runId);
     else {
       const error = new Error(`Agent cancellation is not supported by runtime mode ${mode}.`);
       error.status = 409;
@@ -1132,7 +1165,9 @@ export function createAgentRuntime(options = {}) {
     }
     state.agent = {
       ...state.agent,
-      status: 'cancel_requested',
+      status: isExecutionReleased(result) ? result.status : 'cancel_requested',
+      currentAction: null,
+      resourceRelease: cancellationRelease(state.agent, result),
       phase: 'Agent cancellation requested',
     };
     appendRuntimeEvent(state, 'agent.run_cancel_requested', { runId }, { kind: 'agent', mode });
@@ -1202,6 +1237,7 @@ export function createAgentRuntime(options = {}) {
         ];
         const nextAgent = {
           ...state.agent,
+
           status: nextStatus,
           phase: errors.length ? 'OpenCode 执行失败' : busy ? 'OpenCode 正在执行' : diffList.length ? '候选变更待审阅' : assistantMessages.length ? 'OpenCode 分析完成' : state.agent.phase,
           progress: busy ? Math.max(10, state.agent.progress || 0) : errors.length || assistantMessages.length ? 100 : state.agent.progress,
@@ -1221,7 +1257,7 @@ export function createAgentRuntime(options = {}) {
         if (statusChanged) appendRuntimeEvent(state, errors.length ? 'opencode.session_failed' : diffList.length ? 'opencode.diff_ready' : 'opencode.session_updated', { sessionId, status: nextStatus, diffCount: diffList.length, error: errors.at(-1) || null }, { kind: 'agent', mode: 'opencode-server' });
         return { state, changed: changed || statusChanged };
       } catch (error) {
-        const nextAgent = { ...state.agent, status: 'failed', phase: 'OpenCode 状态读取失败', progress: 100, messages: [...(state.agent.messages || []), { id: `opencode-projection-error-${sessionId}`, phase: 'OpenCode', status: 'waiting', title: '无法读取 OpenCode Session', detail: error.message, time: '刚刚' }] };
+        const nextAgent = { ...state.agent, resourceRelease: observedRun.resourceRelease || { confirmed: true, status: 'confirmed' }, status: 'failed', phase: 'OpenCode 状态读取失败', progress: 100, messages: [...(state.agent.messages || []), { id: `opencode-projection-error-${sessionId}`, phase: 'OpenCode', status: 'waiting', title: '无法读取 OpenCode Session', detail: error.message, time: '刚刚' }] };
         const changed = runtimeChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
         state.agent = nextAgent;
         return { state, changed };
@@ -1229,22 +1265,28 @@ export function createAgentRuntime(options = {}) {
     }
     const materializerNeedsProjection = ['running', 'cancel_requested'].includes(state.baseline?.materializer?.status);
     if (managedCliMode && materializerNeedsProjection && state.baseline?.materializer?.runId && state.baseline.materializer.runtimeKind === mode) {
+      let observedRun = null;
       try {
         const prev = state.baseline.materializer;
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
-        const run = await runtimeEngine.invoke(mode, 'readRun', prev.runId);
+        let run = await runtimeEngine.invoke(mode, 'readRun', prev.runId);
+        observedRun = run;
         const events = await runtimeEngine.invoke(mode, 'readEvents', prev.runId);
         recordRunTokenUsage(state, { runId: prev.runId, phase: 'materializer', provider: mode, events });
-        const failed = run.status === 'failed';
-        const completed = run.status === 'completed';
-        const cancelled = run.status === 'cancelled';
         const budgetExceeded = Number(prev.budgetMs) > 0
           && prev.startedAt
           && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
-        const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? 'cancelled' : (budgetExceeded && prev.status !== 'cancel_requested') ? 'timed_out' : prev.status === 'cancel_requested' ? 'cancel_requested' : 'running';
-        if (nextStatus === 'timed_out') {
-          try { await runtimeEngine.invoke(mode, 'cancel', prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
+        const settlement = await settleCancellation(prev, run, budgetExceeded, events.some(event => event.type === 'turn.completed'));
+        if (settlement.projection) {
+          const changed = runtimeChanged || JSON.stringify(settlement.projection) !== JSON.stringify(prev);
+          state.baseline = { ...state.baseline, materializer: settlement.projection };
+          return { state, changed };
         }
+        run = settlement.run; observedRun = run;
+        const failed = run.status === 'failed';
+        const completed = run.status === 'completed';
+        const cancelled = run.status === 'cancelled';
+        const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? (prev.timedOut ? 'timed_out' : 'cancelled') : 'running';
         let terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
         const eventCount = events.length;
         const lastEventAt = lastManagedActivityAt(run, prev.lastEventAt, eventCount > (prev.eventCount || 0));
@@ -1253,7 +1295,7 @@ export function createAgentRuntime(options = {}) {
         let finalStatus = nextStatus;
         let finalPhase = failed ? 'Baseline materializer 执行失败' : completed ? 'Baseline 单文件展开完成' : cancelled ? 'Baseline materializer 已取消' : nextStatus === 'timed_out' ? 'Baseline materializer 预算耗尽' : prev.status === 'cancel_requested' ? '正在取消 baseline materializer' : 'Baseline 单文件展开中';
         let workspaceArtifact = null;
-        if (!result) {
+        if (!result && terminal) {
           try { workspaceArtifact = await readMaterializerWorkspaceResult(prev, events); } catch { /* Agent may still be replacing its report atomically. */ }
         }
         if (workspaceArtifact && !result) {
@@ -1315,6 +1357,7 @@ export function createAgentRuntime(options = {}) {
         }
         const nextMaterializer = {
           ...prev,
+          resourceRelease: run.resourceRelease || (terminal ? { confirmed: true, status: 'confirmed' } : prev.resourceRelease),
           status: finalStatus,
           phase: finalPhase,
           progress: terminal ? 100 : Math.max(5, Math.min(95, 5 + events.length * 3)),
@@ -1350,9 +1393,13 @@ export function createAgentRuntime(options = {}) {
         if (terminal) appendRuntimeEvent(state, finalStatus === 'completed' ? 'baseline.materializer_completed' : 'baseline.materializer_failed', { runId: prev.runId, status: finalStatus, source: state.baseline.source, error: materializerError }, { kind: 'baseline-materializer', mode });
         return { state, changed: true };
       } catch (error) {
+        if (!isExecutionReleased(observedRun || {})) {
+          state.baseline = { ...state.baseline, materializer: cancellationProjection(state.baseline.materializer, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message }) };
+          return { state, changed: true };
+        }
         state.baseline = {
           ...(state.baseline || {}),
-          materializer: { ...(state.baseline?.materializer || {}), status: 'failed', phase: 'Baseline materializer 状态读取失败', progress: 100, error: { code: 'BASELINE_MATERIALIZER_PROJECTION_FAILED', message: error.message } },
+          materializer: { ...(state.baseline?.materializer || {}), resourceRelease: observedRun.resourceRelease || { confirmed: true, status: 'confirmed' }, status: 'failed', phase: 'Baseline materializer 状态读取失败', progress: 100, error: { code: 'BASELINE_MATERIALIZER_PROJECTION_FAILED', message: error.message } },
         };
         return { state, changed: true };
       }
@@ -1366,23 +1413,29 @@ export function createAgentRuntime(options = {}) {
       || (['completed', 'failed', 'timed_out', 'cancelled'].includes(state.researchAgent?.status)
           && ['synthesize', 'experience'].includes(state.researchAgent?.runPhase) && !(state.researchAgent?.notes || []).length);
     if (managedCliMode && researchNeedsProjection && state.researchAgent?.runId && state.researchAgent?.runtimeKind === mode) {
+      let observedRun = null;
       try {
         const prev = state.researchAgent;
-        const run = await runtimeEngine.invoke(mode, 'readRun', prev.runId);
+        let run = await runtimeEngine.invoke(mode, 'readRun', prev.runId);
+        observedRun = run;
         const events = await runtimeEngine.invoke(mode, 'readEvents', prev.runId);
         const usageBefore = JSON.stringify(state.tokenUsage || null);
         recordRunTokenUsage(state, { runId: prev.runId, phase: `research.${prev.runPhase || 'run'}`, provider: mode, events });
         const usageChanged = usageBefore !== JSON.stringify(state.tokenUsage || null);
-        const failed = run.status === 'failed';
-        const completed = run.status === 'completed';
-        const cancelled = run.status === 'cancelled';
         const budgetExceeded = Number(prev.budgetMs) > 0
           && prev.startedAt
           && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
-        const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? 'cancelled' : (budgetExceeded && prev.status !== 'cancel_requested') ? 'timed_out' : prev.status === 'cancel_requested' ? 'cancel_requested' : 'running';
-        if (nextStatus === 'timed_out') {
-          try { await runtimeEngine.invoke(mode, 'cancel', prev.runId); } catch { /* 下一 tick 由 readRun 收敛 */ }
+        const settlement = await settleCancellation(prev, run, budgetExceeded, false);
+        if (settlement.projection) {
+          const changed = runtimeChanged || usageChanged || JSON.stringify(settlement.projection) !== JSON.stringify(prev);
+          state.researchAgent = settlement.projection;
+          return { state, changed };
         }
+        run = settlement.run; observedRun = run;
+        const failed = run.status === 'failed';
+        const completed = run.status === 'completed';
+        const cancelled = run.status === 'cancelled';
+        const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? (prev.timedOut ? 'timed_out' : 'cancelled') : 'running';
         const terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
         // 事件新鲜度：供循环做停滞/事件预算终止
         const eventCount = events.length;
@@ -1390,6 +1443,7 @@ export function createAgentRuntime(options = {}) {
         const phaseLabel = prev.runPhase === 'acquire' ? '研究员采集' : prev.runPhase === 'experience' ? '研究员经验调研' : '研究员整理笔记';
         const nextResearchAgent = {
           ...prev,
+          resourceRelease: run.resourceRelease || (terminal ? { confirmed: true, status: 'confirmed' } : prev.resourceRelease),
           status: nextStatus,
           runPhase: prev.runPhase,
           phase: failed ? `${phaseLabel}失败` : completed ? (prev.runPhase === 'acquire' ? '采集完成，待整理笔记' : prev.runPhase === 'experience' ? '经验调研完成' : '研究员笔记完成') : cancelled ? '研究员已取消' : nextStatus === 'timed_out' ? '研究员预算耗尽' : prev.status === 'cancel_requested' ? '正在取消研究员' : (prev.runPhase === 'acquire' ? '研究员采集中' : prev.runPhase === 'experience' ? '研究员搜寻优化经验中' : '研究员整理笔记中'),
@@ -1454,19 +1508,25 @@ export function createAgentRuntime(options = {}) {
         state.researchAgent = nextResearchAgent;
         if (prev.synchronous === true) return { state, changed };
       } catch (error) {
+        if (!isExecutionReleased(observedRun || {})) {
+          state.researchAgent = cancellationProjection(state.researchAgent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message });
+          return { state, changed: true };
+        }
         appendRuntimeEvent(state, 'research.acquire_failed', {
           runId: state.researchAgent?.runId,
           phase: state.researchAgent?.runPhase,
           errorCode: error.code || 'RESEARCH_SOURCE_ACQUISITION_FAILED',
           details: error.details || null,
         }, { kind: 'research', mode });
-        state.researchAgent = { ...state.researchAgent, status: 'failed', phase: '研究员处理失败', progress: 100, messages: [...(state.researchAgent.messages || []), { id: `research-projection-error-${state.researchAgent.runId}`, phase: 'research', status: 'waiting', title: '研究或来源处理失败', detail: error.message, time: '刚刚' }] };
+        state.researchAgent = { ...state.researchAgent, resourceRelease: observedRun.resourceRelease || { confirmed: true, status: 'confirmed' }, status: 'failed', phase: '研究员处理失败', progress: 100, messages: [...(state.researchAgent.messages || []), { id: `research-projection-error-${state.researchAgent.runId}`, phase: 'research', status: 'waiting', title: '研究或来源处理失败', detail: error.message, time: '刚刚' }] };
         if (state.researchAgent?.synchronous === true) return { state, changed: true };
       }
     }
     if (managedCliMode && state.agent?.runtimeKind === mode && state.agent?.runId) {
+      let observedRun = null;
       try {
-        const run = await runtimeEngine.invoke(mode, 'readRun', state.agent.runId);
+        let run = await runtimeEngine.invoke(mode, 'readRun', state.agent.runId);
+        observedRun = run;
         const events = await runtimeEngine.invoke(mode, 'readEvents', state.agent.runId);
         const usageBefore = JSON.stringify(state.tokenUsage || null);
         recordRunTokenUsage(state, { runId: state.agent.runId, phase: 'iteration', provider: mode, events });
@@ -1477,8 +1537,8 @@ export function createAgentRuntime(options = {}) {
         const toolEvents = events.filter((event) => /tool|command|function_call/i.test(`${event.type || ''} ${event.item?.type || ''}`));
         // The run record is the terminal source of truth. A completed Codex turn may
         // contain failed tool calls or recoverable error events without failing the run.
-        const failed = run.status === 'failed';
-        const completed = run.status === 'completed';
+        let failed = run.status === 'failed';
+        let completed = run.status === 'completed';
         const workflowAdvanced = state.patchApplied || ['validation', 'evidence', 'curation', 'published'].includes(state.stage);
         // 取消后进程未必立即死透：run.status 仍为 running，不能把已请求的取消覆盖回 running
         // （与研究分支同法：保留 cancel_requested，直到进程真正终结为 cancelled）。
@@ -1487,10 +1547,15 @@ export function createAgentRuntime(options = {}) {
         const elapsed = state.agent.startedAt ? Date.now() - new Date(state.agent.startedAt).getTime() : 0;
         const stalled = !completed && !failed && run.status !== 'cancelled' && lastEventAt && Date.now() - lastEventAt >= mainAgentStallMs;
         const budgetExceeded = !completed && !failed && run.status !== 'cancelled' && elapsed >= (state.agent.budgetMs || mainAgentBudgetMs);
-        if ((stalled || budgetExceeded) && state.agent.status !== 'cancel_requested') {
-          try { await runtimeEngine.invoke(mode, 'cancel', state.agent.runId); } catch { /* 下一 tick 收敛 */ }
+        const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded);
+        if (settlement.projection) {
+          const changed = runtimeChanged || usageChanged || JSON.stringify(settlement.projection) !== JSON.stringify(state.agent);
+          state.agent = settlement.projection;
+          return { state, changed };
         }
-        const timedOut = stalled || budgetExceeded || (run.status === 'cancelled' && state.agent.timedOut === true);
+        run = settlement.run; observedRun = run;
+        failed = run.status === 'failed'; completed = run.status === 'completed';
+        const timedOut = isExecutionReleased(run) && (stalled || budgetExceeded || (run.status === 'cancelled' && state.agent.timedOut === true));
         const nextStatus = failed ? 'failed' : completed ? 'completed' : timedOut ? 'completed' : run.status === 'cancelled' ? 'cancelled' : state.agent.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         const failure = failed ? classifyManagedFailure(run, events) : null;
         const projectedMessages = assistantEvents.slice(-8).map((event, index) => ({ id: event.id || `${managedMeta.slug}-event-${index}`, phase: event.type || managedMeta.name, status: failed ? 'waiting' : 'completed', title: event.type || `${managedMeta.name} 事件`, detail: runtimeEngine.invoke(mode, 'eventText', event) || `${managedMeta.name} 已产生新的运行事件`, time: event.timestamp || '刚刚' }));
@@ -1502,94 +1567,35 @@ export function createAgentRuntime(options = {}) {
         let verifiedCandidates = agentResult.candidates;
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
         const candidateInspectionEligible = terminalCompleted || recoverableGenerationFailure;
-        if (candidateInspectionEligible && agentResult.candidates.length) {
-          const selectedCandidate = agentResult.candidates.find((candidate) => candidate.id === agentResult.recommendedCandidate) || agentResult.candidates[0];
-          const declaredFiles = String(selectedCandidate.files || '').split(',').map((file) => file.trim().replaceAll('\\', '/')).filter(Boolean);
+        if (candidateInspectionEligible && (agentResult.candidates.length || !workflowAdvanced)) {
           const manifest = await workspaceManager.captureDiff(run.workspace);
           const stableDigest = state.workflowRecovery?.checkpoints?.at(-1)?.stableDigest || null;
-          const actualFiles = manifest.changedFiles.map((file) => file.replaceAll('\\', '/'));
-          const undeclaredFiles = actualFiles.filter((file) => !declaredFiles.includes(file));
-          const missingFiles = declaredFiles.filter((file) => !actualFiles.includes(file));
-          if (!manifest.dirty || !manifest.diff || (stableDigest && manifest.digest === stableDigest)) {
-            candidateValidation = { passed: false, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_EMPTY`, detail: `${managedMeta.name} 返回了候选，但 Mission 工作区没有真实 Git Diff。` };
-            verifiedCandidates = [];
-          } else if (undeclaredFiles.length || missingFiles.length) {
-            candidateValidation = { passed: false, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_FILES_MISMATCH`, detail: `候选文件清单与真实 Diff 不一致。未声明：${undeclaredFiles.join(', ') || '无'}；未修改：${missingFiles.join(', ') || '无'}。`, undeclaredFiles, missingFiles };
-            verifiedCandidates = [];
-          } else {
-            // 工作区 Git Diff 是候选准入权威。来源引用只作信息标记（候选自报），不校验、不阻塞准入——
-            // 迁移场景中参考材料可能含非 git 内容、agent 引用 commit 也可能与实际拉取不一致，强制校验会误拦。
-            const claimedReferences = Array.isArray(selectedCandidate.sourceReferences) ? selectedCandidate.sourceReferences : [];
-            candidateValidation = { passed: true, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_VERIFIED`, digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: '候选自报来源标记，未做固定来源校验（工作区 Diff 为准入权威）' };
-            verifiedCandidates = [{ ...selectedCandidate, files: actualFiles.join(', '), sourceReferences: claimedReferences, patchDigest: manifest.digest, sourceRunId: state.agent.runId }];
-          }
-        } else if (candidateInspectionEligible && !agentResult.candidates.length && !workflowAdvanced) {
-          const manifest = await workspaceManager.captureDiff(run.workspace);
-          const stableDigest = state.workflowRecovery?.checkpoints?.at(-1)?.stableDigest || null;
-          const actualFiles = manifest.changedFiles.map((file) => file.replaceAll('\\', '/'));
-          if (manifest.dirty && manifest.diff && actualFiles.length && (!stableDigest || manifest.digest !== stableDigest)) {
-            const claimedReferences = Array.isArray(agentResult.sourceReferences) ? agentResult.sourceReferences : [];
-            candidateValidation = { passed: true, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_OBSERVED`, digest: manifest.digest, files: actualFiles, sourceReferences: claimedReferences, sourceReferencesNote: 'Agent 未返回 candidates；客户端以 Mission 工作区 Git Diff 作为候选准入权威。' };
-            verifiedCandidates = [{
-              id: 'candidate-01',
-              version: 'agent.1',
-              label: 'Observed workspace candidate',
-              title: actualFiles.includes('run.py') ? '单文件 run.py 优化候选' : 'Agent 工作区 Diff 候选',
-              hypothesis: agentResult.summary || 'Agent 已在 Mission 工作区产生候选 Diff。',
-              change: actualFiles.join(', '),
-              files: actualFiles.join(', '),
-              status: '待验证',
-              classification: 'weak_candidate',
-              acceptGate: { passed: false, result: 'pending', checks: [] },
-              correctness: 'pending',
-              decision: 'pending',
-              decisionReason: '',
-              evidence: [],
-              knowledge: null,
-              sourceReferences: claimedReferences,
-              tone: 'blue',
-              source: `${managedMeta.slug}-agent`,
-              patchDigest: manifest.digest,
-              sourceRunId: state.agent.runId,
-            }];
-          }
+          ({ candidateValidation, verifiedCandidates } = inspectCandidateDiff({
+            agentResult,
+            manifest,
+            stableDigest,
+            provider: managedMeta,
+            runId: state.agent.runId,
+          }));
         }
         if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
-          const strictZeroSource = activeMission.sourcePolicy?.mode === 'agent-research-only' || activeMission.sourcePolicy?.strictZeroSource === true;
-          const previousDigests = new Set((state.runHistory || []).map((round) => round.candidateDigest).filter(Boolean));
-          const nextDigest = verifiedCandidates[0].patchDigest;
-          const changedFiles = String(verifiedCandidates[0].files || '').split(',').map((file) => file.trim().replaceAll('\\', '/')).filter(Boolean);
-          const candidateContract = activeMission.operatorProfile?.candidateContract || null;
-          const requiredWorkspaceFiles = candidateContract?.requiredWorkspaceFiles || [];
+          const { requiredWorkspaceFiles, contentFiles } = candidateWorkspaceRequirements(activeMission);
           const workspaceFiles = (await Promise.all(requiredWorkspaceFiles.map(async (file) => await fileExists(path.join(run.workspace, file)) ? file : null))).filter(Boolean);
-          const contentFiles = candidateContract?.contentFiles || ['run.py'];
-          const entryContent = (await Promise.all(contentFiles.map((file) => readFile(path.join(run.workspace, file), 'utf8').catch(() => '')))).join('\n');
-          const languageValidation = validateOperatorLanguageCandidate({ language: activeMission.implementation, changedFiles, workspaceFiles, entryContent, contract: candidateContract });
-          if ((strictZeroSource || activeMission.implementation) && !languageValidation.passed) {
-            candidateValidation = {
-              passed: false,
-              code: 'CANDIDATE_LANGUAGE_CONTRACT_FAILED',
-              detail: `候选不符合 ${languageValidation.language} 文件/语言契约。unexpected=${languageValidation.unexpected.join(',') || '-'} missing=${languageValidation.missing.join(',') || '-'} missingWorkspace=${languageValidation.missingWorkspace.join(',') || '-'} missingAny=${languageValidation.missingAny.join(',') || '-'} contentMismatch=${languageValidation.contentMismatch}`,
-              languageValidation,
-            };
-            verifiedCandidates = [];
-          } else if (previousDigests.has(nextDigest)) {
-            candidateValidation = { passed: false, code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_DIFF_REPEATED`, detail: '该工作区 Diff 已在前一轮测试，不能重复消耗新的硬件测量序号。', digest: nextDigest };
-            verifiedCandidates = [];
-          } else {
-            const ordinal = Math.max(1, Number(state.iterationStats?.round || 0) + 1);
-            const candidateId = `candidate-${String(ordinal).padStart(2, '0')}`;
-            verifiedCandidates = verifiedCandidates.map((candidate) => ({
-              ...candidate,
-              agentOriginalId: candidate.id || null,
-              id: candidateId,
-              version: `agent.${ordinal}`,
-            }));
-          }
+          const entryContent = (await Promise.all(contentFiles.map((file) => readFile(path.join(run.workspace, file), 'utf8').catch(() => '')))).join('\\n');
+          ({ candidateValidation, verifiedCandidates } = finalizeCandidateAdmission({
+            admission: { candidateValidation, verifiedCandidates },
+            mission: activeMission,
+            workspaceFiles,
+            entryContent,
+            runHistory: state.runHistory || [],
+            round: state.iterationStats?.round || 0,
+            provider: managedMeta,
+          }));
         }
         const nextAgent = {
           ...state.agent,
           status: nextStatus,
+          resourceRelease: run.resourceRelease || (isExecutionReleased(run) ? { confirmed: true, status: 'confirmed' } : state.agent.resourceRelease),
           phase: failure?.phase || (timedOut ? `${managedMeta.name} 单轮停滞，已收敛为无候选` : completed ? `${managedMeta.name} 分析完成` : state.agent.status === 'cancel_requested' ? `正在取消 ${managedMeta.name}` : `${managedMeta.name} 正在分析`),
           progress: completed || failed || timedOut ? 100 : Math.max(5, Math.min(95, 5 + events.length * 3)),
           threadId: run.threadId || threadEvent?.thread_id || threadEvent?.threadId || state.agent.threadId || null,
@@ -1685,6 +1691,10 @@ export function createAgentRuntime(options = {}) {
         if (nextStatus !== previousStatus && !lifecycleEventRecorded) appendRuntimeEvent(state, lifecycleEventType, { runId: state.agent.runId, threadId: nextAgent.threadId, eventCount: events.length, errorCode: failure?.code || null }, { kind: 'agent', mode });
         return { state, changed };
       } catch (error) {
+        if (!isExecutionReleased(observedRun || {})) {
+          state.agent = cancellationProjection(state.agent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message });
+          return { state, changed: true };
+        }
         const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }] };
         state.agent = nextAgent;
         return { state, changed: true };
@@ -1722,7 +1732,12 @@ export function createAgentRuntime(options = {}) {
     return { state, changed };
   };
 
-  return { mode, describe, preflight, startRun, cancelRun, startResearch, startBaselineMaterialization, projectState, codexClient: codex, claudeClient: claude };
+  const projectWithResourceRelease = async (state) => {
+    const projected = await projectState(state);
+    const release = reconcileResourceRelease(projected.state);
+    return { ...projected, state: release.state, changed: projected.changed || release.changed };
+  };
+  return { mode, describe, preflight, startRun, cancelRun, startResearch, startBaselineMaterialization, projectState: projectWithResourceRelease, codexClient: codex, claudeClient: claude };
 }
 
 export const agentRuntime = createAgentRuntime();

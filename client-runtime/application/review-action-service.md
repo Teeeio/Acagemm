@@ -14,3 +14,7 @@ Owns the low-risk `/api/actions` commands for Mission resume and human decision-
 `outcome` is one of `adopt`, `supplement`, or `redirect`; when omitted it comes from the pending request. `adopt` requires completed evidence. Resolution requires an active pending request.
 
 The service never applies adoption, resets validation, restores checkpoints, or updates knowledge assets itself. Those effects remain command-registry rules. `STATE_VERSION_CONFLICT` is mapped by the route; pending-state, outcome, and workflow failures retain stable error codes.
+
+resume enforces the shared resource-release barrier before executing the durable
+command. A paused Mission with unconfirmed old workers cannot restart or restore
+its workspace merely by requesting resume.

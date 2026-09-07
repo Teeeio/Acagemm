@@ -226,6 +226,9 @@ for (const requiredDocument of [
   'client-runtime/application/main-round-orchestration-service.md',
   'client-runtime/server/README.md',
   'client-runtime/agent-runtime/README.md',
+  'client-runtime/candidate-generation/README.md',
+  'client-runtime/candidate-generation/CONSTRAINTS.md',
+  'docs/development/MODULE_03_CANDIDATE_GENERATION_HANDOFF.md',
   'tools/local-c500-tester/README.md',
   'tools/local-c500-tester/components/README.md',
   'tests/README.md',
@@ -237,9 +240,22 @@ const ownershipIndex = await read('docs/development/MODULE_OWNERSHIP.md');
 const applicationModules = (await readdir(path.join(root, 'client-runtime', 'application')))
   .filter((name) => name.endsWith('.mjs'));
 for (const moduleName of applicationModules) {
+  const source = await read(`client-runtime/application/${moduleName}`);
+  assert.equal(await exists(`client-runtime/application/${moduleName.replace(/\.mjs$/, '.md')}`), true, `public module contract is required: ${moduleName}`);
+  assert.doesNotMatch(source, /(?:from\s*|import\s*\()\s*['"]node:(?:fs|http|https|child_process|net|worker_threads)(?:\/[^'"]*)?['"]/, `application effects must be injected: ${moduleName}`);
+  assert.doesNotMatch(source, /(?:from\s*|import\s*\()\s*['"][^'"]*(?:server\/|tools\/local-c500-tester\/|workspace-manager\.mjs|state-workspace\.mjs|state-snapshot-storage\.mjs|state-store\.mjs|state-repository\.mjs|local-c500-service-client\.mjs|claude-client\.mjs|codex-client\.mjs)['"]/, `application must not import transport or concrete effects: ${moduleName}`);
   assert.match(ownershipIndex, new RegExp(`\\b${moduleName.replace('.mjs', '\\.md')}\\b`), `ownership index must classify ${moduleName}`);
 }
 
 assert.equal(Object.keys(packageJson.scripts).some((name) => /local-c500-(?:tester|adapter|workflow|discovery|generation|adoption|e2e)$/.test(name)), false);
 
+assert.doesNotMatch(localServer, /^\s+(?:prepare|apply|keyFor|isApplied):/m, 'command implementations belong in application modules');
+assert.doesNotMatch(localServer, /const (?:guardMutation|guardWorkflowTransition|adoptCandidateState)\s*=/, 'command policy belongs in the application boundary');
+assert.equal(await exists('client-runtime/command-journal.md'), true);
+const snapshotReader = stateStore.split('export async function readState(')[1]?.split('// Initialization,')[0];
+assert.ok(snapshotReader, 'state-store must expose a dedicated snapshot reader');
+assert.doesNotMatch(snapshotReader, /ensureStorage\(|saveState\(|reconcileCommandJournal\(|refreshReference|runAutomaticAdoption\(/, 'snapshot reads cannot repair, recover, advance, or persist');
+assert.match(localServer, /const loadRuntimeState = \(\) => runtimeLifecycleService\.read\(\)/);
+assert.match(localServer, /runExclusive\(\(\) => advanceRuntimeState\(\)\)/, 'background advancement must use the explicit application entry');
+assert.doesNotMatch(localServer, /runtimeStateInFlight/, 'readers must not join an in-flight mutating operation');
 console.log('[module-boundary] production path, dependency direction, and local contracts passed');

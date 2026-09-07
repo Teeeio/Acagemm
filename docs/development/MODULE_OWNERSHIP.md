@@ -34,8 +34,9 @@ TUI / GUI
 | HTTP Transport | `client-runtime/server/` | 路由匹配、JSON/SSE、请求限制和 HTTP 错误映射 | HTTP request、注入的应用服务 | HTTP response、handled boolean | API/协议开发 |
 | Application Use Cases | `client-runtime/application/` | 协调 Mission、Agent、Baseline、测试、Gate、采用和经验治理 | command/query DTO、领域函数、注入端口 | 应用结果、更新后的 state、稳定错误 | 工作流开发 |
 | Domain Contracts | `client-runtime/*.mjs` 中的纯规则模块 | 定义 workflow、迭代、Profile、语义绑定、测试规格和错误规则 | 领域状态和不可变输入 | 决策、规范化 DTO、不变量结果 | 领域规则开发 |
-| 状态与持久化 | `state-store.mjs`、`state-repository.mjs`、`command-journal.mjs` | 状态兼容、转换、串行写入、版本检查和命令幂等 | state snapshot、mutation、expected version | 原子持久化状态、冲突或恢复结果 | 状态平台开发 |
+| 状态与持久化 | `state-store.mjs`、`state-snapshot-storage.mjs`、`state-repository.mjs`、`command-journal.mjs` | 兼容组装、快照读写/恢复、串行写入、版本检查和命令幂等 | state snapshot、mutation、expected version | 原子持久化状态、冲突或恢复结果 | 状态平台开发 |
 | Agent Runtime | `agent-runtime.mjs`、`agent-runtime/`、Provider clients | 能力发现、逻辑操作分发、Provider 生命周期和 usage 归一化 | runtime ID、operation、Mission context | 统一事件、Agent 结果、token usage | Agent 集成开发 |
+| Candidate Generation（03） | `candidate-generation/` | 在冻结 Round Context 下渲染 Agent 候选 Prompt，并以 Workspace Diff、语言契约和重复摘要完成候选准入 | frozen Mission round context、Agent result、Workspace manifest | Candidate Plan、verified candidate、稳定准入错误 | Agent/工作流边界开发 |
 | Workspace 与 Source | `workspace-manager.mjs`、`baseline-resolver.mjs`、`baseline-materializer.mjs`、`source-mirror-policy.mjs` | 隔离工作区、Diff/Checkpoint、Baseline 来源和材料化 | Mission、仓库、Source Registry、Candidate | Workspace identity、Diff、Baseline artifact | 工具链开发 |
 | 测试队列 | `operator-test-queue.mjs` | 串行测试生命周期、轮询、取消和终态持久化 | 参数化 test payload、执行端口 | task snapshot、terminal outcome | 执行平台开发 |
 | C550 执行适配器 | `local-c500-service-client.mjs`、`tools/local-c500-runner.py` | 把统一测试任务转换为本地 C550 执行和证据 | Candidate 工件、Baseline oracle、固定矩阵 | correctness、benchmark、环境和诊断工件 | 后端/算子开发 |
@@ -90,6 +91,9 @@ TUI / GUI
 | `benchmark-projection-service.md` | 将 Queue snapshot 投影到 workflow | benchmark/task state | changed state |
 | `decision-service.md` | 采用、拒绝和撤销采用 | decision command | decision result、recovery metadata |
 | `repository-adoption-service.md` | 将通过 Gate 的 Candidate 写回仓库 | projected state、workspace port | changed state |
+| `experience-api-service.md` | 正式人工经验 API 的项目范围和输入边界 | 只读状态、Experience service ports | 版本化人工经验 DTO |
+| `round-experience-service.md` | 主轮冻结经验引用与可信执行观察 | 经验服务、轮状态、验证端口 | 冻结上下文、可追踪记录结果 |
+| `experience-service.md` | 版本化开发经验、人工注入和冻结检索上下文 | 受信项目授权、repository/clock/ID ports | 非发布型经验与引用上下文 |
 | `knowledge-service.md` | 编辑经验草稿和引用经验资产 | draft/reference command | governed state 或稳定错误 |
 
 ### 单轮迭代与自动推进
@@ -111,17 +115,34 @@ TUI / GUI
 | `autopilot-service.md` | 汇总自动推进分支 | runtime state | state/action result |
 | `runtime-projection-service.md` | 投影 workflow 和 Agent 状态 | state/runtime snapshot | projected state |
 | `runtime-advance-service.md` | 执行 Autopilot、Iteration、Reconcile 尾段 | projected state | advanced state |
-| `runtime-state-pipeline-service.md` | 编排加载后状态的迁移和投影顺序 | state/runtime snapshot | projected state、changed flag |
+| `runtime-state-pipeline-service.md` | 编排显式推进时的维护、投影、测试处理与迭代顺序 | state/runtime snapshot | advanced state、changed flag |
 
 ### Runtime 查询与状态控制
 
 | 服务合同 | 功能 | 输入 | 输出 |
 |---|---|---|---|
 | `runtime-query-service.md` | 查询状态、preflight 和活动 Workspace | Mission ID/query | state/readiness/workspace DTO |
+| `runtime-lifecycle-service.md` | 分离只读快照与显式推进 | state/descriptor/pipeline 端口 | snapshot 或 advanced state |
+| `runtime-maintenance-service.md` | 原 loadState 中的模式策略与 fixture 推进 | state/runtime mode/领域端口 | changed state |
 | `runtime-state-service.md` | 处理 TUI patch、暂停/恢复和预算 | state command body | persisted state 或稳定错误 |
 
 以上合同均位于 `client-runtime/application/`。修改某个服务时，必须同时更新同名 `.md` 和
 对应 `tests/<name>-test.mjs`。
+
+## 命令处理器与恢复归属
+
+| 服务合同 | 功能 | 输入 | 输出 |
+|---|---|---|---|
+| `candidate-commands.md` | Candidate 准入、Patch 工件和阶段回滚 | Candidate、Workspace 端口 | 命令定义及捕获的效果 |
+| `benchmark-command.md` | 冻结测试提交与恢复查询 | 测试输入、Queue 端口 | 可恢复的 Benchmark 命令 |
+| `decision-commands.md` | 审查、采用、撤销与预算恢复 | 决策、领域和 Workspace 端口 | 决策命令定义 |
+| `agent-commands.md` | Run、Research、Materializer 启动 | Agent 与 Workspace 端口 | Agent 命令定义 |
+| `workflow-command-policy.md` | 预算、阶段、能力准入与采用状态 | 状态规则、能力端口、时钟 | 准入函数与状态转换 |
+
+以上合同位于 `client-runtime/application/`。命令日志平台拥有“意图 → 效果 →
+结果 → 状态”的恢复协议；应用命令拥有业务语义；Queue 拥有串行执行。新命令需明确
+`plan/prepare/recover/apply` 边界及未知副作用的处理方式。
+验证入口为 `npm run test:workflow-commands` 和 `npm run test:command-recovery`。
 
 ## 核心领域与基础设施文件
 
@@ -133,12 +154,32 @@ TUI / GUI
 | `semantic-snapshot.mjs` | Domain / Evidence | 将 Mission/Profile/Test 绑定为不可变摘要 | 修改 Workspace 或提交任务 |
 | `test-spec.mjs` | Domain / Test Contract | 测试规格默认值和规范化 | 执行 Correctness/Benchmark |
 | `workflow-error.mjs` | Shared Contract | 错误分类、重试性、序列化和恢复动作 | 直接改变 workflow state |
-| `runtime-events.mjs` | Shared Contract | 生成统一 Mission 事件 | HTTP/SSE 输出 |
-| `state-store.mjs` | State Domain | 状态兼容、领域转换和 Gate 投影 | HTTP 格式和 TUI 展示 |
+| [`runtime-events.mjs`](../../client-runtime/runtime-events.md) | Shared Contract | 生成统一 Mission 和 audit 事件 | 持久化、HTTP/SSE 输出 |
+| [`state-store.mjs`](../../client-runtime/state-store.md) | Compatibility Facade | 兼容导出、领域组装、schema/version 和存储恢复协调 | 领域规则实体、HTTP/TUI |
+| [`mission-project-state.mjs`](../../client-runtime/mission-project-state.md) | Domain / Mission & Project | 注入路径的规范化、投影、切换、CRUD 和轮次状态转换 | 持久化、真实 Agent 执行 |
+| [`mission-state-shapes.mjs`](../../client-runtime/mission-state-shapes.md) | Shared State Contract | 预算、Research/Iteration/Agent 基础状态 | 存储、能力执行 |
+| [`knowledge-state.mjs`](../../client-runtime/knowledge-state.md) | Domain / Knowledge | 内存采用/治理、来源降级和资产格式化 | 发布授权替代、仓库写入 |
+| [`state-reference-data.mjs`](../../client-runtime/state-reference-data.md) | Reference Data | 保留旧默认记录与展示元数据 | 真机证据、运行时权限 |
+| [`state-initialization.mjs`](../../client-runtime/state-initialization.md) | Domain / Initial State | 通过注入 Mission 工厂构造 seed/product snapshot | 存储初始化、迁移执行 |
+| [`state-reference-runtime.mjs`](../../client-runtime/state-reference-runtime.md) | Reference State Projection | 现有 fixture 进度、日志和内存事件 | 真机/Agent 执行 |
+| [`accept-gate.mjs`](../../client-runtime/accept-gate.md) | Domain / Gate | 接受规则与 Baseline 证据构造 | 测试执行、持久化、采用 |
+| [`operator-test-evidence.mjs`](../../client-runtime/operator-test-evidence.md) | Domain / Evidence | 队列快照、候选处置和事件的内存投影 | 文件系统、队列执行 |
+| [`evidence-state.mjs`](../../client-runtime/evidence-state.md) | Shared State Contract | Review/Baseline 状态工厂 | 验收授权、I/O |
+| [`mission-objective.mjs`](../../client-runtime/mission-objective.md) | Domain / Objective | 目标模式推断与规范化 | 迭代执行、持久化 |
+| [`state-identifiers.mjs`](../../client-runtime/state-identifiers.md) | Shared Contract | 保持旧 ID/名称格式 | 路径授权或防碰撞保证 |
+| [`state-workspace.mjs`](../../client-runtime/state-workspace.md) | Workspace Adapter | 布局、Fixture 与检查点副作用 | Gate 规则、反向导入 state-store |
+| [`state-snapshot-storage.mjs`](../../client-runtime/state-snapshot-storage.md) | Snapshot Adapter | 原始读取、原子替换、隔离备份与注入式初始化 | schema/version 和 workflow 策略 |
 | `state-repository.mjs` | Persistence Port | 排他队列、乐观版本和原子 persist | workflow 决策 |
 | `command-journal.mjs` | Persistence | 幂等 command journal | 业务分支选择 |
 | `agent-runtime.mjs` | Agent Adapter Facade | Agent 用例生命周期和 Provider 协调 | Mission 持久化、硬件执行 |
 | `workspace-manager.mjs` | Git Adapter | Workspace、Diff、checkpoint、restore、adoption | Gate 结论 |
+| `candidate-generation/README.md`、`candidate-generation/CONSTRAINTS.md` | Candidate Generation Contract | 03 候选生成输入、输出、确定性步骤和职责边界 | Provider 生命周期、Queue/Gate/采用/下一轮决策 |
+| [`execution-package-contract.mjs`](../../client-runtime/execution-package-contract.md) | Domain / Package | 语言无关闭包、摘要与准入绑定 | I/O、环境执行 |
+| [`cancellation-contract.mjs`](../../client-runtime/cancellation-contract.md) | Domain / Liveness | 资源释放屏障与匹配身份的确认 | 终止进程、持久化 |
+| [`experience-contract.mjs`](../../client-runtime/experience-contract.md) | Domain / Experience | 版本、来源、范围和非发布观察 | 发布授权、存储 |
+| [`experience-repository.mjs`](../../client-runtime/experience-repository.md) | Experience Adapter | 原子版本存储 | Mission 决策 |
+| [`execution-package-store.mjs`](../../client-runtime/execution-package-store.md) | Package Adapter | CAS、受信准入与准备恢复 | 另建测试队列、假定宿主机隔离 |
+| [`operator-test-tool.mjs`](../../client-runtime/operator-test-tool.md) | Test Tool Port | 单一队列的异步调用边界 | 等待完整执行、重复调度 |
 | `operator-test-queue.mjs` | Execution Port | 串行任务、poll/cancel、终态持久化 | Mission 推进和采用 |
 | `local-c500-service-client.mjs` | C550 Adapter | 本地 C550 任务与工件适配 | Gate 和迭代决策 |
 | `local-server.mjs` | Composition Root | 组装模块、注入依赖、进程生命周期 | 新增领域规则 |

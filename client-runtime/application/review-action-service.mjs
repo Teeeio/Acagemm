@@ -1,3 +1,5 @@
+import { assertResourcesReleased } from '../cancellation-contract.mjs';
+
 export const createReviewActionService = ({ loadState, persistState, executeCommand, journal, registry, guardSupportedRuntimeAction, guardMutation = () => {}, guardWorkflowTransition } = {}) => {
   if (typeof loadState !== 'function' || typeof persistState !== 'function' || typeof executeCommand !== 'function' || !journal || !registry || typeof guardSupportedRuntimeAction !== 'function' || typeof guardWorkflowTransition !== 'function') {
     throw new TypeError('Review action service requires state, command, guard, journal, and registry dependencies.');
@@ -13,6 +15,7 @@ export const createReviewActionService = ({ loadState, persistState, executeComm
   const resume = async (body = {}) => {
     await guardSupportedRuntimeAction('Mission Resume');
     const state = await loadState();
+    assertResourcesReleased(state);
     return executeCommand({ journal, saveState: persistState, registry, state, type: 'resume-mission', body, expectedVersion: state.stateVersion });
   };
   const requestReview = async (body = {}) => {

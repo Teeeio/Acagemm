@@ -12,4 +12,4 @@ Owns orchestration for applying a generated Candidate patch, submitting baseline
 
 Candidate Benchmark submission requires an applied patch, a valid matrix, and a Candidate identity. Baseline submission is allowed from diagnosis, Candidate, or validation. Rollback is blocked while a human review is pending.
 
-The service does not inspect or modify files, create checkpoints, submit hardware tasks, build evidence, or mutate workflow state. Those effects remain in command-registry rules and their injected ports. Fixed profile matrices and retry budgets must not be weakened here.
+The service does not inspect or modify files, create checkpoints, submit hardware tasks, build evidence, or mutate workflow state. Those effects belong to the Candidate and Benchmark command modules and their injected ports. Fixed profile matrices and retry budgets must not be weakened here.

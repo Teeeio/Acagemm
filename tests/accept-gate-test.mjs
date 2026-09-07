@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { applyOperatorTestSnapshot, evaluateAcceptGate, runAutomaticAdoption, runKnowledgeMaintenance, toPublishedKnowledgeAsset } from '../client-runtime/state-store.mjs';
+import { applyOperatorTestSnapshot } from '../client-runtime/operator-test-evidence.mjs';
+import { evaluateAcceptGate } from '../client-runtime/accept-gate.mjs';
+import { runAutomaticAdoption, runKnowledgeMaintenance, toPublishedKnowledgeAsset } from '../client-runtime/state-store.mjs';
 
 const upstreamSource = {
   authority: 'upstream',

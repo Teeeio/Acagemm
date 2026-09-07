@@ -4,11 +4,14 @@ import { createResearchService } from '../client-runtime/application/research-se
 import { createResearchRoutes } from '../client-runtime/server/research-routes.mjs';
 import { createJsonResponder, readJson } from '../client-runtime/server/http.mjs';
 
-const base = { activeMissionId: 'MIS_1', missions: [{ id: 'MIS_1' }] };
+const base = { activeMissionId: 'MIS_1', missions: [{ id: 'MIS_1' }, { id: 'MIS_2' }] };
 let saved;
-const service = createResearchService({ loadState: async () => structuredClone(base), persistState: async (state) => { saved = structuredClone(state); return state; }, executeCommand: async ({ state }) => ({ status: 'applied', state, result: { runId: 'RUN_1' } }), journal: {}, registry: {}, agentRuntime: { async cancelRun({ state }) { state.researchAgent = { status: 'cancel_requested' }; return { state, result: { runId: 'RUN_1' } }; } } });
+const selections = [];
+const service = createResearchService({ missionState: { selectMission(state, id) { selections.push(id); state.activeMissionId = id; return state; } }, loadState: async () => structuredClone(base), persistState: async (state) => { saved = structuredClone(state); return state; }, executeCommand: async ({ state }) => ({ status: 'applied', state, result: { runId: 'RUN_1' } }), journal: {}, registry: {}, agentRuntime: { async cancelRun({ state }) { state.researchAgent = { status: 'cancel_requested' }; return { state, result: { runId: 'RUN_1' } }; } } });
 const started = await service.start('MIS_1', { direction: 'investigate' });
 assert.equal(started.status, 'applied');
+assert.equal((await service.start('MIS_2', {})).state.activeMissionId, 'MIS_2');
+assert.deepEqual(selections, ['MIS_2']);
 await assert.rejects(service.start('missing', {}), (error) => error.code === 'MISSION_NOT_FOUND');
 const cancelled = await service.cancel('MIS_1', 'RUN_1');
 assert.equal(cancelled.result.runId, 'RUN_1');

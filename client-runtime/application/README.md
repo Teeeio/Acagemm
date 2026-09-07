@@ -37,6 +37,8 @@
 | `baseline-service.mjs` | Authoritative Baseline single-file materialization | command result and materializer run ID |
 | `operator-test-service.mjs` | Operator Test Queue queries and cancellation | task DTOs and queue path |
 | `mission-control-service.mjs` | Agent cancellation, human feedback, and Mission stop | persisted state and control result |
+| `experience-api-service.mjs` | Project-scoped human experience CRUD | versioned guidance DTOs and conflicts |
+| `round-experience-service.mjs` | Frozen per-round experience and verified observations | context and record status through injected ports |
 | `knowledge-service.mjs` | Knowledge draft editing, asset references, and retired manual publication | persisted state or governance response |
 | `runtime-query-service.mjs` | Runtime state, preflight, and active workspace queries | state/workspace query | transport-neutral query DTOs |
 | `runtime-state-service.mjs` | TUI state patch, budget validation, and pause/resume command | state command body | persisted state or stable validation error |
@@ -68,8 +70,25 @@
 | `runtime-projection-service.mjs` | workflow and Agent state projection | state/runtime | projected state |
 | `runtime-advance-service.mjs` | Autopilot, iteration, and reconcile tail | projected state | advanced state |
 | `baseline-orchestration-service.mjs` | complete Baseline workflow orchestration | baseline command | updated state |
-| `runtime-state-pipeline-service.mjs` | ordered loaded-state projection pipeline | state/runtime snapshot | projected state and changed flag |
+| `runtime-state-pipeline-service.mjs` | ordered explicit advancement pipeline | state/runtime snapshot | advanced state and changed flag |
+| `runtime-lifecycle-service.mjs` | separate snapshot reads and effectful advancement | state/descriptor/pipeline ports | isolated state or advanced state |
+| `runtime-maintenance-service.mjs` | runtime-specific policy and fixture progression | state/runtime mode and domain ports | changed state |
 | `main-round-orchestration-service.mjs` | complete main Agent round orchestration | round command | updated state |
+
+## Durable command handlers
+
+| Module | Input | Output |
+|---|---|---|
+| `candidate-commands.mjs` | Candidate and workspace ports | Patch / rollback command definitions |
+| `benchmark-command.mjs` | frozen test input and queue recovery port | recoverable Benchmark command |
+| `decision-commands.mjs` | review, adoption and budget policy ports | decision command definitions |
+| `agent-commands.mjs` | Agent and workspace ports | run, research and materializer commands |
+| `workflow-command-policy.mjs` | state rules, capabilities and clock | command admission and adoption policy |
+
+These handlers implement [the command journal protocol](../command-journal.md).
+The composition root binds their ports. Preparation records external mutations through
+`runEffect`; application changes only the provided state. Benchmark recovery queries
+the queue using its frozen request ID and never processes tasks while looking them up.
 
 ## Dependency Direction
 
@@ -79,6 +98,17 @@ server routes -> application services -> domain functions / injected ports
 
 Application services may import pure domain/state transition functions. Filesystem, Git workspace, persistence, clocks, and other effects must be injected at construction time.
 
+Gate/evidence/objective consumers use their canonical domain modules or injected
+functions. Do not import state-workspace or state-snapshot-storage, including only
+for a path helper: Projects receives workspaceDirForMission as a required port.
+Mission/Project transition ports are required at construction time: Projects
+receives projectState; Missions, Mission Query, Research and Run receive
+missionState. Production supplies the canonical mission-project-state factory
+bound to existing path queries. Missing transition methods fail construction;
+there is no state-store default. Pure Research shapes come from
+mission-state-shapes. The recursive import gate covers every Application module
+and rejects direct or transitive storage/facade dependencies.
+
 ## Verification
 
 ```bash
@@ -86,3 +116,25 @@ npm run test:projects-service
 npm run test:module-boundary
 npm run test:smoke
 ```
+
+## Generic iteration safety and experience ports
+
+[experience-service.mjs](experience-service.md) provides project-scoped versioned
+human guidance, execution observations and frozen retrieval contexts through
+injected repository/clock/ID ports. Production supplies it to
+[round-experience-service.mjs](round-experience-service.md) and the project-scoped
+human Experience API. Agent commands and automatic rounds persist one frozen
+context; the Provider receives it as untrusted, attributed data. Terminal
+collection requires a trusted package-execution verification receipt: the current
+legacy backend has none, so it is explicitly skipped, not upgraded into evidence.
+Mutation/resume paths enforce [resource-release barriers](../cancellation-contract.md).
+Runtime advancement checks budget guards before Autopilot and uses the injected
+Mission control releaseResources port for budget shutdown. A pending release
+prevents new dispatch, workspace mutation and adoption; snapshot queries remain
+read-only. Baseline CPU requests include their own separate frozen oracle.
+
+Run Service receives an explicit nowMs clock. Fixed-Profile arming uses the
+canonical iteration guards and freezes a permitted round before persistence;
+exhausted limits are rejected synchronously, never cleared by manual start.
+Only an explicitly admitted new round can replace a settled budget. Autopilot,
+Agent preparation and replay consume that frozen active identity.

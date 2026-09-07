@@ -35,7 +35,7 @@ try {
     baselineSource: { profileId: 'profile.mla-paged-attention', operator: 'mla_paged_attention' },
     matrix: { environments: ['C550'], stages: ['Correctness', 'Full Benchmark'], shapeKey: 'simulation-shape', correctnessCases: 24, repeats: 10 },
   });
-  const task = await adapter.get(submitted.taskId);
+  const task = await adapter.advance(submitted.taskId);
   assert.equal(task.status, 'completed');
   assert.equal(task.result.environment.source, 'simulation');
 } finally {

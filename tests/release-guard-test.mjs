@@ -40,6 +40,7 @@ const child = spawn('node', ['client-runtime/local-server.mjs'], {
     OPERATOR_DATA_DIR: dataDir,
     OPERATOR_RUNTIME_DIR: runtimeDir,
     OPERATOR_RUNTIME_MODE: 'cli-file',
+    OPERATOR_AUTO_TICK: '0',
     OPERATOR_CLI_ROOT: cliRoot,
     OPERATOR_BRIDGE_DIR: bridgeDir,
   },
@@ -104,6 +105,9 @@ try {
   await expectFailure('/api/knowledge/publish', 410, 'KNOWLEDGE_PUBLISH_RETIRED', { method: 'POST', body: '{}' });
   await expectFailure('/api/knowledge/publish-all', 410, 'KNOWLEDGE_PUBLISH_RETIRED', { method: 'POST', body: '{}' });
 
+  const inspected = (await request('/api/state')).state;
+  assert.equal(inspected.agent.phase, started.state.agent.phase, 'queries and rejected commands cannot project Agent updates');
+  await request('/api/runtime/advance', { method: 'POST' });
   const stateAfter = (await request('/api/state')).state;
   assert.equal(JSON.stringify({ stage: stateAfter.stage, patchApplied: stateAfter.patchApplied, benchmark: stateAfter.benchmark, publishedAssets: stateAfter.publishedAssets, events: stateAfter.runtimeEvents }), stateBefore);
   assert.equal(stateAfter.agent.runId, started.state.agent.runId);

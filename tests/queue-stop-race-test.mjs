@@ -31,14 +31,17 @@ try {
   });
   const timeoutTask = await timeoutQueue.submit(payload);
   assert.equal((await timeoutQueue.get(timeoutTask.taskId)).status, 'running');
-  assert.equal((await timeoutQueue.get(timeoutTask.taskId)).status, 'running');
+  const unknown = await timeoutQueue.get(timeoutTask.taskId);
+  assert.equal(unknown.status, 'quarantined');
+  assert.equal(unknown.resourceRelease.confirmed, false);
   const exhausted = await timeoutQueue.get(timeoutTask.taskId);
-  assert.equal(exhausted.status, 'failed');
+  assert.equal(exhausted.status, 'quarantined', 'poll failure does not prove the worker stopped');
   assert.equal(exhausted.attempts.poll, 2);
   assert.equal(exhausted.error.code, 'REMOTE_TEST_TIMEOUT');
   assert.equal(exhausted.error.category, 'timeout');
   assert.equal(exhausted.error.retryable, false);
-  assert.equal(exhausted.error.terminal, true);
+  assert.equal(exhausted.error.terminal, false);
+  assert.equal(exhausted.resourceRelease.confirmed, false);
   assert.equal(exhausted.error.stopPolicy, 'needs_human');
   assert.equal(pollCalls, 2);
 
@@ -51,7 +54,7 @@ try {
         await submitStarted;
         return { taskId: 'remote-race', status: 'queued' };
       },
-      get: async () => ({ status: 'cancelled', progress: 100 }),
+      get: async () => ({ taskId: 'remote-race', status: 'cancelled', resourceRelease: { confirmed: true }, progress: 100 }),
       cancel: async () => ({ status: 'cancel_requested' }),
     },
   });
@@ -60,7 +63,7 @@ try {
   const cancelRead = raceQueue.cancel(raceTask.taskId);
   releaseSubmit();
   const [running, cancelled] = await Promise.all([runningRead, cancelRead]);
-  assert.equal(running.status, 'running');
+  assert.ok(['running', 'cancel_requested'].includes(running.status));
   assert.equal(cancelled.status, 'cancel_requested');
   const final = await raceQueue.get(raceTask.taskId);
   assert.equal(final.status, 'cancelled');
@@ -72,4 +75,4 @@ try {
   await rm(root, { recursive: true, force: true });
 }
 
-console.log('[queue-stop-race] timeout exhaustion and concurrent cancel converge to explicit terminal states');
+console.log('[queue-stop-race] unknown timeout retains its slot; confirmed cancellation has one terminal outcome');

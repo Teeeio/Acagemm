@@ -27,11 +27,11 @@ try {
     runPy: 'def get_inputs(): return {}\ndef run(inputs): return 1\ndef reference(inputs): return 1\n',
   });
 
-  let task = await client.get(submitted.taskId);
+  let task = await client.advance(submitted.taskId);
   const deadline = Date.now() + 2_000;
   while (task.status === 'running' && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 20));
-    task = await client.get(submitted.taskId);
+    task = await client.advance(submitted.taskId);
   }
   assert.equal(task.status, 'failed');
   assert.equal(task.error.code, 'LOCAL_C500_HARDWARE_DISABLED');

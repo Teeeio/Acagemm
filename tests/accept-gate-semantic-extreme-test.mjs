@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { evaluateAcceptGate } from '../client-runtime/state-store.mjs';
+import { evaluateAcceptGate } from '../client-runtime/accept-gate.mjs';
 import { createSemanticSnapshot, createSemanticTaskBinding, freezeSemanticSnapshot } from '../client-runtime/semantic-snapshot.mjs';
 
 const source = {

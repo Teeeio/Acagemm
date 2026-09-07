@@ -16,7 +16,8 @@
 - `loadState()` and `persistState(state)): coordinated Runtime state access.
 - `ensureMissionWorkspace(id, repository, options)`: creates the Mission Snapshot workspace.
 - `validateMissionBudgetInput(input)`: shared budget contract.
-- `missionState.createMission(state, input)`: domain/state transition function.
+- `missionState.createMission(state, input)`: required injected domain transition.
+  A missing method throws TypeError at construction; no state-store fallback.
 
 ## Stable Errors
 
@@ -31,7 +32,8 @@ Domain errors from `createMission` and workspace initialization are preserved.
 
 - Mission creation persists only after its workspace initialization succeeds.
 - The service does not parse URLs or write HTTP responses.
-- Mission state transitions remain owned by `state-store.mjs`.
+- Mission state transitions belong to the injected `mission-project-state.mjs`
+  domain factory; this application module does not import the compatibility facade.
 - Run execution and research side effects are not started by Mission creation.
 
 ## Verification

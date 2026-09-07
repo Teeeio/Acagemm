@@ -20,7 +20,9 @@ Exposes read and cancellation use cases for the serialized Operator Test Queue w
 
 ## Dependencies And Side Effects
 
-The only dependency is an injected queue port exposing `path`, `list`, `get`, and `cancel`. Side effects are exactly those of that queue port.
+The only dependency is an injected queue port exposing `path`, `list`, `get`, and `cancel`. `list/get` must be read-only: the composition root binds Queue `readTasks/readTask`.
+Only cancellation is effectful through this service; explicit advancement owns
+queue processing. Legacy effectful Queue `list/get` must not be injected here.
 
 ## Verification
 

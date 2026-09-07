@@ -8,7 +8,7 @@ const childEnvironment = {
   ...process.env,
   [pathKey]: `${path.dirname(process.execPath)}${path.delimiter}${process.env[pathKey] || ''}`,
   OPERATOR_HARDWARE_DISABLED: '1',
-  // Integration tests drive /api/state explicitly. Do not let an ambient
+  // Integration tests POST /api/runtime/advance explicitly. Do not let an ambient
   // TUI auto-tick race the test's state transitions.
   OPERATOR_AUTO_TICK: '0',
 };
@@ -30,7 +30,9 @@ for (const key of [
 
 const checks = [
   'verify:local-c500-release',
+  'test:test-service',
   'e2e:cpu-iteration',
+  'test:local-cpu-runner',
   'test:local-c500-no-hardware-guard',
   'test:semantic-snapshot',
   'test:semantic-snapshot-extreme',

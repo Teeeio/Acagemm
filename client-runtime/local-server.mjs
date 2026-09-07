@@ -1,43 +1,33 @@
-import { createServer } from 'node:http';
+import { createMissionProjectState } from './mission-project-state.mjs';
+import { createCandidateCommands } from './application/candidate-commands.mjs';
+import { createBenchmarkCommands } from './application/benchmark-command.mjs';
+import { createDecisionCommands } from './application/decision-commands.mjs';
+import { createAgentCommands } from './application/agent-commands.mjs';
 import { randomUUID } from 'node:crypto';
+import { createExperienceRepository } from './experience-repository.mjs';
+import { createExperienceService } from './application/experience-service.mjs';
+import { createExperienceApiService } from './application/experience-api-service.mjs';
+import { createRoundExperienceService } from './application/round-experience-service.mjs';
+import { createExperienceRoutes } from './server/experience-routes.mjs';
+import { createServer } from 'node:http';
+import { createRuntimeLifecycleService } from './application/runtime-lifecycle-service.mjs';
+import { createRuntimeMaintenanceService } from './application/runtime-maintenance-service.mjs';
+import { createRuntimeAdvanceRoutes } from './server/runtime-advance-routes.mjs';
+import { createWorkflowCommandPolicy } from './application/workflow-command-policy.mjs';
 import { writeFileSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeOperatorLanguage } from './operator-language.mjs';
-import {
-  addAuditEvent,
-  applyOperatorTestSnapshot,
-  applyCandidatePatch,
-  createCurrentBestState,
-  createDecisionReviewState,
-  createWorkflowRecoveryState,
-  createWorkspaceCheckpoint,
-  ensureMissionWorkspace,
-  ensureProjectLayout,
-  artifactDirForMission,
-  baselineDirForMission,
-  ensureStorage,
-  buildBenchmarkLogsForMatrix,
-  loadState as loadPersistedState,
-  resetFixtureData,
-  rebuildMissionWorkspaceFromRepository,
-  resetMissionWorkspace,
-  restoreWorkspaceCheckpoint,
-  runAutomaticAdoption,
-  markCandidateAccepted,
-  normalizeMissionBudgetMs,
-  resetMissionRunState,
-  runKnowledgeMaintenance,
-  saveState as savePersistedState,
-  selectMission,
-  resumeMissionState,
-  startAgentRun,
-  runtimeDir,
-  workspaceFiles,
-  researchDirForMission,
-  createResearchAgentState,
-} from './state-store.mjs';
+import { addAuditEvent } from './runtime-events.mjs';
+import { applyOperatorTestSnapshot } from './operator-test-evidence.mjs';
+import { createCurrentBestState, normalizeMissionBudgetMs, createResearchAgentState } from './mission-state-shapes.mjs';
+import { ensureStorage, loadState as loadPersistedState, readState as readPersistedState, resetFixtureData, saveState as savePersistedState, runtimeDir } from './state-store.mjs';
+import { buildBenchmarkLogsForMatrix, refreshReferenceAgent, refreshReferenceBenchmark } from './state-reference-runtime.mjs';
+import { runAutomaticAdoption, markCandidateAccepted, runKnowledgeMaintenance } from './knowledge-state.mjs';
+import { createDecisionReviewState } from './evidence-state.mjs';
+import { workspaceDir, missionSourceDirFor, ensureMissionWorkspace, ensureProjectLayout, workspaceDirForMission, artifactDirForMission, baselineDirForMission, rebuildMissionWorkspaceFromRepository, resetMissionWorkspace, restoreWorkspaceCheckpoint, workspaceFiles, researchDirForMission } from './state-workspace.mjs';
+import { isMaximizeMission } from './mission-objective.mjs';
 import { agentRuntime, isResearchAgentActive } from './agent-runtime.mjs';
 import { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
 import { appendRuntimeEvent } from './runtime-events.mjs';
@@ -134,8 +124,13 @@ import {
   selectResearchBaselineSource,
 } from './baseline-resolver.mjs';
 
+import { createStateWorkspace } from './state-workspace.mjs';
+
+const { applyCandidatePatch, createWorkspaceCheckpoint } = createStateWorkspace({ initializeStorage: ensureStorage });
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(serverDir, '..');
+const missionProjectState = createMissionProjectState({ rootDir, workspaceDir, workspaceDirForMission, missionSourceDirFor });
+const { createWorkflowRecoveryState, resetMissionRunState, selectMission, resumeMissionState, startAgentRun } = missionProjectState;
 const distDir = path.join(rootDir, 'dist');
 const serverPidPath = path.join(runtimeDir, 'operator-studio.pid');
 const port = Number(process.env.API_PORT || process.env.PORT || 4173);
@@ -163,8 +158,23 @@ const activeTestServiceClient = localC500Config.enabled
   ? createLocalC500ServiceClient()
   : testServiceClient;
 const operatorTestQueue = createOperatorTestQueue({ serviceClient: activeTestServiceClient });
+const experienceRepository = createExperienceRepository({ rootDir: path.join(runtimeDir, 'experiences') });
+const experienceService = createExperienceService({ repository: experienceRepository, now: () => new Date().toISOString(), createId: () => 'exp-' + randomUUID() });
+const roundExperienceService = createRoundExperienceService({
+  experienceService, timers: { setTimeout, clearTimeout },
+  resolveAccess: ({ state, mission }) => {
+    if (!state.projects?.some((project) => project.id === mission.projectId)) throw Object.assign(new Error('The Mission owning Project is unavailable for experience retrieval.'), { code: 'ROUND_EXPERIENCE_ACCESS_INVALID', status: 409 });
+    return { projectId: mission.projectId, allowedProjectIds: [] };
+  },
+  // Fail closed until the new package-backed execution verifier is installed.
+  // Worker-provided evidence/verified flags cannot authorize an observation.
+  verifyObservationEvidence: async () => ({ verified: false, code: 'EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE' }),
+});
 const commandJournal = createCommandJournal({ filePath: path.join(runtimeDir, 'command-journal.jsonl') });
-const stateRepository = createStateRepository({ load: loadPersistedState, save: savePersistedState });
+const stateRepository = createStateRepository({
+  load: (options = {}) => (options.recover ? loadPersistedState : readPersistedState)({ ...options, commandJournal, applyRegistry: commandRegistry }),
+  save: savePersistedState,
+});
 const persistState = stateRepository.persist;
 const json = createJsonResponder(bridge);
 const testBackendDescriptor = localC500Config.enabled
@@ -178,9 +188,11 @@ const systemRoutes = createSystemRoutes({
 const filesystemService = createFilesystemService({ picker: nativeDirectoryPicker });
 const filesystemRoutes = createFilesystemRoutes({ json, readJson, filesystem: filesystemService });
 const projectsService = createProjectsService({
+  projectState: missionProjectState,
   loadState: () => loadRuntimeState(),
   persistState,
   ensureProjectLayout,
+  workspaceDirForMission,
   workspace: workspaceManager,
   filesystem: { directoryExists, mkdir, readFile, readdir, rename },
   guardMutation: (...args) => guardMutation(...args),
@@ -191,13 +203,14 @@ const projectsService = createProjectsService({
 });
 const projectRoutes = createProjectRoutes({ json, readJson, projects: projectsService });
 const missionsService = createMissionsService({
+  missionState: missionProjectState,
   loadState: () => loadRuntimeState(),
   persistState,
   ensureMissionWorkspace,
   validateMissionBudgetInput: (...args) => validateMissionBudgetInput(...args),
 });
 const missionRoutes = createMissionRoutes({ json, readJson, missions: missionsService });
-const missionQuery = createMissionQueryService({ loadState: () => loadRuntimeState(), persistState });
+const missionQuery = createMissionQueryService({ missionState: missionProjectState, loadState: () => loadRuntimeState(), persistState });
 const missionQueryRoutes = createMissionQueryRoutes({ json, missionQuery, streamEvents: (...args) => streamMissionEvents(...args) });
 const semanticService = createSemanticService({ loadState: () => loadRuntimeState(), persistState, guardMutation: (...args) => guardMutation(...args), appendRuntimeEvent, addAuditEvent });
 const semanticRoutes = createSemanticRoutes({ json, readJson, semantic: semanticService });
@@ -307,13 +320,15 @@ const streamMissionEvents = async (request, response, missionId, after = 0) => {
     if (closed || busy) return;
     busy = true;
     try {
-      const state = await stateRepository.runExclusive(() => loadRuntimeState());
+      const state = await loadRuntimeState();
       const events = (state.runtimeEvents || []).filter((event) => event.missionId === missionId && event.sequence > nextSequence);
       for (const event of events) {
         if (!sse(response, 'runtime', event)) return close();
         nextSequence = Math.max(nextSequence, event.sequence || nextSequence);
       }
-      const revision = String(state.stateVersion ?? '') || state.updatedAt || `${state.agent?.runId || ''}:${state.benchmark?.status || ''}:${state.benchmark?.progress || 0}`;
+      const snapshotRevision = String(state.stateVersion ?? '') || state.updatedAt || `${state.agent?.runId || ''}:${state.benchmark?.status || ''}:${state.benchmark?.progress || 0}`;
+      const recovery = state.workflowRecovery?.commandRecovery;
+      const revision = JSON.stringify([snapshotRevision, recovery?.status, recovery?.failure?.code, recovery?.failure?.details?.commandId]);
       if (revision !== lastRevision) {
         lastRevision = revision;
         if (!sse(response, 'state', { missionId, state })) return close();
@@ -330,714 +345,29 @@ const streamMissionEvents = async (request, response, missionId, after = 0) => {
   if (!closed) timer = setInterval(tick, 500);
 };
 
-const guardMutation = (state) => {
-  if (state.missionPaused) {
-    const error = new Error('Mission 已暂停，请先恢复任务。');
-    error.status = 409;
-    throw error;
-  }
-  const budgetMs = normalizeMissionBudgetMs(state.missionBudgetMs);
-  state.missionBudgetMs = budgetMs;
-  if (!budgetMs) {
-    state.missionBudgetStartedAt = null;
-    return;
-  }
-  if (!state.missionBudgetStartedAt) {
-    state.missionBudgetStartedAt = new Date().toISOString();
-    return;
-  }
-  const startedAtMs = Date.parse(state.missionBudgetStartedAt);
-  if (!Number.isFinite(startedAtMs)) {
-    state.missionBudgetStartedAt = new Date().toISOString();
-    return;
-  }
-  const elapsedMs = Date.now() - startedAtMs;
-  if (elapsedMs >= budgetMs) {
-    const error = new Error('Mission 时间预算已耗尽，请调整预算后继续。');
-    error.status = 409;
-    error.code = 'MISSION_BUDGET_EXCEEDED';
-    error.details = { budgetMs, elapsedMs, startedAt: state.missionBudgetStartedAt };
-    throw error;
-  }
-};
+const { guardMutation, hasMissionBudgetInput, validateMissionBudgetInput, guardSupportedRuntimeAction, guardWorkflowTransition, interventionOutcomeMeta, adoptCandidateState } = createWorkflowCommandPolicy({ addAuditEvent, agentRuntime, appendRuntimeEvent, createCurrentBestState, createDecisionReviewState, isManagedWorkspaceRuntimeMode, markCandidateAccepted, normalizeMissionBudgetMs });
 
-const missionBudgetRawValue = (valueOrInput) => {
-  if (!valueOrInput || typeof valueOrInput !== 'object' || Array.isArray(valueOrInput)) return valueOrInput;
-  if (Object.hasOwn(valueOrInput, 'missionBudgetMs')) return valueOrInput.missionBudgetMs;
-  if (Object.hasOwn(valueOrInput, 'timeBudgetMs')) return valueOrInput.timeBudgetMs;
-  if (Object.hasOwn(valueOrInput, 'missionBudgetHours')) return Number(valueOrInput.missionBudgetHours) * 60 * 60 * 1000;
-  if (Object.hasOwn(valueOrInput, 'timeBudgetHours')) return Number(valueOrInput.timeBudgetHours) * 60 * 60 * 1000;
-  return null;
-};
-const hasMissionBudgetInput = (valueOrInput) => Boolean(valueOrInput && typeof valueOrInput === 'object' && !Array.isArray(valueOrInput) && ['missionBudgetMs', 'timeBudgetMs', 'missionBudgetHours', 'timeBudgetHours'].some((key) => Object.hasOwn(valueOrInput, key)));
-const isMissionBudgetDisableValue = (valueOrInput) => {
-  if (!hasMissionBudgetInput(valueOrInput) && valueOrInput && typeof valueOrInput === 'object' && !Array.isArray(valueOrInput)) return true;
-  const raw = missionBudgetRawValue(valueOrInput);
-  return raw === null || raw === undefined || raw === '' || raw === false || Number(raw) === 0;
-};
-const validateMissionBudgetInput = (valueOrInput) => {
-  if (isMissionBudgetDisableValue(valueOrInput)) return { ok: true, value: null };
-  const normalized = normalizeMissionBudgetMs(valueOrInput);
-  return normalized ? { ok: true, value: normalized } : { ok: false, value: null };
-};
 
-const guardSupportedRuntimeAction = async (action) => {
-  const runtime = await agentRuntime.describe();
-  if (runtime.mode === 'reference-fixture') return runtime;
-  // Codex owns reasoning and workspace changes; all workflow decisions remain
-  // client-owned so the local harness can inspect, pause, adopt, redirect, and
-  // roll back a verified candidate without asking the Agent adapter to mutate state.
-  if (isManagedWorkspaceRuntimeMode(runtime.mode)) return runtime;
-  const error = new Error(`${runtime.label || 'Agent Runtime'} 尚未实现 ${action} 动作桥；已拒绝生成本地参考结果。`);
-  error.status = 409;
-  error.code = 'RUNTIME_ACTION_UNAVAILABLE';
-  throw error;
-};
 
 const resetService = createResetService({ guardSupportedRuntimeAction, resetFixtureData });
 const resetRoutes = createResetRoutes({ json, reset: resetService });
 
-const guardWorkflowTransition = (state, { stages, actionType, label }) => {
-  const stageAllowed = stages.includes(state.stage);
-  const actionAllowed = !actionType || state.agent?.currentAction?.type === actionType;
-  if (stageAllowed && actionAllowed) return;
-  const error = new Error(`${label} 与当前 Mission 状态不一致，操作已拒绝。`);
-  error.status = 409;
-  error.code = 'INVALID_WORKFLOW_TRANSITION';
-  throw error;
-};
 
-const interventionOutcomeMeta = {
-  adopt: { label: '允许采用', expectedOutput: '确认采用并更新 current best' },
-  supplement: { label: '补充验证', expectedOutput: '补充验证并重新形成证据' },
-  redirect: { label: '调整优化方向', expectedOutput: '恢复候选工作区并生成新的 Candidate Plan' },
-};
 
-const adoptCandidateState = (state, note, source = 'policy') => {
-  const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
-  const candidate = (state.candidateEvaluations || []).find((item) => item.id === candidateId);
-  const resolvedAt = markCandidateAccepted(state, note, source);
-  state.stage = 'curation';
-  state.decisionReview = {
-    ...(state.decisionReview || createDecisionReviewState('resolved')),
-    status: 'resolved',
-    recommendation: 'adopt',
-    requiresApproval: false,
-    resolution: { outcome: 'adopt', source, note, resolvedAt },
-    resolvedAt,
-  };
-  const primaryMeasurement = state.benchmark?.result?.benchmark?.[0];
-  state.currentBest = candidateId
-    ? { candidateId, version: candidate?.version || 'agent.1', value: primaryMeasurement ? `${primaryMeasurement.value} ${primaryMeasurement.unit}` : '--', improvement: candidate?.delta || 'new', status: 'active', evidenceSource: candidate?.acceptGate?.evidenceSource || 'unknown', verified: candidate?.acceptGate?.publishable === true }
-    : createCurrentBestState('candidate-02');
-  state.workflowRecovery = {
-    ...(state.workflowRecovery || {}),
-    worktree: { ...(state.workflowRecovery?.worktree || {}), status: 'adopted', adoptedAt: resolvedAt },
-    lastRecovery: null,
-  };
-  state.agent = { ...state.agent, status: 'executing', phase: '知识自动维护', currentAction: null };
-  appendRuntimeEvent(state, 'decision.adopted', { candidate: candidateId, note, source }, { kind: 'policy', mode: 'client' });
-  addAuditEvent(state, source === 'human_review' ? `审批意见已处理并采用 ${candidateId}` : `策略建议已执行并采用 ${candidateId}`, `Level 3 · ${note}`, 'green', 'CheckCircle2');
-  state.knowledgeMaintenance = { ...(state.knowledgeMaintenance || {}), status: 'ready' };
-  return state;
-};
 
 // 命令注册表：keyFor（幂等键）、prepare（外部副作用，返回 payload+result）、apply（纯状态变换）、isApplied（去重精确化）。
 // apply 必须是纯状态函数：崩溃恢复 reconcile 会用它重放，绝不能再次触发 spawn/提交/文件写入。
-const commandRegistry = {
-  'apply-patch': {
-    keyFor: (state, body) => `apply-patch:${state.activeMissionId}:${body?.candidate || state.appliedCandidateId}`,
-    isApplied: (state, payload) => state.patchApplied === true && state.appliedCandidateId === payload?.candidateId,
-    prepare: async ({ state, body }) => {
-      const runtime = await agentRuntime.describe();
-      const candidate = (state.candidateEvaluations || []).find((item) => item.id === body.candidate);
-      const declaredFiles = String(candidate?.files || '').split(',').map((item) => item.trim()).filter(Boolean);
-      const codexPatch = isManagedWorkspaceRuntimeMode(runtime.mode) ? await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId)) : null;
-      const actualFiles = (codexPatch?.changedFiles || []).map((file) => file.replaceAll('\\', '/'));
-      const normalizedDeclaredFiles = declaredFiles.map((file) => file.replaceAll('\\', '/'));
-      const undeclaredFiles = actualFiles.filter((file) => !normalizedDeclaredFiles.includes(file));
-      const missingFiles = normalizedDeclaredFiles.filter((file) => !actualFiles.includes(file));
-      const codexPolicyChecks = isManagedWorkspaceRuntimeMode(runtime.mode) ? [
-        { id: 'patch.diff.nonempty', label: 'Mission 工作区存在真实 Git Diff', passed: Boolean(codexPatch?.dirty && codexPatch.diff) },
-        { id: 'patch.diff.matches', label: 'Candidate 文件清单与真实 Diff 一致', passed: undeclaredFiles.length === 0 && missingFiles.length === 0, detail: { undeclaredFiles, missingFiles } },
-      ] : [];
-      const policyChecks = [
-        { id: 'candidate.exists', label: '候选身份有效', passed: Boolean(candidate) },
-        { id: 'patch.declared', label: 'Patch 文件清单非空', passed: declaredFiles.length > 0 },
-        { id: 'patch.paths', label: '变更路径位于受控工作区', passed: declaredFiles.length > 0 && declaredFiles.every((file) => !path.isAbsolute(file) && !file.split(/[\\/]/).includes('..') && !file.startsWith('.git')) },
-        ...codexPolicyChecks,
-        { id: 'risk.policy', label: '风险未命中强制人工介入', passed: state.agent?.currentAction?.risk !== 'high' },
-      ];
-      if (policyChecks.some((check) => !check.passed)) {
-        const error = new Error('Patch 自动策略检查未通过，请通过人工介入查看失败项。');
-        error.status = 409;
-        error.code = 'PATCH_POLICY_CHECK_FAILED';
-        error.details = policyChecks;
-        throw error;
-      }
-      const checkpoint = isManagedWorkspaceRuntimeMode(runtime.mode) && state.workflowRecovery?.checkpoints?.length
-        ? state.workflowRecovery.checkpoints.at(-1)
-        : await createWorkspaceCheckpoint(state.activeMissionId, 'candidate', body.candidate);
-      const workspace = isManagedWorkspaceRuntimeMode(runtime.mode)
-        ? { workspace: path.relative(rootDir, codexPatch.workspace).replaceAll('\\', '/'), files: actualFiles.map((file) => ({ path: file, status: 'modified' })), digest: codexPatch.digest, diff: codexPatch.diff }
-        : await applyCandidatePatch(state.activeMissionId, body.candidate);
-      const appliedDiff = codexPatch || await workspaceManager.captureDiff(await ensureMissionWorkspace(state.activeMissionId));
-      if (!isManagedWorkspaceRuntimeMode(runtime.mode)) workspace.digest = appliedDiff.digest, workspace.diff = appliedDiff.diff;
-      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const artifactDir = artifactDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
-      await mkdir(artifactDir, { recursive: true });
-      const patchPath = path.join(artifactDir, `${body.candidate}.patch`);
-      const manifestPath = path.join(artifactDir, `${body.candidate}.manifest.json`);
-      const sourceReferences = Array.isArray(candidate?.sourceReferences) ? candidate.sourceReferences : [];
-      await writeFile(patchPath, appliedDiff.diff, 'utf8');
-      await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, missionId: state.activeMissionId, candidateId: body.candidate, digest: appliedDiff.digest, files: appliedDiff.changedFiles, sourceReferences, sourceRunId: state.agent.runId, createdAt: new Date().toISOString() }, null, 2)}\n`, 'utf8');
-      if (mission.sourceRoot && mission.runtimeRoot) await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot: mission.runtimeRoot, missionId: state.activeMissionId, references: sourceReferences });
-      return {
-        payload: { candidateId: body.candidate, checkpoint, workspace, digest: appliedDiff.digest, files: actualFiles, sourceReferences, artifacts: { patch: patchPath, manifest: manifestPath }, policyChecks, runtimeMode: runtime.mode },
-        result: { workspace, policyChecks },
-      };
-    },
-    apply: (state, payload) => {
-      const candidate = (state.candidateEvaluations || []).find((item) => item.id === payload.candidateId);
-      candidate.patchDigest = payload.digest;
-      candidate.sourceRunId = state.agent.runId;
-      if (isManagedWorkspaceRuntimeMode(payload.runtimeMode)) candidate.files = payload.files.join(', ');
-      candidate.artifacts = payload.artifacts;
-      state.patchApplied = true;
-      state.appliedCandidateId = payload.candidateId;
-      state.stage = 'validation';
-      state.workflowRecovery = {
-        ...(state.workflowRecovery || {}),
-        previousBest: state.workflowRecovery?.previousBest || structuredClone(state.currentBest || { candidateId: null, version: 'baseline', value: '--', improvement: '--', status: 'active' }),
-        worktree: { ...(state.workflowRecovery?.worktree || {}), candidateId: payload.candidateId, status: 'active', activatedAt: new Date().toISOString() },
-        checkpoints: [...(state.workflowRecovery?.checkpoints || []).filter((item) => item.id !== payload.checkpoint.id), payload.checkpoint].slice(-5),
-        lastRecovery: null,
-        invalidatedArtifacts: [],
-      };
-      state.agent = {
-        ...state.agent,
-        status: 'awaiting_action',
-        phase: '异构验证已就绪',
-        currentAction: { id: 'action.validation-matrix', type: 'test.plan', title: '运行 C550 + CUDA 测试矩阵', reason: 'Patch 自动策略检查已通过并写入隔离工作区，下一步验证正确性和完整性能。', expectedOutput: '24 / 24 Correctness · 2 个 Full Benchmark Run', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' },
-        messages: [...(state.agent?.messages || []), { id: `patch-${Date.now()}`, phase: 'candidate', status: 'completed', title: 'Patch 自动检查通过并应用', detail: '变更边界、工作区路径和风险策略均已通过，补丁已写入隔离工作区。', time: '刚刚' }],
-      };
-      appendRuntimeEvent(state, 'patch.applied', { workspace: payload.workspace.workspace, checkpointId: payload.checkpoint.id, files: payload.workspace.files.map((file) => file.path), digest: payload.digest || null, artifacts: payload.artifacts, sourceReferences: payload.sourceReferences, policyChecks: payload.policyChecks, approvalRequired: false, mock: false }, { kind: 'workspace', mode: isManagedWorkspaceRuntimeMode(payload.runtimeMode) ? payload.runtimeMode : 'client' });
-      addAuditEvent(state, 'Patch 自动策略检查通过', `${payload.workspace.workspace} · ${payload.candidateId} · 无需人工审批`, 'green', 'ShieldCheck');
-    },
-  },
-  'start-benchmark': {
-    keyFor: (state, body) => `benchmark:${state.activeMissionId}:${body?.purpose || body?.testPurpose || 'candidate'}:${body?.candidate || state.appliedCandidateId}:${body?.candidateDigest || (state.candidateEvaluations || []).find((c) => c.id === (body?.candidate || state.appliedCandidateId))?.patchDigest}:${hashKey(JSON.stringify(body?.matrix || state.testMatrix))}`,
-    isApplied: (state, payload) => state.benchmark?.status === 'running'
-      && state.benchmark?.purpose === payload?.purpose
-      && (payload?.purpose === 'baseline' || state.appliedCandidateId === payload?.candidateId)
-      && JSON.stringify(state.benchmark?.matrix || {}) === JSON.stringify(payload?.matrix || {}),
-    prepare: async ({ state, body }) => {
-      const matrix = body.matrix || state.testMatrix;
-      const runId = `run_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
-      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const purpose = body.purpose === 'baseline' || body.testPurpose === 'baseline' ? 'baseline' : 'candidate';
-      const normalizedMatrix = {
-        ...structuredClone(matrix),
-        warmup: Number(body.warmup ?? matrix.warmup ?? 50),
-        repeats: Number(body.repeats ?? matrix.repeats ?? 200),
-        correctnessCases: Number(body.correctnessCases ?? matrix.correctnessCases ?? matrix.testSpec?.correctness?.requestedCases ?? 24),
-      };
-      const baselinePlan = purpose === 'baseline'
-        ? await resolveBaselineRunPlan({ state, mission, body, matrix: normalizedMatrix, readMissionRunPy })
-        : null;
-      const semanticBinding = mission.semanticSnapshot?.status === 'frozen'
-        ? createSemanticTaskBinding(mission.semanticSnapshot, { testSpec: normalizedMatrix.testSpec })
-        : null;
-      const baselineKind = baselinePlan?.baselineKind || null;
-      const baselineSource = baselinePlan?.baselineSource || null;
-      const candidateId = purpose === 'baseline' ? baselinePlan.candidateId : (body.candidate || state.appliedCandidateId);
-      const appliedCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === candidateId);
-      const baselineDigestSeed = baselinePlan?.digestSeed || '';
-      const candidateDigest = body.candidateDigest || appliedCandidate?.patchDigest || (purpose === 'baseline' ? `sha256:baseline-${hashKey(String(baselineDigestSeed))}` : null);
-      if (!candidateDigest) {
-        const error = new Error('候选缺少由真实工作区 Diff 生成的 digest，不能提交测试。');
-        error.status = 409;
-        error.code = 'TEST_CANDIDATE_DIGEST_MISSING';
-        throw error;
-      }
-      if (purpose !== 'baseline' && !baselineMatchesMatrix(state.baseline || mission.baseline || {}, mission, normalizedMatrix)) {
-        const error = new Error('优化候选测试前必须先完成当前有效 baseline：同一 runner、同一输入 shape、单文件 run.py。');
-        error.status = 409;
-        error.code = 'BASELINE_REQUIRED_BEFORE_CANDIDATE';
-        error.details = {
-          baselineStatus: state.baseline?.status || mission.baseline?.status || 'missing',
-          expectedKind: state.baseline?.kind || mission.baseline?.kind || 'pytorch_reference',
-          expectedShapeKey: missionShapeKeyFor(mission, normalizedMatrix),
-          requestedEnvironments: normalizedMatrix.environments || mission.hardware || [],
-        };
-        throw error;
-      }
-      const missionRunPy = purpose === 'baseline'
-        ? { content: baselinePlan.runPy, source: baselinePlan.runPySource }
-        : await readMissionRunPy(state.activeMissionId, mission.repository, mission.projectRoot, mission.implementation, mission.operatorProfile);
-      const submitted = await operatorTestQueue.submit({
-        schemaVersion: 1, requestId: runId, missionId: state.activeMissionId,
-        purpose, baselineKind,
-        operator: body.operator || 'mla_paged_attention', candidate: { id: candidateId, digest: candidateDigest, remoteId: body.remoteCandidateId || null },
-        hardware: mission.hardware || matrix.environments, runtime: body.runtime || 'client-managed-runtime', metric: mission.metric || 'latency_p50',
-        matrix: normalizedMatrix, tracer: { enabled: true, format: 'operator-trace/v1' }, profiler: { enabled: true, format: 'operator-profile/v1' },
-        limits: { timeoutSeconds: Number(body.timeoutSeconds || process.env.OPERATOR_LOCAL_C500_TIMEOUT_SECONDS || 600) },
-        ...(baselineSource ? { baselineSource } : {}),
-        ...(baselinePlan?.materializationReport ? { baselineMaterialization: baselinePlan.materializationReport } : {}),
-        ...(missionRunPy.content ? { runPy: missionRunPy.content, runPySource: missionRunPy.source } : {}),
-        ...(purpose !== 'baseline' && (state.baseline?.oracleRunPy || state.baseline?.materializer?.result?.runPy)
-          ? { oracleRunPy: state.baseline.oracleRunPy || state.baseline.materializer.result.runPy }
-          : {}),
-        ...(purpose !== 'baseline' && isFixedOperatorMission(mission) && (state.baseline?.source || mission.baseline?.source) ? { baselineSource: state.baseline?.source || mission.baseline?.source } : {}),
-        ...(Object.keys(missionRunPy.implementationFiles || {}).length ? { implementationFiles: missionRunPy.implementationFiles } : {}),
-        ...(body.packageId ? { packageId: body.packageId } : {}),
-        ...(body.remoteCandidateId ? { remoteCandidateId: body.remoteCandidateId } : {}),
-        ...(semanticBinding ? { semanticBinding } : {}),
-      });
-      return {
-        payload: { runId, taskId: submitted.taskId, purpose, baselineKind, baselineSource, baselineOracleRunPy: purpose === 'baseline' ? baselinePlan?.runPy || null : null, semanticBinding, baselineResolution: baselinePlan?.resolution || null, baselineMaterialization: baselinePlan?.materializationReport || null, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages, submittedAt: submitted.submittedAt },
-        result: { runId, taskId: submitted.taskId },
-      };
-    },
-    apply: (state, payload) => {
-      state.testMatrix = structuredClone(payload.matrix);
-      state.stage = 'validation';
-      state.benchmark = {
-        status: 'running', progress: 0, runId: payload.runId, startedAt: payload.submittedAt || new Date().toISOString(), completedAt: null, durationMs: 0,
-        logs: [{ sequence: 1, progress: 0, message: `调度器已锁定 ${payload.environments.length} 个环境快照` }], matrix: structuredClone(payload.matrix),
-        purpose: payload.purpose, baselineKind: payload.baselineKind, baselineSource: payload.baselineSource ? structuredClone(payload.baselineSource) : null, baselineMaterialization: payload.baselineMaterialization ? structuredClone(payload.baselineMaterialization) : null,
-        semanticBinding: payload.semanticBinding ? structuredClone(payload.semanticBinding) : null,
-        candidate: { id: payload.candidateId, digest: payload.candidateDigest }, testTaskId: payload.taskId, result: null,
-        source: {
-          kind: localC500Config.enabled ? 'local-c500-adapter' : 'operator-test-service',
-          transport: 'local-serial-queue',
-          mock: localC500Config.enabled ? localC500Config.mock : true,
-          liveHardware: localC500Config.enabled ? !localC500Config.mock : false,
-        },
-        lastServiceError: null,
-      };
-      if (payload.purpose === 'baseline') {
-        state.baseline = {
-          ...(state.baseline || { required: true, status: 'missing', sourcePolicy: { requireAuthority: true, requireSingleFileExpansion: true } }),
-          kind: normalizeBaselineKind(payload.baselineKind),
-          status: 'running',
-          source: payload.baselineSource ? structuredClone(payload.baselineSource) : state.baseline?.source || null,
-          oracleRunPy: payload.baselineOracleRunPy || state.baseline?.oracleRunPy || null,
-          resolution: payload.baselineResolution
-            ? structuredClone(payload.baselineResolution)
-            : {
-              ...(state.baseline?.resolution || {}),
-              status: 'running',
-              strategy: payload.baselineKind === 'naive_v0' ? 'fallback_naive_v0' : 'authoritative_first',
-              kind: normalizeBaselineKind(payload.baselineKind),
-              attemptedAuthority: payload.baselineKind !== 'naive_v0',
-              reused: false,
-              reason: payload.baselineKind === 'naive_v0' ? '权威 baseline 不可用，使用 v0 fallback。' : '正在执行权威 baseline。',
-              resolvedAt: null,
-              previousEvidenceRunId: null,
-            },
-        };
-      }
-      const title = payload.purpose === 'baseline'
-        ? (normalizeBaselineKind(payload.baselineKind) === 'naive_v0' ? 'naive v0 baseline 已提交' : 'PyTorch reference baseline 已提交')
-        : 'Full Benchmark 已提交';
-      state.agent = { ...state.agent, status: 'executing', phase: payload.purpose === 'baseline' ? 'Baseline 验证' : '异构验证', currentAction: null, messages: [...(state.agent?.messages || []), { id: `test-${payload.runId}`, phase: 'validation', status: 'running', title: 'Validation Agent 已提交测试矩阵', detail: `${payload.runId} 正在 ${payload.environments.length} 个固定环境中执行。`, time: '刚刚' }] };
-      appendRuntimeEvent(state, 'operator_test.queued', { runId: payload.runId, taskId: payload.taskId, purpose: payload.purpose, baselineKind: payload.baselineKind, baselineSource: payload.baselineSource, baselineMaterialization: payload.baselineMaterialization, candidate: { id: payload.candidateId, digest: payload.candidateDigest }, environments: payload.environments, stages: payload.stages, matrix: structuredClone(payload.matrix) }, { kind: 'operator-test-queue', mode: 'client' });
-      addAuditEvent(state, title, `${payload.runId} · ${payload.environments.length} environments`, 'blue', 'TestTube2');
-    },
-  },
-  'resume-mission': {
-    keyFor: (state, body) => `resume-mission:${state.activeMissionId}:${state.stage}:${state.candidateEvaluations?.[0]?.patchDigest || 'no-candidate'}:${body?.missionBudgetMs ?? body?.missionBudgetHours ?? 'keep'}`,
-    isApplied: (state, payload) => state.stage === 'candidate'
-      && state.agent?.status === 'awaiting_action'
-      && state.missionBudgetStartedAt === payload?.missionBudgetStartedAt,
-    prepare: async ({ state, body }) => {
-      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const hasCandidate = Array.isArray(state.candidateEvaluations) && state.candidateEvaluations.length > 0;
-      const currentBestEmpty = !state.currentBest?.candidateId && (!state.currentBest?.value || state.currentBest.value === '--' || state.currentBest.value === '—');
-      const budgetEnded = state.stage === 'published'
-        && state.agent?.phase === 'Mission budget 已到，保留 current best'
-        && currentBestEmpty
-        && hasCandidate;
-      if (!budgetEnded) {
-        const error = new Error('当前 Mission 不满足预算兜底恢复条件。');
-        error.status = 409;
-        error.code = 'MISSION_RESUME_NOT_APPLICABLE';
-        error.details = { stage: state.stage, agentPhase: state.agent?.phase || null, currentBest: state.currentBest || null, candidateCount: state.candidateEvaluations?.length || 0 };
-        throw error;
-      }
-      const requestedBudget = hasMissionBudgetInput(body)
-        ? validateMissionBudgetInput(body)
-        : { ok: true, value: normalizeMissionBudgetMs(state.missionBudgetMs) || 5 * 60 * 60 * 1000 };
-      if (!requestedBudget.ok) {
-        const error = new Error('missionBudgetMs 必须是正数毫秒；传 null、空值或 0 表示不启用时间限制。');
-        error.status = 400;
-        error.code = 'INVALID_MISSION_BUDGET';
-        throw error;
-      }
-      return {
-        payload: {
-          missionId: state.activeMissionId,
-          missionTitle: mission.title || state.activeMissionId,
-          candidateId: state.candidateEvaluations[0].id || 'candidate-01',
-          candidateDigest: state.candidateEvaluations[0].patchDigest || null,
-          missionBudgetMs: requestedBudget.value,
-          missionBudgetStartedAt: new Date().toISOString(),
-        },
-      };
-    },
-    apply: (state, payload) => {
-      state.stage = 'candidate';
-      state.patchApplied = false;
-      state.missionPaused = false;
-      state.missionBudgetMs = payload.missionBudgetMs;
-      state.missionBudgetStartedAt = payload.missionBudgetStartedAt;
-      state.benchmark = { ...(state.benchmark || {}), status: 'idle', progress: 0, runId: null, testTaskId: null, startedAt: null, completedAt: null, durationMs: 0, logs: [], result: null, lastServiceError: null };
-      state.decisionReview = createDecisionReviewState('idle');
-      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'running', loopStatusReason: null };
-      state.agent = {
-        ...(state.agent || {}),
-        status: 'awaiting_action',
-        phase: 'Candidate Plan 已生成',
-        progress: 100,
-        currentAction: {
-          id: `action.${payload.candidateId}.resume`,
-          type: 'candidate.plan',
-          title: `提交 ${payload.candidateId} 测试`,
-          reason: 'Mission 预算兜底结束后恢复：保留已有单文件候选，刷新预算窗口并继续真实 runner 验证。',
-          expectedOutput: 'Correctness · Benchmark · Tracer · Profiler',
-          risk: 'medium',
-          approvalRequired: false,
-          approvalPolicy: 'client-controlled',
-        },
-      };
-      appendRuntimeEvent(state, 'mission.resumed_after_budget', { missionId: payload.missionId, candidateId: payload.candidateId, candidateDigest: payload.candidateDigest, missionBudgetMs: payload.missionBudgetMs, missionBudgetStartedAt: payload.missionBudgetStartedAt }, { kind: 'mission', mode: 'client' });
-      addAuditEvent(state, 'Mission 已从预算结束态恢复', `${payload.missionTitle} · ${payload.candidateId} · budget ${payload.missionBudgetMs ? `${Math.round(payload.missionBudgetMs / 60 / 60 / 1000)}h` : 'none'}`, 'blue', 'RefreshCw');
-    },
-  },
-  'adopt': {
-    keyFor: (state) => `adopt:${state.activeMissionId}:${state.appliedCandidateId || state.decisionReview?.candidateId}`,
-    isApplied: (state) => state.knowledgeMaintenance?.status === 'completed' && state.publishedAssets?.length === state.knowledgeDrafts?.length,
-    apply: (state, payload) => { adoptCandidateState(state, payload?.note || '证据完整且未命中人工复核信号。', 'policy'); },
-    prepare: async ({ body }) => ({ payload: { note: body?.note || '' }, result: null }),
-  },
-  'reject': {
-    keyFor: (state) => `reject:${state.activeMissionId}:${state.appliedCandidateId || state.decisionReview?.candidateId}`,
-    isApplied: (state) => state.decisionReview?.resolution?.outcome === 'supplement' && state.decisionReview?.resolution?.source === 'direct_action',
-    apply: (state) => {
-      state.stage = 'validation';
-      state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
-      state.decisionReview = { ...createDecisionReviewState('resolved'), recommendation: null, resolution: { outcome: 'supplement', source: 'direct_action', note: '需要补充验证', resolvedAt: new Date().toISOString() } };
-      state.agent = { ...state.agent, status: 'awaiting_action', phase: '补充验证', currentAction: { id: 'action.revalidation', type: 'test.plan', title: '运行补充验证矩阵', reason: '效果决策要求补充验证。', expectedOutput: 'Updated Full Benchmark · refreshed Level 3 evidence', risk: 'medium', approvalRequired: false } };
-      const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
-      appendRuntimeEvent(state, 'decision.revalidation_requested', { candidate: candidateId || null, reason: '需要补充验证' }, { kind: 'policy', mode: 'client' });
-      addAuditEvent(state, '候选退回验证', `${candidateId || '当前候选'} · 需要补充验证`, 'warning', 'TriangleAlert');
-    },
-  },
-  'rollback-stage': {
-    keyFor: (state) => `rollback-stage:${state.activeMissionId}:${state.workflowRecovery?.checkpoints?.at(-1)?.id || 'none'}`,
-    isApplied: (state) => state.stage === 'candidate' && state.patchApplied === false,
-    prepare: async ({ state }) => {
-      const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
-      const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
-      return { payload: { checkpointId: checkpoint.id, recovery }, result: { recovery } };
-    },
-    apply: (state, payload) => {
-      const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
-      const invalidatedArtifacts = [
-        state.benchmark?.runId ? { type: 'benchmark', id: state.benchmark.runId } : null,
-        state.stage === 'evidence' && candidateId ? { type: 'evidence', id: `decision.${candidateId}` } : null,
-      ].filter(Boolean);
-      state.stage = 'candidate';
-      state.patchApplied = false;
-      state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
-      state.decisionReview = createDecisionReviewState('idle');
-      state.agent = {
-        ...state.agent,
-        status: 'awaiting_approval',
-        phase: '候选补丁审查',
-        currentAction: { id: `action.${candidateId || 'candidate'}-restored`, type: 'candidate.plan', title: `重新审阅 ${candidateId || '候选'}`, reason: '流程已恢复到补丁应用前的工作区检查点。', expectedOutput: 'Candidate Plan · isolated worktree', risk: 'medium', approvalRequired: true },
-        messages: [...(state.agent?.messages || []), { id: `rollback-${Date.now()}`, phase: 'candidate', status: 'completed', title: '已返回补丁应用前', detail: `${payload.checkpointId} 已恢复，${invalidatedArtifacts.length} 个后续工件已失效。`, time: '刚刚' }],
-      };
-      state.workflowRecovery = {
-        ...state.workflowRecovery,
-        worktree: { ...state.workflowRecovery.worktree, status: 'restored' },
-        lastRecovery: { type: 'stage_rollback', from: 'validation_or_evidence', to: 'candidate', checkpointId: payload.checkpointId, restoredAt: payload.recovery.restoredAt },
-        invalidatedArtifacts: [...(state.workflowRecovery.invalidatedArtifacts || []), ...invalidatedArtifacts],
-      };
-      appendRuntimeEvent(state, 'workflow.stage_rolled_back', { from: 'validation_or_evidence', to: 'candidate', checkpointId: payload.checkpointId, invalidatedArtifacts }, { kind: 'recovery', mode: 'client' });
-      addAuditEvent(state, '流程已返回补丁应用前', `${payload.checkpointId} · ${invalidatedArtifacts.length} artifacts invalidated`, 'warning', 'History');
-    },
-  },
-  'request-review': {
-    keyFor: (state) => `request-review:${state.activeMissionId}`,
-    isApplied: (state) => state.decisionReview?.status === 'awaiting_review',
-    apply: (state, payload) => {
-      const requestedAt = new Date().toISOString();
-      const outcomeMeta = interventionOutcomeMeta[payload.outcome];
-      state.decisionReview = {
-        ...(state.decisionReview || createDecisionReviewState('auto_ready')),
-        status: 'awaiting_review', requiresApproval: true,
-        request: { candidateId: payload.candidate || state.appliedCandidateId || null, outcome: payload.outcome, note: payload.note, originStage: payload.originStage, submittedBy: payload.submittedBy || 'Yilin Lu', requestedAt },
-        resolution: null, requestedAt, resolvedAt: null,
-      };
-      state.agent = {
-        ...state.agent,
-        status: 'awaiting_approval', phase: '人工介入待处理',
-        currentAction: { id: 'action.resolve-decision-review', type: 'review.resolve', title: '处理人工介入事项', reason: payload.note, expectedOutput: outcomeMeta.expectedOutput, risk: 'high', approvalRequired: true, reviewMode: 'human_requested' },
-        messages: [...(state.agent?.messages || []), { id: `review-${Date.now()}`, phase: 'approval', status: 'waiting', title: '已收到人工介入意见', detail: `${outcomeMeta.label} · ${payload.note}`, time: '刚刚' }],
-      };
-      appendRuntimeEvent(state, 'decision.review_requested', { candidate: state.appliedCandidateId || state.decisionReview?.candidateId || null, originStage: payload.originStage, outcome: payload.outcome, note: payload.note }, { kind: 'approval', mode: 'client' });
-      addAuditEvent(state, '流程已被人工介入阻塞', `${outcomeMeta.label} · ${payload.note}`, 'warning', 'ShieldCheck');
-    },
-    prepare: async ({ state, body }) => {
-      const outcome = ['adopt', 'supplement', 'redirect'].includes(body.outcome) ? body.outcome : 'redirect';
-      const allowedOutcomes = state.stage === 'evidence' ? ['adopt', 'supplement', 'redirect'] : state.stage === 'validation' ? ['supplement', 'redirect'] : ['redirect'];
-      if (!allowedOutcomes.includes(outcome)) {
-        const error = new Error('当前阶段尚不支持该介入指令，请先查看证据状态。');
-        error.status = 409; error.code = 'INTERVENTION_OUTCOME_UNAVAILABLE'; throw error;
-      }
-      const note = String(body.note || '').trim();
-      if (note.length < 4) {
-        const error = new Error('请填写具体的审批意见后再提交。');
-        error.status = 400; error.code = 'DECISION_REVIEW_NOTE_REQUIRED'; throw error;
-      }
-      return { payload: { outcome, note, candidate: body.candidate || null, originStage: state.stage, submittedBy: body.submittedBy || null }, result: null };
-    },
-  },
-  'cancel-review': {
-    keyFor: (state) => `cancel-review:${state.activeMissionId}`,
-    isApplied: (state) => !state.decisionReview?.request,
-    apply: (state) => {
-      const previousRequest = state.decisionReview?.request;
-      const candidateId = state.appliedCandidateId || previousRequest?.candidateId || state.decisionReview?.candidateId;
-      const restoredStatus = state.stage === 'evidence' ? 'auto_ready' : 'idle';
-      const restoredAction = state.stage === 'evidence'
-        ? { id: 'action.adoption-decision', type: 'adoption.decision', title: `确认 ${candidateId || '候选'} 的策略建议`, reason: '人工意见已撤回，当前未命中强制复核信号。', expectedOutput: 'Policy Decision · current best update', risk: 'medium', approvalRequired: false, reviewMode: 'conditional' }
-        : state.stage === 'validation'
-          ? { id: 'action.validation-resumed', type: 'test.plan', title: '继续异构验证', reason: '人工介入已撤回，恢复原验证计划。', expectedOutput: 'Correctness · Full Benchmark · Level 3 evidence', risk: 'medium', approvalRequired: false }
-          : { id: 'action.candidate-resumed', type: 'candidate.plan', title: '继续候选自动检查', reason: '人工介入已撤回，恢复原 Candidate Plan 和自动策略。', expectedOutput: 'Candidate Plan · patch proposal', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' };
-      state.decisionReview = { ...createDecisionReviewState(restoredStatus), cancelledRequest: previousRequest || null };
-      state.agent = { ...state.agent, status: 'awaiting_action', phase: state.stage === 'evidence' ? '效果策略评估' : state.stage === 'validation' ? '异构验证' : '候选补丁审查', currentAction: restoredAction };
-      appendRuntimeEvent(state, 'decision.review_cancelled', { candidate: candidateId || null }, { kind: 'approval', mode: 'client' });
-      addAuditEvent(state, '人工审批意见已撤回', '流程恢复为条件式策略决策', 'blue', 'ShieldCheck');
-      if (state.stage === 'evidence' && state.benchmark?.status === 'complete') runAutomaticAdoption(state, `人工介入已撤回，Accept Gate 继续按策略自动采用 ${candidateId || '候选'}。`);
-    },
-  },
-  'revert-adoption': {
-    keyFor: (state) => `revert-adoption:${state.activeMissionId}:${state.currentBest?.candidateId || state.appliedCandidateId}`,
-    isApplied: (state) => state.decisionReview?.resolution?.outcome === 'reverted',
-    prepare: async ({ state }) => {
-      const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
-      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const repositoryAdoption = state.workflowRecovery?.repositoryAdoption;
-      const repositoryRevert = mission.projectRoot && repositoryAdoption?.commit
-        ? await workspaceManager.revertAdoption({ repository: mission.repository, commit: repositoryAdoption.commit })
-        : null;
-      const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
-      return { payload: { checkpointId: checkpoint.id, recovery, repositoryRevert, repositoryAdoption, revertedAt: new Date().toISOString(), previousBest: state.workflowRecovery?.previousBest || { candidateId: null, version: 'baseline', value: '--', improvement: '--', status: 'active' } }, result: { recovery, repositoryRevert } };
-    },
-    apply: (state, payload) => {
-      const revertedCandidateId = state.currentBest?.candidateId || state.appliedCandidateId || 'candidate';
-      state.currentBest = payload.previousBest;
-      state.decisionReview = { ...(state.decisionReview || createDecisionReviewState('resolved')), status: 'resolved', recommendation: null, requiresApproval: false, resolution: { outcome: 'reverted', source: 'human_recovery', note: `已恢复上一稳定版本 ${payload.previousBest.version || 'baseline'}`, resolvedAt: payload.revertedAt }, resolvedAt: payload.revertedAt };
-      state.publishedAssets = (state.publishedAssets || []).map((asset) => ({ ...asset, status: 'superseded', supersededAt: payload.revertedAt, supersededBy: `rollback.${payload.previousBest.version || 'baseline'}` }));
-      state.knowledgeMaintenance = { ...state.knowledgeMaintenance, rollback: { status: 'completed', reason: `${revertedCandidateId} adoption reverted`, revertedAt: payload.revertedAt }, changes: (state.knowledgeMaintenance?.changes || []).map((change) => ({ ...change, outcome: 'superseded' })) };
-      state.agent = { ...state.agent, status: 'completed', phase: '已回退到上一稳定版本', currentAction: null, messages: [...(state.agent?.messages || []), { id: `adoption-revert-${Date.now()}`, phase: 'decision', status: 'completed', title: '采用结果已回退', detail: `current best 已恢复为 ${payload.previousBest.version || 'baseline'}，${revertedCandidateId} 关联知识已标记为被替代。`, time: '刚刚' }] };
-      state.workflowRecovery = {
-        ...state.workflowRecovery,
-        repositoryAdoption: payload.repositoryRevert ? { ...payload.repositoryAdoption, status: 'reverted', ...payload.repositoryRevert } : payload.repositoryAdoption,
-        worktree: { ...state.workflowRecovery.worktree, status: 'reverted', revertedAt: payload.revertedAt },
-        lastRecovery: { type: 'adoption_revert', from: revertedCandidateId, to: payload.previousBest.candidateId || 'baseline', checkpointId: payload.checkpointId, restoredAt: payload.recovery.restoredAt },
-        invalidatedArtifacts: [...(state.workflowRecovery.invalidatedArtifacts || []), { type: 'decision', id: `decision.${revertedCandidateId}` }, ...(state.publishedAssets || []).map((asset) => ({ type: 'knowledge', id: `${asset.id}@${asset.version}` }))],
-      };
-      appendRuntimeEvent(state, 'decision.adoption_reverted', { from: revertedCandidateId, to: payload.previousBest.candidateId || 'baseline', checkpointId: payload.checkpointId }, { kind: 'recovery', mode: 'client' });
-      appendRuntimeEvent(state, 'knowledge.assets_superseded', { assets: state.publishedAssets.map((asset) => `${asset.id}@${asset.version}`) }, { kind: 'knowledge', mode: 'client' });
-      addAuditEvent(state, '已回退到上一稳定版本', `${revertedCandidateId} → ${payload.previousBest.version || 'baseline'} · ${payload.checkpointId}`, 'warning', 'History');
-    },
-  },
-  'resolve-review': {
-    keyFor: (state, body) => `resolve-review:${state.activeMissionId}:${body?.outcome || state.decisionReview?.request?.outcome}`,
-    isApplied: (state) => state.decisionReview?.status === 'resolved',
-    prepare: async ({ state, body }) => {
-      const outcome = body.outcome || state.decisionReview?.request?.outcome;
-      const note = String(body.note || state.decisionReview?.request?.note || '').trim();
-      if (outcome === 'redirect') {
-        const checkpoint = state.workflowRecovery?.checkpoints?.at(-1);
-        if (!checkpoint) {
-          const error = new Error('当前 Mission 没有可恢复的工作区检查点，无法调整优化方向。');
-          error.status = 409; error.code = 'WORKSPACE_CHECKPOINT_MISSING'; throw error;
-        }
-        const recovery = await restoreWorkspaceCheckpoint(checkpoint, state.activeMissionId);
-        return { payload: { outcome, note, checkpointId: checkpoint.id, recovery }, result: { review: null, recovery } };
-      }
-      return { payload: { outcome, note, checkpointId: null, recovery: null }, result: null };
-    },
-    apply: (state, payload) => {
-      const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
-      const resolvedAt = new Date().toISOString();
-      if (payload.outcome === 'adopt') {
-        adoptCandidateState(state, payload.note, 'human_review');
-        return;
-      }
-      if (payload.outcome === 'redirect') {
-        const invalidatedArtifacts = [
-          state.benchmark?.runId ? { type: 'benchmark', id: state.benchmark.runId } : null,
-          state.stage === 'evidence' && candidateId ? { type: 'evidence', id: `decision.${candidateId}` } : null,
-        ].filter(Boolean);
-        state.stage = 'candidate';
-        state.patchApplied = false;
-        state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
-        state.decisionReview = { ...state.decisionReview, status: 'resolved', requiresApproval: false, recommendation: null, resolution: { outcome: payload.outcome, source: 'human_review', note: payload.note, resolvedAt }, resolvedAt };
-        state.agent = {
-          ...state.agent, status: 'awaiting_action', phase: '调整优化方向',
-          currentAction: { id: 'action.redirect-candidate', type: 'candidate.plan', title: '根据人工意见生成新候选方向', reason: payload.note, expectedOutput: 'Revised Candidate Plan · isolated worktree', risk: 'medium', approvalRequired: true, reviewMode: 'resolved' },
-          messages: [...(state.agent?.messages || []), { id: `review-redirect-${Date.now()}`, phase: 'candidate', status: 'completed', title: '人工介入已调整优化方向', detail: `${payload.checkpointId || 'candidate baseline'} 已恢复，${invalidatedArtifacts.length} 个后续工件已失效。`, time: '刚刚' }],
-        };
-        state.workflowRecovery = {
-          ...state.workflowRecovery,
-          worktree: { ...state.workflowRecovery?.worktree, status: payload.checkpointId ? 'restored' : 'clean' },
-          lastRecovery: payload.checkpointId ? { type: 'intervention_redirect', from: state.decisionReview.request?.originStage || 'workflow', to: 'candidate', checkpointId: payload.checkpointId, restoredAt: payload.recovery.restoredAt } : state.workflowRecovery?.lastRecovery,
-          invalidatedArtifacts: [...(state.workflowRecovery?.invalidatedArtifacts || []), ...invalidatedArtifacts],
-        };
-        appendRuntimeEvent(state, 'decision.review_resolved', { candidate: candidateId || null, outcome: payload.outcome, note: payload.note }, { kind: 'approval', mode: 'client' });
-        appendRuntimeEvent(state, 'workflow.redirected_by_intervention', { candidate: candidateId || null, checkpointId: payload.checkpointId || null, invalidatedArtifacts }, { kind: 'recovery', mode: 'client' });
-        addAuditEvent(state, '人工介入已调整优化方向', `${payload.checkpointId || 'candidate baseline'} · ${payload.note}`, 'warning', 'GitBranch');
-        return;
-      }
-      // supplement
-      state.stage = 'validation';
-      state.benchmark = { status: 'idle', progress: 0, runId: null, startedAt: null, completedAt: null, durationMs: 2600, logs: [] };
-      state.decisionReview = { ...state.decisionReview, status: 'resolved', requiresApproval: false, recommendation: null, resolution: { outcome: payload.outcome, source: 'human_review', note: payload.note, resolvedAt }, resolvedAt };
-      state.agent = {
-        ...state.agent, status: 'awaiting_action', phase: '补充验证',
-        currentAction: { id: 'action.supplement-validation', type: 'test.plan', title: '运行补充验证矩阵', reason: payload.note, expectedOutput: 'Updated Full Benchmark · refreshed Level 3 evidence', risk: 'medium', approvalRequired: false, reviewMode: 'resolved' },
-        messages: [...(state.agent?.messages || []), { id: `review-resolved-${Date.now()}`, phase: 'approval', status: 'completed', title: '审批意见已处理', detail: `流程返回验证阶段 · ${payload.note}`, time: '刚刚' }],
-      };
-      appendRuntimeEvent(state, 'decision.review_resolved', { candidate: candidateId || null, outcome: payload.outcome, note: payload.note }, { kind: 'approval', mode: 'client' });
-      addAuditEvent(state, '审批意见已处理：补充验证', payload.note, 'warning', 'TestTube2');
-    },
-  },
-  'runs': {
-    keyFor: (state, body) => `run-start:${state.activeMissionId}:${state.runHistory?.length || 0}:${hashKey(body?.goal || state.missions?.find((m) => m.id === state.activeMissionId)?.goal || '')}`,
-    isApplied: (state, payload) => state.agent?.runId === payload?.runId && ['running', 'executing', 'awaiting_action'].includes(state.agent?.status),
-    prepare: async ({ state, body }) => {
-      const runtimeDescriptor = await agentRuntime.describe();
-      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const goal = body?.goal?.trim() || mission.goal;
-      let workspace = body?.workspace;
-      if (!workspace) {
-        const preflight = await buildRuntimePreflight(mission);
-        if (!preflight.ready) {
-          const error = new Error(preflight.workspaceCheck?.detail || 'Agent Runtime 预检失败。');
-          error.status = 503; error.code = preflight.workspaceCheck?.code || 'RUNTIME_PREFLIGHT_FAILED'; throw error;
-        }
-        workspace = preflight.workspace;
-      }
-      const referenceFixture = runtimeDescriptor.mode === 'reference-fixture';
-      // 捕获-重放：在克隆上执行 reset + startRun（含 spawn），把结果摘进 payload；apply 只做确定性的状态重建。
-      const clone = structuredClone(state);
-      resetMissionRunState(clone, goal, { referenceFixture });
-      let checkpoint = null;
-      if (runtimeDescriptor.mode === 'reference-fixture') await resetMissionWorkspace(state.activeMissionId);
-      if (isManagedWorkspaceRuntimeMode(runtimeDescriptor.mode)) {
-        checkpoint = await createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline');
-        clone.workflowRecovery = { ...(clone.workflowRecovery || {}), checkpoints: [...(clone.workflowRecovery?.checkpoints || []), checkpoint].slice(-5) };
-      }
-      const runtimeRun = await agentRuntime.startRun({ state: clone, mission, goal, resumeThreadId: body?.resumeThreadId || null, workspace });
-      if (!runtimeRun.handled) startAgentRun(clone, goal, { reset: false });
-      const eventType = referenceFixture
-        ? 'mission.run_started'
-        : runtimeDescriptor.mode === 'cli-file'
-          ? 'mission.run_requested'
-          : `${runtimeDescriptor.mode === 'claude-code' ? 'claude' : 'codex'}.run_started`;
-      return { payload: { goal, referenceFixture, eventType, runtimeMode: runtimeDescriptor.mode, agent: clone.agent, checkpoint, runId: clone.agent.runId }, result: { runId: clone.agent.runId } };
-    },
-    apply: (state, payload) => {
-      resetMissionRunState(state, payload.goal, { referenceFixture: payload.referenceFixture });
-      if (payload.checkpoint) state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), payload.checkpoint].slice(-5) };
-      state.agent = payload.agent;
-      if (!state.runtimeEvents?.some((e) => e.type === payload.eventType && e.payload?.runId === payload.runId)) {
-        appendRuntimeEvent(state, payload.eventType, { runId: payload.runId, goal: payload.goal }, { kind: 'adapter', mode: payload.referenceFixture ? 'reference-fixture' : payload.eventType === 'mission.run_requested' ? 'cli-file' : payload.runtimeMode });
-      }
-    },
-  },
-  'research': {
-    keyFor: (state, body) => `research:${state.activeMissionId}:${state.researchNotes?.length || 0}:${hashKey(body?.direction || selectResearchDirection(state))}`,
-    isApplied: (state, payload) => state.researchAgent?.runId === payload?.runId && state.researchAgent?.status === 'running',
-    prepare: async ({ state, body }) => {
-      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const direction = body?.direction?.trim() || selectResearchDirection(state);
-      const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
-      const clone = structuredClone(state);
-      await mkdir(researchDir, { recursive: true });
-      // 操作员主动触发 → 默认异步（并行，主循环不阻塞）；可在 body 显式传 synchronous:true 改为串行等待
-      const started = await agentRuntime.startResearch({ state: clone, mission, direction, workspace: researchDir, synchronous: body?.synchronous === true });
-      return { payload: { direction, researchAgent: clone.researchAgent }, result: { runId: clone.researchAgent.runId } };
-    },
-    apply: (state, payload) => {
-      state.researchAgent = payload.researchAgent;
-      if (!state.runtimeEvents?.some((e) => e.type === 'research.run_started' && e.payload?.runId === payload.researchAgent.runId)) {
-        appendRuntimeEvent(state, 'research.run_started', { runId: payload.researchAgent.runId, direction: payload.direction, researchDir: payload.researchAgent.researchDir }, { kind: 'research', mode: payload.researchAgent.runtimeKind });
-      }
-    },
-  },
-  'materialize-baseline': {
-    keyFor: (state, body) => {
-      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const source = body?.baselineSource || state.baseline?.source || mission.baseline?.source || selectResearchBaselineSource(state.researchNotes, mission, body) || {};
-      return `materialize-baseline:${state.activeMissionId}:${hashKey(JSON.stringify(source))}:${hashKey(JSON.stringify(body?.matrix || state.testMatrix))}`;
-    },
-    isApplied: (state, payload) => state.baseline?.materializer?.runId === payload?.materializer?.runId
-      && ['running', 'completed'].includes(state.baseline?.materializer?.status),
-    prepare: async ({ state, body }) => {
-      const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
-      const matrix = body.matrix || state.testMatrix;
-      const source = body?.baselineSource || body?.source || state.baseline?.source || mission.baseline?.source || selectResearchBaselineSource(state.researchNotes, mission, body);
-      if (!source) {
-        const error = new Error('Baseline materializer 缺少权威 source；请先让调查员查找 upstream baseline source。');
-        error.status = 409;
-        error.code = 'BASELINE_SOURCE_REQUIRED';
-        throw error;
-      }
-      const materializationDir = isStrictZeroSourceMission(mission)
-        ? baselineDirForMission(state.activeMissionId, mission.repository, mission.projectRoot)
-        : path.join(artifactDirForMission(state.activeMissionId, mission.repository, mission.projectRoot), 'baseline-materialization');
-      const clone = structuredClone(state);
-      await mkdir(materializationDir, { recursive: true });
-      await agentRuntime.startBaselineMaterialization({ state: clone, mission, source, matrix, workspace: materializationDir });
-      return { payload: { materializer: clone.baseline.materializer, baselineSource: source, matrix: structuredClone(matrix) }, result: { runId: clone.baseline.materializer.runId } };
-    },
-    apply: (state, payload) => {
-      state.baseline = {
-        ...(state.baseline || { required: true, status: 'missing' }),
-        kind: 'pytorch_reference',
-        source: payload.baselineSource ? structuredClone(payload.baselineSource) : state.baseline?.source || null,
-        materializer: structuredClone(payload.materializer),
-        resolution: {
-          ...(state.baseline?.resolution || {}),
-          status: 'materializing',
-          strategy: 'agent_assisted_materializer',
-          kind: 'pytorch_reference',
-          attemptedAuthority: true,
-          reused: false,
-          reason: '正在将权威 upstream baseline 展开为单文件 run.py。',
-          resolvedAt: null,
-          previousEvidenceRunId: null,
-        },
-      };
-      if (!state.runtimeEvents?.some((e) => e.type === 'baseline.materializer_started' && e.payload?.runId === payload.materializer.runId)) {
-        appendRuntimeEvent(state, 'baseline.materializer_started', { runId: payload.materializer.runId, source: payload.baselineSource, materializationDir: payload.materializer.materializationDir }, { kind: 'baseline-materializer', mode: payload.materializer.runtimeKind });
-      }
-      addAuditEvent(state, 'Baseline materializer 已启动', `${payload.materializer.runId} · authoritative source → single-file run.py`, 'blue', 'Baseline');
-    },
-  },
-};
+const commandRegistry = Object.freeze({
+  ...createCandidateCommands({ addAuditEvent, agentRuntime, appendRuntimeEvent, applyCandidatePatch, artifactDirForMission, createDecisionReviewState, createWorkspaceCheckpoint, ensureMissionWorkspace, isManagedWorkspaceRuntimeMode, mkdir, path, restoreWorkspaceCheckpoint, rootDir, workspaceManager, writeFile }),
+  ...createBenchmarkCommands({ addAuditEvent, appendRuntimeEvent, baselineMatchesMatrix, createSemanticTaskBinding, hashKey, isFixedOperatorMission, localC500Config, missionShapeKeyFor, normalizeBaselineKind, operatorTestQueue, timeoutSeconds: Number(process.env.OPERATOR_LOCAL_C500_TIMEOUT_SECONDS || 600), readMissionRunPy, resolveBaselineRunPlan }),
+  ...createDecisionCommands({ addAuditEvent, adoptCandidateState, appendRuntimeEvent, createDecisionReviewState, hasMissionBudgetInput, interventionOutcomeMeta, normalizeMissionBudgetMs, restoreWorkspaceCheckpoint, runAutomaticAdoption, validateMissionBudgetInput, workspaceManager }),
+  ...createAgentCommands({ addAuditEvent, agentRuntime, appendRuntimeEvent, artifactDirForMission, baselineDirForMission, buildRuntimePreflight, createWorkspaceCheckpoint, hashKey, isManagedWorkspaceRuntimeMode, isStrictZeroSourceMission, mkdir, path, researchDirForMission, resetMissionRunState, resetMissionWorkspace, selectResearchBaselineSource, selectResearchDirection, startAgentRun, roundExperience: roundExperienceService }),
+});
 
 // 循环驱动依赖：advanceIteration 编排器通过 deps 拿到 agentRuntime 能力与目录函数。
-const researchService = createResearchService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, agentRuntime, guardMutation: (...args) => guardMutation(...args) });
+const researchService = createResearchService({ missionState: missionProjectState, loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, agentRuntime, guardMutation: (...args) => guardMutation(...args) });
 const researchRoutes = createResearchRoutes({ json, readJson, research: researchService });
-const runService = createRunService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, agentRuntime, buildRuntimePreflight, guardMutation: (...args) => guardMutation(...args), assertMissionIntent, isStrictZeroSourceMission, isFixedOperatorMission, selectResearchBaselineSource });
+const runService = createRunService({ nowMs: Date.now, missionState: missionProjectState, loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, agentRuntime, buildRuntimePreflight, guardMutation: (...args) => guardMutation(...args), assertMissionIntent, isStrictZeroSourceMission, isFixedOperatorMission, selectResearchBaselineSource });
 const runRoutes = createRunRoutes({ json, readJson, runs: runService });
 const reviewActionService = createReviewActionService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, guardSupportedRuntimeAction, guardMutation: (...args) => guardMutation(...args), guardWorkflowTransition });
 const reviewActionRoutes = createReviewActionRoutes({ json, readJson, actions: reviewActionService });
@@ -1047,23 +377,25 @@ const candidateValidationService = createCandidateValidationService({ loadState:
 const candidateValidationRoutes = createCandidateValidationRoutes({ json, readJson, workflow: candidateValidationService });
 const baselineService = createBaselineService({ loadState: () => loadRuntimeState(), persistState, executeCommand, journal: commandJournal, registry: commandRegistry, guardMutation: (...args) => guardMutation(...args), guardWorkflowTransition });
 const baselineRoutes = createBaselineRoutes({ json, readJson, baseline: baselineService });
-const operatorTestService = createOperatorTestService({ queue: operatorTestQueue });
+const operatorTestService = createOperatorTestService({ queue: { path: operatorTestQueue.path, list: operatorTestQueue.readTasks, get: operatorTestQueue.readTask, cancel: operatorTestQueue.cancel } });
 const operatorTestRoutes = createOperatorTestRoutes({ json, operatorTests: operatorTestService });
 const missionControlService = createMissionControlService({ loadState: () => loadRuntimeState(), persistState, agentRuntime, operatorTestQueue, appendRuntimeEvent, addAuditEvent });
 const missionControlRoutes = createMissionControlRoutes({ json, readJson, missionControl: missionControlService });
 const knowledgeService = createKnowledgeService({ loadState: () => loadRuntimeState(), persistState, guardMutation: (...args) => guardMutation(...args), appendRuntimeEvent, addAuditEvent });
 const knowledgeRoutes = createKnowledgeRoutes({ json, readJson, knowledge: knowledgeService });
+const experienceApiService = createExperienceApiService({ loadState: () => loadRuntimeState(), experiences: experienceService });
+const experienceRoutes = createExperienceRoutes({ json, readJson, experiences: experienceApiService });
 const sourceService = createSourceService({ readdir, stat, path, workspaceManager });
 const iterationResearchService = createIterationResearchService({ mkdir, agentRuntime, isManagedWorkspaceRuntimeMode });
 const roundRecoveryService = createRoundRecoveryService({ isManagedWorkspaceRuntimeMode, restoreWorkspaceCheckpoint, captureDiff: (...args) => workspaceManager.captureDiff(...args) });
-const agentRoundService = createAgentRoundService({ resetMissionRunState, resetMissionWorkspace, createWorkspaceCheckpoint, startAgentRun, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, agentRuntime });
+const agentRoundService = createAgentRoundService({ resetMissionRunState, resetMissionWorkspace, createWorkspaceCheckpoint, startAgentRun, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, agentRuntime, roundExperience: roundExperienceService, nowMs: () => Date.now() });
 const roundPreflightService = createRoundPreflightService({ settleGenerationAttemptBeforeStart, buildRuntimePreflight });
 const roundArtifactGuard = createRoundArtifactGuard({ isStrictZeroSourceMission });
 const mainRoundOrchestrationService = createMainRoundOrchestrationService({ agentRuntime, preflight: roundPreflightService, recovery: roundRecoveryService, artifactGuard: roundArtifactGuard, agentRound: agentRoundService, appendRuntimeEvent, addAuditEvent });
 const baselineSourceService = createBaselineSourceService({ isFixedOperatorMission, isStrictZeroSourceMission, selectResearchBaselineSource, buildSemanticBaselineSource, inferAuthoritativeBaselineSource, isSemanticBaselineSource });
-const benchmarkProjectionService = createBenchmarkProjectionService({ operatorTestQueue, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path });
+const benchmarkProjectionService = createBenchmarkProjectionService({ operatorTestQueue: { get: operatorTestQueue.readTask }, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path, collectExperience: roundExperienceService.collect });
 const repositoryAdoptionService = createRepositoryAdoptionService({ isManagedWorkspaceRuntimeMode, adoptPatch: (...args) => workspaceManager.adoptPatch(...args), runAutomaticAdoption, runKnowledgeMaintenance, appendRuntimeEvent });
-const autopilotContextService = createAutopilotContextService({ isFixedOperatorMission, selectCandidate: selectAutopilotCandidate });
+const autopilotContextService = createAutopilotContextService({ isFixedOperatorMission, selectCandidate: selectAutopilotCandidate, autoTick: process.env.OPERATOR_AUTO_TICK === '0' ? '0' : '1' });
 const autopilotCandidateActionService = createAutopilotCandidateActionService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry });
 const autopilotValidationService = createAutopilotValidationService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry, inferMissionMatrix });
 const materializerPolicyService = createMaterializerPolicyService();
@@ -1102,9 +434,8 @@ const autopilotService = createAutopilotService({
   isStrictZeroSourceMission,
   runtimeMode: () => agentRuntime.mode,
 });
-const runtimeAdvanceService = createRuntimeAdvanceService({ autopilot: autopilotService, advanceIteration, iteration: iterationService, reconcileWorkflowState });
+const runtimeAdvanceService = createRuntimeAdvanceService({ autopilot: autopilotService, advanceIteration, iteration: iterationService, reconcileWorkflowState, releaseResources: missionControlService.releaseResources });
 
-let runtimeStateInFlight = null;
 const reconcilePersistedBaselineFailure = (state) => projectBaselineFailure({ state, appendRuntimeEvent });
 const recordStateMigration = (state, sourcePolicyMigration) => {
   const iterationPolicyMigrated = sourcePolicyMigration.recovery?.iterationPolicyChanged === true;
@@ -1120,7 +451,10 @@ const recordStateMigration = (state, sourcePolicyMigration) => {
       : 'Research 将按本地、联网、语义 fallback 顺序执行';
   addAuditEvent(state, migrationTitle, migrationDetail, 'blue', 'RefreshCw');
 };
+const runtimeMaintenanceService = createRuntimeMaintenanceService({ isManagedWorkspaceRuntimeMode, runKnowledgeMaintenance, runAutomaticAdoption, isMaximizeMission, refreshReferenceBenchmark, refreshReferenceAgent });
 const runtimeStatePipelineService = createRuntimeStatePipelineService({
+  maintenance: runtimeMaintenanceService,
+  processTests: (options) => operatorTestQueue.dispatch(options),
   migrateState: (state) => migrateLocalC500TesterState(state, { enabled: localC500Config.enabled }),
   recordMigration: recordStateMigration,
   projectBaselineFailure: reconcilePersistedBaselineFailure,
@@ -1130,16 +464,16 @@ const runtimeStatePipelineService = createRuntimeStatePipelineService({
   runtimeAdvance: runtimeAdvanceService,
 });
 
-const loadRuntimeState = async () => {
-  if (runtimeStateInFlight) return structuredClone(await runtimeStateInFlight);
-  runtimeStateInFlight = (async () => {
-  const runtime = await agentRuntime.describe();
-  const state = await stateRepository.read({ runtimeMode: runtime.mode, commandJournal, applyRegistry: commandRegistry });
-  const projected = await runtimeStatePipelineService.project({ state, runtime });
-  return projected.changed ? persistState(projected.state) : projected.state;
-  })().finally(() => { runtimeStateInFlight = null; });
-  return structuredClone(await runtimeStateInFlight);
-};
+const runtimeLifecycleService = createRuntimeLifecycleService({
+  readState: stateRepository.read,
+  persistState,
+  describeRuntime: () => agentRuntime.describe(),
+  pipeline: runtimeStatePipelineService,
+  canAdvance: () => runtimeOwnerPid <= 0 || processAlive(runtimeOwnerPid),
+});
+const loadRuntimeState = () => runtimeLifecycleService.read();
+const advanceRuntimeState = () => runtimeLifecycleService.advance();
+const runtimeAdvanceRoutes = createRuntimeAdvanceRoutes({ json, advanceRuntime: advanceRuntimeState });
 
 async function handleApi(request, response, url) {
   if (await systemRoutes({ request, response, url })) return;
@@ -1157,7 +491,9 @@ async function handleApi(request, response, url) {
   if (await operatorTestRoutes({ request, response, url })) return;
   if (await missionControlRoutes({ request, response, url })) return;
   if (await knowledgeRoutes({ request, response, url })) return;
+  if (await experienceRoutes({ request, response, url })) return;
   if (await runtimeQueryRoutes({ request, response, url })) return;
+  if (await runtimeAdvanceRoutes({ request, response, url })) return;
   if (await runtimeStateRoutes({ request, response, url })) return;
   if (await resetRoutes({ request, response, url })) return;
   json(response, 404, { error: 'API endpoint not found.' });
@@ -1168,7 +504,11 @@ await mkdir(path.dirname(serverPidPath), { recursive: true });
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || '127.0.0.1'}`);
   try {
-    if (url.pathname.match(/^\/api\/missions\/[^/]+\/events\/stream$/)
+    // Parse bounded request bodies before entering the mutation queue. Routes
+    // consume the same cached readJson promise, never the socket a second time.
+    if (url.pathname.startsWith('/api/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) await readJson(request);
+    if ((url.pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method))
+      || url.pathname.match(/^\/api\/missions\/[^/]+\/events\/stream$/)
       || url.pathname === '/api/health'
       || url.pathname === '/api/runtime') await handleApi(request, response, url);
     else if (url.pathname.startsWith('/api/')) await stateRepository.runExclusive(() => handleApi(request, response, url));
@@ -1227,13 +567,13 @@ const runAutoTick = async () => {
       shutdown();
       return;
     }
-    await stateRepository.runExclusive(() => loadRuntimeState());
+    await stateRepository.runExclusive(() => advanceRuntimeState());
   } catch (error) {
     console.error('[client-runtime:auto-tick]', error);
   } finally {
     autoTickBusy = false;
   }
 };
-autoTick = process.env.OPERATOR_AUTO_TICK === '1'
+autoTick = process.env.OPERATOR_AUTO_TICK !== '0'
   ? setInterval(() => { void runAutoTick(); }, autoTickIntervalMs)
   : null;

@@ -181,7 +181,7 @@ try {
   }
   assert.ok(health, `integration runtime did not start: ${stderr}`);
   assert.equal(health.__bridge.runtimeContractVersion, LOCAL_C500_RUNTIME_CONTRACT_VERSION);
-  const response = await fetch(`http://127.0.0.1:${port}/api/state`);
+  const response = await fetch(`http://127.0.0.1:${port}/api/runtime/advance`, { method: 'POST' });
   if (!response.ok) assert.fail(await response.text());
   const snapshot = await response.json();
   const recoveredMission = snapshot.state.missions.find((mission) => mission.id === snapshot.state.activeMissionId);

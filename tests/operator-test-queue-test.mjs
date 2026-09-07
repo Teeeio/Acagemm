@@ -16,9 +16,9 @@ const fakeService = {
   async get(taskId) {
     pollCount += 1;
     if (pollCount % 2 === 1) return { taskId, status: 'running', progress: 50, logs: [{ sequence: 1, progress: 50, message: 'remote running' }] };
-    return { taskId, status: 'completed', progress: 100, durationMs: 42, completedAt: new Date().toISOString(), logs: [{ sequence: 2, progress: 100, message: 'remote completed' }], result: { benchmark: [{ environment: 'C500', value: 41.8, unit: 'us' }] } };
+    return { taskId, status: 'completed', resourceRelease: { confirmed: true }, progress: 100, durationMs: 42, completedAt: new Date().toISOString(), logs: [{ sequence: 2, progress: 100, message: 'remote completed' }], result: { benchmark: [{ environment: 'C500', value: 41.8, unit: 'us' }] } };
   },
-  async cancel() { return { status: 'cancelled' }; },
+  async cancel() { return { status: 'cancelled', resourceRelease: { confirmed: true } }; },
 };
 
 const queue = createOperatorTestQueue({ serviceClient: fakeService, filePath: queuePath });
@@ -46,7 +46,10 @@ try {
   assert.equal(submitCount, 2);
 
   const cancelled = await queue.cancel(second.taskId);
-  assert.equal(cancelled.status, 'cancel_requested');
+  assert.ok(['cancel_requested', 'cancelled'].includes(cancelled.status));
+  const cancellation = await queue.get(second.taskId);
+  assert.equal(cancellation.status, 'cancelled');
+  assert.equal(cancellation.resourceRelease.confirmed, true);
   const persisted = JSON.parse(`[${(await readFile(queuePath, 'utf8')).trim().split(/\r?\n/).join(',')}]`);
   assert.equal(persisted.length, 2);
   assert.equal(persisted.find((task) => task.taskId === second.taskId).cancelRequested, true);
@@ -94,7 +97,7 @@ try {
         async get(taskId) {
           remoteCancelledPolls += 1;
           if (remoteCancelledPolls === 1) return { taskId, status: 'running', progress: 50 };
-          return { taskId, status: 'cancelled', progress: 100, completedAt: new Date().toISOString() };
+          return { taskId, status: 'cancelled', resourceRelease: { confirmed: true }, progress: 100, completedAt: new Date().toISOString() };
         },
       },
       filePath: remoteCancelledPath,

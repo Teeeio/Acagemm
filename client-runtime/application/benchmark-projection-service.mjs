@@ -1,4 +1,4 @@
-export const createBenchmarkProjectionService = ({ operatorTestQueue, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path }) => {
+export const createBenchmarkProjectionService = ({ operatorTestQueue, testServiceClient, applyOperatorTestSnapshot, artifactDirForMission, mkdir, writeFile, path, collectExperience }) => {
   const project = async ({ state }) => {
     if (state.benchmark?.status !== 'running' || !state.benchmark?.testTaskId) return { changed: false, state };
     const before = JSON.stringify(state.benchmark);
@@ -7,6 +7,16 @@ export const createBenchmarkProjectionService = ({ operatorTestQueue, testServic
       try { snapshot = await operatorTestQueue.get(state.benchmark.testTaskId); }
       catch (error) { if (error.code !== 'OPERATOR_TEST_QUEUE_NOT_FOUND') throw error; snapshot = await testServiceClient.get(state.benchmark.testTaskId); }
       applyOperatorTestSnapshot(state, snapshot);
+      if (typeof collectExperience === 'function' && ['complete', 'failed', 'cancelled'].includes(state.benchmark?.status)) {
+        const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
+        try { await collectExperience({ state, mission }); }
+        catch (error) {
+          state.iterationStats = { ...(state.iterationStats || {}), experienceCollection: {
+            ...(state.iterationStats?.experienceCollection || {}), status: 'failed',
+            error: { code: error.code || 'ROUND_EXPERIENCE_FAILED', message: error.message, effectUnknown: Boolean(error.effectUnknown) },
+          } };
+        }
+      }
       if (state.benchmark?.status === 'complete' && state.benchmark?.result) {
         const mission = state.missions.find((item) => item.id === state.activeMissionId) || {};
         const root = artifactDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);

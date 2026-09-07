@@ -1,5 +1,5 @@
 import { execFile as nodeExecFile, spawn as nodeSpawn } from 'node:child_process';
-import { mkdir, appendFile, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, appendFile, readFile, stat, writeFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
@@ -190,108 +190,185 @@ export const createCodexClient = (options = {}) => {
     };
   };
 
+  const writes = new Map();
+  const instanceId = randomUUID();
+  const graceMs = Math.max(10, Number(options.cancelGraceMs) || 1_000);
+  const forceMs = Math.max(10, Number(options.cancelForceMs) || 1_000);
+  const logicalCleanupMs = Math.max(10, Number(options.logicalCleanupMs) || 1_500);
+  const saveRun = (record) => {
+    const snapshot = structuredClone(record);
+    const previous = writes.get(record.runId) || Promise.resolve();
+    const pending = previous.catch(() => {}).then(async () => {
+      const temporary = runPath(record.runId) + '.' + randomUUID() + '.tmp';
+      try {
+        await writeFile(temporary, JSON.stringify(snapshot, null, 2) + '\n', 'utf8');
+        await rename(temporary, runPath(record.runId));
+      } finally { await rm(temporary, { force: true }).catch(() => {}); }
+    });
+    writes.set(record.runId, pending);
+    pending.finally(() => { if (writes.get(record.runId) === pending) writes.delete(record.runId); }).catch(() => {});
+    return pending;
+  };
+  const waitForClose = (execution, timeoutMs) => execution.closed ? Promise.resolve(true) : new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    execution.closedPromise.then(() => { clearTimeout(timer); resolve(true); });
+  });
+  const terminateTree = options.terminateProcessTree || (async ({ child, force }) => {
+    if (!child?.pid) return false;
+    if (process.platform === 'win32') {
+      await execFileAsync(execFileImpl, 'taskkill.exe', ['/pid', String(child.pid), '/t', ...(force ? ['/f'] : [])],
+        { windowsHide: true, timeout: forceMs });
+      return true;
+    }
+    try { process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM'); }
+    catch (error) { if (error.code !== 'ESRCH') throw error; }
+    return true;
+  });
+  const groupReleased = (execution) => {
+    if (process.platform === 'win32' || options.terminateProcessTree) return execution.treeSignalled;
+    try { process.kill(-execution.child.pid, 0); return false; }
+    catch (error) { return error.code === 'ESRCH'; }
+  };
+  const settleClosed = async (execution) => {
+    const { record } = execution;
+    if (!execution.closed) return false;
+    if (record.cancelRequested && !groupReleased(execution)) return false;
+    record.resourceRelease = { confirmed: true, status: 'confirmed', reason: 'Agent process exited and cancellation cleanup is confirmed.', confirmedAt: new Date().toISOString() };
+    record.process = { ...record.process, exitedAt: new Date().toISOString(), exitCode: execution.exitCode, signal: execution.exitSignal };
+    record.status = record.logicalCompleted ? 'completed' : record.cancelRequested ? 'cancelled' : execution.exitCode === 0 ? 'completed' : 'failed';
+    record.completedAt ||= new Date().toISOString();
+    record.error = record.status === 'failed'
+      ? record.error || { code: 'CODEX_EXIT_' + (execution.exitCode ?? execution.exitSignal), message: sanitizeCodexDiagnostic(execution.stderr) || 'Codex exited without a successful result.' }
+      : null;
+    await saveRun(record);
+    children.delete(record.runId);
+    return true;
+  };
+  const readRun = async (runId) => {
+    await writes.get(runId);
+    const record = JSON.parse(await readFile(runPath(runId), 'utf8'));
+    // A new adapter cannot safely signal a stale/reused PID. Preserve uncertainty;
+    // an owner-aware recovery operation must establish release before resuming.
+    if (!children.has(runId) && !['completed', 'failed', 'cancelled'].includes(record.status)) {
+      return { ...record, status: 'cancel_requested', resourceRelease: {
+        confirmed: false, status: 'unconfirmed', reason: 'The Agent execution owner is unavailable; process-tree release cannot be verified.',
+        code: 'CODEX_EXECUTION_OWNER_UNAVAILABLE', deadline: record.resourceRelease?.deadline || new Date().toISOString(),
+        nextAction: 'Inspect the recorded owner and process; confirm termination before resuming this workspace.',
+      } };
+    }
+    return record;
+  };
+  const cancel = async (runId, { reason = 'user' } = {}) => {
+    const execution = children.get(runId);
+    if (!execution) {
+      const record = await readRun(runId);
+      if (!['completed', 'failed', 'cancelled'].includes(record.status)) {
+        record.cancelRequested = true;
+        await saveRun(record);
+      }
+      return record;
+    }
+    if (execution.cancelling) return execution.cancelling;
+    execution.cancelling = (async () => {
+      const { record } = execution;
+      record.cancelRequested = true;
+      record.cancelReason = reason;
+      record.status = 'cancel_requested';
+      record.resourceRelease = { confirmed: false, status: 'pending', reason: 'Cancelling the Agent process tree.',
+        requestedAt: new Date().toISOString(), deadline: new Date(Date.now() + graceMs + forceMs * 3).toISOString(),
+        nextAction: 'Await process exit; force termination follows the grace period.' };
+      await saveRun(record);
+      let failure = null;
+      try { execution.treeSignalled = (await terminateTree({ child: execution.child, force: false })) !== false; }
+      catch (error) { failure = error; }
+      if (await waitForClose(execution, graceMs) && await settleClosed(execution)) return readRun(runId);
+      try { execution.treeSignalled = (await terminateTree({ child: execution.child, force: true })) !== false; }
+      catch (error) { failure = error; }
+      if (await waitForClose(execution, forceMs) && await settleClosed(execution)) return readRun(runId);
+      record.resourceRelease = { ...record.resourceRelease, status: 'unconfirmed',
+        code: failure?.code || 'CODEX_CANCEL_UNCONFIRMED',
+        reason: sanitizeCodexDiagnostic(failure?.message) || 'The Agent process tree did not confirm exit before its cancellation deadline.',
+        nextAction: 'Inspect or retry cancellation. The workspace remains blocked; no new Agent or candidate action is permitted.' };
+      await saveRun(record);
+      return readRun(runId);
+    })().finally(() => { execution.cancelling = null; });
+    return execution.cancelling;
+  };
+
   const start = async ({ runId = `codex_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, missionId, goal, workspace, additionalDirectories = [], resumeThreadId = null, sandboxMode: runSandboxMode = null, skipGitRepoCheck = false, environment = {} }) => {
     await mkdir(runsDir, { recursive: true });
     const writableDirectories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const effectiveSandbox = runSandboxMode || sandboxMode;
     const boundaryEnabled = Boolean(environment.OPERATOR_AGENT_ROOTS);
-    const record = { schemaVersion: 1, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null };
-    await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
-    const sandboxArgs = process.platform === 'win32' && windowsSandbox
-      ? ['-c', `windows.sandbox="${windowsSandbox}"`]
-      : [];
+    const record = { schemaVersion: 2, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null,
+      process: { pid: null, ownerPid: process.pid, instanceId }, resourceRelease: { confirmed: false, status: 'active', reason: 'Agent execution is active.' } };
+    await saveRun(record);
+    const sandboxArgs = process.platform === 'win32' && windowsSandbox ? ['-c', `windows.sandbox="${windowsSandbox}"`] : [];
     const gitRepoArgs = skipGitRepoCheck ? ['--skip-git-repo-check'] : [];
-    // Codex applies file patches through unified_exec. The workspace-write
-    // sandbox confines that tool to the Mission workspace; disabling it makes
-    // every file_change fail before the workflow can validate the Git Diff.
+    // unified_exec is needed for apply_patch; the workspace sandbox confines it.
     const toolRestrictionArgs = boundaryEnabled ? ['--disable', 'shell_tool'] : [];
     const args = resumeThreadId
       ? ['exec', 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
       : ['exec', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
-    const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, {
-      configDir: path.join(bridgeDir, 'git-trust'),
-    });
-    const child = spawnImpl(command, commandArgs(args), {
-      cwd: record.workspace,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-      env: { ...scopedEnvironment, ...environment },
-    });
-    children.set(runId, child);
-    let stderr = '';
+    const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, { configDir: path.join(bridgeDir, 'git-trust') });
+    let child;
+    try {
+      child = spawnImpl(command, commandArgs(args), { cwd: record.workspace, stdio: ['pipe', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32', windowsHide: true, env: { ...scopedEnvironment, ...environment } });
+    } catch (error) {
+      record.status = 'failed'; record.error = { code: error.code || 'CODEX_SPAWN_FAILED', message: sanitizeCodexDiagnostic(error.message) };
+      record.resourceRelease = { confirmed: true, status: 'confirmed', reason: 'No Agent process was created.' };
+      record.completedAt = new Date().toISOString();
+      await saveRun(record);
+      throw error;
+    }
+    let resolveClosed;
+    const execution = { child, record, closed: false, closedPromise: new Promise(resolve => { resolveClosed = resolve; }),
+      treeSignalled: false, stderr: '', cancelling: null, exitCode: null, exitSignal: null };
+    children.set(runId, execution);
+    record.process.pid = child.pid || null;
     let eventBuffer = '';
-    let logicalCompleted = false;
     let terminalCleanupTimer = null;
     let appendChain = Promise.resolve();
-    child.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
-    child.stdout?.on('data', (chunk) => {
+    child.stderr?.on('data', chunk => { execution.stderr = (execution.stderr + chunk.toString()).slice(-4_000); });
+    child.stdout?.on('data', chunk => {
       const text = chunk.toString();
       appendChain = appendChain.then(() => appendFile(eventsPath(runId), text, 'utf8')).catch(() => {});
       eventBuffer += text;
       const lines = eventBuffer.split(/\r?\n/);
       eventBuffer = lines.pop() || '';
       for (const line of lines) {
-        let event;
-        try { event = JSON.parse(line); } catch { continue; }
-        if (event?.type === 'thread.started' || event?.type === 'thread_start' || event?.thread_id || event?.threadId) {
-          record.threadId = record.threadId || event.thread_id || event.threadId || event.thread?.id || null;
-        }
-        if (event?.type !== 'turn.completed' || logicalCompleted) continue;
-        logicalCompleted = true;
-        record.status = 'completed';
-        record.error = null;
-        record.completedAt = new Date().toISOString();
-        appendChain = appendChain.then(() => writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8')).catch(() => {});
-        terminalCleanupTimer = setTimeout(() => {
-          if (!child.killed) child.kill('SIGTERM');
-        }, 1_500);
+        let event; try { event = JSON.parse(line); } catch { continue; }
+        if (event.thread_id || event.threadId || event.thread?.id) record.threadId ||= event.thread_id || event.threadId || event.thread.id;
+        if (event.type !== 'turn.completed' || record.logicalCompleted) continue;
+        record.logicalCompleted = true;
+        appendChain = appendChain.then(() => saveRun(record)).catch(() => {});
+        // Logical completion is not release. Only close/cleanup publishes terminal status.
+        terminalCleanupTimer = setTimeout(() => { void cancel(runId, { reason: 'turn_completed' }).catch(() => {}); }, logicalCleanupMs);
         terminalCleanupTimer.unref?.();
       }
     });
-    child.on('error', async (error) => {
-      record.status = 'failed';
+    child.once('error', error => {
       record.error = { code: error.code || 'CODEX_SPAWN_FAILED', message: sanitizeCodexDiagnostic(error.message) };
-      record.completedAt = new Date().toISOString();
-      await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8').catch(() => {});
+      if (!child.pid) execution.treeSignalled = true;
+      void saveRun(record).catch(() => {});
     });
-    child.on('close', async (code, signal) => {
-      children.delete(runId);
+    child.once('close', (code, signal) => {
+      execution.closed = true; execution.exitCode = code; execution.exitSignal = signal;
       if (terminalCleanupTimer) clearTimeout(terminalCleanupTimer);
-      await appendChain;
-      const output = await readFile(eventsPath(runId), 'utf8').catch(() => '');
-      const events = parseLines(output);
-      const thread = events.find((event) => event.type === 'thread.started' || event.type === 'thread_start' || event.thread_id || event.threadId);
-      record.threadId = record.threadId || thread?.thread_id || thread?.threadId || thread?.thread?.id || null;
-      const completed = logicalCompleted || hasCompletedTurn(events);
-      record.status = completed ? 'completed' : signal ? 'cancelled' : code === 0 ? 'completed' : 'failed';
-      record.error = completed || code === 0 ? null : { code: `CODEX_EXIT_${code ?? signal}`, message: sanitizeCodexDiagnostic(stderr) || `Codex exited with ${code ?? signal}` };
-      record.completedAt ||= new Date().toISOString();
-      await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8').catch(() => {});
+      resolveClosed();
+      void appendChain.then(async () => {
+        const events = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
+        record.logicalCompleted ||= hasCompletedTurn(events);
+        await settleClosed(execution);
+      }).catch(() => {});
     });
+    await saveRun(record);
+    child.stdin?.on('error', error => { record.error ||= { code: error.code || 'CODEX_STDIN_FAILED', message: sanitizeCodexDiagnostic(error.message) }; });
     child.stdin?.end(`${goal || ''}\n`);
     return { ...record, pid: child.pid || null };
   };
-
-  const readRun = async (runId) => {
-    const record = JSON.parse(await readFile(runPath(runId), 'utf8'));
-    if (record.status !== 'completed') {
-      const events = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
-      if (hasCompletedTurn(events)) {
-        record.status = 'completed';
-        record.error = null;
-        record.completedAt ||= new Date().toISOString();
-        await writeFile(runPath(runId), `${JSON.stringify(record, null, 2)}\n`, 'utf8').catch(() => {});
-      }
-    }
-    return record;
-  };
   const readEvents = async (runId) => parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
-  const cancel = async (runId) => {
-    const child = children.get(runId);
-    if (child && !child.killed) child.kill('SIGTERM');
-    const record = await readRun(runId);
-    return { ...record, status: child ? 'cancel_requested' : record.status };
-  };
   return { command, sandboxMode, windowsSandbox, describe, preflight, start, readRun, readEvents, cancel, eventText };
 };
 

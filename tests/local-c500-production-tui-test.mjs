@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderDashboardSnapshot } from '../tools/local-c500-tester/tui-state.mjs';
 import { Dashboard } from '../tools/local-c500-tester/components/Dashboard.mjs';
+import { reconcileLocalTaskSnapshot } from '../client-runtime/local-c500-service-client.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(path.join(root, relative), 'utf8');
@@ -90,9 +91,31 @@ assert.match(server, /process\.exit\(98\)/);
 assert.match(server, /autoTickBusy/);
 assert.match(server, /autoTickIntervalMs/);
 assert.match(server, /OPERATOR_LOCAL_C500_TIMEOUT_SECONDS \|\| 600/);
-assert.match(backend, /terminateProcessTree/);
+// Cancellation now belongs to the task-owned supervisor, not a Runtime-local
+// helper name. Its real descendant-tree/restart tests must stay in the release gate.
+assert.match(backend, /cancel-request\.json/);
+assert.match(backend, /execution-exit\.json/);
 assert.match(backend, /taskkill\.exe/);
 assert.match(backend, /detached: process\.platform !== 'win32'/);
+assert.equal(packageJson.scripts['test:local-c500-recovery'], 'node tests/local-c500-recovery-test.mjs');
+const releaseGate = await read('scripts/verify-local-c500-release.mjs');
+assert.match(releaseGate, /['"]test:local-c500-recovery['"]/);
+const confirmedTerminal = {
+  status: 'completed', progress: 100, result: { benchmark: [] },
+  resourceRelease: { confirmed: true, status: 'confirmed' },
+};
+for (const status of ['running', 'cancel_requested', 'cancelled', 'failed']) {
+  assert.deepEqual(reconcileLocalTaskSnapshot(confirmedTerminal, {
+    status, progress: 10, cancelRequested: true, resourceRelease: { confirmed: false },
+  }), confirmedTerminal, 'stale progress or cancellation cannot overwrite a confirmed terminal outcome');
+}
+const cancelling = reconcileLocalTaskSnapshot(
+  { status: 'cancel_requested', cancelRequested: true, progress: 60 },
+  { status: 'running', cancelRequested: false, progress: 10 },
+);
+assert.equal(cancelling.status, 'cancel_requested');
+assert.equal(cancelling.cancelRequested, true);
+assert.equal(cancelling.progress, 60);
 assert.match(server, /createSystemRoutes/);
 assert.match(systemRoutes, /url\.pathname === '\/api\/health'/);
 assert.match(tui, /OPERATOR_TUI_REFRESH_MS/);
@@ -131,7 +154,10 @@ assert.doesNotMatch(productionApi, /OPERATOR_LOCAL_C500_MOCK:\s*'1'/);
 assert.match(server, /createLocalC500ServiceClient/);
 assert.match(server, /createOperatorTestQueue\(\{ serviceClient: activeTestServiceClient \}\)/);
 assert.match(server, /createRuntimeStatePipelineService/);
-assert.match(server, /runtimeStatePipelineService\.project/);
+assert.match(server, /pipeline: runtimeStatePipelineService/);
+assert.match(server, /runtimeLifecycleService\.read\(\)/);
+assert.match(server, /runtimeLifecycleService\.advance\(\)/);
+assert.match(runtimeStatePipeline, /Object\.freeze\(\{ advance \}\)/);
 assert.match(runtimeStatePipeline, /runtimeAdvance\.advance/);
 assert.match(runtimeAdvance, /advanceIteration\(automatic\.state, iteration\)/);
 assert.match(runtimeAdvance, /autopilot\.advance/);

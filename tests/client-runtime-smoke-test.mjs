@@ -15,7 +15,7 @@ const execFileAsync = promisify(execFile);
 const testService = spawn('node', ['test-service/mock-server.mjs'], {
   cwd: rootDir,
   stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...process.env, TEST_SERVICE_PORT: String(testServicePort) },
+  env: { ...process.env, TEST_SERVICE_PORT: String(testServicePort), TEST_SERVICE_MOCK_DURATION_MS: '100' },
 });
 const child = spawn('node', ['client-runtime/local-server.mjs'], {
   cwd: rootDir,
@@ -27,6 +27,7 @@ const child = spawn('node', ['client-runtime/local-server.mjs'], {
     OPERATOR_DATA_DIR: path.join(smokeRoot, 'data'),
     OPERATOR_RUNTIME_DIR: path.join(smokeRoot, 'runtime'),
     OPERATOR_RUNTIME_MODE: 'reference-fixture',
+    OPERATOR_AUTO_TICK: '0',
     OPERATOR_TEST_SERVICE_URL: `http://127.0.0.1:${testServicePort}`,
   },
 });
@@ -49,7 +50,7 @@ const requestFailure = async (pathname, options = {}) => {
 };
 
 const waitForServer = async () => {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     try { await request('/api/health'); return; } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
   }
   throw new Error('Mock API did not start.');
@@ -149,7 +150,7 @@ try {
   assert.deepEqual(startedEvents.events.map((event) => event.type), ['mission.resumed', 'mission.run_started']);
   let agentState;
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    agentState = (await request('/api/state')).state;
+    agentState = (await request('/api/runtime/advance', { method: 'POST' })).state;
     if (agentState.agent.status === 'awaiting_action') break;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
@@ -220,7 +221,7 @@ try {
     }),
   });
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const baselineState = (await request('/api/state')).state;
+    const baselineState = (await request('/api/runtime/advance', { method: 'POST' })).state;
     if (baselineState.baseline?.status === 'complete' && baselineState.benchmark?.status === 'idle') break;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
@@ -230,7 +231,7 @@ try {
   assert.equal(reviewRequested.state.decisionReview.status, 'awaiting_review');
   let state;
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    state = (await request('/api/state')).state;
+    state = (await request('/api/runtime/advance', { method: 'POST' })).state;
     if (state.stage === 'evidence' && state.benchmark.status === 'complete') break;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
@@ -258,7 +259,7 @@ try {
   assert.equal(reappliedAfterRedirect.state.stage, 'validation');
   await request('/api/actions/start-benchmark', { method: 'POST', body: JSON.stringify({ timeoutSeconds: 1 }) });
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    state = (await request('/api/state')).state;
+    state = (await request('/api/runtime/advance', { method: 'POST' })).state;
     if (state.stage === 'published' && state.knowledgeMaintenance.status === 'completed') break;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
@@ -324,6 +325,12 @@ try {
   const rerun = await request(`/api/missions/${missionId}/runs`, { method: 'POST', body: JSON.stringify({ goal: 'rerun isolation check' }) });
   assert.equal(rerun.state.stage, 'diagnosis');
   assert.equal(rerun.state.benchmark.status, 'idle');
+  assert.equal(reverted.state.iterationStats.roundBudget.status, 'completed');
+  assert.equal(rerun.state.iterationStats.roundBudget.status, 'active');
+  assert.notEqual(rerun.state.iterationStats.roundBudget.roundId, reverted.state.iterationStats.roundBudget.roundId);
+  assert.ok(rerun.state.iterationStats.roundBudget.roundNumber > reverted.state.iterationStats.roundBudget.roundNumber);
+  assert.equal(rerun.state.iterationStats.round, reverted.state.iterationStats.round, 'new run identity does not fabricate an evidence round');
+  assert.equal(rerun.state.iterationStats.roundExperience.roundId, rerun.state.iterationStats.roundBudget.roundId);
   assert.equal(rerun.state.publishedAssets.length, 0);
   assert.equal(rerun.state.knowledgeMaintenance.status, 'idle');
   assert.equal(rerun.state.runHistory[0].runId, startedMission.state.agent.runId);

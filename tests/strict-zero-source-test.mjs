@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { resolveBaselineRunPlan } from '../client-runtime/baseline-resolver.mjs';
-import { evaluateAcceptGate } from '../client-runtime/state-store.mjs';
+import { evaluateAcceptGate } from '../client-runtime/accept-gate.mjs';
 
 const mission = {
   id: 'MIS_STRICT_ZERO',

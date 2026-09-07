@@ -19,6 +19,7 @@ import {
   TOTAL_BUDGET_MS,
 } from '../client-runtime/iteration-loop.mjs';
 import { createMission, createSeedState, resumeMissionState } from '../client-runtime/state-store.mjs';
+import { ensureRoundBudgetStarted } from '../client-runtime/round-budget-contract.mjs';
 
 const resumableState = createSeedState();
 const resumableMission = resumableState.missions.find((item) => item.id === resumableState.activeMissionId);
@@ -240,7 +241,9 @@ const phasedCorrectnessRetry = {
   benchmark: { status: 'failed', lastServiceError: { code: 'LOCAL_C500_RUNNER_FAILED', message: 'correctness failed on case mqa_s2' } },
   decisionReview: { status: 'resolved', recommendation: 'reject', resolution: { outcome: 'reject' } },
 };
+const repairRoundBudget = structuredClone(ensureRoundBudgetStarted(phasedCorrectnessRetry, { nowMs: Date.now() - 5000 }).roundBudget);
 const phasedRetryCounted = await advanceIteration(phasedCorrectnessRetry, {});
+assert.deepEqual(phasedRetryCounted.state.iterationStats.roundBudget, repairRoundBudget, 'counting a Correctness failure preserves the original round clock');
 assert.equal(phasedRetryCounted.action, 'correctness_attempt_counted');
 assert.equal(phasedRetryCounted.state.iterationStats.round, 1, 'correctness failure stays inside active round 2');
 assert.equal(phasedRetryCounted.state.iterationStats.performanceRounds, 1, 'correctness failure cannot consume a performance round');
@@ -257,6 +260,7 @@ assert.equal(phasedRetryResumed.action, 'resumed_agent');
 assert.equal(phasedRetryResumed.state.iterationStats.round, 1, 'starting a repair Agent must not increment the completed round count');
 assert.match(repairGoal, /Candidate 2 第 1 次 correctness 未通过/);
 assert.match(repairGoal, /仍属于 Round 2/);
+assert.deepEqual(phasedRetryResumed.state.iterationStats.roundBudget, repairRoundBudget, 'starting a repair Agent cannot refresh the complete-round deadline');
 
 // A correctness repair Agent that returns no candidate must stay in the
 // correctness budget. Starting that repair must not consume generation quota.
@@ -291,6 +295,7 @@ const repairNoCandidateResumed = await advanceIteration(repairNoCandidateCounted
 });
 assert.equal(repairNoCandidateResumed.action, 'resumed_agent');
 assert.equal(repairRetryMode, 'correctness');
+assert.deepEqual(repairNoCandidateResumed.state.iterationStats.roundBudget, repairRoundBudget, 'a repair producing no Candidate also retains the same clock');
 assert.equal(repairNoCandidateResumed.state.iterationStats.currentRoundGenerationAttempts, 0);
 
 const generationSkipForRepair = settleGenerationAttemptBeforeStart(
@@ -316,6 +321,8 @@ assert.equal(phasedOptimizationCounted.action, 'round_counted');
 assert.equal(phasedOptimizationCounted.state.iterationStats.round, 2);
 assert.equal(phasedOptimizationCounted.state.iterationStats.performanceRounds, 2, 'a correctness-passed completed benchmark consumes round 2 even when discarded');
 assert.equal(phasedOptimizationCounted.state.iterationStats.currentRoundCorrectnessAttempts, 0);
+assert.equal(phasedOptimizationCounted.state.iterationStats.roundBudget.status, 'completed');
+assert.equal(phasedOptimizationCounted.state.iterationStats.roundBudget.roundId, repairRoundBudget.roundId);
 
 let startResearchCalls = 0;
 let startMainRoundCalls = 0;

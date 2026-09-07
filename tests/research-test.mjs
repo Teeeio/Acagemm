@@ -191,9 +191,14 @@ try {
     researchNotes: [],
   };
   const timedOut = await timeoutRuntime.projectState(timeoutState);
-  assert.equal(timedOut.state.researchAgent.status, 'timed_out');
+  assert.equal(timedOut.state.researchAgent.status, 'cancel_requested');
   assert.equal(cancelCalled, true);
-  assert.ok(timedOut.state.runtimeEvents.some((event) => event.type === 'research.timed_out'));
+  assert.equal(timedOut.state.researchAgent.resourceRelease.confirmed, false);
+  assert.equal(timedOut.state.researchNotes.length, 0, 'unconfirmed cancellation cannot publish research notes');
+  timeoutClient.readRun = async () => ({ runId: 'codex_research_T', status: 'cancelled' });
+  const timeoutSettled = await timeoutRuntime.projectState(timedOut.state);
+  assert.equal(timeoutSettled.state.researchAgent.status, 'timed_out');
+  assert.ok(timeoutSettled.state.runtimeEvents.some((event) => event.type === 'research.timed_out'));
 
   // ---- cancelRun 按 runId 路由 ----
   const cancelState = { activeMissionId: 'MIS_C', runtimeEvents: [], agent: { status: 'idle' }, researchAgent: { status: 'running', runtimeKind: 'codex-cli', runId: 'codex_research_C' } };

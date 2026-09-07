@@ -1,10 +1,8 @@
-import { selectMission } from '../state-store.mjs';
-
 const notFound = () => { const error = new Error('Mission 不存在。'); error.status = 404; error.code = 'MISSION_NOT_FOUND'; return error; };
 const mismatch = (message) => { const error = new Error(message); error.status = 409; error.code = 'AGENT_MISSION_MISMATCH'; return error; };
 
-export const createResearchService = ({ loadState, persistState, executeCommand, journal, registry, agentRuntime, guardMutation = () => {}, missionState = { selectMission } } = {}) => {
-  if (typeof loadState !== 'function' || typeof persistState !== 'function' || typeof executeCommand !== 'function' || !journal || !registry || !agentRuntime) {
+export const createResearchService = ({ loadState, persistState, executeCommand, journal, registry, agentRuntime, guardMutation = () => {}, missionState } = {}) => {
+  if (typeof missionState?.selectMission !== 'function' || typeof loadState !== 'function' || typeof persistState !== 'function' || typeof executeCommand !== 'function' || !journal || !registry || !agentRuntime) {
     throw new TypeError('Research service requires state, command, journal, registry, and Agent Runtime dependencies.');
   }
   const start = async (missionId, body = {}) => {

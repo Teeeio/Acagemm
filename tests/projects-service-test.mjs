@@ -27,6 +27,7 @@ const baseState = {
 
 let persisted = null;
 const layoutCalls = [];
+const workspacePathCalls = [];
 const gitCalls = [];
 const workspace = {
   async inspect(repository) { return { ready: true, gitRoot: repository, baselineEmpty: false }; },
@@ -65,6 +66,10 @@ const projects = createProjectsService({
     layoutCalls.push(input);
     return { runtimeRoot: path.join(input.root, '.operator-studio') };
   },
+  workspaceDirForMission: (...args) => {
+    workspacePathCalls.push(args);
+    return path.join(root, '.operator-studio', 'injected', args[0]);
+  },
   workspace,
   filesystem,
   projectState,
@@ -89,7 +94,8 @@ assert.equal(persisted.projects.some((project) => project.id === 'PRJ_2'), true)
 const sourceView = await projects.sources('PRJ_1');
 assert.equal(sourceView.layout, 'three-layer');
 assert.deepEqual(sourceView.registry.sources, [{ id: 'SRC_1' }]);
-assert.match(sourceView.layers.activeSnapshot, /MIS_1/);
+assert.equal(sourceView.layers.activeSnapshot, path.join(root, '.operator-studio', 'injected', 'MIS_1'));
+assert.deepEqual(workspacePathCalls, [['MIS_1', path.join(root, 'repository'), root]]);
 await assert.rejects(projects.sources('missing'), (error) => error.code === 'PROJECT_NOT_FOUND');
 
 assert.equal((await projects.select('PRJ_1')).selectedMissionId, 'MIS_1');

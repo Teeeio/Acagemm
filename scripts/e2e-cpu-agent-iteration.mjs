@@ -100,7 +100,17 @@ const baselineRunPy = [
   '',
 ].join('\n');
 
-const matrix = { environments: ['CPU'], stages: ['Correctness', 'Full Benchmark'], correctnessCases: 4, warmup: 2, repeats: 15, testSpec: { correctness: { atol: 1e-9, rtol: 1e-9 } } };
+const matrix = {
+  environments: ['CPU'], stages: ['Correctness', 'Full Benchmark'], correctnessCases: 4, warmup: 2, repeats: 15,
+  testSpec: {
+    schemaVersion: 'operator-studio.test-spec/v1',
+    correctness: {
+      requestedCases: 4, requiredCategories: ['representative', 'boundary', 'minimal', 'edge'],
+      atol: 1e-9, rtol: 1e-9, requireNamedCases: true,
+    },
+    benchmark: { requiredProfiles: ['primary', 'compact'], primaryProfile: 'primary', warmup: 2, repeats: 15 },
+  },
+};
 const goal = [
   '优化 run.py 中的 fused_affine_relu 算子，在 CPU、length=1024 下评估 latency p50。',
   '保持 get_inputs、get_test_cases、get_benchmark_inputs、reference 的输入输出语义不变，只优化 run(inputs)。',
@@ -154,6 +164,13 @@ try {
   }
   assert.equal(state?.baseline?.status, 'complete', `CPU baseline did not complete: ${JSON.stringify(state?.workflowFailure)}`);
   assert.equal(state.baseline.evidence.environment, 'CPU');
+  assert.equal(state.baseline.oracleRunPy, baselineRunPy);
+  const baselineTask = (await request(`/api/operator-tests/${encodeURIComponent(state.baseline.evidence.testTaskId)}`)).task;
+  assert.equal(baselineTask.payload.oracleRunPy, baselineRunPy, 'baseline must receive an explicit independent oracle');
+  assert.equal(baselineTask.result.correctness.total, matrix.correctnessCases);
+  assert.deepEqual(baselineTask.result.correctness.caseNames, ['mixed', 'relu-boundary', 'positive', 'all-clamped']);
+  assert.deepEqual(baselineTask.result.correctness.categories, [...matrix.testSpec.correctness.requiredCategories].sort());
+  assert.deepEqual(baselineTask.result.benchmark.map((row) => row.profile), matrix.testSpec.benchmark.requiredProfiles);
 
   const started = await request(`/api/missions/${encodeURIComponent(missionId)}/runs`, { method: 'POST', body: { goal } });
   const firstRunId = started.state.agent?.runId;
@@ -183,6 +200,12 @@ try {
   assert.equal(firstCandidateTask.result?.benchmark?.every((item) => item.correctness?.passed === true), true);
   assert.equal(firstCandidateTask.result?.environment?.source, 'cpu-e2e');
   assert.equal(firstCandidateTask.result?.environment?.liveHardware, false);
+  assert.equal(firstCandidateTask.payload.oracleRunPy, baselineRunPy, 'candidate must use the persisted baseline oracle');
+  assert.equal(firstCandidateTask.result.correctness.total, matrix.correctnessCases);
+  assert.equal(firstCandidateTask.result.correctness.executedCases, matrix.correctnessCases);
+  assert.deepEqual(firstCandidateTask.result.correctness.caseNames, ['mixed', 'relu-boundary', 'positive', 'all-clamped']);
+  assert.deepEqual(firstCandidateTask.result.correctness.categories, [...matrix.testSpec.correctness.requiredCategories].sort());
+  assert.deepEqual(firstCandidateTask.result.benchmark.map((row) => row.profile), matrix.testSpec.benchmark.requiredProfiles);
   assert.ok(firstRound, 'first iteration was not archived as a closed round');
   const outcome = firstRound.decisionReview?.resolution?.outcome;
   assert.ok(['reference', 'reject'].includes(outcome), `impossible target unexpectedly resolved as ${outcome}`);

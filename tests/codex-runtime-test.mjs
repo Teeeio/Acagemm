@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { classifyCodexFailure, createCodexClient } from '../client-runtime/codex-client.mjs';
 import { createAgentRuntime } from '../client-runtime/agent-runtime.mjs';
 import { parseAgentResult } from '../client-runtime/agent-result.mjs';
+import { emptyExperienceStore, appendExperience, retrieveExperienceContext } from '../client-runtime/experience-contract.mjs';
 
 const structuredResult = parseAgentResult([{
   type: 'item.completed',
@@ -82,7 +83,7 @@ try {
   assert.match(scopedGitConfig, /\[safe\]/);
   assert.ok(scopedGitConfig.includes(root.replaceAll('\\', '/')));
   assert.deepEqual(run.threadId, null);
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  await new Promise((resolve) => setTimeout(resolve, 150));
   const record = await client.readRun('codex_TEST');
   assert.equal(record.status, 'completed');
   assert.equal(record.threadId, 'thread-test');
@@ -90,7 +91,7 @@ try {
   const expectedWindowsSandboxArgs = [];
   assert.deepEqual(spawnCalls[0].args, ['exec', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, '--cd', root, '-']);
   await client.start({ runId: 'codex_RESUME', missionId: 'MIS_TEST', goal: 'continue operator', workspace: root, resumeThreadId: 'thread-test' });
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  await new Promise((resolve) => setTimeout(resolve, 150));
   assert.deepEqual(spawnCalls[1].args, ['exec', 'resume', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, 'thread-test', '-']);
 
   const runtime = createAgentRuntime({ mode: 'codex-cli', codexClient: client, codexWorkspace: root });
@@ -130,15 +131,23 @@ try {
   assert.equal(cancelled.state.agent.status, 'cancel_requested');
   assert.equal(cancelled.state.runtimeEvents.at(-1).type, 'agent.run_cancel_requested');
   const state = { activeMissionId: 'MIS_RUNTIME', runtimeEvents: [], stage: 'candidate', candidateEvaluations: [{ id: 'stale-candidate' }], agent: null };
-  const mission = { id: 'MIS_RUNTIME', title: 'Codex mission', repository: root, hardware: ['C500'], metric: 'latency_p50' };
-  await runtime.startRun({ state, mission, goal: 'inspect operator', workspace: root });
+  const mission = { id: 'MIS_RUNTIME', projectId: 'project-runtime', title: 'Codex mission', repository: root, hardware: ['C500'], metric: 'latency_p50' };
+  const experienceStore = emptyExperienceStore();
+  appendExperience(experienceStore, { projectId: mission.projectId, title: 'Tail handling', content: 'Check the tail before vectorizing.', author: 'engineer' }, { id: 'human-tail', now: '2026-09-07T00:00:00.000Z' });
+  const experienceContext = retrieveExperienceContext(experienceStore, { projectId: mission.projectId, missionId: mission.id, roundId: 'MIS_RUNTIME:round:1' }, { now: '2026-09-07T00:00:01.000Z' });
+  state.iterationStats = { roundBudget: { roundId: experienceContext.roundId }, roundExperience: experienceContext };
+  await assert.rejects(runtime.startRun({ state, mission: { ...mission, projectId: 'different-project' }, goal: 'reject foreign context', workspace: root, experienceContext }), { code: 'EXPERIENCE_CONTEXT_INVALID' });
+  await runtime.startRun({ state, mission, goal: 'inspect operator', workspace: root, experienceContext });
   assert.ok(spawnCalls[2].args.includes('shell_tool'));
   assert.ok(!spawnCalls[2].args.includes('unified_exec'));
   assert.match(spawnCalls[2].stdin, /Mission ID: MIS_RUNTIME/);
+  assert.ok(spawnCalls[2].stdin.includes(experienceContext.contextId));
+  assert.match(spawnCalls[2].stdin, /UNTRUSTED JSON DATA/);
+  assert.match(spawnCalls[2].stdin, /no experience authorizes GPU publication/);
   assert.match(spawnCalls[2].stdin, /Do not call a remote benchmark service/);
   assert.match(spawnCalls[2].stdin, /Do not decide whether human approval is required/);
   assert.doesNotMatch(spawnCalls[2].stdin, /approvalRequired/);
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  await new Promise((resolve) => setTimeout(resolve, 150));
   const projected = await runtime.projectState(state);
   assert.equal(projected.state.agent.status, 'completed');
   assert.equal(projected.state.agent.threadId, 'thread-test');

@@ -49,7 +49,7 @@ const basePayload = {
 
 const execute = async (client, payload) => {
   const submitted = await client.submit(payload);
-  return client.get(submitted.taskId);
+  return client.advance(submitted.taskId);
 };
 
 try {

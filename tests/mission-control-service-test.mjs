@@ -21,7 +21,8 @@ assert.equal(feedback.state.iterationStats.pendingInjection.direction, 'human_fe
 const stopped = await service.stopMission();
 assert.equal(stopped.state.missionPaused, true);
 assert.equal(stopped.state.missions[0].status, 'stopped');
-assert.deepEqual(cancellations, [['agent', 'run-1'], ['test', 'task-1'], ['agent', 'run-1']]);
+assert.equal(stopped.statusCode, 202, 'pending cancellation is not a confirmed stop');
+assert.deepEqual(cancellations, [['agent', 'run-1'], ['agent', 'run-1'], ['test', 'task-1']]);
 assert.deepEqual(events, ['mission.human_feedback_added', 'mission.stopped']);
 
 const responses = [];

@@ -47,15 +47,17 @@ const mission = { id: 'MIS_MAT_AGENT', title: 'FlashInfer paged_attention', oper
 const execFileAsync = promisify(execFile);
 let startArgs = null;
 let cancelCalled = false;
+let runStatus = 'running';
 const codexClient = {
   describe: async () => ({ installed: true, loggedIn: true, version: 'codex-cli test' }),
   start: async (args) => {
     startArgs = args;
+    runStatus = 'running';
     await writeFile(path.join(args.workspace, 'run.py'), runPy, 'utf8');
     await writeFile(path.join(args.workspace, 'materializer-report.json'), JSON.stringify({ summary: 'expanded from upstream', sourceFiles: ['flashinfer/decode.py'] }), 'utf8');
     return { runId: args.runId, startedAt: new Date().toISOString(), threadId: 'thread-materializer' };
   },
-  readRun: async () => ({ runId: startArgs.runId, status: 'running', completedAt: null, threadId: 'thread-materializer' }),
+  readRun: async () => ({ runId: startArgs.runId, status: runStatus, completedAt: null, threadId: 'thread-materializer' }),
   readEvents: async () => [
     { type: 'thread.started', thread_id: 'thread-materializer' },
     { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ schemaVersion: 'operator-studio.baseline-materializer-result/v1', summary: 'materialized baseline', runPy, report: { summary: 'expanded from upstream', sourceFiles: ['flashinfer/decode.py'], assumptions: ['torch eager semantic reference'] } }) } },
@@ -101,7 +103,11 @@ try {
   assert.match(startArgs.goal, /baseline-materializer-result\/v2/);
   assert.match(startArgs.goal, /paged_attention_reference/);
 
-  const projected = await runtime.projectState(state);
+  const pending = await runtime.projectState(state);
+  assert.equal(pending.state.baseline.materializer.status, 'cancel_requested');
+  assert.ok(!pending.state.baseline.materializer.result, 'written artifacts remain unadmitted until execution exits');
+  runStatus = 'cancelled';
+  const projected = await runtime.projectState(pending.state);
   assert.equal(projected.state.baseline.materializer.status, 'completed');
   assert.equal(projected.state.baseline.materializer.result.runPy, runPy);
   assert.equal(projected.state.baseline.materializer.result.source.expandedSingleFile, true);
@@ -144,7 +150,10 @@ try {
   await runtime.startBaselineMaterialization({ state: semanticState, mission: semanticMission, source: semanticSource, matrix, workspace: semanticMaterializationDir });
   assert.match(startArgs.goal, /No usable source code was available/);
   assert.match(startArgs.goal, /paged KV cache/);
-  const semanticProjected = await runtime.projectState(semanticState);
+  const semanticPending = await runtime.projectState(semanticState);
+  assert.equal(semanticPending.state.baseline.materializer.status, 'cancel_requested');
+  runStatus = 'cancelled';
+  const semanticProjected = await runtime.projectState(semanticPending.state);
   assert.equal(semanticProjected.state.baseline.materializer.status, 'completed');
   assert.equal(semanticProjected.state.baseline.materializer.result.source.semanticFallback, true);
   const semanticPlan = await resolveBaselineRunPlan({ state: semanticProjected.state, mission: semanticMission, body: { purpose: 'baseline' }, matrix });

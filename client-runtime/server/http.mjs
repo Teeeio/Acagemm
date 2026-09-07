@@ -10,38 +10,112 @@ const defaultMimeTypes = Object.freeze({
   '.json': 'application/json; charset=utf-8',
 });
 
+const bodyPromises = new WeakMap();
+const stoppedBodies = new WeakMap();
+const bodyError = (code, message, status, cause) => Object.assign(new Error(message), { code, status, ...(cause === undefined ? {} : { cause }) });
+
+// Do not destroy a live HTTP socket before its 408/413 response can be flushed.
+// Pause input immediately; the JSON responder closes after finish. The fallback
+// also bounds callers that fail to respond. Plain in-memory streams close now.
+const stopBodyInput = (request) => {
+  request.pause?.();
+  const ignoreError = () => {};
+  request.once('error', ignoreError);
+  request.once('close', () => request.removeListener('error', ignoreError));
+  const socket = request.socket;
+  if (!socket || typeof socket.end !== 'function') { request.destroy?.(); return; }
+  socket.pause?.();
+  const state = { socket, timer: undefined };
+  stoppedBodies.set(request, state);
+  if (socket.destroyed) { request.destroy?.(); return; }
+  state.timer = setTimeout(() => socket.destroy(), 1000);
+  state.timer.unref?.();
+  socket.once('close', () => {
+    clearTimeout(state.timer);
+    request.destroy?.();
+  });
+};
+
 export const createJsonResponder = (bridge) => (response, status, payload) => {
+  const stopped = response.req && stoppedBodies.get(response.req);
+  if (stopped) {
+    response.shouldKeepAlive = false;
+    response.once?.('finish', () => {
+      if (stopped.socket.destroyed) return;
+      if (typeof stopped.socket.destroySoon === 'function') stopped.socket.destroySoon();
+      else if (!stopped.socket.writableEnded) stopped.socket.end(() => stopped.socket.destroy());
+    });
+  }
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'X-Operator-Studio-Bridge': `${bridge.pid}:${bridge.port}`,
+    ...(stopped ? { Connection: 'close' } : {}),
   });
   response.end(JSON.stringify({ ...payload, __bridge: bridge }));
 };
 
-export const readJson = async (request, { maxBytes = 1_000_000 } = {}) => {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of request) {
-    size += chunk.length;
-    if (size > maxBytes) {
-      const error = new Error(`Request body exceeds the ${Math.floor(maxBytes / 1_000_000) || maxBytes} MB limit.`);
-      error.status = 413;
-      error.code = 'REQUEST_BODY_TOO_LARGE';
-      throw error;
-    }
-    chunks.push(chunk);
-  }
-  if (!chunks.length) return {};
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  } catch (cause) {
-    const error = new Error('Request body must be valid JSON.');
-    error.status = 400;
-    error.code = 'REQUEST_JSON_INVALID';
-    error.cause = cause;
-    throw error;
-  }
+export const readJson = (request, { maxBytes = 1_000_000, timeoutMs = 5000 } = {}) => {
+  if (bodyPromises.has(request)) return bodyPromises.get(request);
+  const promise = new Promise((resolve, reject) => {
+    if (!request || typeof request.on !== 'function' || typeof request.removeListener !== 'function') throw new TypeError('request must be a readable request stream');
+    if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new TypeError('maxBytes must be a positive safe integer');
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 120000) throw new TypeError('timeoutMs must be positive, finite, and no greater than 120000');
+    const chunks = [];
+    let size = 0;
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      request.removeListener('data', onData);
+      request.removeListener('end', onEnd);
+      request.removeListener('error', onError);
+      request.removeListener('aborted', onAborted);
+      request.removeListener('close', onClose);
+    };
+    const fail = (error, stop = true) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      chunks.length = 0;
+      if (stop) stopBodyInput(request);
+      reject(error);
+    };
+    const onData = (chunk) => {
+      if (settled) return;
+      if (typeof chunk !== 'string' && !(chunk instanceof Uint8Array)) {
+        fail(bodyError('REQUEST_JSON_INVALID', 'Request body must contain JSON bytes.', 400)); return;
+      }
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += bytes.length;
+      if (size > maxBytes) {
+        fail(bodyError('REQUEST_BODY_TOO_LARGE', `Request body exceeds the ${Math.floor(maxBytes / 1_000_000) || maxBytes} MB limit.`, 413)); return;
+      }
+      chunks.push(bytes);
+    };
+    const onEnd = () => {
+      if (settled) return;
+      let payload;
+      try { payload = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}; }
+      catch (cause) { fail(bodyError('REQUEST_JSON_INVALID', 'Request body must be valid JSON.', 400, cause), false); return; }
+      settled = true;
+      cleanup();
+      chunks.length = 0;
+      resolve(payload);
+    };
+    const onError = (cause) => fail(bodyError('REQUEST_BODY_ABORTED', 'Request body stream ended before completion.', 400, cause));
+    const onAborted = () => onError();
+    const onClose = () => { if (!request.readableEnded) onError(); };
+    const timer = setTimeout(() => fail(bodyError('REQUEST_BODY_TIMEOUT', 'Request body exceeded its read deadline.', 408)), timeoutMs);
+    request.once('end', onEnd);
+    request.once('error', onError);
+    request.once('aborted', onAborted);
+    request.once('close', onClose);
+    request.on('data', onData);
+    if (request.readableEnded) onEnd();
+    else if (request.destroyed) onError();
+  });
+  if (request && (typeof request === 'object' || typeof request === 'function')) bodyPromises.set(request, promise);
+  return promise;
 };
 
 export const sendSse = (response, event, payload) => {

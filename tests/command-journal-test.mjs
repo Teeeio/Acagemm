@@ -69,6 +69,8 @@ try {
 
   // ---- 6. 崩溃恢复：journal 领先快照 → reconcile 重放追平；再跑幂等 ----
   applyCalls = 0;
+  // Isolate the legacy replay fixture from schema-v2 commands tested above.
+  await journal.reset();
   const replayRegistry = { 'replay-cmd': { apply: (state, payload) => { applyCalls += 1; state.applied = payload.id; } } };
   await journal.append({ seq: 10, commandId: 'cmd_10', idempotencyKey: 'replay:1', type: 'replay-cmd', missionId: 'MIS_T', payload: { id: 'replayed' }, stateVersionBefore: 9, status: 'applied' });
   const stale = makeState(); // commandJournalSeq 0，journal 已有 seq 10
@@ -92,7 +94,7 @@ try {
   const testServicePort = 4202;
   const smokeRoot = path.join(root, 'integration');
   const baseUrl = `http://127.0.0.1:${port}`;
-  const testService = spawn('node', ['test-service/mock-server.mjs'], { cwd: rootDir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TEST_SERVICE_PORT: String(testServicePort) } });
+  const testService = spawn('node', ['test-service/mock-server.mjs'], { cwd: rootDir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TEST_SERVICE_PORT: String(testServicePort), TEST_SERVICE_MOCK_DURATION_MS: '100' } });
   const child = spawn('node', ['client-runtime/local-server.mjs'], { cwd: rootDir, stdio: ['ignore', 'pipe', 'pipe'], env: {
     ...process.env, API_PORT: String(port), SERVE_WEB: 'false',
     OPERATOR_DATA_DIR: path.join(smokeRoot, 'data'), OPERATOR_RUNTIME_DIR: path.join(smokeRoot, 'runtime'),
@@ -115,7 +117,7 @@ try {
     const deadline = Date.now() + timeoutMs;
     let latest = null;
     while (Date.now() < deadline) {
-      latest = (await request('/api/state')).state;
+      latest = (await request('/api/runtime/advance', { method: 'POST' })).state;
       if (predicate(latest)) return latest;
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
@@ -125,10 +127,14 @@ try {
       benchmark: latest?.benchmark?.status,
       baseline: latest?.baseline?.status,
       taskId: latest?.benchmark?.testTaskId,
+      baselineError: latest?.baseline?.error,
+      serviceError: latest?.benchmark?.lastServiceError,
+      workflowFailure: latest?.workflowFailure,
     })}`);
   };
   const waitForServer = async () => {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    // Cold Windows workspace initialization can exceed three seconds.
+    for (let attempt = 0; attempt < 100; attempt += 1) {
       try { await request('/api/health'); return; } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
     }
     throw new Error('Journal test server did not start.');
@@ -215,6 +221,30 @@ try {
     assert.equal(state.decisionReview.resolution.source, 'policy');
     const adoptedEvents = (await request(`/api/missions/${missionId}/events`)).events.filter((event) => event.type === 'decision.auto_adopted' || event.type === 'decision.adopted');
     assert.equal(adoptedEvents.length, 1);
+
+    // An ambiguous Agent effect stays inspectable through GET and does not
+    // advance the pipeline or rewrite the durable state while being inspected.
+    const stateFile = path.join(smokeRoot, 'data', 'mock-db.json');
+    const stableBytes = await readFile(stateFile, 'utf8');
+    const stableState = JSON.parse(stableBytes);
+    const faultJournal = createCommandJournal({ filePath: path.join(smokeRoot, 'runtime', 'command-journal.jsonl') });
+    const faultSeq = await faultJournal.nextSeq();
+    await faultJournal.append({
+      schemaVersion: 2, seq: faultSeq, commandId: 'cmd_ambiguous_agent',
+      effectId: 'effect_ambiguous_agent', idempotencyKey: 'ambiguous-agent',
+      type: 'runs', missionId, body: {}, intent: null,
+      stateVersionBefore: stableState.stateVersion, stateVersionAfter: null,
+      status: 'preparing', effectStarted: true, payload: null, result: null,
+    });
+    const blocked = (await request('/api/state')).state;
+    assert.equal(blocked.workflowFailure.code, 'COMMAND_EFFECT_OUTCOME_UNKNOWN');
+    assert.equal(blocked.missionPaused, true);
+    assert.equal(blocked.missions.find((item) => item.id === missionId).missionPaused, true);
+    assert.equal(blocked.stateVersion, stableState.stateVersion);
+    await request('/api/state');
+    assert.equal(await readFile(stateFile, 'utf8'), stableBytes, 'recovery inspection must not commit a synthetic pause or advance workflow');
+    const stopped = await request('/api/actions/stop-mission', { method: 'POST', body: '{}' });
+    assert.equal(stopped.state.missionPaused, true, 'explicit Mission stop remains available during recovery');
 
     // ---- 12. reset 清 journal，不误回放 ----
     const serverJournal = path.join(smokeRoot, 'runtime', 'command-journal.jsonl');

@@ -4,4 +4,8 @@ Owns Mission research start and cancellation commands. It delegates durable comm
 
 `start(missionId, body)` validates/activates the Mission, applies the shared mutation guard, and returns the command result. `cancel(missionId, runId)` requires the requested Mission to be active, cancels the Agent run, and persists the resulting state.
 
+Constructor requires the injected `missionState.selectMission` transition;
+missing it throws TypeError, with no state-store fallback. Production binds the
+canonical Mission/Project domain factory.
+
 Stable errors: `MISSION_NOT_FOUND` (404), `AGENT_MISSION_MISMATCH` (409), and `STATE_VERSION_CONFLICT` (mapped by the route). The service does not parse HTTP or emit responses.

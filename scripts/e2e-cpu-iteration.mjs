@@ -67,7 +67,7 @@ const pollState = async (predicate, label, timeoutMs = 30_000) => {
   const deadline = Date.now() + timeoutMs;
   let state;
   while (Date.now() < deadline) {
-    state = (await request('/api/state')).state;
+    state = (await request('/api/runtime/advance', { method: 'POST' })).state;
     if (predicate(state)) return state;
     await sleep(100);
   }
@@ -94,7 +94,14 @@ const baselineRunPy = [
   '    return output',
   '',
 ].join('\n');
-const matrix = { environments: ['CPU'], stages: ['Correctness', 'Full Benchmark'], correctnessCases: 1, warmup: 2, repeats: 20 };
+const matrix = {
+  environments: ['CPU'], stages: ['Correctness', 'Full Benchmark'], correctnessCases: 1, warmup: 2, repeats: 20,
+  testSpec: {
+    schemaVersion: 'operator-studio.test-spec/v1',
+    correctness: { requestedCases: 1, requiredCategories: ['minimal'], atol: 0, rtol: 0, requireNamedCases: true },
+    benchmark: { requiredProfiles: ['primary'], primaryProfile: 'primary', warmup: 2, repeats: 20 },
+  },
+};
 const missionGoal = '优化 vector_add kernel 在 CPU 上 batch=1、length=64 的 latency p50，目标低于 1000 us；在隔离 Mission 工作区生成候选 Patch，并通过 1/1 Correctness 和 Full Benchmark Accept Gate。';
 
 try {
@@ -150,6 +157,13 @@ try {
   );
   assert.equal(baselineState.baseline.evidence.liveHardware, false);
   assert.equal(baselineState.baseline.evidence.environment, 'CPU');
+  assert.equal(baselineState.baseline.oracleRunPy, baselineRunPy);
+  const baselineTask = (await request(`/api/operator-tests/${encodeURIComponent(baselineState.baseline.evidence.testTaskId)}`)).task;
+  assert.equal(baselineTask.payload.oracleRunPy, baselineRunPy, 'baseline must receive an explicit independent oracle');
+  assert.equal(baselineTask.result.correctness.total, matrix.correctnessCases);
+  assert.deepEqual(baselineTask.result.correctness.caseNames, ['small-vector']);
+  assert.deepEqual(baselineTask.result.correctness.categories, matrix.testSpec.correctness.requiredCategories);
+  assert.deepEqual(baselineTask.result.benchmark.map((row) => row.profile), matrix.testSpec.benchmark.requiredProfiles);
 
   await request(`/api/missions/${encodeURIComponent(missionId)}/runs`, { method: 'POST', body: { goal: missionGoal } });
   const candidateState = await pollState(
@@ -173,6 +187,12 @@ try {
   assert.equal(completed.benchmark.result.benchmark[0].correctness.passed, true);
   const queueTask = (await request(`/api/operator-tests/${encodeURIComponent(completed.benchmark.testTaskId)}`)).task;
   assert.equal(queueTask.payload.candidate.digest, candidate.patchDigest);
+  assert.equal(queueTask.payload.oracleRunPy, baselineRunPy, 'candidate must use the persisted baseline oracle');
+  assert.equal(queueTask.result.correctness.total, matrix.correctnessCases);
+  assert.equal(queueTask.result.correctness.executedCases, matrix.correctnessCases);
+  assert.deepEqual(queueTask.result.correctness.caseNames, ['small-vector']);
+  assert.deepEqual(queueTask.result.correctness.categories, matrix.testSpec.correctness.requiredCategories);
+  assert.deepEqual(queueTask.result.benchmark.map((row) => row.profile), matrix.testSpec.benchmark.requiredProfiles);
   const executedRunPy = await readFile(path.join(health.testBackend.taskRoot, queueTask.remoteTaskId, 'run.py'), 'utf8');
   const executedOraclePy = await readFile(path.join(health.testBackend.taskRoot, queueTask.remoteTaskId, 'oracle.py'), 'utf8');
   const workspaceRunPy = await readFile(path.resolve(rootDir, applied.workspace.workspace, 'run.py'), 'utf8');

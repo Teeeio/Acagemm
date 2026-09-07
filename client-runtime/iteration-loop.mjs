@@ -1,12 +1,16 @@
-import { addAuditEvent, isInfrastructureTestFailure, isMaximizeMission } from './state-store.mjs';
-import { appendRuntimeEvent } from './runtime-events.mjs';
+import { resourceReleaseBarrier } from './cancellation-contract.mjs';
+import { inspectRoundBudget, ensureRoundBudgetStarted, completeRoundBudget, expireRoundBudget } from './round-budget-contract.mjs';
+export { ROUND_BUDGET_MS } from './round-budget-contract.mjs';
+import { addAuditEvent, appendRuntimeEvent } from './runtime-events.mjs';
+import { isInfrastructureTestFailure } from './operator-test-evidence.mjs';
+import { isMaximizeMission } from './mission-objective.mjs';
 
 // 研究员子 Agent 的循环策略：停滞检测、价值闸、调研简报、单轮预算、自动流转。
 // 纯函数可单测；advanceIteration 通过 deps 注入 agentRuntime 能力，避免模块反向耦合。
 
 export const STAGNATION_WINDOW = 3;            // 尺子 B：连续 N 轮无被采纳候选 → 停滞
 export const RESEARCH_BUDGET_MS = 20 * 60 * 1000; // 研究员时长预算（仅上限，不强制调研）
-export const ROUND_BUDGET_MS = 15 * 60 * 1000;   // 单轮时长预算（预留，Slice 1 不自动取消主线程）
+// ROUND_BUDGET_MS is shared by the persisted round clock and startup admission.
 // 两阶段研究员预算：采集（联网，停滞/事件/资料停滞终止，放宽墙钟）；综合（本地，短墙钟保证笔记写完）
 export const RESEARCH_STALL_MS = 90_000;          // 采集阶段：事件 90s 无新增 → 停滞终止
 export const RESEARCH_EVENT_BUDGET = 200;         // 采集阶段：事件数上限，防无限增长
@@ -243,6 +247,8 @@ export const detectTunnelVision = (state, { window = 3, overlapThreshold = 2 } =
 const LOOP_GUARD_TEXT = {
   max_rounds: '已迭代到最大轮数上限，仍未完成采纳，请人工介入',
   total_budget: '累计迭代时长超出预算上限，请人工介入',
+  round_budget: '当前完整轮次已达到 15 分钟墙钟上限，保留 current best 并等待人工处理；重试或恢复不会刷新同轮预算',
+  round_budget_invalid: '当前轮次预算记录无效，请检查持久化起点与轮次归属后再启动工作',
   max_research: '研究员已多次升级仍未产生被采纳候选，停止研究员升级但主循环继续',
   candidate_generation_failed: '当前轮次的候选生成连续失败，已停止自动重试，请检查 Agent 后端或调整指令后恢复',
   correctness_failed: '固定精度测试在允许的修复轮次内仍未通过',
@@ -313,7 +319,10 @@ const roundCorrectnessPassed = (round = {}) => {
 };
 
 // 全局兜底：任一上限命中返回原因码；未命中返回 null。命中后循环停止自动流转，但手动操作不受阻。
-export const detectLoopGuard = (state) => {
+export const detectLoopGuard = (state, { nowMs = Date.now() } = {}) => {
+  const roundBudget = inspectRoundBudget(state, { nowMs });
+  if (roundBudget.status === 'invalid') return 'round_budget_invalid';
+  if (roundBudget.expired) return 'round_budget';
   const stats = state?.iterationStats || {};
   const mission = (state?.missions || []).find((item) => item.id === state?.activeMissionId) || {};
   const phasedPolicy = phasedIterationPolicy(mission);
@@ -331,12 +340,12 @@ export const detectLoopGuard = (state) => {
   // that is already queued/running. The active queue operation is authoritative.
   if (stats.loopStatus === 'needs_human') {
     const benchmark = state?.benchmark || {};
-    if (['queued', 'running'].includes(benchmark.status)) return null;
-    return stats.loopStatusReason || 'needs_human';
+    if (!['queued', 'running'].includes(benchmark.status)) return stats.loopStatusReason || 'needs_human';
+    // Existing execution may continue, but it still obeys the total deadline.
   }
   const missionBudgetMs = activeMissionBudgetMs(state);
   const budgetStartedAt = state?.missionBudgetStartedAt || stats.loopStartedAt;
-  const totalElapsedMs = budgetStartedAt ? Date.now() - new Date(budgetStartedAt).getTime() : 0;
+  const totalElapsedMs = budgetStartedAt ? Math.max(0, nowMs - new Date(budgetStartedAt).getTime()) : 0;
   if (missionBudgetMs) return totalElapsedMs >= missionBudgetMs ? 'total_budget' : null;
   if ((stats.round || 0) >= MAX_ROUNDS) return 'max_rounds';
   if (totalElapsedMs >= TOTAL_BUDGET_MS) return 'total_budget';
@@ -400,12 +409,32 @@ const completeMaximizeMission = (state, reason, eventType = 'loop.maximize_compl
 // deps: { startResearch, cancelResearch, startMainRound, researchDirForMission }
 export async function advanceIteration(state, deps = {}) {
   if (process.env.NO_AUTO_LOOP === '1') return { state, action: 'disabled' };
-  if (state.missionPaused) return { state, action: 'paused' };
-  if (state.stage === 'published' && state.knowledgeMaintenance?.status === 'completed') return { state, action: 'completed' };
-
-  const guardReason = detectLoopGuard(state);
+  if (resourceReleaseBarrier(state)) return { state, action: 'resource_release_pending' };
+  const clockNow = () => Number(typeof deps.now === 'function' ? deps.now() : Date.now());
+  const nowMs = clockNow();
+  const guardReason = detectLoopGuard(state, { nowMs });
+  if (state.missionPaused && !['round_budget', 'round_budget_invalid', 'total_budget'].includes(guardReason)) return { state, action: 'paused' };
+  if (state.stage === 'published' && state.knowledgeMaintenance?.status === 'completed') {
+    const completed = completeRoundBudget(state, { nowMs });
+    return { state, action: 'completed', changed: completed.changed };
+  }
+  const startBudgetedMainRound = async (input, { completedRoundId = null } = {}) => {
+    ensureRoundBudgetStarted(input.state, { nowMs: clockNow(), completedRoundId });
+    return deps.startMainRound(input);
+  };
   if (guardReason) {
     const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+    if (guardReason === 'round_budget') {
+      const expired = expireRoundBudget(state, { nowMs });
+      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: guardReason };
+      mission.status = 'needs_human';
+      state.agent = { ...(state.agent || {}), phase: '完整轮次预算已到，保留 current best', currentAction: null };
+      if (!state.runtimeEvents?.some(event => event.type === 'loop.round_budget_exceeded' && event.payload?.roundId === expired.roundBudget?.roundId)) {
+        addAuditEvent(state, '完整轮次预算已到', LOOP_GUARD_TEXT.round_budget, 'warning', 'Timer');
+        appendRuntimeEvent(state, 'loop.round_budget_exceeded', { ...expired.roundBudget, reason: guardReason, currentBest: state.currentBest || null }, { kind: 'policy', mode: 'client' });
+      }
+      return { state, action: 'needs_human' };
+    }
     if (guardReason === 'correctness_failed') {
       state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'failed', loopStatusReason: guardReason, completedAt: new Date().toISOString() };
       state.agent = { ...(state.agent || {}), status: 'failed', phase: 'Correctness Failed', progress: 100, currentAction: null };
@@ -653,7 +682,7 @@ export async function advanceIteration(state, deps = {}) {
       && deps.startMainRound) {
     const goal = `${mission.goal || state.agent?.goal || ''}\n【系统恢复】同 runner / 同 shape baseline 已完成（${state.baseline.evidence?.environment || 'runner'} ${state.baseline.evidence?.value ?? ''}${state.baseline.evidence?.unit || ''}），请直接生成单文件 run.py 优化候选，不要再次阻塞在 baseline 缺失。`;
     state.agent = { ...(state.agent || {}), runId: null, runtimeKind: null, result: null };
-    const nextState = await deps.startMainRound({ state, goal });
+    const nextState = await startBudgetedMainRound({ state, goal });
     addAuditEvent(nextState, 'Baseline 后自动恢复候选生成', '检测到旧 baseline 诊断已被真实 baseline 结果满足，继续主 Agent 生成候选。', 'blue', 'RefreshCw');
     appendRuntimeEvent(nextState, 'baseline.resume_candidate_generation', { baseline: state.baseline?.evidence || null }, { kind: 'baseline', mode: 'client' });
     return { state: nextState, action: 'resumed_after_baseline' };
@@ -755,15 +784,24 @@ export async function advanceIteration(state, deps = {}) {
       nextStats.lastCorrectnessAttemptRunId = null;
     }
     state.iterationStats = nextStats;
+    // Generic legacy failure counters still advance, but diagnostic retries
+    // must share the original complete-round clock until real evidence settles.
+    if (correctnessPassed) completeRoundBudget(state, { nowMs: clockNow() });
     return { state, action: 'round_counted' };
   }
+
+  // Only a counted, correctness-passed evidence round admits a fresh clock.
+  // Its budget ordinal can be ahead of evidence counters after a manual rerun.
+  const completedRoundId = resolvedEvidenceRound && roundCorrectnessPassed(state)
+    && stats.lastCountedRunId === state.agent?.runId && stats.roundBudget?.status === 'completed'
+    ? stats.roundBudget.roundId : null;
 
   // 调研注入后的自动续跑：直接进入下一主轮，操作员无需手动继续
   if (stats.pendingInjection && deps.startMainRound) {
     const briefing = stats.pendingInjection.briefing;
     const goal = `${mission.goal || ''}\n【调研注入】${briefing}`;
     state.iterationStats = { ...state.iterationStats, pendingInjection: null };
-    const nextState = await deps.startMainRound({ state, goal });
+    const nextState = await startBudgetedMainRound({ state, goal }, { completedRoundId });
     addAuditEvent(nextState, '自动进入下一轮', '已注入调研简报并启动主线程', 'blue', 'RefreshCw');
     return { state: nextState, action: 'resumed_agent' };
   }
@@ -809,7 +847,7 @@ export async function advanceIteration(state, deps = {}) {
       ? `${mission.goal || state.agent?.goal || ''}\n【系统恢复】Candidate ${activeRound} ${correctnessFailure ? `第 ${correctnessAttempt} 次 correctness 未通过：${state.failureRecords?.[0]?.decisionReason || state.benchmark?.lastServiceError?.message || state.benchmark?.logs?.at(-1)?.message || 'runner correctness failed'}。请保持固定 Oracle、shape 和判据，修复实现后重跑全部 correctness；通过后才进入 benchmark。本次仍属于 Round ${activeRound}，不得降低测试标准。` : '本次未生成有效 Diff。请在相同 Round 内生成一个有真实工作区 Diff 的 run.py 候选。'}`
       : `${mission.goal || state.agent?.goal || ''}\n【上一轮证据】${state.appliedCandidateId || 'candidate'} 的实测值为 ${state.benchmark?.result?.benchmark?.[0]?.value ?? 'unknown'}${state.benchmark?.result?.benchmark?.[0]?.unit || ''}，Accept Gate 未达到相对 baseline 目标。系统会先恢复轮前稳定工作区；请换一个有界优化方向并生成内容不同的单文件 run.py 候选。`;
     const retryMode = correctnessFailure ? 'correctness' : 'generation';
-    const nextState = await deps.startMainRound({ state, goal, retryMode });
+    const nextState = await startBudgetedMainRound({ state, goal, retryMode }, { completedRoundId });
     addAuditEvent(nextState, correctnessFailure ? 'Correctness 修复重试' : diagnosticNoCandidateRound ? '候选生成重试' : '自动进入下一轮', correctnessFailure ? `Round ${activeRound} · attempt ${correctnessAttempt + 1}` : diagnosticNoCandidateRound ? `Round ${activeRound} · Candidate 编号保持不变` : '上一候选未采纳，继续生成下一候选', 'blue', 'RefreshCw');
     return { state: nextState, action: 'resumed_agent' };
   }

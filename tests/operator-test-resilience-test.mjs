@@ -1,3 +1,4 @@
+// Robustness contracts: retry only proven non-acceptance; unknown workers retain their slot.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -5,6 +6,10 @@ import path from 'node:path';
 import { createOperatorTestQueue } from '../client-runtime/operator-test-queue.mjs';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'operator-test-resilience-'));
+const noWorker = { confirmed: true, status: 'confirmed', reason: 'This fake has no active worker.', deadline: null, nextAction: null };
+const notStarted = (error, input) => Object.assign(error, {
+  submission: { status: 'not_started', confirmed: true, requestId: input.requestId }, resourceRelease: noWorker,
+});
 const payload = {
   requestId: 'request-stable-1',
   missionId: 'MIS_RESILIENCE',
@@ -17,13 +22,13 @@ try {
   let submitCalls = 0;
   let pollCalls = 0;
   const serviceClient = {
-    submit: async () => {
+    submit: async (input) => {
       submitCalls += 1;
       if (submitCalls === 1) {
         const error = new Error('temporary submit outage');
         error.code = 'SERVICE_UNAVAILABLE';
         error.status = 503;
-        throw error;
+        throw notStarted(error, input);
       }
       return { taskId: 'remote-1', status: 'queued' };
     },
@@ -34,7 +39,7 @@ try {
         error.code = 'ECONNRESET';
         throw error;
       }
-      return { taskId: 'remote-1', status: 'completed', progress: 100, result: { benchmark: [] } };
+      return { taskId: 'remote-1', status: 'completed', resourceRelease: noWorker, progress: 100, result: { benchmark: [] } };
     },
   };
   const queueFile = path.join(root, 'recoverable.jsonl');
@@ -50,7 +55,8 @@ try {
   task = await queue.get(submitted.taskId);
   assert.equal(task.status, 'running');
   task = await queue.get(submitted.taskId);
-  assert.equal(task.status, 'running');
+  assert.equal(task.status, 'quarantined', 'disconnect does not prove worker release');
+  assert.equal(task.resourceRelease.confirmed, false);
   assert.equal(task.attempts.poll, 1);
   task = await queue.get(submitted.taskId);
   assert.equal(task.status, 'completed');
@@ -60,11 +66,11 @@ try {
   const terminalQueue = createOperatorTestQueue({
     filePath: path.join(root, 'terminal.jsonl'),
     serviceClient: {
-      submit: async () => {
+      submit: async (input) => {
         const error = new Error('invalid task');
         error.code = 'OPERATOR_TEST_TASK_INVALID';
         error.status = 422;
-        throw error;
+        throw notStarted(error, input);
       },
     },
   });
@@ -78,12 +84,12 @@ try {
     filePath: path.join(root, 'bounded.jsonl'),
     maxAttempts: 2,
     serviceClient: {
-      submit: async () => {
+      submit: async (input) => {
         unavailableCalls += 1;
         const error = new Error('still unavailable');
         error.code = 'SERVICE_UNAVAILABLE';
         error.status = 503;
-        throw error;
+        throw notStarted(error, input);
       },
     },
   });
@@ -103,13 +109,15 @@ try {
         snapshotCalls += 1;
         return snapshotCalls === 1
           ? { status: 'failed', error: { code: 'SERVICE_UNAVAILABLE', retryable: true, message: 'temporary remote failure' } }
-          : { status: 'completed', progress: 100, result: { benchmark: [] } };
+          : { status: 'completed', resourceRelease: noWorker, progress: 100, result: { benchmark: [] } };
       },
     },
   });
   const snapshotSubmission = await snapshotQueue.submit({ ...payload, requestId: 'request-snapshot' });
   await snapshotQueue.get(snapshotSubmission.taskId);
-  assert.equal((await snapshotQueue.get(snapshotSubmission.taskId)).status, 'running');
+  const unconfirmed = await snapshotQueue.get(snapshotSubmission.taskId);
+  assert.equal(unconfirmed.status, 'quarantined');
+  assert.equal(unconfirmed.resourceRelease.confirmed, false);
   assert.equal((await snapshotQueue.get(snapshotSubmission.taskId)).status, 'completed');
 
   const malformedQueue = createOperatorTestQueue({
@@ -122,7 +130,8 @@ try {
   const malformedSubmission = await malformedQueue.submit({ ...payload, requestId: 'request-malformed' });
   await malformedQueue.get(malformedSubmission.taskId);
   const malformed = await malformedQueue.get(malformedSubmission.taskId);
-  assert.equal(malformed.status, 'failed');
+  assert.equal(malformed.status, 'quarantined');
+  assert.equal(malformed.resourceRelease.confirmed, false);
   assert.equal(malformed.error.code, 'EXTERNAL_OUTCOME_INVALID');
 
   console.log('[operator-test-resilience] idempotency and bounded outcome-class retries passed');

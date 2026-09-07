@@ -1,4 +1,4 @@
-import { createResearchAgentState, selectMission } from '../state-store.mjs';
+import { createResearchAgentState } from '../mission-state-shapes.mjs';
 
 const notFound = (id) => {
   const error = new Error('Mission 不存在。');
@@ -8,8 +8,8 @@ const notFound = (id) => {
   return error;
 };
 
-export const createMissionQueryService = ({ loadState, persistState, missionState = { selectMission }, researchAgentFactory = createResearchAgentState } = {}) => {
-  if (typeof loadState !== 'function' || typeof persistState !== 'function') {
+export const createMissionQueryService = ({ loadState, persistState, missionState, researchAgentFactory = createResearchAgentState } = {}) => {
+  if (typeof loadState !== 'function' || typeof persistState !== 'function' || typeof missionState?.selectMission !== 'function') {
     throw new TypeError('Mission query service requires state dependencies.');
   }
   const select = async (missionId) => {

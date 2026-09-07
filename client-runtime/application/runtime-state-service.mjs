@@ -1,3 +1,5 @@
+import { assertResourcesReleased } from '../cancellation-contract.mjs';
+
 export const createRuntimeStateService = ({ loadState, persistState, resumeMissionState, normalizeMissionBudgetMs } = {}) => {
   if (typeof loadState !== 'function' || typeof persistState !== 'function' || typeof resumeMissionState !== 'function' || typeof normalizeMissionBudgetMs !== 'function') {
     throw new TypeError('Runtime state service requires state, resume, and budget dependencies.');
@@ -30,7 +32,10 @@ export const createRuntimeStateService = ({ loadState, persistState, resumeMissi
     }
     for (const key of ['testMatrix', 'workspace', 'unreadCount']) if (Object.hasOwn(body, key)) state[key] = body[key];
     if (body.missionPaused === true) state.missionPaused = true;
-    if (body.missionPaused === false) resumeMissionState(state, { source: 'local-c500-tui' });
+    if (body.missionPaused === false) {
+      assertResourcesReleased(state);
+      resumeMissionState(state, { source: 'local-c500-tui' });
+    }
     return { statusCode: 200, payload: { state: await persistState(state) } };
   };
   return Object.freeze({ patch });

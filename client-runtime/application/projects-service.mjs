@@ -1,13 +1,4 @@
 import path from 'node:path';
-import {
-  createProject,
-  deleteProject,
-  selectProject,
-  updateProject,
-  workspaceDirForMission,
-} from '../state-store.mjs';
-
-const defaultProjectState = { createProject, deleteProject, selectProject, updateProject };
 
 const applicationError = (message, status, code) => {
   const error = new Error(message);
@@ -26,9 +17,10 @@ export const createProjectsService = ({
   loadState,
   persistState,
   ensureProjectLayout,
+  workspaceDirForMission,
   workspace,
   filesystem,
-  projectState = defaultProjectState,
+  projectState,
   guardMutation = () => {},
   createWorkflowRecoveryState = () => ({}),
   addAuditEvent = () => {},
@@ -38,8 +30,10 @@ export const createProjectsService = ({
   if (typeof loadState !== 'function'
     || typeof persistState !== 'function'
     || typeof ensureProjectLayout !== 'function'
+    || typeof workspaceDirForMission !== 'function'
     || !workspace
-    || !filesystem) {
+    || !filesystem
+    || ['createProject', 'deleteProject', 'selectProject', 'updateProject'].some((name) => typeof projectState?.[name] !== 'function')) {
     throw new TypeError('Projects service requires state, layout, workspace, and filesystem dependencies.');
   }
 

@@ -21,6 +21,7 @@ const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
     API_PORT: String(port),
     SERVE_WEB: 'false',
     OPERATOR_RUNTIME_MODE: 'unavailable',
+    OPERATOR_AUTO_TICK: '0',
     OPERATOR_DATA_DIR: path.join(testRoot, 'data'),
     OPERATOR_RUNTIME_DIR: path.join(testRoot, 'runtime'),
   },

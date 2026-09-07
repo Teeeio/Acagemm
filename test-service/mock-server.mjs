@@ -2,6 +2,11 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
 const port = Number(process.env.TEST_SERVICE_PORT || 4180);
+// A deadline is a ceiling, never the simulated workload duration.
+const mockDurationMs = Number(process.env.TEST_SERVICE_MOCK_DURATION_MS ?? 3000);
+if (!Number.isInteger(mockDurationMs) || mockDurationMs < 1 || mockDurationMs > 60000) {
+  throw new Error('TEST_SERVICE_MOCK_DURATION_MS must be an integer from 1 to 60000.');
+}
 const tasks = new Map();
 const startedAt = new Date().toISOString();
 
@@ -99,6 +104,7 @@ const materialize = (task) => {
     return {
       taskId: task.taskId,
       status: 'cancelled',
+      resourceRelease: { confirmed: true, status: 'confirmed', reason: 'Simulation has no execution worker.' },
       progress: task.progress || 0,
       submittedAt: task.submittedAt,
       completedAt: task.completedAt,
@@ -108,7 +114,7 @@ const materialize = (task) => {
     };
   }
   const elapsed = Date.now() - task.startedAtMs;
-  const durationMs = Number(task.limits?.timeoutSeconds || 3) * 1000;
+  const durationMs = mockDurationMs;
   const progress = Math.min(100, Math.floor((elapsed / durationMs) * 100 / 10) * 10);
   if (progress < 100) {
     return {
@@ -123,6 +129,7 @@ const materialize = (task) => {
   return {
     taskId: task.taskId,
     status: 'completed',
+    resourceRelease: { confirmed: true, status: 'confirmed', reason: 'Simulation has no execution worker.' },
     progress: 100,
     submittedAt: task.submittedAt,
     completedAt: new Date(task.startedAtMs + durationMs).toISOString(),
@@ -173,7 +180,7 @@ const handle = async (request, response, url) => {
       return;
     }
     task.status = 'cancelled';
-    task.progress = Math.min(99, Math.floor(((Date.now() - task.startedAtMs) / (Number(task.limits?.timeoutSeconds || 3) * 1000)) * 100));
+    task.progress = Math.min(99, Math.floor(((Date.now() - task.startedAtMs) / mockDurationMs) * 100));
     task.completedAt = new Date().toISOString();
     json(response, 200, materialize(task));
     return;

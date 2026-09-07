@@ -1,5 +1,3 @@
-import { createMission } from '../state-store.mjs';
-
 const applicationError = (message, status, code) => {
   const error = new Error(message);
   error.status = status;
@@ -12,12 +10,13 @@ export const createMissionsService = ({
   persistState,
   ensureMissionWorkspace,
   validateMissionBudgetInput,
-  missionState = { createMission },
+  missionState,
 } = {}) => {
   if (typeof loadState !== 'function'
     || typeof persistState !== 'function'
     || typeof ensureMissionWorkspace !== 'function'
-    || typeof validateMissionBudgetInput !== 'function') {
+    || typeof validateMissionBudgetInput !== 'function'
+    || typeof missionState?.createMission !== 'function') {
     throw new TypeError('Missions service requires state, workspace, and budget validation dependencies.');
   }
 

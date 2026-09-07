@@ -1,4 +1,20 @@
-export const createMissionControlService = ({ loadState, persistState, agentRuntime, operatorTestQueue, appendRuntimeEvent, addAuditEvent, now = () => new Date(), createId = () => Date.now().toString(36) } = {}) => {
+import { isExecutionReleased, pendingMissionResources, assertResourcesReleased, resourceReleaseBarrier } from '../cancellation-contract.mjs';
+
+const retainUntrackedResources = (state, current, requestedAt, deadline) => {
+  const barrier = resourceReleaseBarrier(state);
+  if (!barrier) return [];
+  const previous = Array.isArray(barrier.resources) ? barrier.resources : [{ kind: 'unknown', id: 'untracked', reason: barrier.reason }];
+  return previous.filter(resource => resource.confirmed !== true
+    && !current.some(item => item.kind === resource.kind && item.id === resource.id)).map(resource => ({
+    ...resource, kind: resource.kind || 'unknown', id: resource.id || 'untracked', confirmed: false, status: 'unconfirmed',
+    reason: 'The recorded execution no longer has a matching Mission resource; release cannot be inferred.',
+    requestedAt: resource.requestedAt || requestedAt, deadline: resource.deadline || deadline,
+    nextAction: 'Inspect the original execution owner and confirm termination; repeating stop cannot discard unknown resources.',
+    error: resource.error || { code: 'MISSION_RESOURCE_IDENTITY_UNAVAILABLE', message: 'The original resource identity is absent from the current Mission snapshots.' },
+  }));
+};
+
+export const createMissionControlService = ({ loadState, persistState, agentRuntime, operatorTestQueue, appendRuntimeEvent, addAuditEvent, now = () => new Date(), createId = () => Date.now().toString(36), cancellationTimeoutMs = 5_000 } = {}) => {
   if (typeof loadState !== 'function' || typeof persistState !== 'function' || !agentRuntime || !operatorTestQueue || typeof appendRuntimeEvent !== 'function' || typeof addAuditEvent !== 'function') {
     throw new TypeError('Mission control service requires state, Agent, test queue, event, and audit dependencies.');
   }
@@ -16,6 +32,7 @@ export const createMissionControlService = ({ loadState, persistState, agentRunt
     const state = await loadState();
     const note = String(body.note || '').trim();
     if (note.length < 2) return { statusCode: 400, payload: { error: '人工意见至少需要 2 个字符。', code: 'HUMAN_FEEDBACK_REQUIRED' } };
+    assertResourcesReleased(state);
     const feedback = { id: `feedback_${createId()}`, note, submittedAt: now().toISOString(), source: 'local-c500-tui' };
     state.missionPaused = false;
     state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'running', loopStatusReason: null, pendingInjection: { noteId: feedback.id, direction: 'human_feedback', briefing: `人工意见：${note}`, value: 'high' } };
@@ -26,23 +43,78 @@ export const createMissionControlService = ({ loadState, persistState, agentRunt
     return { statusCode: 202, state: await persistState(state), feedback };
   };
 
-  const stopMission = async () => {
-    const state = await loadState();
-    const mission = state.missions?.find((item) => item.id === state.activeMissionId);
-    if (!mission) return { statusCode: 404, payload: { error: '当前没有可停止的 Mission。', code: 'MISSION_NOT_FOUND' } };
-    if (state.benchmark?.status === 'running' && state.benchmark?.testTaskId) await operatorTestQueue.cancel(state.benchmark.testTaskId).catch(() => null);
-    if (state.agent?.runId && ['running', 'executing', 'awaiting_action', 'cancel_requested'].includes(state.agent.status)) {
-      const cancelled = await agentRuntime.cancelRun({ state, runId: state.agent.runId }).catch(() => null);
-      if (cancelled?.state) Object.assign(state, cancelled.state);
+  const releaseResources = async (state, { reason = 'mission_stop' } = {}) => {
+    const requestedAt = now().toISOString();
+    const deadline = new Date(now().getTime() + cancellationTimeoutMs).toISOString();
+    const resources = pendingMissionResources(state);
+    const untracked = retainUntrackedResources(state, resources, requestedAt, deadline);
+    const results = await Promise.all(resources.map(async ({ kind, id, snapshot }) => {
+      let timer;
+      const operation = Promise.resolve().then(() => kind === 'test'
+        ? operatorTestQueue.cancel(id)
+        : agentRuntime.cancelRun({ state: structuredClone(state), runId: id }));
+      // Late provider responses cannot mutate state: each Agent receives an isolated
+      // snapshot. Timeout means quarantined/unconfirmed, not cancelled.
+      const outcome = await new Promise(resolve => {
+        timer = setTimeout(() => resolve({ error: { code: 'MISSION_CANCEL_DEADLINE_EXCEEDED', message: 'Cancellation did not acknowledge before its deadline.' } }), cancellationTimeoutMs);
+        operation.then(value => { clearTimeout(timer); resolve({ value }); },
+          error => { clearTimeout(timer); resolve({ error: { code: error.code || 'MISSION_CANCEL_FAILED', message: error.message } }); });
+      });
+      const result = kind === 'test' ? outcome.value : outcome.value?.result;
+      const confirmed = !outcome.error && isExecutionReleased(result || {});
+      const release = {
+        kind, id, confirmed, status: confirmed ? 'confirmed' : outcome.error || result?.resourceRelease?.status === 'unconfirmed' ? 'unconfirmed' : 'pending',
+        reason: confirmed ? 'Execution has confirmed termination.' : outcome.error?.message || result?.resourceRelease?.reason || 'Cancellation requested; execution resource release is not yet confirmed.',
+        requestedAt, deadline,
+        nextAction: confirmed ? 'No action required.' : 'Inspect or retry cancellation. Resume and workspace changes remain blocked until release is confirmed.',
+        ...(outcome.error ? { error: outcome.error } : result?.resourceRelease?.code ? { error: { code: result.resourceRelease.code, message: result.resourceRelease.reason } } : {}),
+      };
+      const updated = kind === 'agent' ? outcome.value?.state?.agent
+        : kind === 'research' ? outcome.value?.state?.researchAgent
+          : kind === 'materializer' ? outcome.value?.state?.baseline?.materializer : null;
+      const next = { ...snapshot, ...(updated || {}), resourceRelease: release,
+        ...(kind !== 'test' ? { status: confirmed ? result.status : 'cancel_requested', currentAction: null } : { cancelRequested: true }) };
+      return { kind, next, release };
+    }));
+    for (const { kind, next } of results) {
+      if (kind === 'agent') state.agent = next;
+      else if (kind === 'research') state.researchAgent = next;
+      else if (kind === 'materializer') state.baseline = { ...state.baseline, materializer: next };
+      else state.benchmark = next;
     }
-    state.missionPaused = true;
-    state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'stopped', loopStatusReason: 'stopped_by_tester', stoppedAt: now().toISOString() };
-    const activeMission = state.missions?.find((item) => item.id === state.activeMissionId) || mission;
-    activeMission.status = 'stopped';
-    appendRuntimeEvent(state, 'mission.stopped', { missionId: activeMission.id, source: 'local-c500-tui' }, { kind: 'mission', mode: 'client' });
-    addAuditEvent(state, 'Mission 已停止', `${activeMission.id} · 测试人员停止`, 'warning', 'Square');
-    return { statusCode: 200, state: await persistState(state) };
+    const releases = [...results.map(item => item.release), ...untracked];
+    const confirmed = releases.every(resource => resource.confirmed);
+    const summary = { confirmed, status: confirmed ? 'confirmed' : releases.some(resource => resource.status === 'unconfirmed') ? 'unconfirmed' : 'pending',
+      reason, requestedAt, deadline, nextAction: confirmed ? 'All active execution resources have been released.' : 'Inspect pending resources or retry cancellation before resuming.',
+      resources: releases };
+    state.workflowRecovery = { ...state.workflowRecovery, resourceRelease: summary };
+    return summary;
   };
 
-  return Object.freeze({ cancelRun, addHumanFeedback, stopMission });
+  const stopMission = async () => {
+    let state = await loadState();
+    const mission = state.missions?.find((item) => item.id === state.activeMissionId);
+    if (!mission) return { statusCode: 404, payload: { error: '当前没有可停止的 Mission。', code: 'MISSION_NOT_FOUND' } };
+    state.missionPaused = true;
+    state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'stopped', loopStatusReason: 'stopped_by_tester', stoppedAt: now().toISOString() };
+    mission.status = 'stopped';
+    const requestedAt = now().toISOString();
+    const deadline = new Date(now().getTime() + cancellationTimeoutMs).toISOString();
+    const currentResources = pendingMissionResources(state);
+    const untracked = retainUntrackedResources(state, currentResources, requestedAt, deadline);
+    state.workflowRecovery = { ...state.workflowRecovery, resourceRelease: {
+      confirmed: false, status: 'pending', reason: 'mission_stop', requestedAt, deadline,
+      nextAction: 'Cancellation is being dispatched; resources must confirm release before resume.',
+      resources: [...currentResources.map(({ kind, id }) => ({ kind, id, confirmed: false, status: 'pending',
+        reason: 'Cancellation is awaiting dispatch.', requestedAt, deadline, nextAction: 'Await cancellation acknowledgement and resource release.' })), ...untracked],
+    } };
+    // Durable stop intent precedes provider/queue cancellation.
+    state = await persistState(state);
+    const resourceRelease = await releaseResources(state, { reason: 'mission_stop' });
+    appendRuntimeEvent(state, 'mission.stopped', { missionId: state.activeMissionId, source: 'local-c500-tui', resourceRelease }, { kind: 'mission', mode: 'client' });
+    addAuditEvent(state, resourceRelease.confirmed ? 'Mission 已停止' : 'Mission 已停止推进，等待资源释放', state.activeMissionId + ' · ' + resourceRelease.status, 'warning', 'Square');
+    return { statusCode: resourceRelease.confirmed ? 200 : 202, state: await persistState(state), resourceRelease };
+  };
+
+  return Object.freeze({ cancelRun, addHumanFeedback, stopMission, releaseResources });
 };

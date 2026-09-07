@@ -74,19 +74,36 @@ All external outcomes must be normalized before changing Mission state.
 | `application/runtime-projection-service.mjs` | workflow and Agent state projection | state/runtime | projected state |
 | `application/runtime-advance-service.mjs` | Autopilot, iteration, and reconcile tail | projected state | advanced state |
 | `application/baseline-orchestration-service.mjs` | complete Baseline workflow orchestration | baseline command | updated state |
-| `application/runtime-state-pipeline-service.mjs` | loaded-state migration and projection pipeline | state/runtime snapshot | projected state and changed flag |
+| `application/runtime-state-pipeline-service.mjs` | ordered effectful advancement pipeline | state/runtime snapshot | advanced state and changed flag |
+| `application/runtime-lifecycle-service.mjs` | separate snapshot reads and explicit advancement | injected snapshot/recovery/pipeline ports | isolated or advanced state |
+| `application/runtime-maintenance-service.mjs` | runtime-mode policy and fixture progression | state/runtime and domain ports | changed state |
 | `application/main-round-orchestration-service.mjs` | main Agent round preflight/recovery/launch | round command | updated state |
-| `state-store.mjs` | state compatibility, transitions, persistence | product state, snapshot | normalized persisted state |
+| `state-store.mjs` | compatibility assembly, snapshot schema/version and recovery coordination | state, snapshot | delegated access / normalized snapshot |
+| `mission-project-state.mjs` | injected-path Mission/Project rules | state, command and path ports | in-memory normalization / transitions |
+| `mission-state-shapes.mjs` | budget and Mission/Research/Agent shapes | fields/overrides | new records / normalized budget |
+| `knowledge-state.mjs` | adoption and source-aware Knowledge governance | admitted Candidate/evidence state | updated best/review/assets/events |
+| `state-reference-data.mjs` | legacy fixture defaults and metadata | none | shared reference records |
+| `state-initialization.mjs` | seed/product state factories | injected Mission domain factory | initial snapshots (no storage) |
+| `state-reference-runtime.mjs` | existing reference-fixture progression | state and elapsed clock | fixture state/log projection |
+| `accept-gate.mjs` | I/O-free acceptance rules | state and runner evidence | Gate / Baseline evidence |
+| `operator-test-evidence.mjs` | in-memory queue evidence projection | state and task snapshot | updated state / decisions / events |
+| `evidence-state.mjs` | shared review/Baseline shapes | kind/status/overrides | schema-compatible records |
+| `mission-objective.mjs` | objective normalization and queries | Mission/objective | normalized policy |
+| `state-identifiers.mjs` | stable legacy identifier formatting | Mission/repository label | ID/name (not authorization) |
+| `state-workspace.mjs` | layout, fixture and checkpoint adapter | Mission/paths, initialization port | workspace effects / checkpoint DTO |
+| `state-snapshot-storage.mjs` | raw snapshot I/O and injected bootstrap | snapshot / factory ports | atomic file replacement / raw state |
 | `state-repository.mjs` | serialize state access and enforce optimistic versions | load/save adapters, mutation | isolated snapshot or saved state |
 | `iteration-loop.mjs` | bounded iteration policy | Mission state, injected deps | next workflow state/action |
 | `workflow-kernel.mjs` | invariants and recovery projection | product state | violations/effect/reconciled state |
-| `runtime-events.mjs` | append canonical Mission events | state, type, payload, source | appended event |
+| `runtime-events.mjs` | canonical Mission and audit events | state, event fields | in-memory event |
 | `agent-runtime.mjs` | Agent use-case lifecycle | Mission context, runtime events | Agent state/results |
 | `agent-runtime/` | definitions, registry, dispatch, capabilities | runtime ID, operation | definition or provider call |
+| `candidate-generation/` | Candidate prompt, Workspace Diff admission, language/repeat guards, and candidate identity | frozen Mission round context, Agent result, Workspace manifest | candidate prompt and verified candidate admission |
 | `cli-command.mjs` | Resolve direct Agent executables behind Windows npm shims | provider and configured command | executable plus fixed argument prefix |
 | `operator-test-queue.mjs` | serialized test lifecycle | test payload | persisted task snapshot |
 | `local-c500-service-client.mjs` | C550 production execution and isolated CPU E2E command execution | queue task payload | correctness/benchmark artifacts |
 | `workspace-manager.mjs` | Git workspace isolation | Mission/repository/candidate | Diff/checkpoint/restore result |
+| `candidate-generation/README.md`, `CONSTRAINTS.md` | 03 候选生成契约与确定性边界 | frozen round context and Workspace facts | Agent proposal/admission contract; no Queue/Gate/iteration decisions |
 | `fixed-operator-profiles.mjs` | immutable operator contracts | Profile ID | frozen Profile/test matrix |
 | `semantic-snapshot.mjs` | bind semantics to evidence | Mission/Profile/test task | immutable semantic digest |
 
@@ -124,158 +141,129 @@ All external outcomes must be normalized before changing Mission state.
   is deterministic. After observing the next round it calls the public stop action solely for cleanup.
   It is intentionally excluded from routine verification because it consumes a live Agent session.
 
+## Command recovery
+
+Command handlers live in `application/candidate-commands.mjs`,
+`application/benchmark-command.mjs`, `application/decision-commands.mjs` and
+`application/agent-commands.mjs`. Admission policy belongs to
+`application/workflow-command-policy.mjs`; `local-server.mjs` composes these modules.
+
+The [command journal](command-journal.md) persists an intent before external mutations
+and the prepared payload before committing Mission state. Benchmark intent freezes
+the request ID, Candidate digest, Baseline oracle, matrix and implementation content.
+`operatorTestQueue.findByRequestId(requestId, missionId, expectedPayload?)` is a
+read-only recovery query. Reusing an ID for different content fails with
+`OPERATOR_TEST_REQUEST_CONFLICT`.
+
+Uncertain effects remain recorded and cannot be automatically repeated. Runtime
+queries expose a paused `workflowRecovery.commandRecovery` overlay when recovery is
+blocked, while preserving the durable snapshot's version for another recovery query.
+The pipeline skips automatic advancement for this overlay. Explicit user commands
+that save new state still change the version and require the pending operation to be
+inspected. Providers without an authoritative recovery query do not automatically
+restart an ambiguous run.
+
+
+## Snapshot queries and advancement
+
+Runtime contract version 9 requires restarting an older Runtime before using
+bounded dispatch/cancellation, complete-round budgets and frozen experience input.
+The TUI's existing compatibility check will not silently reuse a version 8 process. This is not a persisted state-schema change.
+
+`GET /api/state`, Mission event queries/SSE and Operator Test list/detail return
+committed snapshots. Reading does not advance Agents, submit/poll tests, adopt a
+Candidate, replay a command journal or save a new state version. Journal inspection
+may expose a transient recovery pause without performing recovery.
+
+`POST /api/runtime/advance` runs one application advancement cycle under the same
+State Repository exclusive lock as commands and the background tick. It returns
+`{ state }`; it is an explicit effectful action, not a query or a guarantee of
+backend exactly-once execution. Background ticking defaults to enabled; set
+`OPERATOR_AUTO_TICK=0` for deterministic harnesses, which must POST advancement
+when they want progress. For compatibility this setting also disables automatic
+Candidate actions, while explicit advancement still projects, recovers and settles
+iterations. Production TUI keeps using its existing automatic tick.
+Runtime-owner liveness checks apply to both automatic and manual advancement.
+
+`state-store.readState()` is the no-write snapshot port.
+`state-store.loadState()` is the explicit initialization/migration/recovery port.
+Runtime policy previously hidden in loading now belongs to
+`application/runtime-maintenance-service.mjs`; access coordination belongs to
+`application/runtime-lifecycle-service.mjs`. See [state access](state-store.md).
+
+Queue `readTask(id)` and `readTasks()` are read-only. Production `dispatch()` persists a short claim and starts backend I/O outside locks; `process()` performs
+one serialized execution/poll cycle. Legacy Queue `get/list` remain effectful
+compatibility APIs and must not be bound to HTTP queries. Preflight/Workspace
+endpoints still use their existing idempotent Workspace provisioning ports; this
+change does not claim every filesystem-oriented GET is side-effect-free.
+
 ## Dependency Rules
 
 - Pure policy modules may depend on shared contracts, not adapters.
 - Adapters may depend on Node APIs and external processes.
-- `state-store.mjs` must not import the Agent service facade.
+- `state-store.mjs` must not import the Agent service facade. It remains a
+  compatibility assembly/storage boundary, not a pure policy dependency.
+- Mission/Project and Knowledge implementations are canonical domain modules;
+  every Application service consumes explicit transition ports or pure shared
+  shapes. No Application module imports state-store, directly or transitively.
+- Gate, evidence, Mission/Project, Knowledge, initialization and iteration policy
+  use canonical domain/shared contracts; their full static graph must not reach storage,
+  workspace, queue execution, HTTP or provider implementations.
+- Workspace and raw snapshot effects use their documented adapters and injected
+  ports; see [state access](state-store.md), [Workspace](state-workspace.md), and
+  [snapshot storage](state-snapshot-storage.md).
 - Provider clients must not import HTTP routes or TUI modules.
 
-## TODO：通用测试执行工具
+## 通用测试工具与闭包执行包（Goal 实施中）
 
-> 状态：待实现。以下内容是目标契约，不代表当前代码已经支持。当前生产实现仍由
-> `operator-test-queue.mjs` 调用 `local-c500-service-client.mjs`。
+本轮确认范围见 [Generic Operator Goal](../docs/development/GENERIC_OPERATOR_GOAL.md)。
+已实现语言无关契约和私有内容寻址存储，并接入人工经验 API、冻结轮次上下文与总轮预算。
+新版强隔离环境适配器、正式通用入口及完整包证据集成仍需完成，不能把现有 CPU fixture
+的成功等同于新版完整验收。
 
-### 目标
+目标调用方向为 application -> asynchronous test tool -> local/future remote queue。
+Queue 继续是唯一测试调度与原子终态所有者；工具不增加另一条队列或 workflow。
 
-把当前 C550 执行适配器包装为统一的测试执行工具。上层只描述“执行什么测试”和
-“需要什么能力”，不区分本地进程或远端服务。工具负责查询后端、匹配能力、传输
-执行包、等待终态，并返回统一结果或统一错误。
+| 公共模块 | API / 责任 |
+|---|---|
+| [execution-package-contract](execution-package-contract.md) | 纯 manifest、路径、层、Candidate/Workspace、验收与准入绑定规则 |
+| [execution-package-store](execution-package-store.md) | assemble / validate / prepare / reconcilePreparation / verifyAdmission；私有 CAS 与可信准入 |
+| [operator-test-tool](operator-test-tool.md) | capabilities / prepare / submit / read-only get / cancel / findByRequestId；仅调用一个队列 |
+| [experience-contract](experience-contract.md) | 版本、范围、来源、证据与非发布型开发经验规则 |
+| [experience-repository](experience-repository.md) | 私有原子存储、同进程事务、不可变历史 |
+| [experience-service](application/experience-service.md) | 注入端口的人工经验、观察记录与冻结检索上下文 |
+| [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；完整可信凭据才记录执行观察 |
+| [round-budget-contract](round-budget-contract.md) | 主 Agent、测试与同轮重试共享 15 分钟墙钟；暂停/恢复不刷新 |
+| [cancellation-contract](cancellation-contract.md) | 资源释放真相、只读 barrier 与显式推进中的确认收敛 |
 
-```text
-Operator Test Queue
-  -> 通用测试执行工具
-     -> 本地执行后端适配器
-     -> 远端执行后端适配器
-```
+执行包是 Candidate 文件、离线直接/传递依赖、精确锁定环境层和独立冻结验收包的
+逻辑整体。内容层按摘要复用；不要求每轮重复上传解释器/编译器/大型库。
+宿主机文件、隐式 virtualenv、运行时在线安装均不属于允许依赖。
+语言适配器可以使用 Python、C++、CUDA 等入口，顶层没有强制 run.py。
 
-`Operator Test Queue` 继续拥有串行调度和终态持久化。通用执行工具不得决定 Mission
-推进、Candidate 采纳或 Accept Gate 结果。
+准备先检查内容，再在目标隔离环境内完成 build/load。准入同时绑定全部摘要、
+目标、适配器版本与构建配置；提交和执行均须复核。validated=true 无效。
+普通 Python 进程或静态 import 扫描不是强隔离沙箱；当前未配置受信 OS 隔离
+适配器时明确拒绝新版包准入，不能以降级执行通过验收。
 
-### 建议公开接口
+准备超时保留可观察的未知占用。只有拥有该准备 ID 的适配器确认停止才可重试；
+迟到结果不签发准入，也不能覆盖另一准备。Profiler/Tracer 对 CPU 默认 unavailable。
+CPU 仅为 cpu-e2e、liveHardware=false；正式 GPU 发布仍由既有 Gate 授权。
 
-| 接口 | 输入 | 输出 | 说明 |
-|---|---|---|---|
-| `queryBackends(query)` | 位置、硬件、操作、Profile 等过滤条件 | `ExecutionBackend[]` | 查询本地和远端后端的健康状态、能力、环境和限制 |
-| `preparePackage(request)` | Candidate、入口文件、测试规格 | `ExecutionPackage` | 构建并校验内容寻址的可移植执行包 |
-| `execute(request)` | 参数化任务、后端选择条件、超时和重试预算 | `ExecutionResult` | 完成选择、提交、等待和结果归一化 |
-| `cancel(taskId)` | 通用任务 ID | 取消后的任务快照 | 本地和远端使用相同取消语义 |
-
-`execute()` 接收统一的任务描述，至少包含：
-
-- `operation`：`correctness`、`benchmark` 或 `diagnostic`。
-- `candidate`：`missionId`、`candidateId`、`patchDigest`、Workspace 身份。
-- `profile`：固定 Profile ID 和不可修改的测试矩阵引用。
-- `package`：入口、文件清单、每个文件的 SHA-256 和整个包的摘要。
-- `backendSelector`：必需能力、允许位置和可选的后端优先级。
-- `constraints`：超时、重试预算、最大包大小和取消信号。
-
-返回结果必须包含 `taskId`、`status`、`backendId`、`operation`、Candidate/Package
-摘要、日志、工件、环境指纹、evidence 类型和标准错误。任务状态统一为
-`queued | preparing | running | completed | failed | cancelled`。
-
-### 本地与远端一致性
-
-本地与远端必须执行相同的生命周期：
-
-```text
-查询后端 -> 能力匹配 -> 构建执行包 -> 依赖预检
--> 传输或挂载 -> 提交 -> 等待终态 -> 校验结果 -> 返回
-```
-
-允许不同的只有文件传输和通信实现：本地可以复制或挂载任务目录，远端可以上传压缩
-包或内容块。两者不得在 Profile、测试矩阵、超时、取消、错误、证据或终态语义上产生
-差异；本地适配器也不得因为文件可直接访问而跳过执行包摘要和依赖预检。
-
-### 执行包与文件传输
-
-默认支持“单入口文件”，但不限制为“只能提交一个文件”。建议采用：
-
-- 单文件包：`run.py` 加自动生成的 `manifest.json`，作为默认和最小支持模式。
-- 受控多文件包：允许纯源码辅助文件；所有文件必须列入 manifest，使用包内相对路径。
-- 禁止绝对路径、`..`、符号链接逃逸和运行时读取 Mission Workspace 之外的隐式文件。
-- `packageId` 由 manifest 和文件内容计算；后端落盘后必须再次校验摘要。
-- evidence 必须记录 `packageId`、`patchDigest`、Profile 和后端环境指纹。
-- 不上传整个 Workspace、虚拟环境、缓存目录或未进入 manifest 的文件。
-
-### 依赖策略
-
-提交前依次执行静态 import 扫描、manifest 校验、后端能力匹配和后端环境预检：
-
-1. 后端预装依赖：manifest 声明名称和版本约束，后端返回实际版本并完成匹配。
-2. 包内纯源码依赖：随执行包传输，只允许相对 import 和 manifest 内文件。
-3. 第三方依赖安装：初版不支持。未来只有后端明确声明 `packageInstall` 能力时才允许，
-   且必须使用锁定版本、隔离环境、大小/时间限制和受控软件源。
-4. 无法满足的依赖：必须在正式执行前失败，不得把它记录为 correctness 失败，也不得
-   静默切换到环境语义不同的后端。
-
-第一阶段建议只支持单入口文件和包内纯源码文件，不支持任务级下载安装第三方依赖。
-这能保证本地、远端和离线 C550 环境具有可复现的最小共同能力。
-
-### 后端能力描述
-
-`queryBackends()` 返回的每个后端至少声明：
-
-- 身份与位置：`backendId`、`local | remote`、端点。
-- 可用性：`available`、`healthy`、不可用原因和检查时间。
-- 操作能力：correctness、benchmark、diagnostic、cancel。
-- 环境：硬件型号、Python、框架、驱动和运行时版本。
-- 包能力：最大大小、多文件支持、是否允许安装依赖、是否允许网络访问。
-- 调度限制：并发数、排队深度、最大执行时间。
-- 证据能力：`simulation` 或 `liveHardware`，两者不可互换。
-
-后端选择必须同时满足操作、Profile、硬件、shape/dtype、运行时版本、依赖和包限制。
-没有完全匹配的后端时立即返回错误，不允许通过删减测试或弱化 Profile 获得匹配。
-
-### 统一错误契约
-
-新增执行工具错误必须交给 `workflow-error.mjs` 归一化，并至少区分：
-
-| 错误码 | 含义 | 默认可重试 |
-|---|---|---|
-| `EXECUTOR_BACKEND_UNAVAILABLE` | 没有满足能力和环境要求的健康后端 | 是 |
-| `EXECUTOR_PACKAGE_INVALID` | manifest、路径、大小或摘要不合法 | 否 |
-| `EXECUTOR_PACKAGE_TRANSFER_FAILED` | 上传、复制或摘要复核失败 | 是 |
-| `EXECUTOR_DEPENDENCY_UNAVAILABLE` | 后端缺少依赖且不支持满足该依赖 | 否 |
-| `EXECUTOR_ENVIRONMENT_MISMATCH` | 硬件、驱动或运行时版本不匹配 | 否 |
-| `EXECUTOR_SUBMIT_FAILED` | 后端拒绝或未接收任务 | 是 |
-| `EXECUTOR_WAIT_TIMEOUT` | 等待任务终态超时 | 是；先查询真实终态 |
-| `EXECUTOR_RESULT_INVALID` | 返回结果缺字段、摘要不匹配或证据非法 | 否 |
-
-远端断线后不得直接重复提交。工具必须先使用幂等任务 ID 查询后端；只有确认任务未创建
-时才能重试提交，避免同一 benchmark 被执行两次。
-
-### 不可破坏的约束
-
-- `fixed-operator-profiles.mjs` 仍是固定 Profile 和测试矩阵的唯一来源。
-- simulation evidence 永远不能转换或发布为 live-hardware evidence。
-- 结果中的 Candidate/Package 摘要必须与实际执行内容一致。
-- 工具不得修改 Mission 状态、推进 workflow、执行 Accept Gate 或采纳 Candidate。
-- 所有任务仍通过 `operator-test-queue.mjs` 串行化，并原子持久化终态。
-- 远端地址、凭据和文件路径不得进入任务日志或可发布 evidence。
-
-### 实施拆分与验收
-
-- [ ] 定义并测试 `ExecutionBackend`、`ExecutionPackage`、`ExecutionRequest`、
-  `ExecutionResult` schema。
-- [ ] 抽取通用 executor port，并让 Queue 只依赖该端口。
-- [ ] 将 `local-c500-service-client.mjs` 改造成实现统一契约的本地 adapter。
-- [ ] 实现远端 adapter，包含健康检查、幂等提交、轮询/取消和文件传输。
-- [ ] 实现内容寻址执行包、路径隔离、摘要复核和依赖预检。
-- [ ] 添加本地/远端契约测试，保证相同输入产生相同状态、错误和 evidence 结构。
-- [ ] 添加缺失依赖、传输中断、等待超时、取消竞争和断线重连测试。
-- [ ] 通过 `npm run test:queue`、相关 executor 测试、
-  `npm run verify:local-c500-release` 和 `npm run verify:non-hardware-robustness`。
+本期交付仍需完成：强隔离 Python/CPU adapter 与环境层；包/工具生产装配；
+非固定算子的正式 TUI/API 导入；新版包执行凭据与自动经验记录的可信验证接线；
+至少三类非预置算子的真实 Codex 闭环验收及全部发布门禁。
 
 ## TODO：收敛每轮 Agent 工作量与墙钟耗时
 
-> 状态：待实现。当前生产流程保持不变。本 TODO 不授权削弱固定 Profile、Correctness、
+> 状态：完整轮次预算与冻结经验已实现；精简修复、报告生成和缓存等余项待完成。
+> 本 TODO 不授权削弱固定 Profile、Correctness、
 > Benchmark、Gate 或重试预算，只用于后续重构时明确 Agent 与确定性模块的职责边界。
 
 ### 当前问题
 
-- 主 Agent 单次预算为 10 分钟，但 `ROUND_BUDGET_MS` 仍是未生效的预留定义，尚未限制
-  Agent、测试和重试组成的完整单轮墙钟时间。
+- 主 Agent 单次预算保持 10 分钟；完整轮次现有独立的 15 分钟墙钟预算，覆盖
+  Agent、测试、等待和同轮重试，暂停/恢复不重置。
 - Correctness 失败会通过 `startMainRound()` 启动新的完整 Agent 会话并重新读取上下文，
   而不是复用当前轮的精简修复上下文。
 - 主 Agent 同时承担瓶颈分析、代码修改、交付文件维护、`report.md` 更新和结构化总结，
@@ -292,7 +280,7 @@ Operator Test Queue
 确定性上下文组装
   -> 主 Agent：诊断并生成一个有界 Candidate Patch
   -> 确定性 Diff / Candidate 契约校验
-  -> Operator Test Queue / 通用测试执行工具
+  -> 通用异步测试工具 -> Operator Test Queue
   -> Accept Gate
   -> 系统生成报告与经验草稿
 ```
@@ -304,15 +292,15 @@ Correctness 修复使用同一轮的精简修复路径，只提供失败用例�
 
 ### 实施项
 
-- [ ] 定义并启用完整单轮墙钟预算，覆盖主 Agent、Correctness 修复、测试等待和重试；
+- [x] 定义并启用完整单轮墙钟预算，覆盖主 Agent、Correctness 修复、测试等待和重试；
   超时后保存终态和可诊断错误，不得留下悬挂任务。
 - [ ] 将主 Agent 默认预算从当前 10 分钟调整为可配置的短预算，目标区间 3 至 5 分钟。
 - [ ] 为 Correctness 失败增加 2 至 3 分钟的轻量修复操作，复用当前轮上下文或线程，
   不创建一次全量候选分析。
 - [ ] 从主 Agent Prompt 中移除每轮 `report.md` 维护；由测试结果、Gate 和状态投影确定性
   生成报告内容。
-- [ ] 将经验读取实现为按 Mission/Profile/Baseline/失败摘要查询的非 Agent 服务，并缓存
-  本轮冻结的 Experience Context。
+- [x] 将经验读取实现为按 Project/Mission/operator/hardware/scope 匹配的非 Agent 服务，
+  持久化本轮冻结的 Experience Context 与版本/来源；新包执行证据验证仍待接入。
 - [ ] 为 Baseline Materializer 增加 `source commit + profile digest` 缓存，命中后不启动
   Materializer Agent。
 - [ ] 为异步 Research 与主 Agent 增加 Provider 并发能力检查；不支持并发时延后 Research，
@@ -329,6 +317,10 @@ Correctness 修复使用同一轮的精简修复路径，只提供失败用例�
 - 新增正常轮、Correctness 修复、Provider 不支持并发、Agent 超时和测试超时的契约测试。
 - 通过 Agent Runtime、迭代循环、队列及发布门禁测试。
 
+固定 Profile 的手动启动在进入 armed 前复用统一轮次/预算守卫；达到既有上限时同步
+拒绝并说明下一步，不能清零固定计数。允许的新轮先冻结预算再持久化，自动启动、
+重试和重放只能复用该身份。Run Service 的时钟由组合根显式注入。
+
 ## Verification
 
 ```bash
@@ -337,6 +329,10 @@ npm run test:loop
 npm run test:runtime
 npm run test:queue
 npm run test:state-store-projection
+npm run test:state-domain-boundary
+npm run test:state-storage-adapters
+npm run test:mission-project-state
+npm run test:knowledge-state
 npm run test:state-repository
 npm run test:projects-service
 npm run test:missions-service

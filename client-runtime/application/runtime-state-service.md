@@ -11,3 +11,7 @@ npm run test:runtime-state-service
 npm run test:module-boundary
 npm run test:smoke
 ```
+
+Resuming via missionPaused=false also requires confirmed resource release; unknown
+workers produce MISSION_RESOURCE_RELEASE_PENDING before persistence. Pausing and
+read-only inspection remain available.

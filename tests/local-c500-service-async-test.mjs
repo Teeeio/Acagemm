@@ -14,7 +14,7 @@ delete process.env.OPERATOR_LOCAL_C500_MOCK;
 const { createLocalC500ServiceClient, reconcileLocalTaskSnapshot } = await import('../client-runtime/local-c500-service-client.mjs');
 
 assert.equal(reconcileLocalTaskSnapshot(
-  { status: 'completed', progress: 100, result: { benchmark: [] } },
+  { status: 'completed', resourceRelease: { confirmed: true }, progress: 100, result: { benchmark: [] } },
   { status: 'running', progress: 60, result: null },
 ).status, 'completed', 'a stale progress write must not roll a terminal task back to running');
 assert.equal(reconcileLocalTaskSnapshot(
@@ -34,7 +34,10 @@ try {
     runPy: 'def get_inputs(): return {}\ndef run(inputs): return 1\ndef reference(inputs): return 1\n',
   });
   const startedAt = Date.now();
-  const concurrentStarts = await Promise.all(Array.from({ length: 24 }, () => client.get(submitted.taskId)));
+  const beforeRead = await readFile(path.join(tempRoot, 'tasks', submitted.taskId, 'task.json'), 'utf8');
+  assert.equal((await client.get(submitted.taskId)).status, 'waiting', 'get must not launch a runner');
+  assert.equal(await readFile(path.join(tempRoot, 'tasks', submitted.taskId, 'task.json'), 'utf8'), beforeRead);
+  const concurrentStarts = await Promise.all(Array.from({ length: 24 }, () => client.advance(submitted.taskId)));
   const running = concurrentStarts.at(-1);
   assert.ok(concurrentStarts.every((snapshot) => snapshot.status === 'running'), 'concurrent polling must always observe a complete running task document');
   assert.ok(Date.now() - startedAt < 200, 'starting a hardware task must not block the API until the runner exits');
@@ -43,7 +46,7 @@ try {
   const progressDeadline = Date.now() + 2000;
   while (benchmark.status === 'running' && benchmark.progress < 60 && Date.now() < progressDeadline) {
     await new Promise((resolve) => setTimeout(resolve, 75));
-    benchmark = await client.get(submitted.taskId);
+    benchmark = await client.advance(submitted.taskId);
   }
   assert.equal(benchmark.status, 'running');
   assert.equal(benchmark.progress, 60);
@@ -53,9 +56,10 @@ try {
   const deadline = Date.now() + 3000;
   while (completed.status === 'running' && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 100));
-    completed = await client.get(submitted.taskId);
+    completed = await client.advance(submitted.taskId);
   }
   assert.equal(completed.status, 'completed');
+  assert.equal(completed.resourceRelease.confirmed, true);
   assert.equal(completed.result.environment.liveHardware, true);
   const launches = (await readFile(path.join(tempRoot, 'tasks', submitted.taskId, 'runner-launches.log'), 'utf8')).trim().split(/\r?\n/).filter(Boolean);
   assert.equal(launches.length, 1, 'concurrent first polls must start exactly one hardware runner');

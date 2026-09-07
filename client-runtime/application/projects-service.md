@@ -21,9 +21,14 @@
 
 - `loadState()` and `persistState(state)`: coordinated Runtime state access.
 - `ensureProjectLayout(input)`: creates and records the strict three-layer layout.
+- `workspaceDirForMission(id, repository, projectRoot)`: required path-query port
+  for the active snapshot. Production binds the State Workspace adapter; the
+  service never imports that adapter. Missing required ports throw TypeError.
 - `workspace`: Git inspection, initialization, bootstrap, and source inspection.
 - `filesystem`: directory existence, creation, and UTF-8 file reads.
-- `projectState`: Project domain mutations; defaults to the public state-store functions.
+- `projectState`: required Project domain mutations (`createProject`, `selectProject`,
+  `updateProject`, `deleteProject`), normally from `createMissionProjectState`.
+  There is no implicit state-store default; a missing method fails construction.
 
 ## Stable Errors
 
@@ -35,7 +40,7 @@
 | `PROJECT_NOT_FOUND` | 404 | Project ID is unknown |
 | `PROJECT_REINITIALIZATION_REQUIRED` | 409 | Three-layer source view is unavailable |
 
-Domain mutation errors from `state-store.mjs` are preserved.
+Domain mutation errors from the injected Mission/Project state contract are preserved.
 
 ## Invariants
 

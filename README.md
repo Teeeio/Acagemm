@@ -20,7 +20,7 @@ Operator Studio 是面向异构算子优化的本地 Agent 工作台。当前生
 
 ### 硬件命名约束
 
-- `C550` 是当前唯一的沐曦生产目标。新建 Mission 的 `hardware`、测试矩阵的
+- `C550` 是当前唯一的沐曦生产目标。固定 C550 Profile Mission 的 `hardware`、测试矩阵的
   `environments`、模拟后端的 `device` 以及新生成的执行证据必须使用 `C550`。
 - `tester:c500`、`local-c500`、`LOCAL_C500_*`、`OPERATOR_LOCAL_C500_*` 和
   `LOCAL_C500_*` 错误码是稳定的兼容接口，暂不重命名；其中的 `c500` 不表示任务会在
@@ -156,6 +156,14 @@ npm run dev
 
 后续 GUI 应继续调用 Production HTTP API，不得直接读取状态文件或复制 workflow。
 
+## 状态查询与自动推进
+
+`GET /api/state`、Mission 事件/SSE 和测试任务查询只读取快照，不再驱动流程。
+Runtime 默认开启后台 tick，生产 TUI 的自动推进保持不变。确定性测试可设置
+`OPERATOR_AUTO_TICK=0`，并通过 `POST /api/runtime/advance` 显式推进一次。该兼容开关也会
+关闭自动 Candidate 动作，但显式推进仍负责恢复、投影和轮次结算。该入口与
+后台 tick 共用应用服务和状态锁，不是第二套 workflow。
+
 ## Agent Runtime
 
 | Runtime | 状态 | 用途与限制 |
@@ -179,9 +187,10 @@ Operator Studio 不保存或注入 Agent Provider 的 API key、模型地址和�
 | Full Simulation | 否 | `liveHardware=false` | TUI/API/状态机快速检查 |
 | `test-service` Mock/remote adapter | 兼容路径 | 取决于适配器返回 | 旧 HTTP 测试服务契约与远端联调 |
 
-当前 Queue 仍直接使用具体执行适配器。统一的本地/远端执行工具、内容寻址执行包、依赖预检、
-后端能力查询和统一错误返回仍是待实现项，目标契约记录在
-[`client-runtime/README.md`](client-runtime/README.md#todo通用测试执行工具)。
+通用异步测试工具、内容寻址包与可信准入、版本化开发经验已建立独立模块和契约测试；
+新版强隔离 Python/CPU 环境与正式通用入口尚未完成生产装配。现有 CPU fixture 不能替代
+闭包隔离及真实 Codex 多算子验收，当前范围和进展见
+[通用算子 Goal](docs/development/GENERIC_OPERATOR_GOAL.md)。
 
 ## 核心模块
 
