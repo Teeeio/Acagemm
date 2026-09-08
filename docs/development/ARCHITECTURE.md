@@ -65,6 +65,7 @@ not authorize a direct import of its implementation into a domain module.
 ## Shared Contracts
 
 - Language-neutral package/admission: `client-runtime/execution-package-contract.mjs`
+- Source ingestion: `client-runtime/execution-package-import.mjs` (directory/archive -> immutable package input)
 - Resource-release barriers: `client-runtime/cancellation-contract.mjs`
 - Versioned development experience: `client-runtime/experience-contract.mjs`
 - Complete round wall clock: `client-runtime/round-budget-contract.mjs`

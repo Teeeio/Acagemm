@@ -32,6 +32,17 @@ serialize instances within that process, including Windows case aliases. It is
 not a cross-process writer lock or a hostile concurrent-filesystem sandbox.
 Admission TTL is a positive integer, default one hour and maximum one day.
 
+`execution-package-import.mjs` is the application-facing ingestion adapter for
+unpacked source directories and tar/tar.gz/zip archives (using the host `tar`
+reader). It recursively collects
+regular files (or reads archive members without extracting them), normalizes
+portable POSIX paths, rejects symlinks/devices/hardlinks and requires explicit
+candidate and independent acceptance entrypoints. All bytes are passed to
+`assemble` as content-addressed data; no dependency is installed and no source
+is executed during import. The caller must still provide the trusted
+environment, adapter, Mission/Workspace/Candidate binding and frozen test spec,
+then call `prepare` before submitting a test request.
+
 Verification: node tests/execution-package-store-test.mjs
 
 Adapter registration declares supported languages and exact version, plus

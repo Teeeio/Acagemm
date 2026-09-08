@@ -65,12 +65,6 @@ const observe = async (read, predicate, timeout = 5_000) => {
 };
 const ended = (snapshot) => ['completed', 'cancelled', 'failed'].includes(snapshot.status) && snapshot.resourceRelease?.confirmed;
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
-// Managed Codex runners may deny WMI/CIM process inspection. In that mode the
-// production contract is quarantine (never a false cancellation); skip only
-// tests that require proving descendant termination, while retaining all
-// durable-claim and timeout assertions.
-const processTreeControlAvailable = process.platform !== 'win32'
-  || spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process -ErrorAction Stop | Select-Object -First 1'], { windowsHide: true, stdio: 'ignore' }).status === 0;
 const launches = async (taskId) => (await readFile(path.join(taskRoot, taskId, 'launches.log'), 'utf8')).trim().split(/\r?\n/).length;
 
 test('local durable execution ownership', { timeout: 30_000 }, async (t) => {
@@ -122,10 +116,11 @@ test('local durable execution ownership', { timeout: 30_000 }, async (t) => {
       const lookup = await client.findByRequestId(input.requestId, input.missionId, input);
       assert.equal(lookup.taskId, task.taskId);
       const resumed = await client.advance(task.taskId);
-      assert.ok(['quarantined', 'completed'].includes(resumed.status));
+      assert.ok(['running', 'quarantined', 'completed'].includes(resumed.status));
       const completed = await observe(() => client.advance(task.taskId), ended);
       assert.equal(completed.status, 'completed');
       assert.equal(completed.resourceRelease.confirmed, true);
+      if (process.platform === 'win32') assert.equal(completed.executionClaim.jobObject, true);
       assert.equal(await launches(task.taskId), 1);
     });
 
@@ -180,7 +175,7 @@ test('local durable execution ownership', { timeout: 30_000 }, async (t) => {
       assert.equal((await client.advance(task.taskId)).status, 'completed');
     });
 
-    await t.test('cancel kills and confirms a real descendant tree before terminal status', { skip: !processTreeControlAvailable }, async () => {
+    await t.test('cancel kills and confirms a real descendant tree before terminal status', async () => {
       const task = await submit(payload('owned-tree', 'tree'));
       await client.advance(task.taskId);
       const pids = await observe(() => readJson(path.join(taskRoot, task.taskId, 'owned-pids.json')), Boolean);
@@ -190,6 +185,7 @@ test('local durable execution ownership', { timeout: 30_000 }, async (t) => {
       assert.ok(performance.now() - started < 3_000);
       assert.equal(cancelled.status, 'cancelled', JSON.stringify(cancelled));
       assert.equal(cancelled.resourceRelease.confirmed, true);
+      if (process.platform === 'win32') assert.equal(cancelled.executionClaim.jobObject, true, 'tree cancellation must exercise Job Objects, not WMI capability detection');
       await observe(() => Promise.resolve(pids.map(alive)), (values) => values.every((value) => !value), 1_000);
       const before = await readFile(path.join(taskRoot, task.taskId, 'task.json'), 'utf8');
       assert.equal((await client.advance(task.taskId)).status, 'cancelled');
@@ -197,7 +193,7 @@ test('local durable execution ownership', { timeout: 30_000 }, async (t) => {
       assert.equal(await launches(task.taskId), 1);
     });
 
-    await t.test('supervisor enforces total deadline independently of Runtime polling', { skip: !processTreeControlAvailable }, async () => {
+    await t.test('supervisor enforces total deadline independently of Runtime polling', async () => {
       const task = await submit({ ...payload('worker-deadline', 'tree'), limits: { timeoutSeconds: 0.3 } });
       await client.advance(task.taskId);
       const result = await observe(() => client.get(task.taskId), ended);

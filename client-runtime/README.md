@@ -232,6 +232,7 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 |---|---|
 | [execution-package-contract](execution-package-contract.md) | 纯 manifest、路径、层、Candidate/Workspace、验收与准入绑定规则 |
 | [execution-package-store](execution-package-store.md) | assemble / validate / prepare / reconcilePreparation / verifyAdmission；私有 CAS 与可信准入 |
+| [execution-package-import](execution-package-import.md) | 将目录或 tar/tar.gz/zip 归档读取为候选、依赖、独立验收层；拒绝链接、设备、越界路径后交给 package store 准入 |
 | [operator-test-tool](operator-test-tool.md) | capabilities / prepare / submit / read-only get / cancel / findByRequestId；仅调用一个队列 |
 | [experience-contract](experience-contract.md) | 版本、范围、来源、证据与非发布型开发经验规则 |
 | [experience-repository](experience-repository.md) | 私有原子存储、同进程事务、不可变历史 |

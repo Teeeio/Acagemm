@@ -184,6 +184,12 @@ Mission，不直接修改源码，也不会伪造 baseline/current best；默认
 等待正常 baseline materializer 完成。规格、校验规则和示例见
 [`GENERIC_MISSION_SPEC.md`](./GENERIC_MISSION_SPEC.md)。
 
+已配置共享 GPU package store 的 Runtime 还提供
+`importExecutionPackage(input)` → `POST /api/execution-packages/import`：接受本地
+目录或归档路径、候选/验收入口、冻结 testSpec 和 Mission/Workspace/Candidate
+绑定，返回内容地址 manifest 与可信 admission。全部文件（含依赖）在导入时进入
+包内，后端先验证路径/内容再 prepare；该客户端不读写 Runtime state、不安装依赖。
+
 - `P`: 发布并立即启动 Mission
 - `Space`: 暂停或恢复 Mission
 - `N`: 添加人工意见，意见会进入生产迭代上下文

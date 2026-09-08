@@ -81,8 +81,10 @@ helper is available. It creates a named Job Object, starts the command
 suspended, applies `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, assigns the process,
 and resumes it. Cancellation calls `TerminateJobObject`; closing the helper
 also tears down descendants. The durable claim records `jobName` and
-`jobObject=true`. If helper startup, assignment, or termination cannot be
-confirmed, the task remains quarantined rather than reporting a false release.
+`jobObject=true`. Names are unique per task, and the native helper rejects a
+collision instead of opening another task's Job. Helper startup, receipt parsing,
+assignment, or termination failures are surfaced to the supervisor; the task
+remains quarantined rather than reporting a false release.
 
 ## Limitations and verification
 

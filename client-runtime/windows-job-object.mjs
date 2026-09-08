@@ -39,12 +39,22 @@ export async function spawnJobObjectProcess({ filePath, arguments: args = '', cw
   helper.stdout.setEncoding('utf8'); helper.stderr.setEncoding('utf8');
   helper.stdout.on('data', chunk => { out += chunk; });
   helper.stderr.on('data', chunk => { err += chunk; });
-  const result = new Promise((resolve, reject) => helper.once('close', async (code, signal) => {
+  const result = new Promise((resolve, reject) => {
+    // Spawn failures emit 'error' before 'close'. Keep them in the result
+    // protocol so a missing/denied PowerShell executable cannot crash the
+    // supervisor and lose its durable fail-closed receipt.
+    helper.once('error', (error) => reject(Object.assign(new Error('Job helper could not start: ' + error.message), { code: error.code, cause: error })));
+    helper.once('close', async (code, signal) => {
     try { await rm(configDir, { recursive: true, force: true }); } catch {}
     if (code !== 0) { reject(Object.assign(new Error(err.trim() || `Job helper exited with ${code}`), { code, signal, stderr: err, stdout: out })); return; }
-    try { resolve({ ...JSON.parse(out.trim()), helperPid: helper.pid, jobName }); }
+    try {
+      const receipt = JSON.parse(out.trim());
+      if (receipt.release !== 'confirmed' || !Number.isInteger(receipt.exitCode) || receipt.jobName !== jobName) throw new Error('Job helper receipt identity or release status is invalid.');
+      resolve({ ...receipt, helperPid: helper.pid, jobName });
+    }
     catch (error) { reject(Object.assign(new Error('Job helper returned malformed JSON.'), { cause: error, stdout: out, stderr: err })); }
-  }));
+    });
+  });
   return { helper, helperPid: helper.pid, jobName, result };
 }
 

@@ -267,3 +267,42 @@ acceptance -> integrated fault injection. Shared-GPU
 trusted experience receipts, generic import, package validation, queue terminal
 states and cancellation barriers are wired; do not substitute contract doubles
 or the legacy CPU fixture for the remaining acceptance conditions.
+
+## P0/P1 completion checkpoint (2026-09-09, UTC+8)
+
+The Windows runner ownership boundary now uses a named Job Object as the primary
+path. The helper creates the runner suspended, assigns it before resume, enables
+`KILL_ON_JOB_CLOSE`, rejects name collisions, validates receipts, and fails closed
+on helper/start/termination errors. Recovery coverage includes parent restart,
+descendant cancellation, deadline enforcement and idempotent terminal persistence;
+`npm run test:windows-job-object` passes 2/2 and `npm run test:local-c500-recovery`
+passes 10/10.
+
+The generic acceptance harness now verifies a real second Agent round: the first
+round is archived as `reference`/`reject`, the workspace rollback is clean, and a
+new run identity is observed. If the bounded provider budget reaches
+`needs_human` after those proofs, the harness records that explicit terminal
+instead of waiting for the outer deadline. An affine two-round shared-GPU run
+passed with one validated Candidate, one rollback and confirmed non-publishable
+experience evidence.
+
+P1 source import is now production-wired through
+`POST /api/execution-packages/import` and the Production API client. Directory and
+tar/tar.gz/tgz/zip inputs are recursively read as immutable bytes; candidate and
+independent acceptance entrypoints are required; traversal, non-portable paths,
+symlink/device/hardlink entries and missing files are rejected. Import always
+delegates to `assemble` then trusted `prepare`; no dependency installation or
+source execution occurs. When no trusted package backend is enabled the endpoint
+returns explicit `PACKAGE_BACKEND_UNAVAILABLE` (503).
+
+Current regression evidence:
+
+| Verification | Result |
+|---|---|
+| `npm run verify:local-c500-release` | PASS, 124 checks |
+| `npm run verify:non-hardware-robustness` | PASS, 28 checks |
+| `npm run e2e:shared-gpu-agent-iteration` (`affine`, two rounds) | PASS; rollback and bounded `needs_human` terminal recorded |
+
+Loop status: P0 stability and P1 generic package import complete. Cloud queue,
+additional native language adapters, stronger OS isolation and Profiler/Tracer
+remain subsequent goals.

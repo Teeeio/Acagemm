@@ -519,6 +519,13 @@ export const publishMission = async (draft) => {
   return { missionId, state: started.state, runId: started.runId, project };
 };
 
+// Generic execution-source import stays on the Production API boundary. The
+// runtime owns source validation, immutable packaging and trusted admission.
+export const importExecutionPackage = async (input) => {
+  await ensureProductionRuntime();
+  return api.post('/api/execution-packages/import', input);
+};
+
 // Import an operator-owned source project through the same Production API
 // boundary as the fixed-profile publisher. This client only validates/normalizes
 // the DTO; Mission state and workflow transitions remain server-owned.

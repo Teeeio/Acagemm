@@ -180,6 +180,8 @@ TUI / GUI
 | [`experience-contract.mjs`](../../client-runtime/experience-contract.md) | Domain / Experience | 版本、来源、范围和非发布观察 | 发布授权、存储 |
 | [`experience-repository.mjs`](../../client-runtime/experience-repository.md) | Experience Adapter | 原子版本存储 | Mission 决策 |
 | [`execution-package-store.mjs`](../../client-runtime/execution-package-store.md) | Package Adapter | CAS、受信准入与准备恢复 | 另建测试队列、假定宿主机隔离 |
+| [`execution-package-import.mjs`](../../client-runtime/execution-package-import.md) | Package Import Adapter | 目录/归档读取、依赖闭包与路径安全 | 安装依赖、执行源码、绕过准入 |
+| [`execution-package-import-service.md`](../../client-runtime/application/execution-package-import-service.md) | Application / Package | 导入后 prepare 并返回可提交 admission | HTTP 路由、直接写状态 |
 | [`operator-test-tool.mjs`](../../client-runtime/operator-test-tool.md) | Test Tool Port | 单一队列的异步调用边界 | 等待完整执行、重复调度 |
 | `operator-test-queue.mjs` | Execution Port | 串行任务、poll/cancel、终态持久化 | Mission 推进和采用 |
 | `local-c500-service-client.mjs` | C550 Adapter | 本地 C550 任务与工件适配 | Gate 和迭代决策 |

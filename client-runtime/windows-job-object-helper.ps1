@@ -72,6 +72,8 @@ namespace Acagemm {
 
     [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
     static extern IntPtr CreateJobObjectW(IntPtr attrs, string name);
+    [DllImport("kernel32.dll")]
+    static extern uint GetLastError();
     [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
     static extern IntPtr OpenJobObjectW(uint access, bool inherit, string name);
     [DllImport("kernel32.dll", SetLastError=true)]
@@ -112,7 +114,17 @@ namespace Acagemm {
     static string Quote(string s) { return "\"" + (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""; }
 
     public static string Start(string app, string args, string cwd, string jobName, string stdoutPath, string stderrPath) {
-      var job = CreateJobObjectW(IntPtr.Zero, jobName); if (job == IntPtr.Zero) Fail("CreateJobObject");
+      var job = CreateJobObjectW(IntPtr.Zero, jobName);
+      var createError = GetLastError();
+      if (job == IntPtr.Zero) Fail("CreateJobObject");
+      // CreateJobObjectW opens an existing named Job when the name collides
+      // and reports ERROR_ALREADY_EXISTS. Never attach a new runner to an
+      // existing Job: doing so would make cancellation of one task affect
+      // another task that owns the same name.
+      if (createError == 183) {
+        CloseHandle(job);
+        throw new Win32Exception(183, "CreateJobObject name already exists");
+      }
       var limit = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
       limit.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
       var size = Marshal.SizeOf(limit); var ptr = Marshal.AllocHGlobal(size);

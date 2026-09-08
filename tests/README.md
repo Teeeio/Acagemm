@@ -124,6 +124,9 @@ because it consumes a live Agent session.
 execution-package-contract-test and execution-package-store-test cover portable
 multi-language envelopes, offline blobs, content/admission conflicts, directory
 junctions, environment/artifact changes, preparation deadlines and recovery races.
+execution-package-import-test and execution-package-import-service-test cover
+directory/tar archive ingestion, complete dependency closure, explicit entrypoint
+presence, unsafe source rejection and the application import→prepare boundary.
 Their adapters are contract doubles, not evidence of an actual OS sandbox.
 experience-service-test checks immutable versions, project scope and non-publishable
 observations. codex-cancellation-test uses short-lived Node process trees, not a
@@ -144,10 +147,14 @@ cannot be normalized into success. Real Codex acceptance remains opt-in and is n
 satisfied by these fixtures.
 
 `windows-job-object-test.mjs` covers the Windows process-ownership adapter used by
-the local C500 supervisor. It starts a short-lived worker in a named Job Object and
-asserts that `TerminateJobObject` releases the runner and its task-owned logs. The
+the local C500 supervisor. It starts both a direct worker and a worker with a real
+descendant, asserts that `TerminateJobObject` releases the complete tree, and
+checks invalid executable/helper results fail closed. The adapter also rejects
+named-Job collisions rather than attaching a new task to an existing owner. The
 test is skipped on non-Windows hosts and does not constitute OS sandbox or GPU
-evidence.
+evidence. `local-c500-recovery-test.mjs` exercises the same Job Object path in the
+production adapter for parent restart, deadline, cancellation races and durable
+single-launch recovery.
 
 `shared-gpu-runtime-test` is a read-only capability/policy contract test.
 `e2e:shared-gpu` and `e2e:shared-gpu-service` are opt-in checks for the local

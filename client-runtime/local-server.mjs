@@ -41,6 +41,9 @@ import { normalizeWorkflowError, serializeWorkflowError } from './workflow-error
 import { createLocalC500ServiceClient, localC500Config } from './local-c500-service-client.mjs';
 import { createOperatorTestTool } from './operator-test-tool.mjs';
 import { createExecutionPackageStore, contentDigest } from './execution-package-store.mjs';
+import { importExecutionPackage } from './execution-package-import.mjs';
+import { createExecutionPackageImportService } from './application/execution-package-import-service.mjs';
+import { createExecutionPackageRoutes } from './server/execution-package-routes.mjs';
 import { canonicalJson } from './execution-package-contract.mjs';
 import { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARED_GPU_PACKAGE_ADAPTER } from './local-shared-gpu-package-adapter.mjs';
 import { migrateLocalC500TesterState } from './local-c500-state-migration.mjs';
@@ -171,6 +174,9 @@ const executionPackageStore = sharedGpuPackageAdapter
     adapters: { [SHARED_GPU_PACKAGE_ADAPTER.id]: sharedGpuPackageAdapter },
     inspectionTimeoutMs: Number(process.env.OPERATOR_PACKAGE_INSPECTION_TIMEOUT_MS || 30000) })
   : null;
+const executionPackageImportService = executionPackageStore ? createExecutionPackageImportService({ store: executionPackageStore, importSource: (input) => importExecutionPackage({ store: executionPackageStore, ...input }) }) : {
+  import: async () => { throw Object.assign(new Error('Execution package import requires an enabled trusted package backend.'), { code: 'PACKAGE_BACKEND_UNAVAILABLE', status: 503 }); },
+};
 const resolvePreparedSharedGpuPackage = async (payload) => {
   if (!executionPackageStore || !sharedGpuPackageAdapter) return null;
   const verified = await executionPackageStore.verifyAdmission(payload);
@@ -252,6 +258,7 @@ const missionsService = createMissionsService({
   validateMissionBudgetInput: (...args) => validateMissionBudgetInput(...args),
 });
 const missionRoutes = createMissionRoutes({ json, readJson, missions: missionsService });
+const executionPackageRoutes = createExecutionPackageRoutes({ json, readJson, imports: executionPackageImportService });
 const missionQuery = createMissionQueryService({ missionState: missionProjectState, loadState: () => loadRuntimeState(), persistState });
 const missionQueryRoutes = createMissionQueryRoutes({ json, missionQuery, streamEvents: (...args) => streamMissionEvents(...args) });
 const semanticService = createSemanticService({ loadState: () => loadRuntimeState(), persistState, guardMutation: (...args) => guardMutation(...args), appendRuntimeEvent, addAuditEvent });
@@ -556,6 +563,7 @@ async function handleApi(request, response, url) {
   if (await filesystemRoutes({ request, response, url })) return;
   if (await projectRoutes({ request, response, url })) return;
   if (await missionRoutes({ request, response, url })) return;
+  if (executionPackageRoutes && await executionPackageRoutes({ request, response, url })) return;
   if (await missionQueryRoutes({ request, response, url })) return;
   if (await semanticRoutes({ request, response, url })) return;
   if (await researchRoutes({ request, response, url })) return;

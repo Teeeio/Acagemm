@@ -42,6 +42,7 @@
 | `candidate-validation-routes.mjs` | Patch, Benchmark, and rollback HTTP contexts | handled boolean and JSON response |
 | `baseline-routes.mjs` | Baseline materialization HTTP context | handled boolean and JSON response |
 | `operator-test-routes.mjs` | Operator Test list/detail/cancel HTTP contexts | handled boolean and JSON response |
+| `execution-package-routes.mjs` | execution-source import POST | immutable manifest/admission DTO from the import application service |
 | `mission-control-routes.mjs` | Run cancel, human feedback, and Mission stop contexts | handled boolean and JSON response |
 | `experience-routes.mjs` | Project-scoped experience GET/POST/PATCH | versioned guidance DTOs; no public observation writes |
 | `knowledge-routes.mjs` | Knowledge draft, reference, and retired publication HTTP contexts | handled boolean and JSON response |
