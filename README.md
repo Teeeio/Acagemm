@@ -187,9 +187,10 @@ Operator Studio 不保存或注入 Agent Provider 的 API key、模型地址和�
 | Full Simulation | 否 | `liveHardware=false` | TUI/API/状态机快速检查 |
 | `test-service` Mock/remote adapter | 兼容路径 | 取决于适配器返回 | 旧 HTTP 测试服务契约与远端联调 |
 
-通用异步测试工具、内容寻址包与可信准入、版本化开发经验已建立独立模块和契约测试；
-新版强隔离 Python/CPU 环境与正式通用入口尚未完成生产装配。现有 CPU fixture 不能替代
-闭包隔离及真实 Codex 多算子验收，当前范围和进展见
+通用异步测试工具、内容寻址执行包与可信准入、版本化开发经验已建立独立模块和契约测试；
+共享 GPU MVP 已接入生产组合根，提交前会完成包组装、语法校验、准备和 admission，Runner
+只读取已准备包目录。共享主机 GPU 结果标记为开发证据，不能直接发布为真机经验。强隔离
+环境与真实 Codex 多算子验收仍属于后续扩展，当前范围和进展见
 [通用算子 Goal](docs/development/GENERIC_OPERATOR_GOAL.md)。
 
 ## 核心模块

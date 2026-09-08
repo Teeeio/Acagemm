@@ -106,6 +106,8 @@ All external outcomes must be normalized before changing Mission state.
 | `candidate-generation/README.md`, `CONSTRAINTS.md` | 03 候选生成契约与确定性边界 | frozen round context and Workspace facts | Agent proposal/admission contract; no Queue/Gate/iteration decisions |
 | `fixed-operator-profiles.mjs` | immutable operator contracts | Profile ID | frozen Profile/test matrix |
 | `semantic-snapshot.mjs` | bind semantics to evidence | Mission/Profile/test task | immutable semantic digest |
+| `shared-gpu-runtime.mjs` | read-only local shared-GPU capability probe and trusted environment descriptor | host tool/runtime probes | explicit `shared-host-gpu` environment policy |
+| `local-shared-gpu-package-adapter.mjs` | Python package materialization, syntax validation, prepared-artifact verification and release inspection | package store manifest/blobs | package-only task directory and non-publishable shared-GPU evidence |
 
 ## Invariants
 
@@ -214,12 +216,13 @@ change does not claim every filesystem-oriented GET is side-effect-free.
   [snapshot storage](state-snapshot-storage.md).
 - Provider clients must not import HTTP routes or TUI modules.
 
-## 通用测试工具与闭包执行包（Goal 实施中）
+## 通用测试工具与闭包执行包
 
 本轮确认范围见 [Generic Operator Goal](../docs/development/GENERIC_OPERATOR_GOAL.md)。
 已实现语言无关契约和私有内容寻址存储，并接入人工经验 API、冻结轮次上下文与总轮预算。
-新版强隔离环境适配器、正式通用入口及完整包证据集成仍需完成，不能把现有 CPU fixture
-的成功等同于新版完整验收。
+共享 GPU MVP 已完成正式组合：测试命令先组装语言无关执行包，经过 Python 语法校验、
+准备和短期 admission 后才进入异步工具与本地队列；Runner 只消费适配器准备目录。
+强隔离环境、更多语言和完整包执行证据仍按后续扩展推进。
 
 目标调用方向为 application -> asynchronous test tool -> local/future remote queue。
 Queue 继续是唯一测试调度与原子终态所有者；工具不增加另一条队列或 workflow。
@@ -241,17 +244,18 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 宿主机文件、隐式 virtualenv、运行时在线安装均不属于允许依赖。
 语言适配器可以使用 Python、C++、CUDA 等入口，顶层没有强制 run.py。
 
-准备先检查内容，再在目标隔离环境内完成 build/load。准入同时绑定全部摘要、
+准备先检查内容，再在目标隔离环境内完成 build/load；MVP 也允许显式注册的
+`shared-host-gpu` 环境由适配器在共享主机上完成 build/load。准入同时绑定全部摘要、
 目标、适配器版本与构建配置；提交和执行均须复核。validated=true 无效。
-普通 Python 进程或静态 import 扫描不是强隔离沙箱；当前未配置受信 OS 隔离
-适配器时明确拒绝新版包准入，不能以降级执行通过验收。
+普通 Python 进程或静态 import 扫描不是强隔离沙箱；共享 GPU 必须同时声明
+`allowSharedHostGpu=true` 和 `packageBoundary=adapter-enforced`，并明确标记为
+非发布型开发证据，不能以普通主机执行降级通过验收。
 
 准备超时保留可观察的未知占用。只有拥有该准备 ID 的适配器确认停止才可重试；
 迟到结果不签发准入，也不能覆盖另一准备。Profiler/Tracer 对 CPU 默认 unavailable。
 CPU 仅为 cpu-e2e、liveHardware=false；正式 GPU 发布仍由既有 Gate 授权。
 
-本期交付仍需完成：强隔离 Python/CPU adapter 与环境层；包/工具生产装配；
-非固定算子的正式 TUI/API 导入；新版包执行凭据与自动经验记录的可信验证接线；
+本期后续工作：强隔离 Python/CPU 环境层；非固定算子的正式 TUI/API 导入；新版包执行凭据与自动经验记录的可信验证接线；
 至少三类非预置算子的真实 Codex 闭环验收及全部发布门禁。
 
 ## TODO：收敛每轮 Agent 工作量与墙钟耗时

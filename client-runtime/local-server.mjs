@@ -38,6 +38,10 @@ import { createOperatorTestQueue } from './operator-test-queue.mjs';
 import { consumeWorkflowRecoveryBudget, reconcileWorkflowState } from './workflow-kernel.mjs';
 import { normalizeWorkflowError, serializeWorkflowError } from './workflow-error.mjs';
 import { createLocalC500ServiceClient, localC500Config } from './local-c500-service-client.mjs';
+import { createOperatorTestTool } from './operator-test-tool.mjs';
+import { createExecutionPackageStore, contentDigest } from './execution-package-store.mjs';
+import { canonicalJson } from './execution-package-contract.mjs';
+import { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARED_GPU_PACKAGE_ADAPTER } from './local-shared-gpu-package-adapter.mjs';
 import { migrateLocalC500TesterState } from './local-c500-state-migration.mjs';
 import { LOCAL_C500_RUNTIME_CONTRACT_VERSION } from './local-c500-runtime-contract.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
@@ -154,9 +158,40 @@ const bridge = {
   ownerPid: runtimeOwnerPid || null,
   startedAt,
 };
-const activeTestServiceClient = localC500Config.enabled
-  ? createLocalC500ServiceClient()
-  : testServiceClient;
+const sharedGpuPackageRoot = process.env.OPERATOR_EXECUTION_PACKAGE_DIR
+  ? path.resolve(process.env.OPERATOR_EXECUTION_PACKAGE_DIR)
+  : path.join(runtimeDir, 'execution-packages');
+const sharedGpuEnvironmentResolver = localC500Config.kind === 'local-shared-gpu'
+  ? createSharedGpuEnvironmentResolver({ probeOptions: { python: process.env.OPERATOR_GPU_PYTHON || path.join(rootDir, '.gpu-venv', 'Scripts', 'python.exe') } }) : null;
+const sharedGpuPackageAdapter = localC500Config.kind === 'local-shared-gpu'
+  ? createSharedGpuPackageAdapter({ rootDir: path.join(sharedGpuPackageRoot, 'adapter') }) : null;
+const executionPackageStore = sharedGpuPackageAdapter
+  ? createExecutionPackageStore({ rootDir: path.join(sharedGpuPackageRoot, 'store'), environments: sharedGpuEnvironmentResolver, adapters: { [SHARED_GPU_PACKAGE_ADAPTER.id]: sharedGpuPackageAdapter } })
+  : null;
+const resolvePreparedSharedGpuPackage = async (payload) => {
+  if (!executionPackageStore || !sharedGpuPackageAdapter) return null;
+  const verified = await executionPackageStore.verifyAdmission(payload);
+  const artifact = await sharedGpuPackageAdapter.verifyPreparedArtifact({ manifest: verified.manifest, environment: verified.environment, preparedArtifactDigest: verified.admission.preparedArtifactDigest });
+  if (artifact?.valid !== true || !artifact.root) throw Object.assign(new Error('Prepared execution package is unavailable.'), { code: 'PACKAGE_PREPARED_ARTIFACT_CHANGED', status: 409 });
+  const files = {};
+  for (const layer of verified.manifest.layers) for (const descriptor of layer.files) {
+    const full = path.join(artifact.root, ...descriptor.path.split('/'));
+    const bytes = await readFile(full);
+    const text = bytes.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(bytes)) throw Object.assign(new Error('Python shared-GPU adapter accepts UTF-8 package files only.'), { code: 'PACKAGE_FILE_ENCODING_INVALID', status: 422 });
+    files[descriptor.path] = text;
+  }
+  const candidate = files[verified.manifest.entrypoints.candidate];
+  const oracle = files[verified.manifest.entrypoints.acceptance];
+  const implementationFiles = Object.fromEntries(Object.entries(files).filter(([name]) => name !== verified.manifest.entrypoints.candidate && name !== verified.manifest.entrypoints.acceptance));
+  return { runPy: candidate, oracleRunPy: oracle, implementationFiles, packageDigest: payload.packageDigest, admissionId: payload.admissionId };
+};
+const localBackend = localC500Config.enabled
+  ? createLocalC500ServiceClient({ packageResolver: localC500Config.kind === 'local-shared-gpu' ? resolvePreparedSharedGpuPackage : null })
+  : null;
+const activeTestServiceClient = localC500Config.kind === 'local-shared-gpu'
+  ? createOperatorTestTool({ backend: localBackend, packages: executionPackageStore })
+  : localBackend || testServiceClient;
 const operatorTestQueue = createOperatorTestQueue({ serviceClient: activeTestServiceClient });
 const experienceRepository = createExperienceRepository({ rootDir: path.join(runtimeDir, 'experiences') });
 const experienceService = createExperienceService({ repository: experienceRepository, now: () => new Date().toISOString(), createId: () => 'exp-' + randomUUID() });
@@ -347,6 +382,40 @@ const streamMissionEvents = async (request, response, missionId, after = 0) => {
 
 const { guardMutation, hasMissionBudgetInput, validateMissionBudgetInput, guardSupportedRuntimeAction, guardWorkflowTransition, interventionOutcomeMeta, adoptCandidateState } = createWorkflowCommandPolicy({ addAuditEvent, agentRuntime, appendRuntimeEvent, createCurrentBestState, createDecisionReviewState, isManagedWorkspaceRuntimeMode, markCandidateAccepted, normalizeMissionBudgetMs });
 
+const prepareExecutionPackage = executionPackageStore
+  ? async ({ request, mission, matrix, missionRunPy }) => {
+    const testSpec = matrix.testSpec;
+    if (!testSpec || typeof testSpec !== 'object') throw Object.assign(new Error('Shared-GPU execution requires a frozen testSpec from the active Profile.'), { code: 'PACKAGE_TEST_SPEC_REQUIRED', status: 409 });
+    const candidateFiles = { 'run.py': String(missionRunPy?.content || request.runPy || '') };
+    const dependencyFiles = Object.fromEntries(Object.entries(missionRunPy?.implementationFiles || request.implementationFiles || {}));
+    const oracle = request.oracleRunPy;
+    if (!oracle) throw Object.assign(new Error('Execution package requires an independent acceptance entrypoint.'), { code: 'PACKAGE_ORACLE_INVALID', status: 409 });
+    const candidateDigest = /^sha256:[a-f0-9]{64}$/.test(request.candidate?.digest || '')
+      ? request.candidate.digest
+      : contentDigest(Buffer.from(candidateFiles['run.py'], 'utf8'));
+    const semanticDigest = request.semanticBinding?.semanticDigest && /^sha256:[a-f0-9]{64}$/.test(request.semanticBinding.semanticDigest)
+      ? request.semanticBinding.semanticDigest
+      : contentDigest(Buffer.from(canonicalJson(testSpec), 'utf8'));
+    const assembled = await executionPackageStore.assemble({
+      language: 'python', adapter: SHARED_GPU_PACKAGE_ADAPTER, environmentId: 'local-shared-gpu',
+      binding: { missionId: request.missionId, workspaceId: mission.workspaceId || mission.id || request.missionId, candidateId: request.candidate?.id, candidateDigest },
+      candidateEntrypoint: 'run.py', candidateFiles, dependencyFiles,
+      acceptance: { entrypoint: 'oracle.py', files: { 'oracle.py': oracle }, semanticDigest, testSpec }, build: {},
+    });
+    const admission = await executionPackageStore.prepare(assembled.packageDigest);
+    return {
+      ...request,
+      candidate: { ...request.candidate, digest: candidateDigest },
+      workspaceId: mission.workspaceId || mission.id || request.missionId,
+      packageDigest: assembled.packageDigest, admissionId: admission.admissionId,
+      environmentDigest: admission.environmentDigest, acceptanceDigest: admission.acceptanceDigest,
+      target: admission.target, build: admission.build, adapter: admission.adapter,
+      checks: ['correctness', 'benchmark'],
+      deadline: new Date(Date.now() + Number(request.limits?.timeoutSeconds || 600) * 1000).toISOString(),
+    };
+  }
+  : null;
+
 
 
 const resetService = createResetService({ guardSupportedRuntimeAction, resetFixtureData });
@@ -359,7 +428,7 @@ const resetRoutes = createResetRoutes({ json, reset: resetService });
 // apply 必须是纯状态函数：崩溃恢复 reconcile 会用它重放，绝不能再次触发 spawn/提交/文件写入。
 const commandRegistry = Object.freeze({
   ...createCandidateCommands({ addAuditEvent, agentRuntime, appendRuntimeEvent, applyCandidatePatch, artifactDirForMission, createDecisionReviewState, createWorkspaceCheckpoint, ensureMissionWorkspace, isManagedWorkspaceRuntimeMode, mkdir, path, restoreWorkspaceCheckpoint, rootDir, workspaceManager, writeFile }),
-  ...createBenchmarkCommands({ addAuditEvent, appendRuntimeEvent, baselineMatchesMatrix, createSemanticTaskBinding, hashKey, isFixedOperatorMission, localC500Config, missionShapeKeyFor, normalizeBaselineKind, operatorTestQueue, timeoutSeconds: Number(process.env.OPERATOR_LOCAL_C500_TIMEOUT_SECONDS || 600), readMissionRunPy, resolveBaselineRunPlan }),
+  ...createBenchmarkCommands({ addAuditEvent, appendRuntimeEvent, baselineMatchesMatrix, createSemanticTaskBinding, hashKey, isFixedOperatorMission, localC500Config, missionShapeKeyFor, normalizeBaselineKind, operatorTestQueue, prepareExecutionPackage, timeoutSeconds: Number(process.env.OPERATOR_LOCAL_C500_TIMEOUT_SECONDS || 600), readMissionRunPy, resolveBaselineRunPlan }),
   ...createDecisionCommands({ addAuditEvent, adoptCandidateState, appendRuntimeEvent, createDecisionReviewState, hasMissionBudgetInput, interventionOutcomeMeta, normalizeMissionBudgetMs, restoreWorkspaceCheckpoint, runAutomaticAdoption, validateMissionBudgetInput, workspaceManager }),
   ...createAgentCommands({ addAuditEvent, agentRuntime, appendRuntimeEvent, artifactDirForMission, baselineDirForMission, buildRuntimePreflight, createWorkspaceCheckpoint, hashKey, isManagedWorkspaceRuntimeMode, isStrictZeroSourceMission, mkdir, path, researchDirForMission, resetMissionRunState, resetMissionWorkspace, selectResearchBaselineSource, selectResearchDirection, startAgentRun, roundExperience: roundExperienceService }),
 });

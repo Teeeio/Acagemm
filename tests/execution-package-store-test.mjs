@@ -53,6 +53,36 @@ try {
   environment = { ...environment, isolation: { kind: 'container', enforced: true } };
   const different = await store.assemble({ ...input, candidateFiles: { ...input.candidateFiles, 'src/operator.code': 'modified' } });
   await rejects(() => store.verifyAdmission({ ...request, packageDigest: different.packageDigest }), 'PACKAGE_ADMISSION_CONFLICT');
+
+  // The MVP shared-GPU policy is a separate, explicit trusted environment. It
+  // does not make the ordinary host-Python or CPU path admissible.
+  const gpuTarget = { platform: 'test-x64', device: 'gpu' };
+  const gpuEnvironment = {
+    digest: contentDigest('shared gpu environment'), target: gpuTarget,
+    isolation: { kind: 'shared-host-gpu', enforced: false },
+    policy: { allowSharedHostGpu: true, packageBoundary: 'adapter-enforced' },
+  };
+  const gpuStore = createExecutionPackageStore({
+    rootDir: path.join(root, 'shared-gpu'),
+    environments: { resolve: async () => gpuEnvironment },
+    adapters: { [adapterDescriptor.id]: adapter },
+  });
+  const gpuPackage = await gpuStore.assemble({ ...input, environmentId: 'shared-gpu', target: gpuTarget });
+  const gpuAdmission = await gpuStore.prepare(gpuPackage.packageDigest);
+  const gpuRequest = {
+    ...request, requestId: 'gpu-r1', packageDigest: gpuPackage.packageDigest,
+    admissionId: gpuAdmission.admissionId, environmentDigest: gpuEnvironment.digest,
+    target: gpuTarget, deadline: new Date(Date.now() + 60000).toISOString(),
+  };
+  assert.equal((await gpuStore.verifyAdmission(gpuRequest)).environment.policy.allowSharedHostGpu, true); checks += 1;
+  const gpuRejected = { ...gpuEnvironment, policy: { allowSharedHostGpu: false, packageBoundary: 'adapter-enforced' } };
+  const rejectedGpuStore = createExecutionPackageStore({
+    rootDir: path.join(root, 'shared-gpu-rejected'),
+    environments: { resolve: async () => gpuRejected },
+    adapters: { [adapterDescriptor.id]: adapter },
+  });
+  const rejectedGpuPackage = await rejectedGpuStore.assemble({ ...input, environmentId: 'shared-gpu-rejected', target: gpuTarget });
+  await rejects(() => rejectedGpuStore.prepare(rejectedGpuPackage.packageDigest), 'EXECUTION_ISOLATION_UNAVAILABLE');
   const dep = pkg.manifest.layers.find((layer) => layer.role === 'dependency').files[0];
   const depPath = path.join(root, 'blobs', dep.digest.slice(7));
   const original = await readFile(depPath);

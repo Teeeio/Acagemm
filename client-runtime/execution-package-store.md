@@ -7,7 +7,11 @@ environment identity. File content supports UTF-8 and base64, without archive
 extraction or any online dependency installation.
 
 prepare requires an OS-enforced container/namespace/AppContainer/Windows Sandbox
-environment. A plain host Python subprocess is explicitly unavailable. The
+environment. A plain host Python subprocess is explicitly unavailable. The MVP
+also admits an explicitly registered `shared-host-gpu` environment when the
+target is a GPU, `policy.allowSharedHostGpu=true`, and
+`policy.packageBoundary=adapter-enforced`. This shared, non-isolated
+development mode is never publishable evidence. The
 trusted adapter must perform target build/load checks within its deadline and
 return matching content identities plus resourceRelease.confirmed=true.
 Admission records are stored outside the Mission Workspace and cannot be replaced

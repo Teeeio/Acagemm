@@ -87,3 +87,10 @@ local-c500-no-hardware-guard and local-c500-simulation-artifact tests. The recov
 test uses real bounded Node CPU workers, a descendant tree and actual parent
 process exit; it invokes no Python/GPU/Agent. CPU fixture E2E separately exercises
 the strict Python runner through the production queue.
+
+When the runtime selects `local-shared-gpu`, the composition root injects a
+trusted package resolver. Submissions must carry a current package admission;
+the resolver verifies the prepared artifact digest and materializes only files
+from that adapter-owned package directory into the task workspace. Raw host
+paths are never passed to the runner. Shared-GPU results are live development
+evidence and remain non-publishable because the host GPU is shared.

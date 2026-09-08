@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const smokeRoot = path.join(rootDir, 'runtime', `smoke-${process.pid}`);
+// Use a disposable system temp root so the smoke server does not depend on
+// repository runtime ACLs on managed Windows workspaces.
+const smokeRoot = await mkdtemp(path.join(os.tmpdir(), 'operator-smoke-'));
 const port = 4199;
 const testServicePort = 4200;
 const baseUrl = `http://127.0.0.1:${port}`;

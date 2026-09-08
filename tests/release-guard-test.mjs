@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const testRoot = path.join(rootDir, 'runtime', `release-guard-${process.pid}`);
+// Keep the fixture outside the repository runtime tree.  Some managed Windows
+// workspaces deny child-process directory creation there; the test only needs
+// an isolated, disposable root and must not depend on repository ACLs.
+const testRoot = await mkdtemp(path.join(os.tmpdir(), 'operator-release-guard-'));
 const cliRoot = path.join(testRoot, 'cli');
 const bridgeDir = path.join(testRoot, 'bridge');
 const dataDir = path.join(testRoot, 'data');

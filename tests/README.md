@@ -136,3 +136,10 @@ in non-hardware verification, not as GPU or strong-isolation evidence. CPU fixtu
 must provide a separate oracle and a complete exact testSpec; malformed matrices
 cannot be normalized into success. Real Codex acceptance remains opt-in and is not
 satisfied by these fixtures.
+
+`shared-gpu-runtime-test` is a read-only capability/policy contract test.
+`e2e:shared-gpu` and `e2e:shared-gpu-service` are opt-in checks for the local
+NVIDIA adapter and its production queue supervisor. They require the F-drive
+CUDA environment, execute real GPU correctness/benchmark work, and mark every
+observation non-publishable. They are intentionally excluded from hardware-free
+release gates.

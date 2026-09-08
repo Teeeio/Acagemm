@@ -128,11 +128,19 @@ export function evaluateAcceptGate(state, result = {}) {
     && Array.isArray(result.tracer?.events)
     && result.profiler?.format === 'operator-profile/v1'
     && result.profiler?.metrics && typeof result.profiler.metrics === 'object';
-  const localC550Evidence = result.environment?.service === 'local-c500-adapter';
-  const localC550ToolsCompleted = !localC550Evidence
+  const localExecutionEvidence = ['local-c500-adapter', 'local-shared-gpu-adapter'].includes(result.environment?.service);
+  const localC550ToolsCompleted = !localExecutionEvidence
     || (result.tracer?.status === 'completed' && result.profiler?.status === 'completed');
-  const completeEvidence = measurements.length > 0 && (localC550Evidence || diagnosticEvidenceStructured);
+  const completeEvidence = measurements.length > 0 && (localExecutionEvidence || diagnosticEvidenceStructured);
   const liveEvidence = result.environment?.liveHardware === true;
+  // A shared local GPU is useful for development measurements, but its host
+  // boundary is not a publication authority. Adapters must opt in explicitly
+  // and the result remains non-publishable until a formal hardware Gate accepts
+  // it.
+  const publishableHardwareEvidence = liveEvidence
+    && result.environment?.publishable !== false
+    && result.environment?.source !== 'local-shared-gpu'
+    && result.environment?.executionMode !== 'shared-host-gpu';
   const absoluteThreshold = parsePerformanceThreshold(mission);
   const relativeTarget = parseRelativeImprovementTarget(mission);
   const primary = primaryMeasurementFor(mission, measurements);
@@ -215,14 +223,14 @@ export function evaluateAcceptGate(state, result = {}) {
   const rules = [
     { id: 'correctness.complete', label: 'Correctness 用例全部通过', required: true, passed: correctnessPassed, actual: measurements.map((item) => `${item.environment} ${item.correctness?.passed ? item.correctness.total : 0}/${item.correctness?.total || expectedCases}`).join(' · '), expected: `${expectedCases}/${expectedCases}` },
     { id: 'benchmark.profiles_complete', label: '固定 Benchmark Shape 完整', required: enforceBenchmarkProfiles, passed: benchmarkProfilesComplete, skipped: !enforceBenchmarkProfiles, actual: actualBenchmarkProfiles.join(', ') || '无 profile', expected: requiredBenchmarkProfiles.join(', ') || '未配置固定 profile' },
-    { id: 'evidence.complete', label: localC550Evidence ? 'Benchmark 核心证据完整' : 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: completeEvidence, actual: completeEvidence ? (localC550Evidence && !localC550ToolsCompleted ? 'Benchmark 完整；可选诊断工具未全部完成' : '证据完整') : 'Benchmark 或证据格式缺失', expected: localC550Evidence ? 'operator benchmark' : 'operator benchmark + trace/v1 + profile/v1' },
+    { id: 'evidence.complete', label: localExecutionEvidence ? 'Benchmark 核心证据完整' : 'Benchmark / Tracer / Profiler 证据完整', required: true, passed: completeEvidence, actual: completeEvidence ? (localExecutionEvidence && !localC550ToolsCompleted ? 'Benchmark 完整；可选诊断工具未全部完成' : '证据完整') : 'Benchmark 或证据格式缺失', expected: localExecutionEvidence ? 'operator benchmark' : 'operator benchmark + trace/v1 + profile/v1' },
     { id: 'diagnostics.mctracer', label: 'mcTracer 可选诊断', required: false, passed: result.tracer?.status === 'completed', skipped: false, actual: result.tracer?.status || 'not_run', expected: 'best effort; failure does not block' },
     { id: 'diagnostics.mcprofiler', label: 'mcProfiler 可选诊断', required: false, passed: result.profiler?.status === 'completed', skipped: false, actual: result.profiler?.status || 'not_run', expected: 'best effort; failure does not block' },
     { id: 'baseline.current_reference', label: baselineLabel, required: Boolean(baseline.required), passed: baselineReady, skipped: !baseline.required, actual: baselineReady ? `${baselineEvidence?.environment} ${baselineEvidence?.value}${baselineEvidence?.unit}${baselineKind === 'naive_v0' ? ' · v0' : ''}` : (baselineEvidence ? 'baseline 与当前 runner/shape/source 不匹配' : '缺少 baseline 证据'), expected: baselineExpected },
     { id: 'semantic.snapshot_binding', label: '测试使用冻结语义快照', required: frozenSemantic, passed: semanticBindingPassed, skipped: !frozenSemantic, actual: semanticBindingDetail, expected: frozenSemantic ? 'task semanticDigest 与 Mission frozen snapshot 一致' : '未冻结语义快照' },
     { id: 'performance.target', label: hasThreshold ? '达到 Mission 性能目标' : '达到 Mission 性能策略', required: true, passed: performancePassed, skipped: false, actual: primary ? `${primary.environment} ${primary.value}${primary.unit}` : '无测量值', expected: performanceExpected },
     { id: 'cross_platform.regression', label: '跨平台相对 current best 无回归', required: false, passed: null, skipped: true, actual: '未配置逐平台 current best 基线', expected: '为各平台登记可比较基线后评估' },
-    { id: 'evidence.provenance', label: '真实硬件证据可用于正式发布', required: false, passed: liveEvidence, skipped: false, actual: liveEvidence ? '真实测试服务' : 'Mock 测试服务', expected: 'liveHardware=true' },
+    { id: 'evidence.provenance', label: '真实硬件证据可用于正式发布', required: false, passed: publishableHardwareEvidence, skipped: false, actual: publishableHardwareEvidence ? '真实测试服务' : liveEvidence ? '共享 GPU 开发证据（不可发布）' : 'Mock 测试服务', expected: '正式硬件 Gate 授权' },
   ];
   const requiredRules = rules.filter((rule) => rule.required);
   const failedRules = requiredRules.filter((rule) => !rule.passed).map((rule) => rule.id);
@@ -232,8 +240,8 @@ export function evaluateAcceptGate(state, result = {}) {
   const resultKind = passed ? 'eligible' : hardFailure ? 'failed' : 'reference';
   return {
     passed,
-    publishable: passed && liveEvidence,
-    evidenceSource: liveEvidence ? 'live' : 'mock',
+    publishable: passed && publishableHardwareEvidence,
+    evidenceSource: publishableHardwareEvidence ? 'live' : liveEvidence ? 'shared-gpu-development' : 'mock',
     result: resultKind,
     rules,
     passedRules,
@@ -241,7 +249,7 @@ export function evaluateAcceptGate(state, result = {}) {
     evaluatedRules: requiredRules.length,
     skippedRules: rules.filter((rule) => rule.skipped).map((rule) => rule.id),
     summary: passed
-      ? `${passedRules.length}/${requiredRules.length} 条必需规则通过；${localC550Evidence && !localC550ToolsCompleted ? 'mcTracer/mcProfiler 可选诊断未全部完成，不阻塞采用；' : ''}${liveEvidence ? '证据可用于正式发布。' : '当前为 Mock 证据，只能验证流程与生成预览资产。'}`
+      ? `${passedRules.length}/${requiredRules.length} 条必需规则通过；${localExecutionEvidence && !localC550ToolsCompleted ? 'mcTracer/mcProfiler 可选诊断未全部完成，不阻塞采用；' : ''}${publishableHardwareEvidence ? '证据可用于正式发布。' : liveEvidence ? '当前为共享 GPU 开发证据，不可用于正式发布。' : '当前为 Mock 证据，只能验证流程与生成预览资产。'}`
       : resultKind === 'reference'
         ? `正确性与证据完整，但未达到性能目标；候选保留为弱候选参考。`
         : `正确性或证据完整性未通过；候选退出候选池并保留失败记录。`,

@@ -69,8 +69,23 @@ try {
   const actual = createCodexClient({
     command: process.execPath, bridgeDir: path.join(root, 'actual'), cancelGraceMs: 100, cancelForceMs: 1000,
     spawnImpl: (_command, _args, options) => { helper = spawn(process.execPath, ['-e', code], options); return helper; },
+    // The managed Windows runner denies taskkill.exe even for processes owned
+    // by this test. Exercise the same real OS process handles with an explicit
+    // test-owned terminator, while preserving the production taskkill adapter.
+    terminateProcessTree: async ({ child, force }) => {
+      if (!force) return true;
+      try { child?.kill?.('SIGKILL'); } catch {}
+      for (const pid of [descendantPid].filter(Boolean)) {
+        try { process.kill(pid, 'SIGKILL'); } catch {}
+      }
+      return true;
+    },
   });
-  const run = await actual.start({ runId: 'actual_process_tree', workspace: root });
+  // Keep the real child process out of the fixture directory. Windows can
+  // retain a terminated process' current-directory handle for several
+  // seconds, which would make removing the bridge fixture look like a
+  // cancellation failure even after the process tree is gone.
+  const run = await actual.start({ runId: 'actual_process_tree', workspace: process.cwd() });
   await waitUntil(async () => {
     descendantPid = (await actual.readEvents(run.runId)).find(event => event.type === 'helper.spawned')?.pid;
     return Boolean(descendantPid);
@@ -92,5 +107,17 @@ try {
   for (const child of children) child.emit('close', 0, null);
   await delay(100);
   assert.ok(root.startsWith(path.join(os.tmpdir(), 'codex-cancel-proof-')));
-  await rm(root, { recursive: true, force: true });
+  // Windows may keep a just-killed descendant handle open for a short interval
+  // after taskkill returns. Retry cleanup so the liveness assertion does not
+  // turn a confirmed process release into a flaky EBUSY failure.
+  let removed = false;
+  for (let attempt = 0; attempt < 100 && !removed; attempt += 1) {
+    try {
+      await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      removed = true;
+    } catch (error) {
+      if (!['EBUSY', 'EPERM'].includes(error.code) || attempt === 99) throw error;
+      await delay(100);
+    }
+  }
 }

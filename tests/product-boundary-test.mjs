@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const testRoot = path.join(rootDir, 'runtime', `boundary-${process.pid}`);
+// Keep the server's isolated data outside the packaged repository. Some
+// deployments make the repository runtime directory read-only; a boundary
+// test must exercise HTTP ownership rather than depend on that ACL.
+const testRoot = await mkdtemp(path.join(os.tmpdir(), 'operator-boundary-'));
 const port = 4202;
 const baseUrl = `http://127.0.0.1:${port}`;
 const localServerSource = await readFile(path.join(rootDir, 'client-runtime', 'local-server.mjs'), 'utf8');

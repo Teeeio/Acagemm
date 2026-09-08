@@ -94,6 +94,18 @@ const liveGate = evaluateAcceptGate(liveState, result({ liveHardware: true }));
 assert.equal(liveGate.passed, true);
 assert.equal(liveGate.publishable, true);
 
+const sharedGpuState = createState();
+const sharedGpuGate = evaluateAcceptGate(sharedGpuState, {
+  ...result({ liveHardware: true }),
+  environment: {
+    runtime: 'local-shared-gpu-runner/v1', source: 'local-shared-gpu',
+    executionMode: 'gpu', liveHardware: true, publishable: false,
+  },
+});
+assert.equal(sharedGpuGate.passed, true, 'shared GPU measurements may still drive development iteration');
+assert.equal(sharedGpuGate.publishable, false, 'shared GPU evidence cannot authorize publication');
+assert.equal(sharedGpuGate.evidenceSource, 'shared-gpu-development');
+
 const incompleteLocalC500State = createState();
 const incompleteLocalC500Gate = evaluateAcceptGate(incompleteLocalC500State, {
   ...result({ liveHardware: true }),

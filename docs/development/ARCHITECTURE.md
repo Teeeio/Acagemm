@@ -37,6 +37,7 @@ The removed standalone local CLI workflow is not a supported architecture. New c
 | `client-runtime/state-snapshot-storage.mjs` | raw snapshot I/O and injected storage bootstrap | schema/version policy, workflow decisions |
 | `client-runtime/operator-test-queue.mjs` | serialized task lifecycle and queue persistence | Mission policy and UI |
 | `client-runtime/local-c500-service-client.mjs` | C550 task execution adapter and artifacts | Mission iteration decisions |
+| `tools/local-shared-gpu-runner.py` | opt-in shared-host NVIDIA execution adapter and GPU timing | Mission policy, queue ownership, publication decisions |
 | `client-runtime/workspace-manager.mjs` | isolated workspace, Diff, checkpoint and restore | Gate decisions |
 | `client-runtime/local-server.mjs` | API bootstrap and application orchestration | duplicated domain rules |
 | `client-runtime/application` | transport-neutral use-case orchestration and injected effect ports | HTTP formatting, TUI rendering |

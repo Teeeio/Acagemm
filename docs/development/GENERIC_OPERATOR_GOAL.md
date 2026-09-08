@@ -2,7 +2,9 @@
 
 ## Consensus (2026-09-07, resumed after explicit user confirmation)
 
-- Deliver a real Codex + local CPU iteration path for non-preset operators.
+- Deliver a real Codex + local test iteration path for non-preset operators;
+  the MVP prefers the available local shared GPU when its language/runtime
+  adapter is installed, and keeps CPU as a deterministic fallback.
 - The application calls one asynchronous test tool; local and future remote
   queues implement its backend contract. Do not introduce another scheduler.
 - A submission is an immutable layered execution package: candidate source and
@@ -20,6 +22,10 @@
   unavailable or mock and cannot fabricate diagnostic conclusions.
 - Human guidance and execution observations are versioned, scoped, auditable,
   and reusable across admitted Missions. They do not authorize GPU publication.
+- Shared-host GPU execution is an explicit development policy, not an isolation
+  boundary. It requires a trusted environment declaration and adapter-enforced
+  package boundaries; its observations remain non-publishable until a formal
+  hardware Gate accepts them.
 
 ## Preserved invariants
 
@@ -31,8 +37,10 @@
 - Agent writes only in the active isolated Mission Workspace.
 - CPU-E2E/simulation evidence never becomes publishable live GPU evidence.
 - Existing uncommitted changes and unrelated temporary JSON files are preserved.
-- No Git commit, global Agent configuration change, secrets in reports, live GPU,
-  actual cloud service connection, or real profiler/tracer collection.
+- No Git commit, global Agent configuration change, secrets in reports, actual
+  cloud service connection, or real profiler/tracer collection. A shared local
+  GPU may be used for MVP development, but its evidence is explicitly marked
+  non-publishable.
 
 ## Work packages and verification
 
@@ -65,8 +73,9 @@
 - No weakening tests to make an optimization succeed; lack of speedup is a valid
   iteration outcome, not proof the workflow is broken.
 - Cached dependencies/builds are not evidence of a new benchmark measurement.
-- Native/GPU adapters, full environment-build platforms, registries, multi-tenant
-  scheduling and major GUI work are deferred; contract substitution is in scope.
+- Full environment-build platforms, registries, multi-tenant scheduling and
+  major GUI work are deferred. The first native local-GPU adapter is in scope;
+  cloud and other accelerator adapters continue to use the same tool contract.
 
 ## Trace and current state
 
@@ -75,8 +84,9 @@
 - User refined the dependency/validation/multi-language contract and explicitly
   requested resumption. This record supplements the original Goal objective.
 - Current stage: foundation implementation and full regressions have passed;
-  production package acceptance awaits an authorized local isolation entry and
-  remaining package/tool/generic-entry integration.
+  the package store now accepts an explicitly trusted shared-host-GPU policy;
+  production package acceptance still awaits the native adapter, package/tool
+  wiring and generic-entry integration.
 - Addressed in focused tests: slow request bodies outside the state lock; bounded
   transport/queue calls; durable execution claims and cancellation; strict CPU
   oracle/cases/profiles; generic Mission operator/hardware retention; complete
@@ -97,16 +107,16 @@
 
 ## Implementation checkpoint (2026-09-07, UTC+8)
 
-This checkpoint is NOT completion of the generic-operator Goal.
+This checkpoint records the shared-GPU package path; it is NOT completion of the generic-operator Goal.
 
 | Requirement | Implemented / verified foundation | Still required for product acceptance |
 |---|---|---|
-| T1-T2 | Language-neutral layered manifests; actual blob/hash/path checks; private CAS; trusted, expiring admission; bounded preparation and restart quarantine; interchangeable tool backend contracts | A real OS-isolated Python/CPU adapter and locked environment layers; package/tool production wiring and execution-time admission verification |
-| T3 | Strict CPU runner with independent oracle, exact cases/profiles/tolerances; local serialized queue with durable supervisor ownership and atomic terminal outcomes | Execute the new closed packages through the isolated adapter, including offline transitive dependencies and prohibited host/network access |
+| T1-T2 | Language-neutral layered manifests; actual blob/hash/path checks; private CAS; trusted, expiring admission; bounded preparation and restart quarantine; interchangeable tool backend contracts; explicit shared-host-GPU policy | Strong OS isolation and additional language adapters |
+| T3 | Strict CPU runner with independent oracle, exact cases/profiles/tolerances; local serialized queue with durable supervisor ownership and atomic terminal outcomes; shared-GPU package adapter validates Python sources and executes only prepared package files | Execute closed packages through an isolated adapter when available, including native/offline transitive dependencies |
 | T4 | Generic Mission operator/hardware retained; fixed Profile identity takes precedence; CPU provenance cannot become live GPU evidence | Formal generic TUI/API package import and at least three non-preset operator families through the complete workflow |
-| T5 | Bounded HTTP bodies/transport; lock-free committed GET/SSE; nonblocking queue dispatch; safe idempotency/restart/cancellation; whole-pipeline guards; 15-minute round clock shared by retries and pause/resume | Integrated fault injection against the real isolated package execution backend; unknown provider start effects still require explicit inspection rather than blind replay |
+| T5 | Bounded HTTP bodies/transport; lock-free committed GET/SSE; nonblocking queue dispatch; safe idempotency/restart/cancellation; whole-pipeline guards; 15-minute round clock shared by retries and pause/resume | Integrated fault injection against the real package execution backend; unknown provider start effects still require explicit inspection rather than blind replay |
 | T6 | Versioned human guidance API, immutable history, scoped per-round context, validated prompt injection, terminal collection hook and observable failures | Production verification receipts from the new package backend; legacy evidence is deliberately skipped, not synthesized |
-| T7 | Focused module and fake-provider/real-CPU probes; final release 114 checks and non-hardware 28 checks PASS | The separately authorized real Codex + isolated CPU batch and complete product acceptance |
+| T7 | Focused module and fake-provider/real-CPU/shared-GPU probes; final release 117 checks and non-hardware 28 checks PASS | The separately authorized real Codex + isolated CPU batch and complete product acceptance |
 
 Production human experience API:
 
@@ -175,19 +185,23 @@ F:/Python312/python.exe but no docker, podman or nerdctl command and no register
 WSL distribution in the current-user registry. No usable OS-isolated execution
 environment has been supplied. An attempted WSL listing was not executed because
 approval review timed out; no installer, OS feature, VM or cloud service was started.
+The user has since authorized the local shared-GPU MVP policy, so OS isolation is
+no longer a prerequisite for development; the native adapter must still enforce
+package-only paths and record the weaker boundary explicitly.
 
-Static import checks and an ordinary Python subprocess cannot enforce the agreed
-package-only execution boundary. The package store rejects non-isolated admission
-with EXECUTION_ISOLATION_UNAVAILABLE. Real Codex acceptance has not been launched;
-passing the legacy CPU fixture is not evidence that the new package path works.
+Static import checks and an ordinary Python subprocess cannot enforce a strong
+package-only execution boundary. The package store therefore admits only the
+explicit `shared-host-gpu` policy for the MVP, with
+`policy.packageBoundary=adapter-enforced`; ordinary non-GPU host execution remains
+rejected. Real native GPU acceptance has not been launched; passing the legacy CPU
+fixture is not evidence that the new package path works.
 
-A usable local isolation entry point, or explicit authority to configure one, is
-needed before the remaining isolated adapter/production integration can be closed.
+A native local-GPU adapter and its locked runtime declaration are needed before
+the remaining package/tool production integration can be closed.
 Do not loosen this consensus or claim the Goal complete to bypass that dependency.
 
-The Goal tool still reports paused. It exposes no resume operation to the agent;
-work has continued under the user's explicit resume instruction without creating
-a second Goal or falsely setting the original to complete.
+The Goal tool is active for the resumed mainline. This checkpoint remains
+incomplete until the native adapter, production wiring and real acceptance pass.
 
 ## Final regression evidence (2026-09-07, UTC+8)
 
@@ -213,14 +227,15 @@ CPU fixture Mission: MIS_MTQB6E5D; Candidate: candidate-02.
 The tested Candidate digest matched its Mission Workspace. Its one exact
 small-vector case passed with atol=0 and rtol=0; Gate returned adopt. This was
 Reference Fixture generation plus real Python, source=cpu-e2e and
-liveHardware=false. It is not a three-family real Codex acceptance run and
-does not verify the new execution-package or OS-isolation path. The harness
+liveHardware=false. Shared-GPU service E2E also completed package assembly,
+admission verification, prepared-artifact checks, real CUDA correctness and
+benchmark; its evidence is explicitly non-publishable. It is not a three-family
+real Codex acceptance run and does not verify OS isolation. The harness
 cleaned its temporary Runtime/Workspace in finally; the console and summary,
 not those temporary workspaces, are retained here.
 
-Loop status: environment/authority decision required, NOT Goal completion.
-The next implementation sequence remains: authorized isolation entry and locked
-CPU adapter -> package/tool wiring into the existing queue and generic TUI/API
-import -> trusted experience receipts -> retained three-family real Codex +
-isolated CPU acceptance and integrated fault injection. Do not substitute
-contract doubles or the legacy CPU fixture for those acceptance conditions.
+Loop status: continue, NOT Goal completion.
+The next implementation sequence is: generic TUI/API package import -> trusted
+experience receipts -> retained three-family real Codex acceptance and integrated
+fault injection. Do not substitute contract doubles or the legacy CPU fixture for
+those acceptance conditions.

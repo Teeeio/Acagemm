@@ -47,6 +47,19 @@ const atomicJson = async (file, value) => {
 };
 const parse = async (file) => JSON.parse(await readRegular(file));
 
+// MVP-only execution policy. A shared host GPU is deliberately opt-in and is
+// never treated as an isolation boundary or publishable hardware evidence.
+const hasAdmittedExecutionBoundary = (environment, target) => {
+  const kind = environment?.isolation?.kind;
+  if (environment?.isolation?.enforced === true
+    && ['container', 'namespace', 'appcontainer', 'windows-sandbox'].includes(kind)) return true;
+  return kind === 'shared-host-gpu'
+    && environment?.isolation?.enforced === false
+    && environment?.policy?.allowSharedHostGpu === true
+    && target?.device === 'gpu'
+    && environment?.policy?.packageBoundary === 'adapter-enforced';
+};
+
 const inspectWithin = async (query, timeoutMs = 5000) => {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw fail('PACKAGE_INSPECTION_TIMEOUT', 'Inspection deadline has expired.');
   const controller = new AbortController();
@@ -168,8 +181,8 @@ export const createExecutionPackageStore = ({ rootDir, environments, adapters, n
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 120000) throw fail('PACKAGE_PREPARE_LIMIT_INVALID', 'Preparation needs a positive deadline no longer than 120 seconds.');
     const { manifest, environment, testSpec } = await validate(packageDigest);
     const adapter = adapterFor(manifest);
-    if (environment.isolation?.enforced !== true || !['container', 'namespace', 'appcontainer', 'windows-sandbox'].includes(environment.isolation.kind)) {
-      throw fail('EXECUTION_ISOLATION_UNAVAILABLE', 'Target lacks enforced OS-level package isolation. Configure an admitted local environment; ordinary Python is not a sandbox.');
+    if (!hasAdmittedExecutionBoundary(environment, manifest.target)) {
+      throw fail('EXECUTION_ISOLATION_UNAVAILABLE', 'Target lacks an admitted execution boundary. A shared host GPU requires explicit trusted policy and adapter-enforced package boundaries.');
     }
     const recordPath = named('preparations', packageDigest);
     const startedAt = now().toISOString();
@@ -270,7 +283,7 @@ export const createExecutionPackageStore = ({ rootDir, environments, adapters, n
     if (preparation.status !== 'ready' || preparation.preparationId !== admission.preparationId
       || preparation.admissionId !== request.admissionId || preparation.resourceRelease?.confirmed !== true) throw fail('PACKAGE_NOT_ADMITTED', 'Admission preparation was superseded or is no longer ready.');
     const adapter = adapterFor(manifest);
-    if (environment.isolation?.enforced !== true || !['container', 'namespace', 'appcontainer', 'windows-sandbox'].includes(environment.isolation.kind)) throw fail('EXECUTION_ISOLATION_UNAVAILABLE', 'Target OS isolation is no longer enforced.');
+    if (!hasAdmittedExecutionBoundary(environment, manifest.target)) throw fail('EXECUTION_ISOLATION_UNAVAILABLE', 'Target execution boundary is no longer admitted.');
     const artifact = await inspectWithin((options) => adapter.verifyPreparedArtifact({ manifest, environment, preparedArtifactDigest: admission.preparedArtifactDigest, ...options }), Math.min(5000, Date.parse(request.deadline) - now().getTime()));
     if (artifact?.valid !== true) throw fail('PACKAGE_PREPARED_ARTIFACT_CHANGED', 'Admitted preparation artifact changed.');
     assertAdmissionBinding({ request, manifest, admission, nowMs: now().getTime() });

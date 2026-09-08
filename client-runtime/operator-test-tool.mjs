@@ -43,6 +43,7 @@ export const createOperatorTestTool = ({ backend, packages, requestTimeoutMs = 5
   return Object.freeze({
     capabilities, submit,
     prepare: (...args) => packages.prepare(...args),
+    ...(typeof backend.advance === 'function' ? { advance: (taskId) => call('advance', [taskId]) } : {}),
     get: (taskId) => call('get', [taskId]),
     cancel: (taskId) => call('cancel', [taskId]),
     findByRequestId: (requestId, missionId, expectedPayload) => call('findByRequestId', [requestId, missionId, expectedPayload]),

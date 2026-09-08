@@ -14,6 +14,8 @@ const childEnvironment = {
 const checks = [
   'test:execution-package-contract',
   'test:execution-package-store',
+  'test:shared-gpu-runtime',
+  'test:shared-gpu-package-adapter',
   'test:experience-service',
   'test:experience-api-service',
   'test:round-experience-service',

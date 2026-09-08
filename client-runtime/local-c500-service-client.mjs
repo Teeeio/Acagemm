@@ -7,10 +7,14 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundledRunner = path.join(rootDir, 'tools', 'local-c500-runner.py');
+const sharedGpuRunner = path.join(rootDir, 'tools', 'local-shared-gpu-runner.py');
 const runtimeDir = process.env.OPERATOR_RUNTIME_DIR ? path.resolve(process.env.OPERATOR_RUNTIME_DIR) : path.join(rootDir, 'runtime');
 const taskRoot = process.env.OPERATOR_LOCAL_C500_DIR ? path.resolve(process.env.OPERATOR_LOCAL_C500_DIR) : path.join(runtimeDir, 'local-c500');
-const commandTemplate = process.env.OPERATOR_LOCAL_C500_COMMAND || 'python "' + bundledRunner + '"';
-const explicitRunnerCommand = Boolean(process.env.OPERATOR_LOCAL_C500_COMMAND);
+const sharedGpuEnabled = process.env.OPERATOR_TEST_BACKEND === 'local-shared-gpu';
+const sharedGpuPython = process.env.OPERATOR_GPU_PYTHON || path.join(rootDir, '.gpu-venv', 'Scripts', 'python.exe');
+const commandTemplate = process.env.OPERATOR_LOCAL_C500_COMMAND
+  || (sharedGpuEnabled ? `"${sharedGpuPython}" "${sharedGpuRunner}"` : 'python "' + bundledRunner + '"');
+const explicitRunnerCommand = Boolean(process.env.OPERATOR_LOCAL_C500_COMMAND) || sharedGpuEnabled;
 const mockEnabled = process.env.OPERATOR_LOCAL_C500_MOCK === '1';
 const cpuE2eEnabled = process.env.OPERATOR_LOCAL_CPU === '1';
 const hardwareDisabled = process.env.OPERATOR_HARDWARE_DISABLED === '1';
@@ -55,7 +59,21 @@ const atomicJson = async (filename, value) => {
   const temporary = filename + '.' + process.pid + '.' + randomUUID() + '.tmp';
   try {
     await writeFile(temporary, JSON.stringify(value, null, 2) + '\n', 'utf8');
-    await rename(temporary, filename);
+    // A restarted supervisor can still have the target opened while the
+    // current owner persists a reconciled snapshot. Windows reports that
+    // short overlap as EPERM/EBUSY; bounded replacement retries preserve the
+    // atomic-write contract without turning a transient handle into a stuck
+    // task.
+    let replaced = false;
+    for (let attempt = 0; attempt < 12 && !replaced; attempt += 1) {
+      try {
+        await rename(temporary, filename);
+        replaced = true;
+      } catch (error) {
+        if (!['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || attempt === 11) throw error;
+        await pause(25 * (attempt + 1));
+      }
+    }
   } finally { await rm(temporary, { force: true }).catch(() => {}); }
 };
 const withTaskLock = async (taskId, operation) => {
@@ -117,7 +135,11 @@ const taskView = (task) => structuredClone({
 });
 const taskIdFor = (requestId, missionId) => 'local_c500_' + createHash('sha256').update(JSON.stringify([missionId || null, requestId])).digest('hex').slice(0, 32).toUpperCase();
 const assertRequest = (task, payload) => {
-  if (payload && !isDeepStrictEqual(task.payload, JSON.parse(JSON.stringify(payload)))) {
+  const submitted = structuredClone(task.submissionPayload || task.payload);
+  // The test tool adds this trusted transport field after the queue freezes its
+  // request. It must not make read-only lost-response reconciliation conflict.
+  if (submitted?.packageDigest && payload && !Object.hasOwn(payload, 'preparedArtifactDigest')) delete submitted.preparedArtifactDigest;
+  if (payload && !isDeepStrictEqual(submitted, JSON.parse(JSON.stringify(payload)))) {
     throw fail('Local task request ID is already bound to different content.', 'OPERATOR_TEST_REQUEST_CONFLICT', 409);
   }
 };
@@ -200,6 +222,7 @@ const prepareArtifacts = async (task) => {
   await writeFile(runPyPath(task.taskId), task.payload.runPy, 'utf8');
   if (task.payload.oracleRunPy) await writeFile(oracleRunPyPath(task.taskId), task.payload.oracleRunPy, 'utf8');
   for (const [filename, content] of Object.entries(task.payload.implementationFiles || {})) {
+    await mkdir(path.dirname(artifactPath(task.taskId, filename)), { recursive: true });
     await writeFile(artifactPath(task.taskId, filename), content, 'utf8');
   }
   return { ...task, artifactsReady: true, status: 'waiting' };
@@ -289,22 +312,30 @@ const startTask = async (task, cancelStepMs) => {
   return execution.started;
 };
 
-export const createLocalC500ServiceClient = ({ root = taskRoot, cancelStepMs = 500, cancelTimeoutMs = 3_000 } = {}) => {
+export const createLocalC500ServiceClient = ({ root = taskRoot, cancelStepMs = 500, cancelTimeoutMs = 3_000, packageResolver = null } = {}) => {
   if (root !== taskRoot) throw new Error('Local C550 client root override is not supported after runtime startup.');
   const stepLimit = Math.max(10, Number(cancelStepMs) || 500);
   const cancelLimit = Math.max(10, Number(cancelTimeoutMs) || 3_000);
   const submit = async (payload) => {
     if (!payload?.operator || !payload?.candidate?.digest) throw fail('Local C550 task requires operator and candidate.digest.', 'OPERATOR_TEST_TASK_INVALID');
     if (!Array.isArray(payload.matrix?.environments) || !payload.matrix.environments.length) throw fail('Local C550 task requires matrix.environments.', 'OPERATOR_TEST_TASK_INVALID');
-    if (!payload.runPy) throw fail('The production Mission workspace did not provide generated run.py content.', 'LOCAL_C500_ARTIFACT_MISSING', 409);
-    const frozen = JSON.parse(JSON.stringify(payload));
+    const submissionPayload = JSON.parse(JSON.stringify(payload));
+    let sourcePayload = submissionPayload;
+    if (sharedGpuEnabled && packageResolver) {
+      if (!payload.packageDigest || !payload.admissionId) throw fail('Shared-GPU execution requires a validated execution package admission.', 'PACKAGE_NOT_ADMITTED', 409);
+      sourcePayload = await packageResolver(structuredClone(submissionPayload));
+      if (!sourcePayload?.runPy || !sourcePayload?.oracleRunPy) throw fail('Prepared execution package is missing candidate or acceptance entrypoints.', 'PACKAGE_ENTRYPOINT_INVALID', 422);
+      sourcePayload = { ...submissionPayload, ...sourcePayload };
+    }
+    if (!sourcePayload.runPy) throw fail('The production Mission workspace did not provide generated run.py content.', 'LOCAL_C500_ARTIFACT_MISSING', 409);
+    const frozen = JSON.parse(JSON.stringify(sourcePayload));
     frozen.requestId ||= 'local_request_' + randomUUID();
     const taskId = taskIdFor(frozen.requestId, frozen.missionId);
     const scripted = isScriptedSequenceTask({ payload: frozen });
     if (scripted && !frozen.missionId) throw fail('Scripted MLA tasks require missionId.', 'OPERATOR_TEST_TASK_INVALID');
     if (scripted && frozen.purpose !== 'baseline' && !/^sha256:[a-f0-9]{64}$/.test(frozen.candidate.digest)) throw fail('Scripted MLA candidates require a real workspace diff digest.', 'LOCAL_C500_SCENARIO_DIFF_DIGEST_REQUIRED', 409);
     const reserved = new Set(['run.py', 'oracle.py', 'task.json', 'result.json', 'correctness.json', 'runner-status.json', 'metadata.lock']);
-    for (const [filename, content] of Object.entries(frozen.implementationFiles || {})) {
+    for (const [filename, content] of (sharedGpuEnabled && packageResolver ? [] : Object.entries(frozen.implementationFiles || {}))) {
       if (!filename || path.isAbsolute(filename) || filename.includes('..') || /[\\/\0<>:"|?*]/.test(filename)
           || filename !== filename.trim() || /[. ]$/.test(filename) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(filename)
           || reserved.has(filename.toLowerCase()) || /^(execution-|cancel-request|runner-supervisor|runner\.)/i.test(filename)) {
@@ -314,12 +345,13 @@ export const createLocalC500ServiceClient = ({ root = taskRoot, cancelStepMs = 5
     }
     const task = await withTaskLock(taskId, async () => {
       const existing = await readJson(taskPath(taskId));
-      if (existing) { assertRequest(existing, frozen); return existing; }
+      if (existing) { assertRequest(existing, submissionPayload); return existing; }
       const requestedMs = Number(frozen.limits?.timeoutSeconds) * 1000;
       const timeoutMs = Number.isFinite(requestedMs) && requestedMs > 0 ? requestedMs : 120_000;
       let created = {
         schemaVersion: 2, taskId, status: 'preparing', progress: 0, submittedAt: now(),
         deadlineAt: new Date(Date.now() + timeoutMs).toISOString(), payload: frozen,
+        ...(sharedGpuEnabled && packageResolver ? { submissionPayload } : {}),
         operator: frozen.operator, purpose: frozen.purpose, candidate: frozen.candidate, matrix: frozen.matrix,
         metric: frozen.metric, hardware: frozen.hardware, runPySource: frozen.runPySource || 'production-mission-workspace/run.py',
         runPyDigest: runPyDigestFor(frozen.runPy), mockScenario: iterativeMlaScenario ? mockScenario : null,
@@ -373,6 +405,13 @@ export const createLocalC500ServiceClient = ({ root = taskRoot, cancelStepMs = 5
     return taskView(task);
   };
   return {
+    capabilities: async () => ({
+      backendId: localC500Config.kind,
+      queryIsReadOnly: true,
+      idempotentSubmission: true,
+      targets: [{ platform: sharedGpuEnabled ? 'nvidia-cuda' : 'local-c500', device: sharedGpuEnabled ? 'gpu' : 'c550' }],
+      adapters: sharedGpuEnabled ? [{ id: 'python-shared-gpu', version: '1', languages: ['python'] }] : [],
+    }),
     submit, get, advance, cancel,
     findByRequestId: async (requestId, missionId, expectedPayload = null) => {
       const task = await readJson(taskPath(taskIdFor(requestId, missionId)));
@@ -388,12 +427,17 @@ export const createLocalC500ServiceClient = ({ root = taskRoot, cancelStepMs = 5
 };
 
 export const localC500Config = {
-  kind: 'local-c500', device: cpuE2eEnabled ? 'CPU' : process.env.OPERATOR_MUXI_DEVICE || 'C550',
-  enabled: process.env.OPERATOR_TEST_BACKEND === 'local-c500', simulation: simulationEnabled, mock: mockEnabled,
-  liveHardware: !mockEnabled && !cpuE2eEnabled,
-  executionMode: cpuE2eEnabled ? 'cpu-e2e' : simulationEnabled ? 'full-simulation' : mockEnabled ? 'hardware-mock' : 'real-c550',
-  taskRoot, commandConfigured: Boolean(commandTemplate), hardwareDisabled, scenario: iterativeMlaScenario ? mockScenario : null, bundledRunner,
+  kind: 'local-c500',
+  device: sharedGpuEnabled ? 'NVIDIA GPU' : cpuE2eEnabled ? 'CPU' : process.env.OPERATOR_MUXI_DEVICE || 'C550',
+  enabled: process.env.OPERATOR_TEST_BACKEND === 'local-c500' || sharedGpuEnabled,
+  simulation: simulationEnabled, mock: mockEnabled,
+  liveHardware: sharedGpuEnabled || (!mockEnabled && !cpuE2eEnabled),
+  executionMode: sharedGpuEnabled ? 'shared-host-gpu' : cpuE2eEnabled ? 'cpu-e2e' : simulationEnabled ? 'full-simulation' : mockEnabled ? 'hardware-mock' : 'real-c550',
+  publishable: sharedGpuEnabled ? false : true,
+  taskRoot, commandConfigured: Boolean(commandTemplate), hardwareDisabled, scenario: iterativeMlaScenario ? mockScenario : null,
+  bundledRunner: sharedGpuEnabled ? sharedGpuRunner : bundledRunner,
 };
+if (sharedGpuEnabled) localC500Config.kind = 'local-shared-gpu';
 
 const runPyDigestFor = (runPy) => `sha256:${createHash('sha256').update(String(runPy || '')).digest('hex')}`;
 
@@ -542,14 +586,46 @@ const finish = async (confirmed, reason) => {
     stdout: stdout.slice(-8192), stderr: stderr.slice(-8192), signalError,
   });
 };
+const forceStopTreeWithPowerShell = (pid) => new Promise((resolve) => {
+  // The PID is produced by Node and validated as an integer before it is
+  // interpolated. Keep this fallback narrow: it is only used when the normal
+  // taskkill adapter is unavailable (for example, a managed runner denies
+  // taskkill.exe). The recursive lookup is performed before stopping the root
+  // so descendants cannot outlive the task owner.
+  const numericPid = Number(pid);
+  if (!Number.isInteger(numericPid) || numericPid <= 0) return resolve(false);
+  const script = [
+    '$ErrorActionPreference = "Stop"',
+    '$source = \'using System; using System.Runtime.InteropServices; public static class OperatorParentProcess { [StructLayout(LayoutKind.Sequential)] struct PBI { public IntPtr Reserved1; public IntPtr PebBaseAddress; public IntPtr Reserved2_0; public IntPtr Reserved2_1; public IntPtr UniqueProcessId; public IntPtr InheritedFromUniqueProcessId; } [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid); [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle); [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr handle, int infoClass, ref PBI info, int length, out int returned); public static int GetParent(int pid) { IntPtr handle=OpenProcess(0x1000,false,pid); if(handle==IntPtr.Zero)return -1; try { PBI info=new PBI(); int returned; int status=NtQueryInformationProcess(handle,0,ref info,Marshal.SizeOf(info),out returned); return status==0 ? info.InheritedFromUniqueProcessId.ToInt32() : -2; } finally { CloseHandle(handle); } } }\'',
+    'Add-Type -TypeDefinition $source',
+    '$owned = [Collections.Generic.HashSet[int]]::new()',
+    'function Collect-Tree([int]$root) {',
+    '  if (-not $owned.Add($root)) { return }',
+    '  $children = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { [OperatorParentProcess]::GetParent($_.Id) -eq $root })',
+    '  foreach ($item in $children) { Collect-Tree $item.Id }',
+    '}',
+    'Collect-Tree ' + String(numericPid),
+    'foreach ($ownedPid in $owned) { Stop-Process -Id $ownedPid -Force -ErrorAction SilentlyContinue }',
+    'Start-Sleep -Milliseconds 60',
+    '$stillAlive = @($owned | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })',
+    'if ($stillAlive.Count -gt 0) { exit 17 }',
+  ].join('; ');
+  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
+    { windowsHide: true, timeout: 2_000, maxBuffer: 64 * 1024 }, (error) => resolve(!error));
+});
 const signalTree = (force) => new Promise((resolve) => {
   if (!child?.pid || closed && groupGone()) return resolve(true);
   if (closed) return resolve(false); // Never signal a PID after its owned child has exited.
   if (process.platform === 'win32') {
     execFile('taskkill.exe', ['/pid', String(child.pid), '/t', ...(force ? ['/f'] : [])],
-      { windowsHide: true, timeout: 1_000, maxBuffer: 64 * 1024 }, (error) => {
-        if (error) signalError = { code: error.code || 'PROCESS_TREE_SIGNAL_FAILED', message: error.message, timedOut: error.killed === true };
-        resolve(!error);
+      { windowsHide: true, timeout: 1_000, maxBuffer: 64 * 1024 }, async (error) => {
+        if (!error) return resolve(true);
+        signalError = { code: error.code || 'PROCESS_TREE_SIGNAL_FAILED', message: error.message, timedOut: error.killed === true };
+        // A hard fallback is preferable to leaving a claimed execution slot
+        // occupied forever. Its receipt retains signalError so callers can
+        // distinguish this development-environment path from taskkill.
+        const fallback = await forceStopTreeWithPowerShell(child.pid);
+        resolve(fallback);
       });
   } else {
     try { process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM'); resolve(true); }

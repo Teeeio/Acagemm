@@ -14,6 +14,7 @@ export const createBenchmarkCommands = ({
   missionShapeKeyFor,
   normalizeBaselineKind,
   operatorTestQueue,
+  prepareExecutionPackage = null,
   timeoutSeconds = 600,
   // Run IDs are derived from the durable command effect identity.
   readMissionRunPy,
@@ -59,7 +60,7 @@ export const createBenchmarkCommands = ({
       const candidateId = purpose === 'baseline' ? baselinePlan.candidateId : (body.candidate || state.appliedCandidateId);
       const appliedCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === candidateId);
       const baselineDigestSeed = baselinePlan?.digestSeed || '';
-      const candidateDigest = body.candidateDigest || appliedCandidate?.patchDigest || (purpose === 'baseline' ? `sha256:baseline-${hashKey(String(baselineDigestSeed))}` : null);
+      let candidateDigest = body.candidateDigest || appliedCandidate?.patchDigest || (purpose === 'baseline' ? `sha256:baseline-${hashKey(String(baselineDigestSeed))}` : null);
       if (!candidateDigest) {
         const error = new Error('候选缺少由真实工作区 Diff 生成的 digest，不能提交测试。');
         error.status = 409;
@@ -102,6 +103,24 @@ export const createBenchmarkCommands = ({
         ...(body.remoteCandidateId ? { remoteCandidateId: body.remoteCandidateId } : {}),
         ...(semanticBinding ? { semanticBinding } : {}),
       };
+      if (typeof prepareExecutionPackage === 'function') {
+        const packageBinding = await prepareExecutionPackage({
+          request: structuredClone(request),
+          mission,
+          matrix: normalizedMatrix,
+          missionRunPy,
+          purpose,
+          candidateId,
+        });
+        if (!packageBinding || typeof packageBinding !== 'object') {
+          const error = new Error('Execution package preparation did not return an admission binding.');
+          error.status = 409;
+          error.code = 'PACKAGE_PREPARATION_INVALID';
+          throw error;
+        }
+        Object.assign(request, packageBinding);
+        candidateDigest = request.candidate?.digest || candidateDigest;
+      }
       const submissionIntent = {
         runId, request,
         payload: { runId, purpose, baselineKind, baselineSource, baselineOracleRunPy: purpose === 'baseline' ? baselinePlan?.runPy || null : null, semanticBinding, baselineResolution: baselinePlan?.resolution || null, baselineMaterialization: baselinePlan?.materializationReport || null, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages },
@@ -119,7 +138,7 @@ export const createBenchmarkCommands = ({
         semanticBinding: payload.semanticBinding ? structuredClone(payload.semanticBinding) : null,
         candidate: { id: payload.candidateId, digest: payload.candidateDigest }, testTaskId: payload.taskId, result: null,
         source: {
-          kind: localC500Config.enabled ? 'local-c500-adapter' : 'operator-test-service',
+          kind: localC500Config.enabled ? `${localC500Config.kind || 'local-c500'}-adapter` : 'operator-test-service',
           transport: 'local-serial-queue',
           mock: localC500Config.enabled ? localC500Config.mock : true,
           liveHardware: localC500Config.enabled ? localC500Config.liveHardware === true : false,
