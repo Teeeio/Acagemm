@@ -13,6 +13,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exec = promisify(execFile);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const mode = process.env.E2E_AGENT_RUNTIME || 'codex-cli';
+// Keep live operator-generation acceptance on the cost-conscious GPT-5.6 Sol
+// tier by default; callers can override with GPT-5.5 or another approved model.
+const codexModel = process.env.OPERATOR_CODEX_MODEL || 'gpt-5.6-sol';
 const limit = Number(process.env.E2E_GPU_TIMEOUT_MS || 12 * 60_000);
 const families = (process.env.E2E_GPU_FAMILIES || 'affine,reduction,normalization').split(',');
 const desiredTasks = Number(process.env.E2E_GPU_CANDIDATE_TASKS || 2);
@@ -34,6 +37,7 @@ const writes = [];
 const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
   cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...process.env, API_PORT: String(port), SERVE_WEB: 'false', OPERATOR_RUNTIME_MODE: mode,
+    OPERATOR_CODEX_MODEL: codexModel,
     OPERATOR_AUTO_TICK: '1', OPERATOR_AUTO_TICK_INTERVAL_MS: '5000',
     OPERATOR_CODEX_LOGICAL_CLEANUP_MS: process.env.OPERATOR_CODEX_LOGICAL_CLEANUP_MS || '60000',
     OPERATOR_MAIN_AGENT_BUDGET_MS: '180000', OPERATOR_TEST_BACKEND: 'local-shared-gpu',

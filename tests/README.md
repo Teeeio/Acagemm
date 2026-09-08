@@ -131,6 +131,12 @@ model. agent-cancellation-liveness-test and generic-runtime-safety-test enforce
 resource barriers and budget-before-dispatch behavior. HTTP request/client tests
 use memory streams and loopback servers only.
 
+`generic-iteration-fault-injection-test` integrates these boundaries through the
+production queue/tool contracts. It injects package-inspection timeout, lost
+submit response, structured runner failure, cancellation without release proof,
+and command-journal acknowledgement loss; every case must converge without
+duplicate execution or false terminal evidence.
+
 local-cpu-runner-test executes bounded Python CPU subprocesses. It runs explicitly
 in non-hardware verification, not as GPU or strong-isolation evidence. CPU fixtures
 must provide a separate oracle and a complete exact testSpec; malformed matrices

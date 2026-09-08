@@ -158,6 +158,33 @@ try {
   assert.equal(projected.state.agent.phase, 'Codex 分析完成，未生成候选');
   assert.equal(projected.state.runtimeEvents.filter((event) => event.type === 'candidate.not_proposed').length, 1);
 
+  // Model selection is deterministic: explicit options.model wins over
+  // OPERATOR_CODEX_MODEL, which wins over the legacy CODEX_MODEL fallback.
+  const savedOperatorModel = process.env.OPERATOR_CODEX_MODEL;
+  const savedLegacyModel = process.env.CODEX_MODEL;
+  process.env.OPERATOR_CODEX_MODEL = 'gpt-5.6-sol';
+  process.env.CODEX_MODEL = 'gpt-5.5';
+  const envModelClient = createCodexClient({ command: 'codex-model-env', bridgeDir: path.join(root, 'bridge-model-env'), execFileImpl, spawnImpl });
+  await envModelClient.start({ runId: 'codex_MODEL_ENV', missionId: 'MIS_TEST', goal: 'model env', workspace: root });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.deepEqual(spawnCalls[3].args.slice(0, 3), ['exec', '--model', 'gpt-5.6-sol']);
+
+  const optionModelClient = createCodexClient({ command: 'codex-model-option', model: 'gpt-5.5', bridgeDir: path.join(root, 'bridge-model-option'), execFileImpl, spawnImpl });
+  await optionModelClient.start({ runId: 'codex_MODEL_OPTION', missionId: 'MIS_TEST', goal: 'model option', workspace: root });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.deepEqual(spawnCalls[4].args.slice(0, 3), ['exec', '--model', 'gpt-5.5']);
+  await optionModelClient.start({ runId: 'codex_MODEL_RESUME', missionId: 'MIS_TEST', goal: 'model resume', workspace: root, resumeThreadId: 'thread-test' });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.deepEqual(spawnCalls[5].args.slice(0, 4), ['exec', '--model', 'gpt-5.5', 'resume']);
+
+  delete process.env.OPERATOR_CODEX_MODEL;
+  const legacyModelClient = createCodexClient({ command: 'codex-model-legacy', bridgeDir: path.join(root, 'bridge-model-legacy'), execFileImpl, spawnImpl });
+  await legacyModelClient.start({ runId: 'codex_MODEL_LEGACY', missionId: 'MIS_TEST', goal: 'legacy model', workspace: root });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.deepEqual(spawnCalls[6].args.slice(0, 3), ['exec', '--model', 'gpt-5.5']);
+  if (savedOperatorModel === undefined) delete process.env.OPERATOR_CODEX_MODEL; else process.env.OPERATOR_CODEX_MODEL = savedOperatorModel;
+  if (savedLegacyModel === undefined) delete process.env.CODEX_MODEL; else process.env.CODEX_MODEL = savedLegacyModel;
+
   await execFileAsync('git', ['add', '-A'], { cwd: root });
   await execFileAsync('git', ['commit', '--allow-empty', '-m', 'test fixture runtime artifacts'], { cwd: root });
   await writeFile(path.join(root, 'kernel.cu'), '// verified candidate\n', 'utf8');

@@ -26,7 +26,11 @@ const { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARE
 const packageRoot = path.join(runtime, 'execution-packages');
 const environmentResolver = createSharedGpuEnvironmentResolver();
 const packageAdapter = createSharedGpuPackageAdapter({ rootDir: path.join(packageRoot, 'adapter') });
-const packageStore = createExecutionPackageStore({ rootDir: path.join(packageRoot, 'store'), environments: environmentResolver, adapters: { [SHARED_GPU_PACKAGE_ADAPTER.id]: packageAdapter } });
+// The first trusted NVIDIA probe may import torch and exceed the generic
+// 5-second inspection budget on a contended developer host. Keep the probe
+// bounded but give the registered shared-GPU environment its explicit 30s
+// composition budget (the production root uses the same policy).
+const packageStore = createExecutionPackageStore({ rootDir: path.join(packageRoot, 'store'), environments: environmentResolver, adapters: { [SHARED_GPU_PACKAGE_ADAPTER.id]: packageAdapter }, inspectionTimeoutMs: 30_000 });
 const resolvePreparedPackage = async (payload) => {
   const verified = await packageStore.verifyAdmission(payload);
   const artifact = await packageAdapter.verifyPreparedArtifact({ manifest: verified.manifest, environment: verified.environment, preparedArtifactDigest: verified.admission.preparedArtifactDigest });
@@ -60,7 +64,10 @@ try {
   assert.equal((await client.findByRequestId(payload.requestId, payload.missionId, payload)).taskId, task.taskId);
   assert.equal((await client.submit(payload)).taskId, task.taskId, 'same admitted request must not create another task');
   await client.advance(task.taskId);
-  for (let attempt = 0; attempt < 120; attempt += 1) {
+  // The shared-GPU runner may spend tens of seconds importing torch and
+  // warming CUDA on a contended host. Poll through the task's 120s deadline,
+  // rather than treating the first 30s as an execution failure.
+  for (let attempt = 0; attempt < 480; attempt += 1) {
     task = await client.get(task.taskId);
     if (['completed', 'failed', 'cancelled', 'quarantined'].includes(task.status)) break;
     await new Promise((resolve) => setTimeout(resolve, 250));

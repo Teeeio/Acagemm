@@ -126,6 +126,10 @@ export const createOperatorTestQueue = ({
       if (terminal(task)) return task;
       const field = claim.lane === 'cancel' ? 'cancelClaim' : 'dispatchClaim';
       const current = task[field]?.id === claim.id;
+      // Once cancellation has quarantined a task for missing release proof,
+      // an older poll/reconcile response must not reopen it as running.
+      if (task.status === 'quarantined' && task.cancelRequested === true
+          && claim.lane !== 'cancel' && claim.lane !== 'submit') return task;
       // A late submit response remains useful for reconciliation. Other stale
       // nonterminal responses must not overwrite a newer claim or cancellation.
       if (!current && claim.lane !== 'submit' && !terminalStatuses.has(snapshot?.status)) return task;

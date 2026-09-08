@@ -593,31 +593,36 @@ const finish = async (confirmed, reason) => {
   });
 };
 const forceStopTreeWithPowerShell = (pid) => new Promise((resolve) => {
-  // The PID is produced by Node and validated as an integer before it is
-  // interpolated. Keep this fallback narrow: it is only used when the normal
-  // taskkill adapter is unavailable (for example, a managed runner denies
-  // taskkill.exe). The recursive lookup is performed before stopping the root
-  // so descendants cannot outlive the task owner.
   const numericPid = Number(pid);
-  if (!Number.isInteger(numericPid) || numericPid <= 0) return resolve(false);
+  if (!Number.isInteger(numericPid) || numericPid <= 0 || closed) return resolve(false);
   const script = [
-    '$ErrorActionPreference = "Stop"',
-    '$source = \'using System; using System.Runtime.InteropServices; public static class OperatorParentProcess { [StructLayout(LayoutKind.Sequential)] struct PBI { public IntPtr Reserved1; public IntPtr PebBaseAddress; public IntPtr Reserved2_0; public IntPtr Reserved2_1; public IntPtr UniqueProcessId; public IntPtr InheritedFromUniqueProcessId; } [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid); [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle); [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr handle, int infoClass, ref PBI info, int length, out int returned); public static int GetParent(int pid) { IntPtr handle=OpenProcess(0x1000,false,pid); if(handle==IntPtr.Zero)return -1; try { PBI info=new PBI(); int returned; int status=NtQueryInformationProcess(handle,0,ref info,Marshal.SizeOf(info),out returned); return status==0 ? info.InheritedFromUniqueProcessId.ToInt32() : -2; } finally { CloseHandle(handle); } } }\'',
-    'Add-Type -TypeDefinition $source',
-    '$owned = [Collections.Generic.HashSet[int]]::new()',
-    'function Collect-Tree([int]$root) {',
-    '  if (-not $owned.Add($root)) { return }',
-    '  $children = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { [OperatorParentProcess]::GetParent($_.Id) -eq $root })',
-    '  foreach ($item in $children) { Collect-Tree $item.Id }',
-    '}',
-    'Collect-Tree ' + String(numericPid),
-    'foreach ($ownedPid in $owned) { Stop-Process -Id $ownedPid -Force -ErrorAction SilentlyContinue }',
-    'Start-Sleep -Milliseconds 60',
-    '$stillAlive = @($owned | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })',
-    'if ($stillAlive.Count -gt 0) { exit 17 }',
-  ].join('; ');
-  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
-    { windowsHide: true, timeout: 2_000, maxBuffer: 64 * 1024 }, (error) => resolve(!error));
+'$ErrorActionPreference = "Stop"',
+'$all = @(Get-CimInstance Win32_Process)',
+'$owned = @{}',
+'function Collect-Tree([int]$root) {',
+'  $item = $all | Where-Object { $_.ProcessId -eq $root } | Select-Object -First 1',
+'  if ($null -eq $item) { return }',
+'  $owned[$root] = [string]$item.CreationDate',
+'  @($all | Where-Object { $_.ParentProcessId -eq $root }) | ForEach-Object { Collect-Tree ([int]$_.ProcessId) }',
+'}',
+'Collect-Tree ([int]$env:OPERATOR_TREE_PID)',
+'if ($owned.Count -eq 0) { exit 17 }',
+'$mismatch = $false',
+'foreach ($id in @($owned.Keys | Sort-Object -Descending)) {',
+'  try { $current = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $id) -ErrorAction Stop } catch { exit 17 }',
+'  if ($null -eq $current) { continue }',
+'  if ([string]$current.CreationDate -ne $owned[$id]) { $mismatch = $true; continue }',
+'  Stop-Process -Id $id -Force -ErrorAction SilentlyContinue',
+'}',
+'Start-Sleep -Milliseconds 80',
+'foreach ($id in $owned.Keys) {',
+'  try { $current = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $id) -ErrorAction Stop } catch { exit 17 }',
+'  if ($null -ne $current -and [string]$current.CreationDate -eq $owned[$id]) { exit 17 }',
+'  if ($null -ne $current -and [string]$current.CreationDate -ne $owned[$id]) { $mismatch = $true }',
+'}',
+'if ($mismatch) { exit 17 }',
+  ].join("; ");
+  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 2_000, maxBuffer: 64 * 1024, env: { ...process.env, OPERATOR_TREE_PID: String(numericPid) } }, (error) => resolve(!error));
 });
 const signalTree = (force) => new Promise((resolve) => {
   if (!child?.pid || closed && groupGone()) return resolve(true);
@@ -627,11 +632,11 @@ const signalTree = (force) => new Promise((resolve) => {
       { windowsHide: true, timeout: 1_000, maxBuffer: 64 * 1024 }, async (error) => {
         if (!error) return resolve(true);
         signalError = { code: error.code || 'PROCESS_TREE_SIGNAL_FAILED', message: error.message, timedOut: error.killed === true };
-        // A hard fallback is preferable to leaving a claimed execution slot
-        // occupied forever. Its receipt retains signalError so callers can
-        // distinguish this development-environment path from taskkill.
-        const fallback = await forceStopTreeWithPowerShell(child.pid);
-        resolve(fallback);
+        // Fallback validates each PID's CreationDate before stopping it and
+        // again afterwards; identity mismatch or a surviving process remains
+        // quarantined rather than being reported as released.
+        if (!force) return resolve(false);
+        forceStopTreeWithPowerShell(child.pid).then(resolve);
       });
   } else {
     try { process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM'); resolve(true); }
@@ -681,5 +686,4 @@ if (initialCancel) {
   if (!cancellation && !groupGone()) await stop({ reason: 'descendant_cleanup', nonce: 'cleanup' });
   await finish(groupGone(), groupGone() ? 'Runner process and owned process tree have exited.' : 'Runner exited but descendant release is unconfirmed.');
 }
-
 `;

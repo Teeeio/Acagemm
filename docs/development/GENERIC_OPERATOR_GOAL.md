@@ -94,8 +94,8 @@
 - Remaining risk/boundary: the new test tool/admission store is not yet the
   production execution path. Generic TUI import and real isolated-package/Codex
   acceptance still require implementation and verification.
-- Local Codex CLI was detected and reported logged in during planning. No real
-  session has yet been launched for this Goal. Live sessions must be isolated and
+- Local Codex CLI was detected and reported logged in during planning. Live
+  sessions must be isolated and
   bounded; initial E2E batch is three CPU Missions with at most two candidate
   rounds each, finite per-run/Mission limits and an outer harness deadline.
 - Every new probe records stage, inputs, expected/actual outcome and artifact path.
@@ -116,7 +116,7 @@ This checkpoint records the shared-GPU package path; it is NOT completion of the
 | T4 | Generic Mission operator/hardware retained; fixed Profile identity takes precedence; CPU provenance cannot become live GPU evidence | Formal generic TUI/API package import and at least three non-preset operator families through the complete workflow |
 | T5 | Bounded HTTP bodies/transport; lock-free committed GET/SSE; nonblocking queue dispatch; safe idempotency/restart/cancellation; whole-pipeline guards; 15-minute round clock shared by retries and pause/resume | Integrated fault injection against the real package execution backend; unknown provider start effects still require explicit inspection rather than blind replay |
 | T6 | Versioned human guidance API, immutable history, scoped per-round context, validated prompt injection, terminal collection hook and observable failures; shared-GPU admission/artifact receipt verifier wired in production composition | Legacy evidence is deliberately skipped, not synthesized |
-| T7 | Focused module and fake-provider/real-CPU/shared-GPU probes; final release 117 checks and non-hardware 28 checks PASS | The separately authorized real Codex + isolated CPU batch and complete product acceptance |
+| T7 | Focused module and fake-provider/real-CPU/shared-GPU probes; final release 120 checks and non-hardware 28 checks PASS | The separately authorized real Codex + isolated CPU batch and complete product acceptance |
 
 Production human experience API:
 
@@ -210,6 +210,17 @@ paths, and incomplete baselines. The real CUDA runner and production service
 E2E pass; the generic Mission acceptance driver is retained at
 `scripts/e2e-shared-gpu-agent-iteration.mjs`.
 
+The shared-GPU real-Agent harness now explicitly passes `--model` through the
+Codex adapter and defaults to `gpt-5.6-sol`; `OPERATOR_CODEX_MODEL=gpt-5.5`
+is supported for the same cost-conscious path. The affine family completed one
+real candidate with 4/4 correctness, both fixed benchmark profiles, package /
+admission / candidate binding, confirmed release, and one trusted
+non-publishable experience record. The reduction family reached an in-progress
+Codex file edit, then its bounded Agent budget requested cancellation. Windows
+process-tree release could not be verified, so the run remains quarantined and
+no candidate/evidence was accepted. This is a safe failure, not an iteration
+completion.
+
 The remaining acceptance dependency is the reduction/normalization portion of
 the real local Codex session plus fault injection. The run is deliberately
 bounded: network reconnects and unconfirmed process-tree release become an
@@ -224,7 +235,7 @@ The observed verification window is recorded in the machine-readable report.
 
 | Verification | Result |
 |---|---|
-| npm run verify:local-c500-release | PASS, 119 checks; executed inside the umbrella gate |
+| npm run verify:local-c500-release | PASS, 120 checks; executed inside the umbrella gate |
 | npm run verify:non-hardware-robustness | PASS, 28 checks without physical hardware |
 | node tests/local-cpu-runner-test.mjs | PASS, 63 tests, 0 failures; actual Python |
 | node test-service/contract-test.mjs | PASS, independent mock duration/deadline and invalid configuration checks |

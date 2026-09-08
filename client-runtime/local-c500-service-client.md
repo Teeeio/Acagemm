@@ -47,11 +47,14 @@ to finish after the Runtime owner exits. Claim creation and cancellation use the
 same short metadata lock; neither can authorize a post-cancellation duplicate.
 
 The current owner signals its process tree with bounded Windows taskkill calls or
-POSIX process-group signals, then verifies child closure. Forced cleanup without
-confirmation writes a quarantined receipt. A Runtime never sends signals to a
-PID loaded from an old claim: cancellation is handled by the original supervisor
-through the durable marker. Unknown orphan claims have no automatic restart or
-force-release path. A stored result alone never proves process exit.
+POSIX process-group signals, then verifies child closure. If taskkill is denied,
+the supervisor may use a bounded Win32_Process snapshot fallback, but every PID
+must match its captured CreationDate before and after termination; missing,
+mismatched, or unreadable identities fail closed and leave release unconfirmed.
+A Runtime never sends signals to a
+PID loaded from an old claim: cancellation is handled by the original
+supervisor through the durable marker. Unknown orphan claims have no automatic
+restart or force-release path. A stored result alone never proves process exit.
 
 Successful natural exit, or confirmed cancellation cleanup, permits a matching
 receipt to settle exactly one atomic terminal task. Result written before exit
@@ -75,8 +78,8 @@ success-looking result.json. Signal failures remain in the receipt diagnostics.
 
 ## Limitations and verification
 
-This process supervisor is not an OS security sandbox, package verifier or native
-Windows Job Object. The backend admission/allowlist must prevent unauthorized
+This process supervisor is not an OS security sandbox, package verifier, or
+Windows process owner. The backend admission/allowlist must prevent unauthorized
 daemonization, escaping process groups and mutation of adapter-owned control
 artifacts. It does not guarantee recovery of pre-supervisor legacy executions;
 missing receipt/unknown ownership remains a visible, occupied quarantine.

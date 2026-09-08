@@ -70,6 +70,11 @@ it provides no remote exactly-once guarantee or manual force-release API. Reques
 idempotency and process identity remain backend responsibilities. dispose is a
 process teardown API, not a resource recovery operation.
 
+After cancellation quarantine, a stale poll/reconcile response cannot reopen the
+task as running; only an explicit cancellation/reconciliation result with
+confirmed release can clear that barrier. Other quarantines (for example an
+unknown owner during restart) remain pollable for authoritative recovery.
+
 ## Verification
 
 Run `node tests/operator-test-queue-test.mjs`, `node tests/queue-stop-race-test.mjs`,

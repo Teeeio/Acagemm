@@ -43,7 +43,9 @@ try {
   assert.ok(Date.now() - startedAt < 200, 'starting a hardware task must not block the API until the runner exits');
 
   let benchmark = running;
-  const progressDeadline = Date.now() + 2000;
+  // Process-heavy release gates can delay the fixture supervisor startup; the
+  // API contract is bounded/nonblocking, not a sub-2s scheduling guarantee.
+  const progressDeadline = Date.now() + 5000;
   while (benchmark.status === 'running' && benchmark.progress < 60 && Date.now() < progressDeadline) {
     await new Promise((resolve) => setTimeout(resolve, 75));
     benchmark = await client.advance(submitted.taskId);

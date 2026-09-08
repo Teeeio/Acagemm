@@ -24,6 +24,10 @@ This module defines provider-neutral Agent capabilities and dispatch. It lets pr
 - Managed-workspace runtimes must define a failure classifier.
 - Registry definitions are immutable after construction.
 - External runtime aliases are normalized at the boundary (`codex` -> `codex-cli`, `claude` -> `claude-code`, `opencode` -> `opencode-server`); unknown values remain unsupported.
+- A Mission permits only one in-flight managed Agent start. Cancellation with an
+  unconfirmed resource release is retried at most three times; if the adapter
+  still cannot prove release, the projection becomes `needs_human` and blocks
+  further workflow mutation until an owner-aware inspection resolves it.
 
 ## Non-Responsibilities
 

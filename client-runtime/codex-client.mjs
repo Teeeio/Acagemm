@@ -126,6 +126,7 @@ export const createCodexClient = (options = {}) => {
   const execFileImpl = options.execFileImpl || nodeExecFile;
   const bridgeDir = options.bridgeDir || path.resolve(process.env.OPERATOR_BRIDGE_DIR || path.join(runtimeDir, 'agent-bridge'));
   const sandboxMode = options.sandboxMode || process.env.OPERATOR_CODEX_SANDBOX || 'workspace-write';
+  const model = options.model || process.env.OPERATOR_CODEX_MODEL || process.env.CODEX_MODEL || null;
   const windowsSandbox = options.windowsSandbox ?? process.env.OPERATOR_CODEX_WINDOWS_SANDBOX ?? null;
   const runsDir = path.join(bridgeDir, 'codex-runs');
   const children = new Map();
@@ -327,9 +328,10 @@ export const createCodexClient = (options = {}) => {
     const gitRepoArgs = skipGitRepoCheck ? ['--skip-git-repo-check'] : [];
     // unified_exec is needed for apply_patch; the workspace sandbox confines it.
     const toolRestrictionArgs = boundaryEnabled ? ['--disable', 'shell_tool'] : [];
+    const modelArgs = model ? ['--model', model] : [];
     const args = resumeThreadId
-      ? ['exec', 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
-      : ['exec', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
+      ? ['exec', ...modelArgs, 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
+      : ['exec', ...modelArgs, ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
     const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, { configDir: path.join(bridgeDir, 'git-trust') });
     let child;
     try {

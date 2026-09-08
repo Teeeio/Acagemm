@@ -14,6 +14,10 @@ and preserve runId, missionId, workspace, threadId and event path, adding
 
 - start creates a process in the requested isolated workspace. On Unix it creates
   a dedicated process group; Windows processes remain hidden.
+- Model selection is explicit and never persisted: `createCodexClient({ model })`
+  wins over `OPERATOR_CODEX_MODEL`, which wins over legacy `CODEX_MODEL`. The
+  shared-GPU acceptance harness defaults to `gpt-5.6-sol`; set
+  `OPERATOR_CODEX_MODEL=gpt-5.5` when that lower-cost model is preferred.
 - readRun/readEvents inspect records only. They never start, kill, repair or
   rewrite a run. An active record without this adapter's live owner is projected
   as cancel_requested / CODEX_EXECUTION_OWNER_UNAVAILABLE. It is unsafe to signal

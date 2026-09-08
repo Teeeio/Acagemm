@@ -351,6 +351,7 @@ const runtimeStatusMap = {
 const ACTIVE_MAIN_AGENT_STATUSES = new Set(['running', 'executing', 'awaiting_action', 'cancel_requested', 'awaiting_approval']);
 const ACTIVE_RESEARCH_AGENT_STATUSES = new Set(['running', 'cancel_requested']);
 const ACTIVE_BASELINE_MATERIALIZER_STATUSES = new Set(['running', 'cancel_requested']);
+const MAX_CANCELLATION_RETRIES = 3;
 const MAIN_AGENT_BUDGET_MS = 10 * 60 * 1000;
 const NON_RECOVERABLE_MANAGED_FAILURE_CODES = new Set([
   'CLAUDE_AUTH_FAILED',
@@ -388,6 +389,7 @@ export function createAgentRuntime(options = {}) {
   const runtimeDefinition = runtimeRegistry.get(mode);
   const runtimeClients = { codex, claude, opencode: openCodeClient };
   const runtimeEngine = createAgentRuntimeEngine({ registry: runtimeRegistry, clients: runtimeClients });
+  const activeStartMissions = new Map();
   const managedCliMode = runtimeDefinition?.managedWorkspace === true;
   const managedMeta = managedCliMode
     ? { name: runtimeDefinition.name, slug: runtimeDefinition.slug, unavailableCode: runtimeDefinition.unavailableCode }
@@ -614,7 +616,19 @@ export function createAgentRuntime(options = {}) {
 
   const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null }) => {
     assertResourcesReleased(state);
-    if (mode === 'reference-fixture') return { handled: false };
+    const activeStartAt = activeStartMissions.get(mission.id);
+    if (activeStartAt && Date.now() - activeStartAt < 120_000) {
+      const error = new Error('该 Mission 已有 Agent 启动请求在处理中。');
+      error.status = 409;
+      error.code = 'AGENT_RUN_START_ALREADY_IN_FLIGHT';
+      throw error;
+    }
+    const startGuardToken = Date.now();
+    activeStartMissions.set(mission.id, startGuardToken);
+    const startGuardTimer = setTimeout(() => { if (activeStartMissions.get(mission.id) === startGuardToken) activeStartMissions.delete(mission.id); }, 120_000);
+    startGuardTimer.unref?.();
+    try {
+    if (mode === 'reference-fixture') { activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer); return { handled: false }; }
     const experienceInstruction = experienceContext ? formatExperienceContext(experienceContext, {
       projectId: mission.projectId, missionId: mission.id, roundId: state.iterationStats?.roundBudget?.roundId,
     }) : '';
@@ -668,6 +682,7 @@ export function createAgentRuntime(options = {}) {
         artifacts: [{ id: `opencode-session-${session.id}`, kind: 'OpenCode Session', title: session.title || mission.title, status: 'ready', meta: `OpenCode ${descriptor.version || ''} · HTTP API` }],
       };
       appendRuntimeEvent(state, 'opencode.session_started', { sessionId: session.id, agent: descriptor.agent, model: descriptor.model }, { kind: 'agent', mode: 'opencode-server' });
+      activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer);
       return { handled: true, state };
     }
     if (managedCliMode) {
@@ -689,6 +704,15 @@ export function createAgentRuntime(options = {}) {
         const error = new Error('同步研究员正在运行，主线程需等待研究员完成。');
         error.status = 409;
         error.code = 'RESEARCH_SERIAL_BUSY';
+        throw error;
+      }
+      // A persisted active run owns the Mission Workspace until it reaches a
+      // terminal, release-confirmed state. Never start a second provider run
+      // for the same Mission while the first one is still observable.
+      if (isMainAgentActive(state.agent)) {
+        const error = new Error('An Agent run is already active for this Mission.');
+        error.status = 409;
+        error.code = 'AGENT_RUN_ALREADY_ACTIVE';
         throw error;
       }
       const runId = `${managedMeta.slug}_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
@@ -744,6 +768,7 @@ export function createAgentRuntime(options = {}) {
         artifacts: [{ id: `${managedMeta.slug}-run-${runId}`, kind: `${managedMeta.name} Run`, title: mission.title, status: 'running', meta: `${descriptor.transport} · 本地事件投影` }],
       };
       appendRuntimeEvent(state, resumeThreadId ? `${managedMeta.slug}.run_resumed` : `${managedMeta.slug}.run_started`, { runId, threadId: run.threadId || resumeThreadId || null, workspace: run.workspace }, { kind: 'agent', mode });
+      activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer);
       return { handled: true, state };
     }
 
@@ -795,7 +820,12 @@ export function createAgentRuntime(options = {}) {
       artifacts: [{ id: 'artifact-runtime-request', kind: 'Runtime Request', title: `${mission.title} / ${runId}`, status: 'ready', meta: 'adapter · persisted · awaiting runtime' }],
     };
     appendRuntimeEvent(state, 'mission.run_requested', { runId, goal, bridge: `requests/${runId}.json` }, { kind: 'adapter', mode: 'cli-file' });
+    activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer);
     return { handled: true, state };
+    } finally {
+      activeStartMissions.delete(mission.id);
+      clearTimeout(startGuardTimer);
+    }
   };
 
   const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot, runPhase = 'acquire', sourceEvidence = null }) => {
@@ -1073,6 +1103,7 @@ export function createAgentRuntime(options = {}) {
   };
 
   const cancellationCalls = new Map();
+  const cancellationRetries = new Map();
   const cancellationTimeoutMs = Math.max(20, Number(options.cancellationTimeoutMs) || 5_000);
   const requestCancellation = async (runId) => {
     let operation = cancellationCalls.get(runId);
@@ -1105,16 +1136,27 @@ export function createAgentRuntime(options = {}) {
       ...resourceRelease, status: resourceRelease.status === 'unconfirmed' ? 'unconfirmed' : 'pending', confirmed: false },
   });
   const settleCancellation = async (previous, run, expired = false, logicalDone = false) => {
-    if (isExecutionReleased(run)) return { run, projection: null };
+    if (isExecutionReleased(run)) { cancellationRetries.delete(previous.runId); return { run, projection: null }; }
     const cancelling = expired || logicalDone || previous.status === 'cancel_requested' || ['completed', 'failed', 'cancelled'].includes(run.status)
       || ['pending', 'unconfirmed'].includes(run.resourceRelease?.status);
     if (!cancelling) return { run, projection: null };
     let outcome = run;
-    if (previous.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') {
+    const releasePending = ['pending', 'unconfirmed'].includes(run.resourceRelease?.status);
+    const retryCount = cancellationRetries.get(previous.runId) || 0;
+    const shouldRequest = (previous.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') || releasePending;
+    if (shouldRequest && retryCount < MAX_CANCELLATION_RETRIES) {
+      cancellationRetries.set(previous.runId, retryCount + 1);
       outcome = await requestCancellation(previous.runId);
       if (isExecutionReleased(outcome)) return { run: { ...run, ...outcome }, projection: null };
     }
-    return { run, projection: cancellationProjection(previous, outcome.resourceRelease, { timedOut: expired || previous.timedOut }) };
+    const exhausted = releasePending && (cancellationRetries.get(previous.runId) || 0) >= MAX_CANCELLATION_RETRIES;
+    const projection = cancellationProjection(previous, outcome.resourceRelease, { timedOut: expired || previous.timedOut });
+    if (exhausted) {
+      projection.status = 'needs_human';
+      projection.phase = '取消释放需要人工确认';
+      projection.resourceRelease.nextAction = '人工确认 Agent 进程树已释放后，清理该 Mission 执行占用。';
+    }
+    return { run: outcome, projection };
   };
 
   const cancellationRelease = (previous, result) => isExecutionReleased(result)
