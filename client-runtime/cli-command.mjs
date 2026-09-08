@@ -32,6 +32,8 @@ export const resolveCliInvocation = ({
     if (existsImpl(executable)) return { command: executable, prefixArgs: [], requested, shim };
   }
   if (provider === 'codex') {
+    const bundledExecutable = path.join(npmRoot, 'node_modules', '@openai', 'codex', 'node_modules', '@openai', 'codex-win32-x64', 'vendor', 'x86_64-pc-windows-msvc', 'bin', 'codex.exe');
+    if (existsImpl(bundledExecutable)) return { command: bundledExecutable, prefixArgs: [], requested, shim };
     const entry = path.join(npmRoot, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
     if (existsImpl(entry)) {
       const bundledNode = path.join(npmRoot, 'node.exe');

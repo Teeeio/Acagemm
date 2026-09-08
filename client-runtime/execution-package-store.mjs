@@ -87,10 +87,11 @@ const decode = (value) => {
 
 // Trusted adapter boundary. Environment.resolve must inspect the actual locked
 // runtime/layers, not return the caller's environment declaration.
-export const createExecutionPackageStore = ({ rootDir, environments, adapters, now = () => new Date(), admissionTtlMs = 60 * 60 * 1000 } = {}) => {
+export const createExecutionPackageStore = ({ rootDir, environments, adapters, now = () => new Date(), admissionTtlMs = 60 * 60 * 1000, inspectionTimeoutMs = 5000 } = {}) => {
   if (!rootDir || typeof environments?.resolve !== 'function' || !adapters) throw new TypeError('Package store requires rootDir, trusted environments and language adapters.');
   if (!path.isAbsolute(rootDir) || path.resolve(rootDir) === path.parse(path.resolve(rootDir)).root) throw new TypeError('Package store requires a specific absolute private directory.');
   if (!Number.isSafeInteger(admissionTtlMs) || admissionTtlMs <= 0 || admissionTtlMs > 86400000) throw new TypeError('Admission TTL must be a positive integer no longer than one day.');
+  if (!Number.isSafeInteger(inspectionTimeoutMs) || inspectionTimeoutMs < 100 || inspectionTimeoutMs > 120000) throw new TypeError('Inspection timeout must be between 100ms and 120s.');
   const root = path.resolve(rootDir);
   const named = (kind, digest) => path.join(root, kind, assertContentDigest(digest).slice(7) + '.json');
   const blobPath = (digest) => path.join(root, 'blobs', assertContentDigest(digest).slice(7));
@@ -107,7 +108,7 @@ export const createExecutionPackageStore = ({ rootDir, environments, adapters, n
     return digest;
   };
   const resolveEnvironment = async (manifest) => {
-    const environment = await inspectWithin((options) => environments.resolve(manifest.environment.id, options));
+    const environment = await inspectWithin((options) => environments.resolve(manifest.environment.id, options), inspectionTimeoutMs);
     if (!environment || environment.digest !== manifest.environment.digest) throw fail('PACKAGE_ENVIRONMENT_CHANGED', 'Locked runtime/dependency environment changed; validate a new package.');
     if (canonicalJson(environment.target) !== canonicalJson(manifest.target)) throw fail('PACKAGE_TARGET_UNSUPPORTED', 'Package target does not match the locked environment.');
     return environment;
@@ -128,7 +129,7 @@ export const createExecutionPackageStore = ({ rootDir, environments, adapters, n
     return { manifest, environment, testSpec: specification };
   };
   const assemble = async (input) => {
-    const environment = await inspectWithin((options) => environments.resolve(input.environmentId, options));
+    const environment = await inspectWithin((options) => environments.resolve(input.environmentId, options), inspectionTimeoutMs);
     if (!environment?.digest || !environment.target) throw fail('PACKAGE_ENVIRONMENT_UNKNOWN', 'Choose a registered locked environment.');
     const layers = [];
     const contents = [];

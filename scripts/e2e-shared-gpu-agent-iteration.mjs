@@ -34,7 +34,8 @@ const writes = [];
 const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
   cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...process.env, API_PORT: String(port), SERVE_WEB: 'false', OPERATOR_RUNTIME_MODE: mode,
-    OPERATOR_AUTO_TICK: '1', OPERATOR_AUTO_TICK_INTERVAL_MS: '250',
+    OPERATOR_AUTO_TICK: '1', OPERATOR_AUTO_TICK_INTERVAL_MS: '5000',
+    OPERATOR_CODEX_LOGICAL_CLEANUP_MS: process.env.OPERATOR_CODEX_LOGICAL_CLEANUP_MS || '60000',
     OPERATOR_MAIN_AGENT_BUDGET_MS: '180000', OPERATOR_TEST_BACKEND: 'local-shared-gpu',
     OPERATOR_GPU_PYTHON: process.env.OPERATOR_GPU_PYTHON || path.join(root, '.gpu-venv', 'Scripts', 'python.exe'),
     OPERATOR_LOCAL_CPU: '0', OPERATOR_LOCAL_C500_MOCK: '0', OPERATOR_LOCAL_C500_SIMULATION: '0',
@@ -112,6 +113,7 @@ try {
     const firstRun = started.state.agent.runId;
     const writesAtStart = writes.length;
     const deadline = Date.now() + limit;
+    let commandRecoveryStartedAt = null;
     let completed = [];
     let tasks = [];
     let progress = '';
@@ -123,7 +125,20 @@ try {
       if (next !== progress) { console.log('[gpu-agent-e2e] ' + next); progress = next; }
       await writeFile(path.join(runRoot, family + '-state.json'), JSON.stringify({ state, tasks }, null, 2));
       if (completed.length >= desiredTasks && state.iterationStats?.experienceCollection?.recorded > 0) break;
-      if (['needs_human', 'failed', 'budget_exhausted'].includes(state.iterationStats?.loopStatus)) throw new Error('Iteration stopped: ' + JSON.stringify(state.iterationStats));
+      if (['needs_human', 'failed', 'budget_exhausted'].includes(state.iterationStats?.loopStatus)) {
+        // A command effect may have committed its state just after this
+        // read-only projection. Give the production auto-tick a bounded
+        // recovery window before treating the blocker as terminal.
+        if (state.workflowFailure?.code === 'COMMAND_PENDING_RECOVERY') {
+          commandRecoveryStartedAt ??= Date.now();
+        }
+        if (state.workflowFailure?.code === 'COMMAND_PENDING_RECOVERY' && Date.now() < commandRecoveryStartedAt + 30_000) {
+          await sleep(1000);
+          continue;
+        }
+        throw new Error('Iteration stopped: ' + JSON.stringify(state.iterationStats));
+      }
+      commandRecoveryStartedAt = null;
       if (exit) throw new Error('Runtime exited: ' + JSON.stringify(exit));
       await sleep(1000);
     }
@@ -147,7 +162,6 @@ try {
   }
 } catch (error) { failure = { message: error.message, stack: error.stack }; }
 finally {
-  if (missionId && !exit) await request('/api/actions/stop-mission', {}).catch((error) => logs.push('stop: ' + error.message));
   // Preserve the entire disposable acceptance project and receipts for audit.
   if (!exit) child.kill();
   await Promise.race([new Promise((resolve) => child.once('exit', resolve)), sleep(3000)]);

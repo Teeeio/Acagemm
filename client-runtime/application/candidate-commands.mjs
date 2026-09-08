@@ -66,13 +66,21 @@ export const createCandidateCommands = ({
         await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 1, missionId: state.activeMissionId, candidateId: body.candidate, digest: appliedDiff.digest, files: appliedDiff.changedFiles, sourceReferences, sourceRunId: state.agent.runId, createdAt: now().toISOString() }, null, 2)}\n`, 'utf8');
         if (mission.sourceRoot && mission.runtimeRoot) await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot: mission.runtimeRoot, missionId: state.activeMissionId, references: sourceReferences });
         return {
-          payload: { candidateId: body.candidate, checkpoint, workspace, digest: appliedDiff.digest, files: actualFiles, sourceReferences, artifacts: { patch: patchPath, manifest: manifestPath }, policyChecks, runtimeMode: runtime.mode },
+          payload: { candidateId: body.candidate, candidate: candidate ? structuredClone(candidate) : null, checkpoint, workspace, digest: appliedDiff.digest, files: actualFiles, sourceReferences, artifacts: { patch: patchPath, manifest: manifestPath }, policyChecks, runtimeMode: runtime.mode },
           result: { workspace, policyChecks },
         };
       });
     },
     apply: (state, payload) => {
-      const candidate = (state.candidateEvaluations || []).find((item) => item.id === payload.candidateId);
+      let candidate = (state.candidateEvaluations || []).find((item) => item.id === payload.candidateId);
+      // If the Agent result was projected immediately before this command but
+      // its state snapshot was lost in the same crash window, the frozen
+      // command payload remains the authoritative candidate identity.
+      if (!candidate && payload.candidate?.id === payload.candidateId) {
+        state.candidateEvaluations = [...(state.candidateEvaluations || []), structuredClone(payload.candidate)];
+        candidate = state.candidateEvaluations.at(-1);
+      }
+      if (!candidate) throw Object.assign(new Error('Candidate identity is unavailable for patch application recovery.'), { code: 'PATCH_CANDIDATE_NOT_FOUND', status: 409 });
       candidate.patchDigest = payload.digest;
       candidate.sourceRunId = state.agent.runId;
       if (isManagedWorkspaceRuntimeMode(payload.runtimeMode)) candidate.files = payload.files.join(', ');

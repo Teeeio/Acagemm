@@ -167,7 +167,9 @@ const sharedGpuEnvironmentResolver = localC500Config.kind === 'local-shared-gpu'
 const sharedGpuPackageAdapter = localC500Config.kind === 'local-shared-gpu'
   ? createSharedGpuPackageAdapter({ rootDir: path.join(sharedGpuPackageRoot, 'adapter') }) : null;
 const executionPackageStore = sharedGpuPackageAdapter
-  ? createExecutionPackageStore({ rootDir: path.join(sharedGpuPackageRoot, 'store'), environments: sharedGpuEnvironmentResolver, adapters: { [SHARED_GPU_PACKAGE_ADAPTER.id]: sharedGpuPackageAdapter } })
+  ? createExecutionPackageStore({ rootDir: path.join(sharedGpuPackageRoot, 'store'), environments: sharedGpuEnvironmentResolver,
+    adapters: { [SHARED_GPU_PACKAGE_ADAPTER.id]: sharedGpuPackageAdapter },
+    inspectionTimeoutMs: Number(process.env.OPERATOR_PACKAGE_INSPECTION_TIMEOUT_MS || 30000) })
   : null;
 const resolvePreparedSharedGpuPackage = async (payload) => {
   if (!executionPackageStore || !sharedGpuPackageAdapter) return null;

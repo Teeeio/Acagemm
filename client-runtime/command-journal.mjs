@@ -222,6 +222,17 @@ export async function reconcileCommandJournal(state, { journal, registry }) {
       break;
     }
     try {
+      // A crash can occur after the command's state snapshot is persisted but
+      // before commandJournalSeq is advanced. An `applied` journal entry whose
+      // post-version is already present and whose idempotency predicate holds
+      // is therefore safe to acknowledge without replaying its side effects.
+      if (entry.status === 'applied' && Number(entry.seq) === Number(state.commandJournalSeq || 0) + 1
+        && Number(entry.stateVersionAfter) <= Number(state.stateVersion || 0)
+        && (!command.isApplied || command.isApplied(state, entry.payload))) {
+        state.commandJournalSeq = Number(entry.seq);
+        replayed.push(Number(entry.seq));
+        continue;
+      }
       assertRecoveryState(entry, state);
       const next = structuredClone(state);
       const prepared = await recoverEntry({ command, entry, state: next, journal });

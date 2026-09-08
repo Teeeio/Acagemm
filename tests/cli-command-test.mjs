@@ -19,6 +19,12 @@ const codex = resolveCliInvocation({ provider: 'codex', configuredCommand: 'code
 assert.equal(codex.command, path.join(npmRoot, 'node.exe'));
 assert.deepEqual(codex.prefixArgs, [path.join(npmRoot, 'node_modules', '@openai', 'codex', 'bin', 'codex.js')]);
 
+const nativeCodexPath = path.join(npmRoot, 'node_modules', '@openai', 'codex', 'node_modules', '@openai', 'codex-win32-x64', 'vendor', 'x86_64-pc-windows-msvc', 'bin', 'codex.exe');
+const nativeCodex = resolveCliInvocation({ provider: 'codex', configuredCommand: 'codex', platform: 'win32', whereImpl,
+  existsImpl: (candidate) => candidate === nativeCodexPath || available.has(candidate) });
+assert.equal(nativeCodex.command, nativeCodexPath);
+assert.deepEqual(nativeCodex.prefixArgs, []);
+
 const explicit = resolveCliInvocation({ provider: 'codex', configuredCommand: 'custom-codex.exe', platform: 'win32', whereImpl, existsImpl });
 assert.equal(explicit.command, 'custom-codex.exe');
 assert.deepEqual(explicit.prefixArgs, []);
