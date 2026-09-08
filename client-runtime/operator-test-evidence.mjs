@@ -62,6 +62,19 @@ export function applyOperatorTestSnapshot(state, snapshot) {
       state.benchmark.result.semanticBinding = structuredClone(state.benchmark.semanticBinding);
     }
   }
+  if (snapshot.payload?.packageDigest && snapshot.payload?.admissionId) {
+    state.benchmark.executionPackage = {
+      packageDigest: snapshot.payload.packageDigest,
+      admissionId: snapshot.payload.admissionId,
+      preparedArtifactDigest: snapshot.payload.preparedArtifactDigest || state.benchmark.executionPackage?.preparedArtifactDigest || null,
+      environmentDigest: snapshot.payload.environmentDigest,
+      acceptanceDigest: snapshot.payload.acceptanceDigest,
+      workspaceId: snapshot.payload.workspaceId,
+      target: structuredClone(snapshot.payload.target),
+      build: structuredClone(snapshot.payload.build || {}),
+      adapter: structuredClone(snapshot.payload.adapter),
+    };
+  }
   if (nextStatus === 'cancelled') {
     state.agent = {
       ...state.agent,

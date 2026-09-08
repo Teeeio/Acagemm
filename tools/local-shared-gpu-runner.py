@@ -95,6 +95,31 @@ def main():
                 "liveHardware": True,
                 "publishable": False,
             })
+            task_path = Path(__import__("os").environ.get("OPERATOR_LOCAL_C500_TASK_JSON", ""))
+            task = json.loads(task_path.read_text(encoding="utf-8")) if task_path.is_file() else {}
+            payload = task.get("payload") or {}
+            package = {
+                key: payload.get(key)
+                for key in ("packageDigest", "admissionId", "preparedArtifactDigest", "environmentDigest", "acceptanceDigest", "workspaceId", "target", "build", "adapter")
+                if payload.get(key) is not None
+            }
+            if package:
+                result["executionPackage"] = package
+                environment["executionPackage"] = package
+                result["experienceEvidence"] = {
+                    "missionId": payload.get("missionId"),
+                    "candidateId": (payload.get("candidate") or {}).get("id"),
+                    "runId": payload.get("requestId"),
+                    "patchDigest": (payload.get("candidate") or {}).get("digest"),
+                    "packageDigest": package.get("packageDigest"),
+                    "environmentDigest": package.get("environmentDigest"),
+                    "acceptanceDigest": package.get("acceptanceDigest"),
+                    "hardware": "nvidia-gpu",
+                    "executionMode": "gpu",
+                    "outcome": "passed",
+                    "operation": "test",
+                    "liveHardware": True,
+                }
             result["publishable"] = False
             result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         except Exception as error:

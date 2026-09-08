@@ -19,6 +19,7 @@
     "test:experience-service": "node tests/experience-service-test.mjs",
     "test:experience-api-service": "node tests/experience-api-service-test.mjs",
     "test:round-experience-service": "node tests/round-experience-service-test.mjs",
+    "test:shared-gpu-experience-verifier": "node tests/shared-gpu-experience-verifier-test.mjs",
     "test:agent-start-context": "node tests/agent-start-context-test.mjs",
     "test:round-budget": "node tests/round-budget-test.mjs",
     "test:codex-cancellation": "node tests/codex-cancellation-test.mjs",

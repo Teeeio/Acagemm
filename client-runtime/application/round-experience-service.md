@@ -17,7 +17,7 @@
 
 `record({state,mission,observation,timeoutMs?,signal?})` 接收 `{evidence,evidenceRefs?}`；evidence 沿用 [经验契约](../experience-contract.md) 完整字段。缺 Mission/Candidate/run 或四类摘要/硬件/模式/结果时返回 `{status:'skipped',code:'EXPERIENCE_BINDING_MISSING',missing}`，不调用验证器或写入。合法完整字段还必须经可信端口验证，且回执规范化后逐字段一致；内容仅由绑定结果与可信 summary 构造。
 
-`collect({state,mission,observations?,timeoutMs?})` 最多处理 20 个 observation。省略列表时仅检查终态 `state.benchmark.result.experienceEvidence`，refs 来自 experienceEvidenceRefs；旧 runner 不具备该字段或包摘要就显式 skipped，不改造/伪造旧结果。返回 `{status,recorded,existing,skipped,records}`。record 返回 recorded/existing 时含 experience/created；幂等由已绑定 evidence key 保证。
+`collect({state,mission,observations?,timeoutMs?})` 最多处理 20 个 observation。省略列表时仅检查终态 `state.benchmark.result.experienceEvidence`，refs 来自 experienceEvidenceRefs；旧 runner 不具备该字段或包摘要就显式 skipped，不改造/伪造旧结果。共享 GPU 组合根会重新验证执行包 admission、prepared artifact、Mission/Workspace/Candidate 绑定后才返回 verified；worker 自带的 verified 标志不具授权力。共享 GPU 经验始终 `publishable=false`。返回 `{status,recorded,existing,skipped,records}`。record 返回 recorded/existing 时含 experience/created；幂等由已绑定 evidence key 保证。
 
 ## Outputs / Invariants
 

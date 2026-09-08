@@ -115,7 +115,7 @@ This checkpoint records the shared-GPU package path; it is NOT completion of the
 | T3 | Strict CPU runner with independent oracle, exact cases/profiles/tolerances; local serialized queue with durable supervisor ownership and atomic terminal outcomes; shared-GPU package adapter validates Python sources and executes only prepared package files | Execute closed packages through an isolated adapter when available, including native/offline transitive dependencies |
 | T4 | Generic Mission operator/hardware retained; fixed Profile identity takes precedence; CPU provenance cannot become live GPU evidence | Formal generic TUI/API package import and at least three non-preset operator families through the complete workflow |
 | T5 | Bounded HTTP bodies/transport; lock-free committed GET/SSE; nonblocking queue dispatch; safe idempotency/restart/cancellation; whole-pipeline guards; 15-minute round clock shared by retries and pause/resume | Integrated fault injection against the real package execution backend; unknown provider start effects still require explicit inspection rather than blind replay |
-| T6 | Versioned human guidance API, immutable history, scoped per-round context, validated prompt injection, terminal collection hook and observable failures | Production verification receipts from the new package backend; legacy evidence is deliberately skipped, not synthesized |
+| T6 | Versioned human guidance API, immutable history, scoped per-round context, validated prompt injection, terminal collection hook and observable failures; shared-GPU admission/artifact receipt verifier wired in production composition | Legacy evidence is deliberately skipped, not synthesized |
 | T7 | Focused module and fake-provider/real-CPU/shared-GPU probes; final release 117 checks and non-hardware 28 checks PASS | The separately authorized real Codex + isolated CPU batch and complete product acceptance |
 
 Production human experience API:
@@ -235,7 +235,7 @@ cleaned its temporary Runtime/Workspace in finally; the console and summary,
 not those temporary workspaces, are retained here.
 
 Loop status: continue, NOT Goal completion.
-The next implementation sequence is: generic TUI/API package import -> trusted
-experience receipts -> retained three-family real Codex acceptance and integrated
-fault injection. Do not substitute contract doubles or the legacy CPU fixture for
-those acceptance conditions.
+The next implementation sequence is: generic TUI/API package import -> retained
+three-family real Codex acceptance and integrated fault injection. Shared-GPU
+trusted experience receipts are now wired; do not substitute contract doubles or
+the legacy CPU fixture for the remaining acceptance conditions.

@@ -202,7 +202,12 @@ const refreshTask = async (taskId) => {
       message: task.error?.message || (task.status === 'cancelled' ? 'Cancellation confirmed by the process supervisor.' : 'Runner completed with confirmed resource release.') }];
     return saveTask(task);
   }
-  if (claim && !activeExecutions.has(taskId)) {
+  // A second client instance in the same Runtime (or a restarted adapter
+  // sharing the still-live supervisor) may legitimately observe a claim before
+  // its local in-memory execution map is populated. Only quarantine when every
+  // recorded owner process is demonstrably gone.
+  if (claim && !activeExecutions.has(taskId)
+    && !processAlive(claim.supervisorPid) && !processAlive(claim.pid) && !processAlive(claim.ownerPid)) {
     task.status = 'quarantined';
     task.error = { code: 'LOCAL_C500_EXECUTION_OWNER_UNKNOWN', category: 'internal', phase: 'recovery', role: 'backend', retryable: false,
       message: 'Execution was claimed by another owner; no durable exit receipt is available.' };
@@ -283,6 +288,7 @@ const startTask = async (task, cancelStepMs) => {
       cwd: taskDirFor(taskId), windowsHide: true, detached: true, stdio: 'ignore',
       env: {
         ...process.env, OPERATOR_LOCAL_C500_TASK_ID: taskId, OPERATOR_LOCAL_C500_TASK_DIR: taskDirFor(taskId),
+        OPERATOR_LOCAL_C500_TASK_JSON: taskPath(taskId),
         OPERATOR_LOCAL_C500_RUN_PY: runPyPath(taskId), OPERATOR_LOCAL_C500_RESULT_JSON: resultPath(taskId),
         OPERATOR_LOCAL_C500_REFERENCE_CACHE_DIR: referenceCacheRoot,
         OPERATOR_LOCAL_C500_EXPECTED_DEVICE: String(task.hardware?.[0] || 'C550'),

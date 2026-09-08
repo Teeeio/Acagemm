@@ -8,6 +8,7 @@ import { createExperienceRepository } from './experience-repository.mjs';
 import { createExperienceService } from './application/experience-service.mjs';
 import { createExperienceApiService } from './application/experience-api-service.mjs';
 import { createRoundExperienceService } from './application/round-experience-service.mjs';
+import { createSharedGpuExperienceVerifier } from './application/shared-gpu-experience-verifier.mjs';
 import { createExperienceRoutes } from './server/experience-routes.mjs';
 import { createServer } from 'node:http';
 import { createRuntimeLifecycleService } from './application/runtime-lifecycle-service.mjs';
@@ -195,15 +196,19 @@ const activeTestServiceClient = localC500Config.kind === 'local-shared-gpu'
 const operatorTestQueue = createOperatorTestQueue({ serviceClient: activeTestServiceClient });
 const experienceRepository = createExperienceRepository({ rootDir: path.join(runtimeDir, 'experiences') });
 const experienceService = createExperienceService({ repository: experienceRepository, now: () => new Date().toISOString(), createId: () => 'exp-' + randomUUID() });
+const sharedGpuExperienceVerifier = executionPackageStore && sharedGpuPackageAdapter
+  ? createSharedGpuExperienceVerifier({ executionPackageStore, packageAdapter: sharedGpuPackageAdapter }) : null;
 const roundExperienceService = createRoundExperienceService({
   experienceService, timers: { setTimeout, clearTimeout },
   resolveAccess: ({ state, mission }) => {
     if (!state.projects?.some((project) => project.id === mission.projectId)) throw Object.assign(new Error('The Mission owning Project is unavailable for experience retrieval.'), { code: 'ROUND_EXPERIENCE_ACCESS_INVALID', status: 409 });
     return { projectId: mission.projectId, allowedProjectIds: [] };
   },
-  // Fail closed until the new package-backed execution verifier is installed.
-  // Worker-provided evidence/verified flags cannot authorize an observation.
-  verifyObservationEvidence: async () => ({ verified: false, code: 'EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE' }),
+  // Shared-GPU receipts are revalidated against the durable package admission;
+  // legacy CPU/mock results remain explicitly unverified.
+  verifyObservationEvidence: async (input) => sharedGpuExperienceVerifier
+    ? sharedGpuExperienceVerifier(input)
+    : ({ verified: false, code: 'EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE' }),
 });
 const commandJournal = createCommandJournal({ filePath: path.join(runtimeDir, 'command-journal.jsonl') });
 const stateRepository = createStateRepository({

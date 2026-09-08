@@ -123,7 +123,21 @@ export const createBenchmarkCommands = ({
       }
       const submissionIntent = {
         runId, request,
-        payload: { runId, purpose, baselineKind, baselineSource, baselineOracleRunPy: purpose === 'baseline' ? baselinePlan?.runPy || null : null, semanticBinding, baselineResolution: baselinePlan?.resolution || null, baselineMaterialization: baselinePlan?.materializationReport || null, matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest, environments: matrix.environments, stages: matrix.stages },
+        payload: {
+          runId, purpose, baselineKind, baselineSource,
+          baselineOracleRunPy: purpose === 'baseline' ? baselinePlan?.runPy || null : null,
+          semanticBinding, baselineResolution: baselinePlan?.resolution || null,
+          baselineMaterialization: baselinePlan?.materializationReport || null,
+          matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest,
+          environments: matrix.environments, stages: matrix.stages,
+          ...(request.packageDigest ? { executionPackage: {
+            packageDigest: request.packageDigest, admissionId: request.admissionId,
+            preparedArtifactDigest: request.preparedArtifactDigest || null,
+            environmentDigest: request.environmentDigest, acceptanceDigest: request.acceptanceDigest,
+            workspaceId: request.workspaceId, target: request.target,
+            build: request.build, adapter: request.adapter,
+          } } : {}),
+        },
       };
       await recordIntent(submissionIntent);
       return captureSubmission(submissionIntent, await runEffect(() => operatorTestQueue.submit(request)));
@@ -137,6 +151,7 @@ export const createBenchmarkCommands = ({
         purpose: payload.purpose, baselineKind: payload.baselineKind, baselineSource: payload.baselineSource ? structuredClone(payload.baselineSource) : null, baselineMaterialization: payload.baselineMaterialization ? structuredClone(payload.baselineMaterialization) : null,
         semanticBinding: payload.semanticBinding ? structuredClone(payload.semanticBinding) : null,
         candidate: { id: payload.candidateId, digest: payload.candidateDigest }, testTaskId: payload.taskId, result: null,
+        ...(payload.executionPackage ? { executionPackage: structuredClone(payload.executionPackage) } : {}),
         source: {
           kind: localC500Config.enabled ? `${localC500Config.kind || 'local-c500'}-adapter` : 'operator-test-service',
           transport: 'local-serial-queue',

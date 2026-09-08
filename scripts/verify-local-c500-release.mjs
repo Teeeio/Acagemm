@@ -19,6 +19,7 @@ const checks = [
   'test:experience-service',
   'test:experience-api-service',
   'test:round-experience-service',
+  'test:shared-gpu-experience-verifier',
   'test:agent-start-context',
   'test:round-budget',
   'test:codex-cancellation',

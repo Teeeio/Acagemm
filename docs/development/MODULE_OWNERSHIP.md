@@ -93,6 +93,7 @@ TUI / GUI
 | `repository-adoption-service.md` | 将通过 Gate 的 Candidate 写回仓库 | projected state、workspace port | changed state |
 | `experience-api-service.md` | 正式人工经验 API 的项目范围和输入边界 | 只读状态、Experience service ports | 版本化人工经验 DTO |
 | `round-experience-service.md` | 主轮冻结经验引用与可信执行观察 | 经验服务、轮状态、验证端口 | 冻结上下文、可追踪记录结果 |
+| `shared-gpu-experience-verifier.md` | 共享 GPU 执行包回执的准入、产物和候选绑定复核 | execution package store、adapter、terminal benchmark state | verified 或显式 skipped 的开发观察 |
 | `experience-service.md` | 版本化开发经验、人工注入和冻结检索上下文 | 受信项目授权、repository/clock/ID ports | 非发布型经验与引用上下文 |
 | `knowledge-service.md` | 编辑经验草稿和引用经验资产 | draft/reference command | governed state 或稳定错误 |
 

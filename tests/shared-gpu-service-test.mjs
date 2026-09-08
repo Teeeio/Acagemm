@@ -68,6 +68,12 @@ try {
   assert.equal(task.status, 'completed', JSON.stringify(task.error));
   assert.equal(task.result.environment.source, 'local-shared-gpu');
   assert.equal(task.result.environment.publishable, false);
+  assert.equal(task.result.executionPackage.packageDigest, payload.packageDigest);
+  assert.equal(task.result.executionPackage.admissionId, payload.admissionId);
+  assert.equal(task.result.experienceEvidence.missionId, payload.missionId);
+  assert.equal(task.result.experienceEvidence.candidateId, payload.candidate.id);
+  assert.equal(task.result.experienceEvidence.executionMode, 'gpu');
+  assert.equal(task.result.experienceEvidence.outcome, 'passed');
   assert.equal(task.result.benchmark[0].correctness.passed, true);
   assert.equal(task.resourceRelease.confirmed, true);
   console.log('[shared-gpu-service] production local queue, supervisor, CUDA correctness and benchmark passed');

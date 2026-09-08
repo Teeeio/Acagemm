@@ -255,8 +255,8 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 迟到结果不签发准入，也不能覆盖另一准备。Profiler/Tracer 对 CPU 默认 unavailable。
 CPU 仅为 cpu-e2e、liveHardware=false；正式 GPU 发布仍由既有 Gate 授权。
 
-本期后续工作：强隔离 Python/CPU 环境层；非固定算子的正式 TUI/API 导入；新版包执行凭据与自动经验记录的可信验证接线；
-至少三类非预置算子的真实 Codex 闭环验收及全部发布门禁。
+本期后续工作：强隔离 Python/CPU 环境层；非固定算子的正式 TUI/API 导入；至少三类非预置算子的真实 Codex 闭环验收及全部发布门禁。
+共享 GPU 包执行凭据已接入自动经验记录：组合根会复核 admission、prepared artifact 及候选/任务绑定，经验仍不可发布。
 
 ## TODO：收敛每轮 Agent 工作量与墙钟耗时
 
