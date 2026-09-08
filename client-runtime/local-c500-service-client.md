@@ -46,12 +46,12 @@ total task deadline and writes execution-exit.json. The supervisor remains able
 to finish after the Runtime owner exits. Claim creation and cancellation use the
 same short metadata lock; neither can authorize a post-cancellation duplicate.
 
-The current owner signals its process tree with bounded Windows taskkill calls or
-POSIX process-group signals, then verifies child closure. If taskkill is denied,
-the supervisor may use a bounded Win32_Process snapshot fallback, but every PID
-must match its captured CreationDate before and after termination; missing,
-mismatched, or unreadable identities fail closed and leave release unconfirmed.
-A Runtime never sends signals to a
+The current owner uses the Windows Job Object adapter for new executions, or
+POSIX process-group signals on Unix, then verifies child closure. The legacy
+Windows taskkill/WMI path is retained only when the Job Object helper is
+unavailable; every fallback PID must match its captured CreationDate before and
+after termination. Missing, mismatched, or unreadable identities fail closed
+and leave release unconfirmed. A Runtime never sends signals to a
 PID loaded from an old claim: cancellation is handled by the original
 supervisor through the durable marker. Unknown orphan claims have no automatic
 restart or force-release path. A stored result alone never proves process exit.
@@ -75,6 +75,14 @@ errors. Invalid/missing result, task deadline, unknown execution owner, receipt
 mismatch and unconfirmed cancellation have distinct LOCAL_C500_* codes. Matching
 exit receipts are checked before orphan recovery and cannot be replaced by a
 success-looking result.json. Signal failures remain in the receipt diagnostics.
+
+On Windows, newly started executions use `windows-job-object.mjs` when the
+helper is available. It creates a named Job Object, starts the command
+suspended, applies `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, assigns the process,
+and resumes it. Cancellation calls `TerminateJobObject`; closing the helper
+also tears down descendants. The durable claim records `jobName` and
+`jobObject=true`. If helper startup, assignment, or termination cannot be
+confirmed, the task remains quarantined rather than reporting a false release.
 
 ## Limitations and verification
 

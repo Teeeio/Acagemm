@@ -30,6 +30,7 @@ const checks = [
   'test:http-request-liveness',
   'test:queue-liveness',
   'test:local-c500-recovery',
+  'test:windows-job-object',
   'test:generic-iteration-fault-injection',
   'test:cli-command',
   'test:workflow-kernel',

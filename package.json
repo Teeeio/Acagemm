@@ -30,6 +30,7 @@
     "test:http-request-liveness": "node tests/http-request-liveness-test.mjs",
     "test:queue-liveness": "node tests/queue-liveness-test.mjs",
     "test:local-c500-recovery": "node tests/local-c500-recovery-test.mjs",
+    "test:windows-job-object": "node tests/windows-job-object-test.mjs",
     "test:generic-iteration-fault-injection": "node tests/generic-iteration-fault-injection-test.mjs",
     "test:local-cpu-runner": "node tests/local-cpu-runner-test.mjs",
     "test:runtime": "node tests/agent-runtime-test.mjs",

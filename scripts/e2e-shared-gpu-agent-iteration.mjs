@@ -113,7 +113,24 @@ try {
     }
     assert.equal(state.baseline?.status, 'complete', 'Baseline stalled: ' + JSON.stringify(state.benchmark));
     console.log(`[gpu-agent-e2e] ${family}: GPU baseline complete`);
-    const started = await request(`/api/missions/${missionId}/runs`, { goal });
+    // Auto-tick may start the Agent immediately after baseline completion. Make
+    // this acceptance driver idempotent: reuse that run instead of turning a
+    // harmless start race into a terminal 409 failure.
+    let started;
+    const observedBeforeStart = (await request('/api/state')).state;
+    if (observedBeforeStart.agent?.status === 'running' && observedBeforeStart.agent?.missionId === missionId) {
+      started = { state: observedBeforeStart };
+    } else {
+      try {
+        started = await request(`/api/missions/${missionId}/runs`, { goal });
+      } catch (error) {
+        if (error.code !== 'AGENT_RUN_ALREADY_ACTIVE') throw error;
+        const recovered = (await request('/api/state')).state;
+        assert.equal(recovered.agent?.missionId, missionId, '409 active run belongs to another Mission');
+        assert.equal(recovered.agent?.status, 'running', '409 active run is not running');
+        started = { state: recovered };
+      }
+    }
     const firstRun = started.state.agent.runId;
     const writesAtStart = writes.length;
     const deadline = Date.now() + limit;

@@ -108,6 +108,7 @@ All external outcomes must be normalized before changing Mission state.
 | `semantic-snapshot.mjs` | bind semantics to evidence | Mission/Profile/test task | immutable semantic digest |
 | `shared-gpu-runtime.mjs` | read-only local shared-GPU capability probe and trusted environment descriptor | host tool/runtime probes | explicit `shared-host-gpu` environment policy |
 | `local-shared-gpu-package-adapter.mjs` | Python package materialization, syntax validation, prepared-artifact verification and release inspection | package store manifest/blobs | package-only task directory and non-publishable shared-GPU evidence |
+| `windows-job-object.mjs` | Windows Job Object process-tree adapter | executable, arguments and task-owned log paths | helper process, named Job identity and confirmed termination |
 
 ## Invariants
 

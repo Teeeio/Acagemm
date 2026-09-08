@@ -291,6 +291,7 @@ const startTask = async (task, cancelStepMs) => {
         OPERATOR_LOCAL_C500_TASK_JSON: taskPath(taskId),
         OPERATOR_LOCAL_C500_RUN_PY: runPyPath(taskId), OPERATOR_LOCAL_C500_RESULT_JSON: resultPath(taskId),
         OPERATOR_LOCAL_C500_REFERENCE_CACHE_DIR: referenceCacheRoot,
+        OPERATOR_WINDOWS_JOB_OBJECT_MODULE: path.join(rootDir, 'client-runtime', 'windows-job-object.mjs'),
         OPERATOR_LOCAL_C500_EXPECTED_DEVICE: String(task.hardware?.[0] || 'C550'),
         ...(task.payload.oracleRunPy ? { OPERATOR_LOCAL_C500_ORACLE_RUN_PY: oracleRunPyPath(taskId) } : {}),
       },
@@ -557,6 +558,8 @@ const supervisorSource = String.raw`
 import { spawn, execFile } from 'node:child_process';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
+import { access } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 const taskDir = process.argv[2];
 const target = (name) => path.join(taskDir, name);
 const read = async (name) => { try { return JSON.parse(await readFile(target(name), 'utf8')); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
@@ -569,6 +572,7 @@ const config = await read('execution-config.json');
 let claim = await read('execution-claim.json');
 let child = null, closed = false, exitCode = null, exitSignal = null;
 let stdout = '', stderr = '', stopping = false, cancellation = null, lastNonce = null, treeSignalled = false, signalError = null;
+let jobApi = null, jobProcess = null, jobName = null;
 let resolveClose;
 const closedPromise = new Promise((resolve) => { resolveClose = resolve; });
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -579,10 +583,15 @@ const groupGone = () => {
   try { process.kill(-child.pid, 0); return false; } catch (error) { return error.code === 'ESRCH'; }
 };
 const finish = async (confirmed, reason) => {
+  if (jobApi) {
+    try { stdout = await readFile(target('runner.stdout.raw.log'), 'utf8'); } catch {}
+    try { stderr = await readFile(target('runner.stderr.raw.log'), 'utf8'); } catch {}
+  }
   await write('runner.stdout.log', stdout);
   await write('runner.stderr.log', stderr);
   await write('execution-exit.json', {
     ownerId: claim.ownerId, supervisorPid: process.pid, pid: child?.pid || null,
+    jobName: claim.jobName || null, jobObject: Boolean(claim.jobObject),
     exitCode, signal: exitSignal, cancelled: Boolean(cancellation)
       && (cancellation.reason === 'task_deadline' || !(exitCode === 0 && exitSignal === null)),
     cancelReason: cancellation?.reason || null, closed,
@@ -628,6 +637,12 @@ const signalTree = (force) => new Promise((resolve) => {
   if (!child?.pid || closed && groupGone()) return resolve(true);
   if (closed) return resolve(false); // Never signal a PID after its owned child has exited.
   if (process.platform === 'win32') {
+    if (jobApi && jobName) {
+      jobApi.terminateJobObject(jobName).then(() => { treeSignalled = true; resolve(true); }).catch((error) => {
+        signalError = { code: error.code || 'JOB_OBJECT_TERMINATE_FAILED', message: error.message }; resolve(false);
+      });
+      return;
+    }
     execFile('taskkill.exe', ['/pid', String(child.pid), '/t', ...(force ? ['/f'] : [])],
       { windowsHide: true, timeout: 1_000, maxBuffer: 64 * 1024 }, async (error) => {
         if (!error) return resolve(true);
@@ -664,17 +679,35 @@ if (initialCancel) {
   cancellation = initialCancel; closed = true;
   await finish(true, 'Cancellation was observed before a runner process was created.');
 } else {
-  child = spawn(config.command, {
-    cwd: taskDir, shell: true, detached: process.platform !== 'win32', windowsHide: true,
-    env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  child.stdout?.on('data', (chunk) => { stdout = (stdout + chunk).slice(-8 * 1024 * 1024); });
-  child.stderr?.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8 * 1024 * 1024); });
-  child.once('error', (error) => { stderr += error.code + ': ' + error.message; });
-  child.once('close', (code, signal) => {
-    closed = true; exitCode = code; exitSignal = signal; resolveClose();
-  });
-  claim = { ...claim, supervisorPid: process.pid, pid: child.pid || null, spawnedAt: new Date().toISOString() };
+  try {
+    if (process.platform === 'win32' && process.env.OPERATOR_WINDOWS_JOB_OBJECT_MODULE) {
+      try { await access(process.env.OPERATOR_WINDOWS_JOB_OBJECT_MODULE); jobApi = await import(pathToFileURL(process.env.OPERATOR_WINDOWS_JOB_OBJECT_MODULE).href); } catch { jobApi = null; }
+    }
+    if (jobApi?.jobObjectSupported?.()) {
+      // Job names must be unique per task. Reusing the adapter owner UUID
+      // would attach concurrent tasks to one Job and make cancellation unsafe.
+      jobName = 'Local\\Acagemm-' + claim.ownerId.replace(/[^a-zA-Z0-9_.-]/g, '_')
+        + '-' + path.basename(taskDir).replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const comspec = process.env.ComSpec || 'cmd.exe';
+      jobProcess = await jobApi.spawnJobObjectProcess({ filePath: comspec, arguments: '/d /s /c "' + config.command + '"',
+        cwd: taskDir, stdoutPath: target('runner.stdout.raw.log'), stderrPath: target('runner.stderr.raw.log'), jobName, tempRoot: taskDir });
+      child = { pid: jobProcess.helperPid };
+      claim = { ...claim, supervisorPid: process.pid, pid: jobProcess.helperPid || null, jobName, jobObject: true, spawnedAt: new Date().toISOString() };
+      jobProcess.result.then((result) => { closed = true; exitCode = result.exitCode; exitSignal = null; resolveClose(); })
+        .catch((error) => { stderr += error.message; closed = true; exitCode = 1; exitSignal = null; resolveClose(); });
+    } else {
+      child = spawn(config.command, {
+        cwd: taskDir, shell: true, detached: process.platform !== 'win32', windowsHide: true,
+        env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      child.stdout?.on('data', (chunk) => { stdout = (stdout + chunk).slice(-8 * 1024 * 1024); });
+      child.stderr?.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8 * 1024 * 1024); });
+      child.once('error', (error) => { stderr += error.code + ': ' + error.message; });
+      child.once('close', (code, signal) => {
+        closed = true; exitCode = code; exitSignal = signal; resolveClose();
+      });
+      claim = { ...claim, supervisorPid: process.pid, pid: child.pid || null, spawnedAt: new Date().toISOString() };
+    }
   await write('execution-claim.json', claim);
   while (!closed || stopping) {
     const request = await read('cancel-request.json');
@@ -685,5 +718,10 @@ if (initialCancel) {
   }
   if (!cancellation && !groupGone()) await stop({ reason: 'descendant_cleanup', nonce: 'cleanup' });
   await finish(groupGone(), groupGone() ? 'Runner process and owned process tree have exited.' : 'Runner exited but descendant release is unconfirmed.');
+  } catch (error) {
+    stderr += error.message;
+    closed = true; exitCode = 1;
+    await finish(false, 'Job Object launch failed; resource release is unconfirmed.');
+  }
 }
 `;

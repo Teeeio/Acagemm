@@ -143,6 +143,12 @@ must provide a separate oracle and a complete exact testSpec; malformed matrices
 cannot be normalized into success. Real Codex acceptance remains opt-in and is not
 satisfied by these fixtures.
 
+`windows-job-object-test.mjs` covers the Windows process-ownership adapter used by
+the local C500 supervisor. It starts a short-lived worker in a named Job Object and
+asserts that `TerminateJobObject` releases the runner and its task-owned logs. The
+test is skipped on non-Windows hosts and does not constitute OS sandbox or GPU
+evidence.
+
 `shared-gpu-runtime-test` is a read-only capability/policy contract test.
 `e2e:shared-gpu` and `e2e:shared-gpu-service` are opt-in checks for the local
 NVIDIA adapter and its production queue supervisor. They require the F-drive

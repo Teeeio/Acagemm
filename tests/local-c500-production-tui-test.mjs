@@ -98,8 +98,10 @@ assert.match(backend, /execution-exit\.json/);
 assert.match(backend, /taskkill\.exe/);
 assert.match(backend, /detached: process\.platform !== 'win32'/);
 assert.equal(packageJson.scripts['test:local-c500-recovery'], 'node tests/local-c500-recovery-test.mjs');
+assert.equal(packageJson.scripts['test:windows-job-object'], 'node tests/windows-job-object-test.mjs');
 const releaseGate = await read('scripts/verify-local-c500-release.mjs');
 assert.match(releaseGate, /['"]test:local-c500-recovery['"]/);
+assert.match(releaseGate, /['"]test:windows-job-object['"]/);
 const confirmedTerminal = {
   status: 'completed', progress: 100, result: { benchmark: [] },
   resourceRelease: { confirmed: true, status: 'confirmed' },
