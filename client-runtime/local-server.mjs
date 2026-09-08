@@ -197,7 +197,7 @@ const operatorTestQueue = createOperatorTestQueue({ serviceClient: activeTestSer
 const experienceRepository = createExperienceRepository({ rootDir: path.join(runtimeDir, 'experiences') });
 const experienceService = createExperienceService({ repository: experienceRepository, now: () => new Date().toISOString(), createId: () => 'exp-' + randomUUID() });
 const sharedGpuExperienceVerifier = executionPackageStore && sharedGpuPackageAdapter
-  ? createSharedGpuExperienceVerifier({ executionPackageStore, packageAdapter: sharedGpuPackageAdapter }) : null;
+  ? createSharedGpuExperienceVerifier({ executionPackageStore, packageAdapter: sharedGpuPackageAdapter, readTask: (taskId) => operatorTestQueue.readTask(taskId) }) : null;
 const roundExperienceService = createRoundExperienceService({
   experienceService, timers: { setTimeout, clearTimeout },
   resolveAccess: ({ state, mission }) => {

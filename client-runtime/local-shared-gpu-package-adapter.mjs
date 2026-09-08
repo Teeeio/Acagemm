@@ -48,24 +48,57 @@ const validatePythonSources = async (stage, files, deadline) => {
   const python = process.env.OPERATOR_GPU_PYTHON || process.env.PYTHON || 'python';
   const sources = files.filter((file) => file.path.toLowerCase().endsWith('.py')).map((file) => path.join(stage, ...file.path.split('/')));
   if (!sources.length) throw fail('PACKAGE_LANGUAGE_INVALID', 'Python execution packages require at least one .py source file.');
-  const script = 'import ast,sys\nfor p in sys.argv[1:]:\n ast.parse(open(p,encoding="utf-8").read(), filename=p)';
+  // Parse syntax and check imports which resolve to another package-local
+  // module.  Imports not represented by package files (for example torch or
+  // the Python standard library) are intentionally delegated to the locked
+  // environment layer; this is not a sandbox or dependency installer.
+  const script = [
+    'import ast,sys,os',
+    'root=sys.argv[1]; paths=sys.argv[2:]',
+    'known=set()',
+    'for p in paths:',
+    ' rel=os.path.relpath(p,root).replace(os.sep,"/")[:-3]',
+    ' if rel.endswith("/__init__"): rel=rel[:-9]',
+    ' known.add(rel.replace("/","."))',
+    ' tops={name.split(".")[0] for name in known}',
+    'def exists(name): return name in known or any(x.startswith(name+".") for x in known)',
+    'for p in paths:',
+    ' rel=os.path.relpath(p,root).replace(os.sep,"/")[:-3]; mod=rel[:-9] if rel.endswith("/__init__") else rel; mod=mod.replace("/",".")',
+    ' tree=ast.parse(open(p,encoding="utf-8").read(),filename=p)',
+    ' for node in ast.walk(tree):',
+    '  names=[]',
+    '  if isinstance(node,ast.Import): names=[(x.name,0) for x in node.names]',
+    '  elif isinstance(node,ast.ImportFrom): names=[(("."*node.level)+(node.module or ""),node.level)]',
+    '  for name,level in names:',
+    '   if level:',
+    '    base=mod.rsplit(".",level)[0] if level <= len(mod.split(".")) else ""; target=(base+"."+name.lstrip(".")).strip(".")',
+    '    if target and not exists(target): raise RuntimeError(f"missing package-local import {target} in {p}")',
+    '   elif name.split(".")[0] in tops and not exists(name): raise RuntimeError(f"missing package-local import {name} in {p}")',
+  ].join('\n');
   const remaining = Math.max(100, Date.parse(deadline) - Date.now());
-  try { await execFileAsync(python, ['-I', '-c', script, ...sources], { cwd: stage, windowsHide: true, timeout: remaining, maxBuffer: 1024 * 1024 }); }
+  try { await execFileAsync(python, ['-I', '-c', script, stage, ...sources], { cwd: stage, windowsHide: true, timeout: remaining, maxBuffer: 1024 * 1024 }); }
   catch (error) { throw fail(error.killed ? 'PACKAGE_VALIDATION_TIMEOUT' : 'PACKAGE_SOURCE_INVALID', 'Python package source failed syntax validation.', { cause: error.message }); }
 };
 
 // Returns the trusted runtime resolver used by the local shared-GPU package
 // store. The probe is read-only; its result is the environment identity bound
 // into a package manifest and is never inferred from task content.
-export const createSharedGpuEnvironmentResolver = ({ probe = probeSharedGpuRuntime, probeOptions = {} } = {}) => {
+export const createSharedGpuEnvironmentResolver = ({ probe = probeSharedGpuRuntime, probeOptions = {}, cacheTtlMs = 30000 } = {}) => {
+  let cached = null;
+  let cachedAt = 0;
+  let inFlight = null;
   return Object.freeze({
     async resolve(environmentId) {
       if (environmentId !== SHARED_GPU_ENVIRONMENT_ID) throw fail('PACKAGE_ENVIRONMENT_UNKNOWN', 'Only the registered local shared-GPU environment is available.', { environmentId });
-      const result = await probe(probeOptions);
+      if (cached && Date.now() - cachedAt < cacheTtlMs) return structuredClone(cached);
+      inFlight ||= Promise.resolve().then(() => probe(probeOptions));
+      let result;
+      try { result = await inFlight; } finally { inFlight = null; }
       if (!result?.environment || result.environment.id !== SHARED_GPU_ENVIRONMENT_ID) throw fail('PACKAGE_ENVIRONMENT_INVALID', 'Shared-GPU probe returned an invalid environment.');
-      return structuredClone(result.environment);
+      cached = structuredClone(result.environment); cachedAt = Date.now();
+      return structuredClone(cached);
     },
-    clear() {},
+    clear() { cached = null; cachedAt = 0; },
   });
 };
 

@@ -14,7 +14,7 @@ const packageBinding = {
 };
 let admissionCalls = 0;
 const verifier = createSharedGpuExperienceVerifier({
-  executionPackageStore: { verifyAdmission: async (request) => { admissionCalls += 1; assert.equal(request.packageDigest, evidence.packageDigest); return { manifest: {}, environment: {} }; } },
+  executionPackageStore: { verifyAdmission: async (request) => { admissionCalls += 1; assert.equal(request.packageDigest, evidence.packageDigest); return { manifest: {}, environment: {}, admission: { preparedArtifactDigest: packageBinding.preparedArtifactDigest } }; } },
   packageAdapter: { verifyPreparedArtifact: async ({ preparedArtifactDigest }) => ({ valid: preparedArtifactDigest === packageBinding.preparedArtifactDigest }) },
   now: () => 1_000,
 });
@@ -25,4 +25,18 @@ assert.equal(admissionCalls, 1);
 assert.equal((await verifier({ state, mission, observation: { evidence: { ...evidence, candidateId: 'other' } } })).verified, false);
 const workerClaim = { ...state, benchmark: { ...state.benchmark, result: { experienceEvidence: { ...evidence, verified: true } } } };
 assert.equal((await verifier({ state: workerClaim, mission, observation: { evidence } })).verified, false, 'worker-provided flags cannot authorize evidence');
+
+const queueVerifier = createSharedGpuExperienceVerifier({
+  executionPackageStore: { verifyAdmission: async () => ({ manifest: {}, environment: {}, admission: { preparedArtifactDigest: packageBinding.preparedArtifactDigest } }) },
+  packageAdapter: { verifyPreparedArtifact: async () => ({ valid: true }) },
+  readTask: async (taskId) => ({ taskId, status: 'completed', resourceRelease: { confirmed: true }, result: { experienceEvidence: { ...evidence, patchDigest: `sha256:${'a'.repeat(64)}` } } }),
+});
+const queuedState = { ...state, benchmark: { ...state.benchmark, testTaskId: 'queue-01' } };
+assert.equal((await queueVerifier({ state: queuedState, mission, observation: { evidence } })).verified, true, 'queue receipt may use prefixed digests');
+const quarantined = createSharedGpuExperienceVerifier({
+  executionPackageStore: { verifyAdmission: async () => ({ manifest: {}, environment: {}, admission: { preparedArtifactDigest: packageBinding.preparedArtifactDigest } }) },
+  packageAdapter: { verifyPreparedArtifact: async () => ({ valid: true }) },
+  readTask: async (taskId) => ({ taskId, status: 'completed', resourceRelease: { confirmed: false }, result: { experienceEvidence: evidence } }),
+});
+assert.equal((await quarantined({ state: queuedState, mission, observation: { evidence } })).code, 'EXECUTION_PACKAGE_QUEUE_NOT_TERMINAL');
 console.log('[shared-gpu-experience-verifier] admission, artifact, candidate and worker-flag checks passed');

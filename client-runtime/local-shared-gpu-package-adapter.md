@@ -11,3 +11,9 @@ every file before admission and submission. Preparation is idempotent for the
 same package identity and reports confirmed release when a failed preparation
 has removed its temporary staging directory. Runtime probing is read-only and
 is provided by `createSharedGpuEnvironmentResolver`.
+
+For Python packages, preparation performs syntax validation and checks that
+relative or package-local imports resolve to files in the manifest. External
+imports (such as `torch` and the standard library) are supplied by the pinned
+environment layer; this check is not an OS sandbox and does not install or
+vendor host dependencies.

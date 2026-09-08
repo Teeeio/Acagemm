@@ -176,6 +176,14 @@ TUI 不允许直接读取或写入持久化 state 文件，不允许调用 Agent
 
 ## TUI 操作
 
+### 通用算子导入
+
+除两个固定 v0.1 Profile 外，自动化 harness 可通过 Production API client 的
+`importMissionSpecification(spec)` 导入已有源码项目。该入口只登记项目和
+Mission，不直接修改源码，也不会伪造 baseline/current best；默认 `start:false`
+等待正常 baseline materializer 完成。规格、校验规则和示例见
+[`GENERIC_MISSION_SPEC.md`](./GENERIC_MISSION_SPEC.md)。
+
 - `P`: 发布并立即启动 Mission
 - `Space`: 暂停或恢复 Mission
 - `N`: 添加人工意见，意见会进入生产迭代上下文

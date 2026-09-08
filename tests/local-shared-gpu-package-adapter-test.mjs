@@ -20,7 +20,7 @@ const spec = { schemaVersion: 'operator-studio.test-spec/v1', correctness: { req
 const pkg = await store.assemble({
   language: 'python', adapter: SHARED_GPU_PACKAGE_ADAPTER, environmentId: environment.id,
   binding: { missionId: 'mission-1', workspaceId: 'workspace-1', candidateId: 'candidate-1', candidateDigest: contentDigest('candidate') },
-  candidateEntrypoint: 'run.py', candidateFiles: { 'run.py': 'def run(x): return x\n' },
+  candidateEntrypoint: 'run.py', candidateFiles: { 'run.py': 'from lib.helper import VALUE\ndef run(x): return x\n' },
   dependencyFiles: { 'lib/helper.py': 'VALUE = 1\n' },
   acceptance: { entrypoint: 'oracle.py', files: { 'oracle.py': 'def run(x): return x\n' }, semanticDigest: contentDigest(canonicalJson(spec)), testSpec: spec },
   build: {},
@@ -38,5 +38,14 @@ const artifact = await adapter.verifyPreparedArtifact({ manifest: pkg.manifest, 
 assert.equal(artifact.valid, true);
 assert.match(await readFile(path.join(artifact.root, 'run.py'), 'utf8'), /def run/);
 assert.match(await readFile(path.join(artifact.root, 'lib', 'helper.py'), 'utf8'), /VALUE/);
+const invalid = await store.assemble({
+  language: 'python', adapter: SHARED_GPU_PACKAGE_ADAPTER, environmentId: environment.id,
+  binding: { missionId: 'mission-1', workspaceId: 'workspace-1', candidateId: 'candidate-2', candidateDigest: contentDigest('candidate-2') },
+  candidateEntrypoint: 'run.py', candidateFiles: { 'run.py': 'from lib.missing import VALUE\ndef run(x): return x\n' },
+  dependencyFiles: { 'lib/helper.py': 'VALUE = 1\n' },
+  acceptance: { entrypoint: 'oracle.py', files: { 'oracle.py': 'def reference(x): return x\ndef get_test_cases(): return []\ndef get_benchmark_inputs(): return []\n' }, semanticDigest: contentDigest(canonicalJson(spec)), testSpec: spec },
+  build: {},
+});
+await assert.rejects(() => store.prepare(invalid.packageDigest), (error) => error.code === 'PACKAGE_SOURCE_INVALID');
 await rm(root, { recursive: true, force: true });
 console.log('[shared-gpu-package-adapter] package-only materialization and admission verification passed');

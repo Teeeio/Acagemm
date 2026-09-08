@@ -10,6 +10,7 @@ import { isCurrentLocalC500Runtime } from '../../client-runtime/local-c500-runti
 import { detectMuxiDevice } from '../../client-runtime/muxi-device.mjs';
 import { inspectRuntimeCapabilities, productionWorkflowCapabilities } from '../../client-runtime/agent-runtime/registry.mjs';
 import { normalizeAgentRuntimeMode } from '../../client-runtime/agent-runtime/capabilities.mjs';
+import { normalizeGenericMissionSpecification } from './mission-spec.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const testerHome = path.resolve(process.env.LOCAL_C500_TESTER_HOME || path.join(rootDir, '.local-c500-production'));
@@ -516,6 +517,69 @@ export const publishMission = async (draft) => {
   const missionId = created.state.activeMissionId;
   const started = await api.post(`/api/missions/${encodeURIComponent(missionId)}/runs`, { goal });
   return { missionId, state: started.state, runId: started.runId, project };
+};
+
+// Import an operator-owned source project through the same Production API
+// boundary as the fixed-profile publisher. This client only validates/normalizes
+// the DTO; Mission state and workflow transitions remain server-owned.
+export const importMissionSpecification = async (input) => {
+  const spec = normalizeGenericMissionSpecification(input);
+  await ensureProductionRuntime();
+  const current = await api.get('/api/state');
+  const activeMission = current.state.missions?.find((item) => item.id === current.state.activeMissionId);
+  if (activeMission && !['completed', 'published', 'stopped', 'archived'].includes(activeMission.status)) await stopMission();
+
+  const projects = await api.get('/api/projects');
+  let project = projects.projects.find((item) => path.resolve(item.repository || '') === spec.repository)
+    || projects.projects.find((item) => path.resolve(item.root || '') === spec.projectRoot);
+  if (!project) {
+    // Projects service owns the three-layer layout and cannot safely register
+    // an arbitrary bare Git root as a project without copying it. Require the
+    // caller to register such a source project first rather than silently
+    // creating a sibling repository and losing the requested source files.
+    const expectedRepository = path.join(spec.projectRoot, 'repository');
+    if (path.resolve(expectedRepository) !== spec.repository) {
+      const error = new Error(`Source project is not registered. Register its three-layer project root first (expected repository ${expectedRepository}).`);
+      error.code = 'GENERIC_PROJECT_NOT_REGISTERED';
+      error.status = 409;
+      throw error;
+    }
+    const createdProject = await api.post('/api/projects', {
+      name: spec.title,
+      root: spec.projectRoot,
+      repository: spec.repository,
+      initializeGit: false,
+    });
+    project = createdProject.project;
+  }
+  if (projects.activeProjectId !== project.id) await api.post(`/api/projects/${encodeURIComponent(project.id)}/select`);
+
+  const baselineReady = spec.baseline?.materializer?.status === 'completed' && Boolean(spec.baseline?.materializer?.result?.runPy);
+  const missionInput = {
+    ...spec,
+    projectId: project.id,
+    repository: project.repository || spec.repository,
+    projectRoot: project.root || spec.repository,
+    sourceRoot: project.sourceRoot || null,
+    sourcePolicy: { ...spec.sourcePolicy, sourceFiles: spec.sourceFiles },
+    // Never manufacture a baseline. An imported Mission may enter the normal
+    // Research/Materializer path, but only an explicitly complete baseline may
+    // be started immediately.
+    baseline: baselineReady ? spec.baseline : undefined,
+  };
+  const created = await api.post('/api/missions', missionInput);
+  const missionId = created.state.activeMissionId;
+  let started = null;
+  if (spec.start) {
+    if (!baselineReady) {
+      const error = new Error('Imported Mission baseline is not ready; complete baseline materialization before starting.');
+      error.code = 'GENERIC_MISSION_BASELINE_NOT_READY';
+      error.status = 409;
+      throw error;
+    }
+    started = await api.post(`/api/missions/${encodeURIComponent(missionId)}/runs`, { goal: spec.goal });
+  }
+  return { missionId, state: started?.state || created.state, runId: started?.runId || null, project, started: Boolean(started), imported: true };
 };
 
 export const loadProductionState = async () => {

@@ -196,12 +196,22 @@ explicit `shared-host-gpu` policy for the MVP, with
 rejected. Real native GPU acceptance has not been launched; passing the legacy CPU
 fixture is not evidence that the new package path works.
 
-A native local-GPU adapter and its locked runtime declaration are needed before
-the remaining package/tool production integration can be closed.
-Do not loosen this consensus or claim the Goal complete to bypass that dependency.
+A native local-GPU adapter, package-only preparation, trusted receipt verifier,
+and production queue wiring are now implemented. The adapter uses the
+explicitly approved shared-host GPU policy (no OS isolation claim), keeps all
+artifacts under the prepared package, and marks observations non-publishable.
+Generic Mission import validation is also available for Python/Triton/CUDA/
+MXMACA aliases and rejects unregistered projects, missing entrypoints, unsafe
+paths, and incomplete baselines. The real CUDA runner and production service
+E2E pass; the generic Mission acceptance driver is retained at
+`scripts/e2e-shared-gpu-agent-iteration.mjs`.
 
-The Goal tool is active for the resumed mainline. This checkpoint remains
-incomplete until the native adapter, production wiring and real acceptance pass.
+The remaining acceptance dependency is a real local Codex session. A sandboxed
+run reached the bounded `needs_human` terminal state after Codex CLI network
+reconnects and produced no candidate; it did not hang or publish evidence.
+Automatic network escalation was rejected by the environment because the
+destination and data egress were not explicitly authorized. Do not substitute
+contract doubles, the CPU fixture, or a fabricated candidate for this gate.
 
 ## Final regression evidence (2026-09-07, UTC+8)
 
@@ -210,8 +220,8 @@ The observed verification window is recorded in the machine-readable report.
 
 | Verification | Result |
 |---|---|
-| npm run verify:local-c500-release | PASS, 114 checks; executed inside the umbrella gate |
-| npm run verify:non-hardware-robustness | PASS, 28 checks including the release gate |
+| npm run verify:local-c500-release | PASS, 119 checks; executed inside the umbrella gate |
+| npm run verify:non-hardware-robustness | running same 119-check gate; no hardware-free failures observed |
 | node tests/local-cpu-runner-test.mjs | PASS, 63 tests, 0 failures; actual Python |
 | node test-service/contract-test.mjs | PASS, independent mock duration/deadline and invalid configuration checks |
 | git diff --check | PASS; existing unrelated changes preserved |
@@ -235,7 +245,9 @@ cleaned its temporary Runtime/Workspace in finally; the console and summary,
 not those temporary workspaces, are retained here.
 
 Loop status: continue, NOT Goal completion.
-The next implementation sequence is: generic TUI/API package import -> retained
-three-family real Codex acceptance and integrated fault injection. Shared-GPU
-trusted experience receipts are now wired; do not substitute contract doubles or
-the legacy CPU fixture for the remaining acceptance conditions.
+The next implementation sequence is: explicit approval for the configured
+Codex CLI network destination and temporary Mission payload -> retained
+three-family real Codex acceptance -> integrated fault injection. Shared-GPU
+trusted experience receipts, generic import, package validation, queue terminal
+states and cancellation barriers are wired; do not substitute contract doubles
+or the legacy CPU fixture for the remaining acceptance conditions.

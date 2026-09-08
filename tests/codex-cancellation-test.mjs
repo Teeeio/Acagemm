@@ -53,6 +53,36 @@ try {
   assert.equal((await recovered.readRun('mock_stubborn')).resourceRelease.code, 'CODEX_EXECUTION_OWNER_UNAVAILABLE');
   assert.equal(await readFile(path.join(bridgeDir, 'codex-runs', 'mock_stubborn.json'), 'utf8'), bytes, 'recovery inspection is read-only');
 
+  if (process.platform === 'win32') {
+    // taskkill is denied: the adapter may stop the still-live parent handle,
+    // but a surviving descendant must keep the run quarantined. It must also
+    // avoid issuing another bare-PID command after the parent close event.
+    const taskkillCalls = [];
+    let parentKillCalls = 0;
+    let deniedChild;
+    const denied = createCodexClient({ command: 'codex-mock', bridgeDir, cancelGraceMs: 20, cancelForceMs: 20, logicalCleanupMs: 500,
+      spawnImpl: () => {
+        deniedChild = mockSpawn();
+        deniedChild.kill = () => { parentKillCalls += 1; deniedChild.emit('close', null, 'SIGKILL'); return true; };
+        deniedChild.descendantAlive = true;
+        return deniedChild;
+      },
+      execFileImpl: (command, args, options, callback) => {
+        taskkillCalls.push({ command, args });
+        const error = new Error('taskkill denied by managed runner'); error.code = 'EACCES';
+        callback(error, '', 'Access is denied');
+      },
+    });
+    await denied.start({ runId: 'mock_taskkill_denied', workspace: root });
+    const deniedResult = await denied.cancel('mock_taskkill_denied');
+    assert.equal(parentKillCalls, 1, 'fallback may stop the live parent handle exactly once');
+    assert.equal(taskkillCalls.length, 1, 'no PID command is attempted after parent close');
+    assert.equal(deniedChild.descendantAlive, true, 'fallback must not claim descendant termination');
+    assert.equal(deniedResult.status, 'cancel_requested');
+    assert.equal(deniedResult.resourceRelease.confirmed, false);
+    assert.equal(deniedResult.resourceRelease.code, 'CODEX_PROCESS_TREE_UNVERIFIED');
+  }
+
   const completedClient = testClient();
   await completedClient.start({ runId: 'mock_logical', workspace: root });
   const logicalChild = children.at(-1);

@@ -18,6 +18,12 @@ declare `isolation.kind=shared-host-gpu`, `policy.allowSharedHostGpu=true`, and
 not satisfy a formal C550/C550 publication Gate. Cancellation and terminal
 resource release still use the existing durable supervisor.
 
+The runner requires a distinct prepared oracle file and writes a structured
+`status=failed` result (including phase, role, and error code) even when
+preflight or module loading fails before normal artifacts exist. This keeps
+queue polling finite and diagnosable. Candidate code may import modules from
+the prepared package root; it cannot resolve host paths.
+
 Run the real smoke and production queue checks with:
 
 ```powershell

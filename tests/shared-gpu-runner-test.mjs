@@ -57,4 +57,27 @@ if (!await exists(python)) {
   } finally {
     await rm(work, { recursive: true, force: true });
   }
+
+  // Regression: a preflight failure must still leave a structured terminal
+  // result for the queue (never an opaque process exit with no JSON).
+  const failedWork = await mkdtemp(path.join(os.tmpdir(), 'shared-gpu-runner-failure-'));
+  const failedCandidate = path.join(failedWork, 'run.py');
+  const failedResult = path.join(failedWork, 'result.json');
+  await writeFile(failedCandidate, 'def run(inputs): return inputs\n', 'utf8');
+  await writeFile(path.join(failedWork, 'task.json'), JSON.stringify({ hardware: ['local-shared-gpu'] }), 'utf8');
+  const failedChild = spawn(python, [runner, '--run-py', failedCandidate, '--result-json', failedResult], {
+    cwd: failedWork, windowsHide: true,
+    env: { ...process.env, OPERATOR_LOCAL_C500_TASK_DIR: failedWork,
+      OPERATOR_LOCAL_C500_RUN_PY: failedCandidate, OPERATOR_LOCAL_C500_RESULT_JSON: failedResult,
+      OPERATOR_LOCAL_C500_ORACLE_RUN_PY: '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const failedExit = await new Promise((resolve) => failedChild.once('close', resolve));
+  const failedPayload = JSON.parse(await readFile(failedResult, 'utf8'));
+  assert.equal(failedExit, 1);
+  assert.equal(failedPayload.status, 'failed');
+  assert.equal(failedPayload.error.code, 'SHARED_GPU_ORACLE_REQUIRED');
+  assert.equal(failedPayload.environment.publishable, false);
+  await rm(failedWork, { recursive: true, force: true });
+  console.log('[shared-gpu-runner] structured preflight failure terminal record passed');
 }

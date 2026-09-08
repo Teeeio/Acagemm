@@ -213,12 +213,29 @@ export const createCodexClient = (options = {}) => {
     const timer = setTimeout(() => resolve(false), timeoutMs);
     execution.closedPromise.then(() => { clearTimeout(timer); resolve(true); });
   });
-  const terminateTree = options.terminateProcessTree || (async ({ child, force }) => {
-    if (!child?.pid) return false;
+  const terminateTree = options.terminateProcessTree || (async ({ child, force, execution }) => {
+    // The ChildProcess close receipt ends our authority to signal its PID.
+    // A later force pass must never act on a possibly reused numeric PID.
+    if (!child?.pid || execution?.closed) return false;
     if (process.platform === 'win32') {
-      await execFileAsync(execFileImpl, 'taskkill.exe', ['/pid', String(child.pid), '/t', ...(force ? ['/f'] : [])],
-        { windowsHide: true, timeout: forceMs });
-      return true;
+      const pid = Number(child.pid);
+      try {
+        await execFileAsync(execFileImpl, 'taskkill.exe', ['/pid', String(pid), '/t', ...(force ? ['/f'] : [])],
+          { windowsHide: true, timeout: forceMs });
+        return true;
+      } catch (error) {
+        // A live ChildProcess handle permits a best-effort stop of this parent
+        // only. It proves nothing about descendants: never upgrade this to a
+        // successful tree signal or invoke a new command using its bare PID.
+        // If the process closed during taskkill, even this handle is no longer
+        // used. Unknown descendants keep the workspace quarantined.
+        if (!execution?.closed && typeof child.kill === 'function') {
+          try { child.kill('SIGKILL'); } catch {}
+        }
+        throw Object.assign(new Error('Codex parent termination was requested, but Windows process-tree release could not be verified.'), {
+          code: 'CODEX_PROCESS_TREE_UNVERIFIED', cause: error,
+        });
+      }
     }
     try { process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM'); }
     catch (error) { if (error.code !== 'ESRCH') throw error; }
@@ -279,10 +296,10 @@ export const createCodexClient = (options = {}) => {
         nextAction: 'Await process exit; force termination follows the grace period.' };
       await saveRun(record);
       let failure = null;
-      try { execution.treeSignalled = (await terminateTree({ child: execution.child, force: false })) !== false; }
+      try { execution.treeSignalled = (await terminateTree({ child: execution.child, force: false, execution })) !== false; }
       catch (error) { failure = error; }
       if (await waitForClose(execution, graceMs) && await settleClosed(execution)) return readRun(runId);
-      try { execution.treeSignalled = (await terminateTree({ child: execution.child, force: true })) !== false; }
+      try { execution.treeSignalled = (await terminateTree({ child: execution.child, force: true, execution })) !== false; }
       catch (error) { failure = error; }
       if (await waitForClose(execution, forceMs) && await settleClosed(execution)) return readRun(runId);
       record.resourceRelease = { ...record.resourceRelease, status: 'unconfirmed',

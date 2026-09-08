@@ -21,8 +21,11 @@ and preserve runId, missionId, workspace, threadId and event path, adding
 - turn.completed records logical completion, not process release. Only child
   close and any required cancellation cleanup publish completed/cancelled/failed.
 - cancel(runId) persists intent before termination. Windows uses bounded taskkill
-  /T, escalating to /F; Unix sends SIGTERM then SIGKILL to the process group.
-  Confirmed cancellation requires child close and process-tree cleanup evidence.
+  /T, escalating to /F; if taskkill is denied, the live ChildProcess handle may
+  receive a best-effort parent stop, but this never counts as tree termination.
+  Unix sends SIGTERM then SIGKILL to the process group. Confirmed cancellation
+  requires child close and process-tree cleanup evidence; an unverified Windows
+  descendant remains quarantined as `CODEX_PROCESS_TREE_UNVERIFIED`.
   Failure to confirm before the deadline returns cancel_requested with explicit
   unconfirmed reason/nextAction and keeps the workspace blocked.
 - Late events cannot overwrite an already confirmed process exit with a running
@@ -40,4 +43,3 @@ The test-owned Node process tree is only a cancellation test, not a Codex/model 
 Tests:
 `node tests/codex-runtime-test.mjs`
 `node tests/codex-cancellation-test.mjs`.
-
