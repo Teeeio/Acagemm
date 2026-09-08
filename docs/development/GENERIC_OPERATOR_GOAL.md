@@ -193,8 +193,12 @@ Static import checks and an ordinary Python subprocess cannot enforce a strong
 package-only execution boundary. The package store therefore admits only the
 explicit `shared-host-gpu` policy for the MVP, with
 `policy.packageBoundary=adapter-enforced`; ordinary non-GPU host execution remains
-rejected. Real native GPU acceptance has not been launched; passing the legacy CPU
-fixture is not evidence that the new package path works.
+rejected. Real native GPU acceptance has now been launched. The retained affine
+run completed one Codex-generated candidate through the production path: real
+workspace Diff, shared-GPU package admission, 4/4 correctness, primary/small
+benchmark profiles, and one trusted non-publishable experience record. A later
+multi-family run was quarantined when Codex process-tree release could not be
+confirmed; no evidence was published.
 
 A native local-GPU adapter, package-only preparation, trusted receipt verifier,
 and production queue wiring are now implemented. The adapter uses the
@@ -206,12 +210,12 @@ paths, and incomplete baselines. The real CUDA runner and production service
 E2E pass; the generic Mission acceptance driver is retained at
 `scripts/e2e-shared-gpu-agent-iteration.mjs`.
 
-The remaining acceptance dependency is a real local Codex session. A sandboxed
-run reached the bounded `needs_human` terminal state after Codex CLI network
-reconnects and produced no candidate; it did not hang or publish evidence.
-Automatic network escalation was rejected by the environment because the
-destination and data egress were not explicitly authorized. Do not substitute
-contract doubles, the CPU fixture, or a fabricated candidate for this gate.
+The remaining acceptance dependency is the reduction/normalization portion of
+the real local Codex session plus fault injection. The run is deliberately
+bounded: network reconnects and unconfirmed process-tree release become an
+explicit `needs_human`/quarantine state rather than a fake completion. Do not
+substitute contract doubles, the CPU fixture, or a fabricated candidate for
+this gate.
 
 ## Final regression evidence (2026-09-07, UTC+8)
 
@@ -221,7 +225,7 @@ The observed verification window is recorded in the machine-readable report.
 | Verification | Result |
 |---|---|
 | npm run verify:local-c500-release | PASS, 119 checks; executed inside the umbrella gate |
-| npm run verify:non-hardware-robustness | running same 119-check gate; no hardware-free failures observed |
+| npm run verify:non-hardware-robustness | PASS, 28 checks without physical hardware |
 | node tests/local-cpu-runner-test.mjs | PASS, 63 tests, 0 failures; actual Python |
 | node test-service/contract-test.mjs | PASS, independent mock duration/deadline and invalid configuration checks |
 | git diff --check | PASS; existing unrelated changes preserved |
@@ -239,15 +243,16 @@ small-vector case passed with atol=0 and rtol=0; Gate returned adopt. This was
 Reference Fixture generation plus real Python, source=cpu-e2e and
 liveHardware=false. Shared-GPU service E2E also completed package assembly,
 admission verification, prepared-artifact checks, real CUDA correctness and
-benchmark; its evidence is explicitly non-publishable. It is not a three-family
-real Codex acceptance run and does not verify OS isolation. The harness
+benchmark; its evidence is explicitly non-publishable. The retained real Codex
+affine run additionally completed one candidate and recorded trusted
+non-publishable experience. It is not yet a complete three-family real Codex
+acceptance run and does not verify OS isolation. The harness
 cleaned its temporary Runtime/Workspace in finally; the console and summary,
 not those temporary workspaces, are retained here.
 
 Loop status: continue, NOT Goal completion.
-The next implementation sequence is: explicit approval for the configured
-Codex CLI network destination and temporary Mission payload -> retained
-three-family real Codex acceptance -> integrated fault injection. Shared-GPU
+The next implementation sequence is: reduction/normalization real Codex
+acceptance -> integrated fault injection. Shared-GPU
 trusted experience receipts, generic import, package validation, queue terminal
 states and cancellation barriers are wired; do not substitute contract doubles
 or the legacy CPU fixture for the remaining acceptance conditions.
