@@ -96,6 +96,8 @@ try {
 
   const runtime = createAgentRuntime({ mode: 'codex-cli', codexClient: client, codexWorkspace: root });
   assert.equal((await runtime.describe()).connected, true);
+  const aliasRuntime = createAgentRuntime({ mode: 'codex', codexClient: client, codexWorkspace: root });
+  assert.equal((await aliasRuntime.describe()).mode, 'codex-cli');
   const delegatedRuntime = createAgentRuntime({
     mode: 'codex-cli',
     codexClient: { describe: async () => ({ installed: true, loggedIn: false, version: 'codex-cli delegated' }) },

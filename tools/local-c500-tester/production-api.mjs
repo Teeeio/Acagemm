@@ -9,6 +9,7 @@ import { buildFixedOperatorBaselineRunPy, fixedOperatorBaselineSource, fixedOper
 import { isCurrentLocalC500Runtime } from '../../client-runtime/local-c500-runtime-contract.mjs';
 import { detectMuxiDevice } from '../../client-runtime/muxi-device.mjs';
 import { inspectRuntimeCapabilities, productionWorkflowCapabilities } from '../../client-runtime/agent-runtime/registry.mjs';
+import { normalizeAgentRuntimeMode } from '../../client-runtime/agent-runtime/capabilities.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const testerHome = path.resolve(process.env.LOCAL_C500_TESTER_HOME || path.join(rootDir, '.local-c500-production'));
@@ -17,7 +18,9 @@ export const exportHome = path.join(testerHome, 'exports');
 export const apiPort = Number(process.env.LOCAL_C500_API_PORT || 4275);
 export const apiBaseUrl = process.env.LOCAL_C500_API_URL || `http://127.0.0.1:${apiPort}`;
 const simulationEnabled = (environment = process.env) => environment.OPERATOR_LOCAL_C500_SIMULATION === '1' || environment.OPERATOR_SIMULATION === '1';
-export const resolveAgentRuntimeMode = (environment = process.env) => simulationEnabled(environment) ? 'reference-fixture' : environment.OPERATOR_RUNTIME_MODE || 'claude-code';
+export const resolveAgentRuntimeMode = (environment = process.env) => simulationEnabled(environment)
+  ? 'reference-fixture'
+  : normalizeAgentRuntimeMode(environment.OPERATOR_RUNTIME_MODE || 'claude-code');
 export const resolveMuxiDevice = (environment = process.env, spawn = spawnSync) => {
   if (simulationEnabled(environment)) return environment.OPERATOR_MUXI_DEVICE || 'C550';
   if (environment.OPERATOR_LOCAL_C500_MOCK === '1') return environment.OPERATOR_MUXI_DEVICE || 'C550';

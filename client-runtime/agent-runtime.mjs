@@ -20,7 +20,7 @@ import { fixedOperatorPrompt } from './fixed-operator-profiles.mjs';
 import { recordRunTokenUsage } from './token-usage.mjs';
 import { runtimeRegistry } from './agent-runtime/registry.mjs';
 import { createAgentRuntimeEngine } from './agent-runtime/engine.mjs';
-import { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
+import { isManagedWorkspaceRuntimeMode, normalizeAgentRuntimeMode } from './agent-runtime/capabilities.mjs';
 import { appendRuntimeEvent } from './runtime-events.mjs';
 
 export { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
@@ -373,7 +373,7 @@ export const isResearchAgentActive = (agent = {}) => Boolean(agent?.runId && ACT
 export function createAgentRuntime(options = {}) {
   // Claude Code is the production tester default. Codex remains available as
   // an explicit compatibility override via OPERATOR_RUNTIME_MODE=codex-cli.
-  const mode = options.mode || process.env.OPERATOR_RUNTIME_MODE || 'claude-code';
+  const mode = normalizeAgentRuntimeMode(options.mode || process.env.OPERATOR_RUNTIME_MODE || 'claude-code');
   const cliRoot = options.cliRoot || process.env.OPERATOR_CLI_ROOT || '';
   const bridgeDir = options.bridgeDir || process.env.OPERATOR_BRIDGE_DIR || defaultBridgeDir;
   const statusPath = cliRoot ? path.join(cliRoot, process.env.OPERATOR_CLI_STATUS_FILE || 'results/agent_status_cli_integration.json') : '';

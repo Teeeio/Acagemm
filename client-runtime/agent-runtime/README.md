@@ -13,7 +13,7 @@ This module defines provider-neutral Agent capabilities and dispatch. It lets pr
 |---|---|---|
 | `definitions.mjs` | none | frozen runtime definitions |
 | `registry.mjs` | runtime ID and capability | definition/capability inspection |
-| `capabilities.mjs` | runtime ID | managed-workspace boolean |
+| `capabilities.mjs` | runtime ID or supported alias | normalized runtime ID and managed-workspace boolean |
 | `engine.mjs` | registry and provider clients | provider-neutral invocation engine |
 | `usage.mjs` | provider events/usage | canonical token usage |
 
@@ -23,6 +23,7 @@ This module defines provider-neutral Agent capabilities and dispatch. It lets pr
 - Production admission is capability-based, not provider-name-based.
 - Managed-workspace runtimes must define a failure classifier.
 - Registry definitions are immutable after construction.
+- External runtime aliases are normalized at the boundary (`codex` -> `codex-cli`, `claude` -> `claude-code`, `opencode` -> `opencode-server`); unknown values remain unsupported.
 
 ## Non-Responsibilities
 
