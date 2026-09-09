@@ -200,12 +200,16 @@ export const createCodexClient = (options = {}) => {
 
   const writes = new Map();
   const instanceId = randomUUID();
-  const graceMs = Math.max(10, Number(options.cancelGraceMs) || 1_000);
-  const forceMs = Math.max(10, Number(options.cancelForceMs) || 1_000);
+  // Codex may leave a short-lived PowerShell/tool descendant behind after a
+  // completed turn. A one-second force window classified valid candidates as
+  // unconfirmed before that descendant exited, so keep cleanup bounded but
+  // long enough to observe the normal Windows process-tree drain.
+  const graceMs = Math.max(10, Number(options.cancelGraceMs) || 2_000);
+  const forceMs = Math.max(10, Number(options.cancelForceMs) || 5_000);
   // Give a completed turn a short drain window before cancellation. Native
   // Windows Codex may close its process before inherited stdout handles drain;
   // callers can tune this bounded window without changing cancellation safety.
-  const logicalCleanupMs = Math.max(10, Number(options.logicalCleanupMs ?? process.env.OPERATOR_CODEX_LOGICAL_CLEANUP_MS) || 1_500);
+  const logicalCleanupMs = Math.max(10, Number(options.logicalCleanupMs ?? process.env.OPERATOR_CODEX_LOGICAL_CLEANUP_MS) || 15_000);
   const saveRun = (record) => {
     const snapshot = structuredClone(record);
     const previous = writes.get(record.runId) || Promise.resolve();

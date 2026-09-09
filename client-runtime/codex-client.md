@@ -36,8 +36,9 @@ and preserve runId, missionId, workspace, threadId and event path, adding
   snapshot. Writes are serialized and atomically renamed.
 
 Cancellation grace/force waits default to 1 second each; CLI termination requests
-also have a force-wait timeout. logicalCleanupMs defaults to 1.5 seconds after a
-turn.completed event. Options cancelGraceMs, cancelForceMs, logicalCleanupMs and
+also have a force-wait timeout. logicalCleanupMs defaults to 15 seconds after a
+turn.completed event so short-lived Windows PowerShell/tool descendants can drain
+before cancellation is classified as unconfirmed. Options cancelGraceMs, cancelForceMs, logicalCleanupMs and
 terminateProcessTree support bounded contract testing. Injected termination
 returning success still requires an actual close event; a timeout is never proof.
 
