@@ -8,6 +8,13 @@
 
 `client-runtime` is the local application backend. It owns Mission state, workflow orchestration, Agent coordination, isolated workspaces, serialized operator tests, evidence decisions, and local persistence.
 
+Windows MVP Codex runs use the unelevated sandbox fallback when the optional
+Windows sandbox helper is unavailable. Boundary mode keeps Codex's structured
+file-edit tools enabled by default; the workspace sandbox and post-run Mission
+Workspace Diff audit remain the write boundary. Set
+`OPERATOR_CODEX_DISABLE_SHELL_TOOL=1` only when a stricter tool surface is
+required for a controlled diagnostic run.
+
 ## Inputs
 
 - HTTP commands from the TUI or Web client.

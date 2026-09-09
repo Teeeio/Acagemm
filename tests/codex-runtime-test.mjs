@@ -142,8 +142,10 @@ try {
   state.iterationStats = { roundBudget: { roundId: experienceContext.roundId }, roundExperience: experienceContext };
   await assert.rejects(runtime.startRun({ state, mission: { ...mission, projectId: 'different-project' }, goal: 'reject foreign context', workspace: root, experienceContext }), { code: 'EXPERIENCE_CONTEXT_INVALID' });
   await runtime.startRun({ state, mission, goal: 'inspect operator', workspace: root, experienceContext });
-  assert.ok(spawnCalls[2].args.includes('shell_tool'));
-  assert.ok(!spawnCalls[2].args.includes('unified_exec'));
+  // Boundary mode keeps Codex's structured edit surface by default. The MVP
+  // relies on the workspace sandbox plus the post-run diff audit; operators
+  // can still opt into --disable shell_tool explicitly when required.
+  assert.ok(!spawnCalls[2].args.includes('shell_tool'));
   assert.match(spawnCalls[2].stdin, /Mission ID: MIS_RUNTIME/);
   assert.ok(spawnCalls[2].stdin.includes(experienceContext.contextId));
   assert.match(spawnCalls[2].stdin, /UNTRUSTED JSON DATA/);

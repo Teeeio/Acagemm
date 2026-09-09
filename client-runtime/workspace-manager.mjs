@@ -1,6 +1,6 @@
 import { execFile as nodeExecFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, lstat, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createScopedGitEnvironment } from './git-environment.mjs';
 
@@ -484,6 +484,39 @@ export function createWorkspaceManager(options = {}) {
     return { repository, candidateId, previousHead: head, commit, adoptedAt: new Date().toISOString() };
   };
 
+  const applyWorkspacePatch = async ({ repository, patch }) => {
+    if (!repository || !path.isAbsolute(repository) || !await exists(repository)) {
+      const error = new Error('Mission Workspace 不存在或不是本机绝对路径。');
+      error.code = 'MISSION_WORKSPACE_UNAVAILABLE';
+      error.status = 409;
+      throw error;
+    }
+    const text = String(patch || '');
+    if (!text.trim()) {
+      const error = new Error('Agent 返回的 Patch 为空。');
+      error.code = 'AGENT_PATCH_EMPTY';
+      error.status = 400;
+      throw error;
+    }
+    const paths = [...text.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((match) => match[1].trim().replaceAll('\\', '/'));
+    if (!paths.length || paths.some((value) => !value || value.startsWith('/') || /^[A-Za-z]:\//.test(value) || value.split('/').includes('..'))) {
+      const error = new Error('Agent Patch 包含缺失、绝对路径或越界路径。');
+      error.code = 'AGENT_PATCH_PATH_INVALID';
+      error.status = 400;
+      throw error;
+    }
+    const patchPath = path.join(repository, `.operator-studio-agent-${process.pid}-${Date.now()}.patch`);
+    await writeFile(patchPath, text, 'utf8');
+    try {
+      await git(['apply', '--check', '--binary', patchPath], repository);
+      await git(['apply', '--binary', patchPath], repository);
+      inspectionCache.delete(await normalizePath(repository));
+      return { files: [...new Set(paths)] };
+    } finally {
+      await rm(patchPath, { force: true }).catch(() => {});
+    }
+  };
+
   const revertAdoption = async ({ repository, commit }) => {
     const inspection = await inspect(repository, { refresh: true });
     if (!inspection.ready || inspection.dirty) {
@@ -507,7 +540,7 @@ export function createWorkspaceManager(options = {}) {
     return { repository, revertedCommit: commit, revertCommit, revertedAt: new Date().toISOString() };
   };
 
-  return { ensure, inspect, bootstrapRepository, captureDiff, inspectSources, updateSourceRegistry, adoptPatch, revertAdoption, excludeProjectRuntime, git };
+  return { ensure, inspect, bootstrapRepository, captureDiff, inspectSources, updateSourceRegistry, adoptPatch, applyWorkspacePatch, revertAdoption, excludeProjectRuntime, git };
 }
 
 export const workspaceManager = createWorkspaceManager();

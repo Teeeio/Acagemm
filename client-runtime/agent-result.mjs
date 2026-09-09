@@ -90,6 +90,7 @@ export function parseAgentResult(events = []) {
     nextAction,
     risks: Array.isArray(parsed?.risks) ? parsed.risks : [],
     sourceReferences: Array.isArray(parsed?.sourceReferences) ? parsed.sourceReferences : [],
+    patch: typeof parsed?.patch === 'string' ? parsed.patch : (typeof parsed?.unifiedDiff === 'string' ? parsed.unifiedDiff : null),
     rawText: finalText.slice(0, 8_000),
   };
 }

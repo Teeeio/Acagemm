@@ -1610,7 +1610,16 @@ export function createAgentRuntime(options = {}) {
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
         const candidateInspectionEligible = terminalCompleted || recoverableGenerationFailure;
         if (candidateInspectionEligible && (agentResult.candidates.length || !workflowAdvanced)) {
-          const manifest = await workspaceManager.captureDiff(run.workspace);
+          let manifest = await workspaceManager.captureDiff(run.workspace);
+          if (!manifest.changedFiles?.length && agentResult.patch) {
+            try {
+              const applied = await workspaceManager.applyWorkspacePatch({ repository: run.workspace, patch: agentResult.patch });
+              appendRuntimeEvent(state, 'candidate.patch_applied_from_result', { runId: state.agent.runId, files: applied.files }, { kind: 'candidate', mode });
+              manifest = await workspaceManager.captureDiff(run.workspace);
+            } catch (error) {
+              appendRuntimeEvent(state, 'candidate.patch_result_rejected', { runId: state.agent.runId, errorCode: error.code || 'AGENT_PATCH_REJECTED', detail: error.message }, { kind: 'policy', mode });
+            }
+          }
           const stableDigest = state.workflowRecovery?.checkpoints?.at(-1)?.stableDigest || null;
           ({ candidateValidation, verifiedCandidates } = inspectCandidateDiff({
             agentResult,

@@ -54,6 +54,8 @@ semantic/correctness/benchmark contracts、raw intent 及未解决冲突/unknown
 写入 API 伪造。
 inspectCandidateDiff 的 manifest 至少包含 dirty、diff、digest 和 changedFiles。
 返回的 candidateValidation 是策略结果；调用方仍需通过命令日志保存外部效果和状态应用。
+当 Provider 没有可用的文件编辑工具时，Prompt 允许返回顶层统一 Git Patch；Patch 的路径
+校验与应用属于 Agent Runtime/Workspace 适配器，本模块仍只以最终 Workspace Diff 作为准入权威。
 
 finalizeCandidateAdmission 不修改任何输入对象。它要求 workspaceFiles 和 entryContent
 已由 Workspace 端口读取，并通过 validateOperatorLanguageCandidate 执行当前语言契约。

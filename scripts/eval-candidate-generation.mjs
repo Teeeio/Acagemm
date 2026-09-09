@@ -137,10 +137,12 @@ try {
   if (candidateValidation?.passed && candidate?.id) {
     await request('/api/actions/apply-patch', { method: 'POST', body: { candidate: candidate.id } });
     const candidateSubmission = await request('/api/actions/start-benchmark', { method: 'POST', body: { purpose: 'candidate', candidate: candidate.id, candidateDigest: candidate.patchDigest, operator, matrix, timeoutSeconds: config.taskTimeoutSeconds || 60 } });
-    // Pause automatic adoption/next-round actions only after the benchmark
-    // command is committed. The runtime pipeline still dispatches this frozen
-    // benchmark while paused; GET remains read-only.
-    await request('/api/state', { method: 'PATCH', body: { missionPaused: true } });
+    // Keep the Mission active while explicitly advancing the committed
+    // benchmark. runtime-advance-service intentionally treats missionPaused as
+    // a no-op for ordinary work, so pausing here would leave the queue task in
+    // `queued` forever. The evaluator has already disabled the background tick
+    // (OPERATOR_AUTO_TICK=0), therefore explicit advancement is deterministic;
+    // pause only after both queue and benchmark reach a terminal outcome.
     const candidateDeadline = Date.now() + Math.min(timeoutMs, 120_000);
     let finalCandidateState = null;
     while (Date.now() < candidateDeadline) {
@@ -158,6 +160,7 @@ try {
     }
     if (!finalCandidateState) throw Object.assign(new Error('Candidate benchmark did not reach a terminal queue and Mission state outcome before its deadline.'), { code: 'CANDIDATE_EVALUATION_TIMEOUT', details: { taskId: candidateSubmission.taskId, taskStatus: candidateTask?.status, benchmarkStatus: state?.benchmark?.status } });
     if (!candidateTask && state.benchmark?.testTaskId) candidateTask = (await request(`/api/operator-tests/${encodeURIComponent(state.benchmark.testTaskId)}`)).task;
+    await request('/api/state', { method: 'PATCH', body: { missionPaused: true } }).catch(() => null);
   }
   const events = (await request(`/api/missions/${encodeURIComponent(missionId)}/events`)).events || [];
   const started = events.find((event) => event.payload?.runId === runId && /run_started$/.test(event.type));

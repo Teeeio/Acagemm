@@ -328,13 +328,20 @@ export const createCodexClient = (options = {}) => {
     const writableDirectories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const effectiveSandbox = runSandboxMode || sandboxMode;
     const boundaryEnabled = Boolean(environment.OPERATOR_AGENT_ROOTS);
+    // The MVP relies on Codex's workspace sandbox plus the post-run Mission
+    // Workspace diff audit. Do not remove the structured edit/apply tools just
+    // because the workflow boundary is enabled: doing so leaves only the
+    // limited node_repl surface and can strand a real run after its first read.
+    // Operators may still opt into the stricter tool surface explicitly.
+    const disableShellTool = String(environment.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? process.env.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? '').toLowerCase() === '1'
+      || String(environment.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? process.env.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? '').toLowerCase() === 'true';
     const record = { schemaVersion: 2, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null,
       process: { pid: null, ownerPid: process.pid, instanceId }, resourceRelease: { confirmed: false, status: 'active', reason: 'Agent execution is active.' } };
     await saveRun(record);
     const sandboxArgs = process.platform === 'win32' && windowsSandbox ? ['-c', `windows.sandbox="${windowsSandbox}"`] : [];
     const gitRepoArgs = skipGitRepoCheck ? ['--skip-git-repo-check'] : [];
     // unified_exec is needed for apply_patch; the workspace sandbox confines it.
-    const toolRestrictionArgs = boundaryEnabled ? ['--disable', 'shell_tool'] : [];
+    const toolRestrictionArgs = boundaryEnabled && disableShellTool ? ['--disable', 'shell_tool'] : [];
     const modelArgs = model ? ['--model', model] : [];
     const args = resumeThreadId
       ? ['exec', ...modelArgs, 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
