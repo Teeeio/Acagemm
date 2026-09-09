@@ -59,6 +59,7 @@ import { createJsonResponder, createStaticFileHandler, readJson, sendSse as sse 
 import { createSystemRoutes } from './server/system-routes.mjs';
 import { createFilesystemService, directoryExists } from './server/filesystem-service.mjs';
 import { createFilesystemRoutes } from './server/filesystem-routes.mjs';
+import { resolvePythonExecutable } from './platform-runtime.mjs';
 import { createProjectRoutes } from './server/project-routes.mjs';
 import { createMissionRoutes } from './server/mission-routes.mjs';
 import { createProjectsService } from './application/projects-service.mjs';
@@ -166,7 +167,7 @@ const sharedGpuPackageRoot = process.env.OPERATOR_EXECUTION_PACKAGE_DIR
   ? path.resolve(process.env.OPERATOR_EXECUTION_PACKAGE_DIR)
   : path.join(runtimeDir, 'execution-packages');
 const sharedGpuEnvironmentResolver = localC500Config.kind === 'local-shared-gpu'
-  ? createSharedGpuEnvironmentResolver({ probeOptions: { python: process.env.OPERATOR_GPU_PYTHON || path.join(rootDir, '.gpu-venv', 'Scripts', 'python.exe') } }) : null;
+  ? createSharedGpuEnvironmentResolver({ probeOptions: { python: resolvePythonExecutable({ rootDir }) } }) : null;
 const sharedGpuPackageAdapter = localC500Config.kind === 'local-shared-gpu'
   ? createSharedGpuPackageAdapter({ rootDir: path.join(sharedGpuPackageRoot, 'adapter') }) : null;
 const executionPackageStore = sharedGpuPackageAdapter

@@ -3,9 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolvePythonExecutable } from '../client-runtime/platform-runtime.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const python = process.env.OPERATOR_GPU_PYTHON || path.join(root, '.gpu-venv', 'Scripts', 'python.exe');
+const python = resolvePythonExecutable({ rootDir: root });
 const required = process.env.OPERATOR_SHARED_GPU_REQUIRED === '1';
 const { access } = await import('node:fs/promises');
 try { await access(python); } catch {

@@ -5,6 +5,7 @@ import { createServer } from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { resolvePythonExecutable } from '../client-runtime/platform-runtime.mjs';
 
 // Acceptance driver only: setup commands, then read-only observation of the
 // production autopilot. No candidate injection, fake provider, Gate override,
@@ -41,7 +42,7 @@ const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
     OPERATOR_AUTO_TICK: '1', OPERATOR_AUTO_TICK_INTERVAL_MS: '5000',
     OPERATOR_CODEX_LOGICAL_CLEANUP_MS: process.env.OPERATOR_CODEX_LOGICAL_CLEANUP_MS || '60000',
     OPERATOR_MAIN_AGENT_BUDGET_MS: '180000', OPERATOR_TEST_BACKEND: 'local-shared-gpu',
-    OPERATOR_GPU_PYTHON: process.env.OPERATOR_GPU_PYTHON || path.join(root, '.gpu-venv', 'Scripts', 'python.exe'),
+    OPERATOR_GPU_PYTHON: resolvePythonExecutable({ rootDir: root }),
     OPERATOR_LOCAL_CPU: '0', OPERATOR_LOCAL_C500_MOCK: '0', OPERATOR_LOCAL_C500_SIMULATION: '0',
     OPERATOR_LOCAL_C500_COMMAND: '', OPERATOR_LOCAL_C500_TIMEOUT_SECONDS: '120',
     OPERATOR_DATA_DIR: path.join(runRoot, 'data'), OPERATOR_RUNTIME_DIR: path.join(runRoot, 'runtime'),

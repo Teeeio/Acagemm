@@ -154,7 +154,10 @@ named-Job collisions rather than attaching a new task to an existing owner. The
 test is skipped on non-Windows hosts and does not constitute OS sandbox or GPU
 evidence. `local-c500-recovery-test.mjs` exercises the same Job Object path in the
 production adapter for parent restart, deadline, cancellation races and durable
-single-launch recovery.
+single-launch recovery. On POSIX it additionally verifies detached
+process-group/session identity and reaps a descendant after the group leader
+exits; this case is skipped on Windows where Job Objects provide the equivalent
+ownership guarantee.
 
 `shared-gpu-runtime-test` is a read-only capability/policy contract test.
 `e2e:shared-gpu` and `e2e:shared-gpu-service` are opt-in checks for the local

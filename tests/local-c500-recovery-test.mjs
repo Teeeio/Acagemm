@@ -27,6 +27,12 @@ const worker = [
   '  setInterval(() => {}, 1000);',
   '  await new Promise(() => {});',
   '}',
+  "if (mode === 'orphan-tree') {",
+  "  const leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { windowsHide: true, stdio: 'ignore' });",
+  "  await writeFile(path.join(dir, 'owned-pids.json'), JSON.stringify([process.pid, leaf.pid]));",
+  "  await writeFile(process.env.OPERATOR_LOCAL_C500_RESULT_JSON, JSON.stringify(result), 'utf8');",
+  '  process.exit(0);',
+  '}',
   "if (mode === 'structured-error') {",
   "  result.status = 'failed'; result.benchmark = [];",
   "  result.error = { code: 'CPU_CANDIDATE_EXCEPTION', category: 'validation', phase: 'correctness', role: 'candidate', retryable: false, message: 'ValueError: network timeout inside a Python kernel', details: { exceptionType: 'ValueError' } };",
@@ -186,11 +192,33 @@ test('local durable execution ownership', { timeout: 30_000 }, async (t) => {
       assert.equal(cancelled.status, 'cancelled', JSON.stringify(cancelled));
       assert.equal(cancelled.resourceRelease.confirmed, true);
       if (process.platform === 'win32') assert.equal(cancelled.executionClaim.jobObject, true, 'tree cancellation must exercise Job Objects, not WMI capability detection');
+      else {
+        assert.equal(cancelled.executionClaim.processGroupId, cancelled.executionClaim.pid);
+        assert.equal(cancelled.executionClaim.sessionId, cancelled.executionClaim.pid);
+        assert.equal(cancelled.executionClaim.processGroupSignal, 'negative-pid');
+      }
       await observe(() => Promise.resolve(pids.map(alive)), (values) => values.every((value) => !value), 1_000);
       const before = await readFile(path.join(taskRoot, task.taskId, 'task.json'), 'utf8');
       assert.equal((await client.advance(task.taskId)).status, 'cancelled');
       assert.equal(await readFile(path.join(taskRoot, task.taskId, 'task.json'), 'utf8'), before);
       assert.equal(await launches(task.taskId), 1);
+    });
+
+    await t.test('POSIX process-group cleanup reaps descendants after leader exit', { skip: process.platform === 'win32' }, async () => {
+      const task = await submit(payload('orphan-tree', 'orphan-tree'));
+      await client.advance(task.taskId);
+      const pids = await observe(() => readJson(path.join(taskRoot, task.taskId, 'owned-pids.json')), Boolean);
+      // The fixture leader intentionally exits before the supervisor observes
+      // it; only the detached descendant is expected to remain alive here.
+      assert.ok(pids.slice(1).some(alive));
+      const terminal = await observe(() => client.advance(task.taskId), ended);
+      assert.equal(terminal.status, 'completed', JSON.stringify(terminal));
+      assert.equal(terminal.resourceRelease.confirmed, true);
+      if (process.platform !== 'win32') {
+        assert.equal(terminal.executionClaim.processGroupId, terminal.executionClaim.pid);
+        assert.equal(terminal.executionClaim.sessionId, terminal.executionClaim.pid);
+      }
+      await observe(() => Promise.resolve(pids.map(alive)), (values) => values.every((value) => !value), 1_000);
     });
 
     await t.test('supervisor enforces total deadline independently of Runtime polling', async () => {

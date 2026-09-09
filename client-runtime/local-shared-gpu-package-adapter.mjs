@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import { canonicalJson } from './execution-package-contract.mjs';
 import { SHARED_GPU_ENVIRONMENT_ID, SHARED_GPU_TARGET, probeSharedGpuRuntime } from './shared-gpu-runtime.mjs';
+import { resolvePythonExecutable } from './platform-runtime.mjs';
 
 export const SHARED_GPU_PACKAGE_ADAPTER = Object.freeze({ id: 'python-shared-gpu', version: '1', languages: ['python'] });
 
@@ -45,7 +46,7 @@ const ensureSafeDirectory = async (directory) => {
   }
 };
 const validatePythonSources = async (stage, files, deadline) => {
-  const python = process.env.OPERATOR_GPU_PYTHON || process.env.PYTHON || 'python';
+  const python = process.env.OPERATOR_GPU_PYTHON || process.env.PYTHON || resolvePythonExecutable();
   const sources = files.filter((file) => file.path.toLowerCase().endsWith('.py')).map((file) => path.join(stage, ...file.path.split('/')));
   if (!sources.length) throw fail('PACKAGE_LANGUAGE_INVALID', 'Python execution packages require at least one .py source file.');
   // Parse syntax and check imports which resolve to another package-local

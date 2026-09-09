@@ -33,21 +33,30 @@ the startup-configured task directory. `localC500Config` and the pure
   remain quarantined rather than reporting cancelled.
 
 The default command remains the bundled C550 runner, or the explicitly configured
-command. OPERATOR_HARDWARE_DISABLED blocks the default hardware executable but
-allows an explicit test command. Existing run/oracle/task/result/progress paths and
-environment variables are preserved for the strict CPU runner.
+command. For the shared-GPU backend, `platform-runtime.mjs` resolves
+`OPERATOR_GPU_PYTHON` (or `PYTHON`), then `.gpu-venv`/`.venv` using the native layout
+(`Scripts/python.exe` on Windows, `bin/python` on Linux/POSIX), and finally the
+platform PATH fallback (`python` or `python3`). This keeps the task contract and
+package boundary identical across hosts. `OPERATOR_HARDWARE_DISABLED` blocks the
+default hardware executable but allows an explicit test command. Existing
+run/oracle/task/result/progress paths and environment variables are preserved for
+the strict CPU runner.
 
 ## Durable execution and cancellation
 
 An exclusive execution-claim.json precedes any spawn. It records owner identity,
-owner PID, supervisor PID, runner PID and timestamps. A detached, task-owned Node
+owner PID, supervisor PID, runner PID, platform/process-group identity and
+timestamps. A detached, task-owned Node
 supervisor executes the configured command, captures bounded output, enforces the
 total task deadline and writes execution-exit.json. The supervisor remains able
 to finish after the Runtime owner exits. Claim creation and cancellation use the
 same short metadata lock; neither can authorize a post-cancellation duplicate.
 
-The current owner uses the Windows Job Object adapter for new executions, or
-POSIX process-group signals on Unix, then verifies child closure. The legacy
+The current owner uses the Windows Job Object adapter for new executions, or a
+detached POSIX process group/session with negative-PID signals on Unix, then
+verifies the whole group. POSIX cancellation remains valid after the group
+leader exits so an orphaned descendant is still reaped; the durable claim
+records `processGroupId`, `sessionId` and `processGroupSignal`. The legacy
 Windows taskkill/WMI path is retained only when the Job Object helper is
 unavailable; every fallback PID must match its captured CreationDate before and
 after termination. Missing, mismatched, or unreadable identities fail closed

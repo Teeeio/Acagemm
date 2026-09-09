@@ -29,6 +29,7 @@ All external outcomes must be normalized before changing Mission state.
 | Module | Responsibility | Primary input | Primary output |
 |---|---|---|---|
 | `local-server.mjs` | Runtime composition root and process bootstrap | HTTP request, runtime ports | assembled routes/services and process lifecycle |
+| `platform-runtime.mjs` | Platform-neutral executable/path resolution for local adapters | platform, environment and repository root | resolved Python executable and shell-safe argument |
 | `server/` | HTTP transport and thin route adapters | request/response and injected services | HTTP/SSE/static responses |
 | `application/` | transport-neutral use-case orchestration | commands, queries, injected ports | application results and stable errors |
 | `application/projects-service.mjs` | Project lifecycle and repository bootstrap | Project command/query | Project DTO or saved state |

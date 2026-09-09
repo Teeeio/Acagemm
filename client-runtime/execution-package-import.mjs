@@ -60,27 +60,15 @@ const normalizeArchiveName = (name) => {
   return normalized;
 };
 
-const collectArchive = async (archivePath, { tarCommand = 'tar' } = {}) => {
-  let archive;
-  try {
-    const sourceInfo = await lstat(archivePath);
-    if (sourceInfo.isSymbolicLink()) throw fail('PACKAGE_SOURCE_UNSAFE', 'Operator archive may not be a symlink.');
-    archive = await realpath(archivePath);
-  } catch (error) {
-    if (['ENOENT', 'ENOTDIR', 'EACCES'].includes(error.code)) throw fail('PACKAGE_SOURCE_NOT_FOUND', 'Operator archive does not exist.', { sourcePath: archivePath, cause: error.code });
-    throw error;
-  }
-  const info = await lstat(archive);
-  if (!info.isFile() || info.isSymbolicLink() || info.nlink > 1) throw fail('PACKAGE_SOURCE_UNSAFE', 'Operator archive must be a regular file.');
+const archiveExtension = (archivePath) => /[.]zip$/i.test(String(archivePath)) ? 'zip' : 'tar';
+
+const collectTarArchive = async (archive, tarCommand) => {
   let listing;
   let verbose;
   try {
     ({ stdout: listing } = await execFileAsync(tarCommand, ['-tf', archive], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
     ({ stdout: verbose } = await execFileAsync(tarCommand, ['-tvf', archive], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
-  } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'Archive listing failed; only readable tar archives are accepted.', { cause: error.code || 'TAR_FAILED' }); }
-  // The first mode character is stable across bsdtar/GNU tar. Reject links,
-  // devices and fifos before reading any bytes, so an archive can never make
-  // an out-of-tree link part of an execution package.
+  } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'Archive listing failed; the archive is not readable by tar.', { cause: error.code || 'TAR_FAILED' }); }
   for (const line of String(verbose).split(/\r?\n/)) {
     if (line && !['-', 'd'].includes(line[0])) throw fail('PACKAGE_SOURCE_UNSAFE', 'Archives may contain regular files and directories only.');
   }
@@ -93,6 +81,61 @@ const collectArchive = async (archivePath, { tarCommand = 'tar' } = {}) => {
       files[name] = { encoding: 'base64', content: Buffer.from(stdout).toString('base64') };
     }
   } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'Archive file extraction failed.', { cause: error.code || 'TAR_FAILED' }); }
+  return files;
+};
+
+const collectZipArchive = async (archive, unzipCommand) => {
+  let listing;
+  let verbose;
+  try {
+    // `-Z1` is the stable machine-readable name listing supported by
+    // Info-ZIP/unzip on Linux and the Git-for-Windows distribution. The
+    // verbose listing is used only to reject links/devices before extraction.
+    ({ stdout: listing } = await execFileAsync(unzipCommand, ['-Z1', archive], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
+    ({ stdout: verbose } = await execFileAsync(unzipCommand, ['-Z', '-v', archive], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
+  } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'ZIP listing failed; install a compatible unzip/bsdtar tool or provide an explicit command.', { cause: error.code || 'UNZIP_FAILED' }); }
+  if (/symbolic\s+link|hard\s+link|block\s+special|character\s+special|fifo|socket/i.test(String(verbose))
+    || /Unix file attributes \([^)]*\):\s*[lbcps]/i.test(String(verbose))) {
+    throw fail('PACKAGE_SOURCE_UNSAFE', 'Archives may contain regular files and directories only.');
+  }
+  const names = [...new Set(String(listing).split(/\r?\n/).map(normalizeArchiveName).filter(Boolean))].sort();
+  if (!names.length) throw fail('PACKAGE_SOURCE_EMPTY', 'Operator archive contains no regular files.');
+  const files = {};
+  try {
+    for (const name of names) {
+      const { stdout } = await execFileAsync(unzipCommand, ['-p', archive, name], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
+      files[name] = { encoding: 'base64', content: Buffer.from(stdout).toString('base64') };
+    }
+  } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'ZIP file extraction failed.', { cause: error.code || 'UNZIP_FAILED' }); }
+  return files;
+};
+
+const collectArchive = async (archivePath, { tarCommand = 'tar', unzipCommand = 'unzip' } = {}) => {
+  let archive;
+  try {
+    const sourceInfo = await lstat(archivePath);
+    if (sourceInfo.isSymbolicLink()) throw fail('PACKAGE_SOURCE_UNSAFE', 'Operator archive may not be a symlink.');
+    archive = await realpath(archivePath);
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR', 'EACCES'].includes(error.code)) throw fail('PACKAGE_SOURCE_NOT_FOUND', 'Operator archive does not exist.', { sourcePath: archivePath, cause: error.code });
+    throw error;
+  }
+  const info = await lstat(archive);
+  if (!info.isFile() || info.isSymbolicLink() || info.nlink > 1) throw fail('PACKAGE_SOURCE_UNSAFE', 'Operator archive must be a regular file.');
+  const kind = archiveExtension(archive);
+  let files;
+  if (kind === 'zip') {
+    // bsdtar (Windows and some Linux distributions) can read ZIP directly;
+    // GNU tar generally cannot. Try tar first, then the portable unzip CLI.
+    try { files = await collectTarArchive(archive, tarCommand); }
+    catch (tarError) {
+      if (tarError?.code !== 'PACKAGE_ARCHIVE_INVALID') throw tarError;
+      try { files = await collectZipArchive(archive, unzipCommand); }
+      catch (unzipError) {
+        throw fail('PACKAGE_ARCHIVE_INVALID', 'ZIP archive could not be read by tar or unzip.', { cause: unzipError.details?.cause || tarError.details?.cause || 'ARCHIVE_TOOL_UNAVAILABLE' });
+      }
+    }
+  } else files = await collectTarArchive(archive, tarCommand);
   return { files, sourceType: 'archive', sourcePath: archive };
 };
 

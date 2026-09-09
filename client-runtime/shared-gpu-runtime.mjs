@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { canonicalJson } from './execution-package-contract.mjs';
+import { resolvePythonExecutable } from './platform-runtime.mjs';
 
 const execFileAsync = promisify(execFile);
 const SHARED_GPU_ENVIRONMENT_ID = 'local-shared-gpu';
@@ -58,7 +59,7 @@ export const probeSharedGpuRuntime = async ({
   run = defaultRun,
   nvidiaSmi = process.env.OPERATOR_GPU_NVIDIA_SMI || 'nvidia-smi',
   nvcc = process.env.OPERATOR_GPU_NVCC || 'nvcc',
-  python = process.env.OPERATOR_GPU_PYTHON || 'python',
+  python = resolvePythonExecutable(),
   timeoutMs = 5000,
 } = {}) => {
   const timeout = positiveTimeout(timeoutMs);

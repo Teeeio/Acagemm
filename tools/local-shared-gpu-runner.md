@@ -9,7 +9,9 @@ independent oracle from the task-owned directory.
 The adapter is selected by `OPERATOR_TEST_BACKEND=local-shared-gpu` and can be
 used through the existing `local-c500-service-client` queue port. It does not
 create a second scheduler. `OPERATOR_GPU_PYTHON` can point to another CUDA
-Python installation on the same drive.
+Python installation on the same drive. Without that override, the runtime picks
+`.gpu-venv/bin/python` on Linux/POSIX or `.gpu-venv/Scripts/python.exe` on
+Windows, then falls back to `python3` or `python` from `PATH` respectively.
 
 This is a shared, non-isolated development backend. Package admission must
 declare `isolation.kind=shared-host-gpu`, `policy.allowSharedHostGpu=true`, and

@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { quoteCommandArgument, resolvePythonExecutable } from './platform-runtime.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundledRunner = path.join(rootDir, 'tools', 'local-c500-runner.py');
@@ -11,9 +12,9 @@ const sharedGpuRunner = path.join(rootDir, 'tools', 'local-shared-gpu-runner.py'
 const runtimeDir = process.env.OPERATOR_RUNTIME_DIR ? path.resolve(process.env.OPERATOR_RUNTIME_DIR) : path.join(rootDir, 'runtime');
 const taskRoot = process.env.OPERATOR_LOCAL_C500_DIR ? path.resolve(process.env.OPERATOR_LOCAL_C500_DIR) : path.join(runtimeDir, 'local-c500');
 const sharedGpuEnabled = process.env.OPERATOR_TEST_BACKEND === 'local-shared-gpu';
-const sharedGpuPython = process.env.OPERATOR_GPU_PYTHON || path.join(rootDir, '.gpu-venv', 'Scripts', 'python.exe');
+const sharedGpuPython = resolvePythonExecutable({ rootDir });
 const commandTemplate = process.env.OPERATOR_LOCAL_C500_COMMAND
-  || (sharedGpuEnabled ? `"${sharedGpuPython}" "${sharedGpuRunner}"` : 'python "' + bundledRunner + '"');
+  || `${quoteCommandArgument(sharedGpuPython)} ${quoteCommandArgument(sharedGpuEnabled ? sharedGpuRunner : bundledRunner)}`;
 const explicitRunnerCommand = Boolean(process.env.OPERATOR_LOCAL_C500_COMMAND) || sharedGpuEnabled;
 const mockEnabled = process.env.OPERATOR_LOCAL_C500_MOCK === '1';
 const cpuE2eEnabled = process.env.OPERATOR_LOCAL_CPU === '1';
@@ -239,7 +240,8 @@ const startTask = async (task, cancelStepMs) => {
   activeExecutions.set(task.taskId, execution);
   execution.started = (async () => {
     const taskId = task.taskId;
-    const claim = { schemaVersion: 1, ownerId, ownerPid: process.pid, pid: null, supervisorPid: null, claimedAt: now() };
+    const claim = { schemaVersion: 1, ownerId, ownerPid: process.pid, pid: null, supervisorPid: null,
+      platform: process.platform, claimedAt: now() };
     try {
       const current = await withTaskLock(taskId, async () => {
         const stored = await loadTask(taskId);
@@ -573,6 +575,10 @@ let claim = await read('execution-claim.json');
 let child = null, closed = false, exitCode = null, exitSignal = null;
 let stdout = '', stderr = '', stopping = false, cancellation = null, lastNonce = null, treeSignalled = false, signalError = null;
 let jobApi = null, jobProcess = null, jobName = null;
+// On POSIX, detached children are session/process-group leaders. Keep the
+// identity in the durable claim so recovery can explain which group is owned;
+// Windows continues to use the Job Object identity below.
+let processGroupId = null, sessionId = null;
 let resolveClose;
 const closedPromise = new Promise((resolve) => { resolveClose = resolve; });
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -580,7 +586,16 @@ const closeWithin = (ms) => Promise.race([closedPromise.then(() => true), wait(m
 const groupGone = () => {
   if (!child?.pid) return true;
   if (process.platform === 'win32') return closed && (!cancellation || treeSignalled || exitCode === 0 && exitSignal === null);
-  try { process.kill(-child.pid, 0); return false; } catch (error) { return error.code === 'ESRCH'; }
+  // A negative PID probes the complete process group. ESRCH means that the
+  // group no longer exists; EPERM means it still exists but is not signalable
+  // by this account, so fail closed and keep the task quarantined.
+  try { process.kill(-child.pid, 0); return false; }
+  catch (error) {
+    if (error.code === 'ESRCH') return true;
+    if (error.code === 'EPERM') return false;
+    // EINVAL/other probe errors are not proof of release.
+    return false;
+  }
 };
 const finish = async (confirmed, reason) => {
   if (jobApi) {
@@ -591,6 +606,8 @@ const finish = async (confirmed, reason) => {
   await write('runner.stderr.log', stderr);
   await write('execution-exit.json', {
     ownerId: claim.ownerId, supervisorPid: process.pid, pid: child?.pid || null,
+    platform: process.platform,
+    processGroupId, sessionId,
     jobName: claim.jobName || null, jobObject: Boolean(claim.jobObject),
     exitCode, signal: exitSignal, cancelled: Boolean(cancellation)
       && (cancellation.reason === 'task_deadline' || !(exitCode === 0 && exitSignal === null)),
@@ -635,7 +652,6 @@ const forceStopTreeWithPowerShell = (pid) => new Promise((resolve) => {
 });
 const signalTree = (force) => new Promise((resolve) => {
   if (!child?.pid || closed && groupGone()) return resolve(true);
-  if (closed) return resolve(false); // Never signal a PID after its owned child has exited.
   if (process.platform === 'win32') {
     if (jobApi && jobName) {
       jobApi.terminateJobObject(jobName).then(() => { treeSignalled = true; resolve(true); }).catch((error) => {
@@ -654,8 +670,20 @@ const signalTree = (force) => new Promise((resolve) => {
         forceStopTreeWithPowerShell(child.pid).then(resolve);
       });
   } else {
-    try { process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM'); resolve(true); }
-    catch (error) { resolve(error.code === 'ESRCH'); }
+    // POSIX process-group cancellation remains valid after the group leader
+    // exits: descendants may still be alive and are exactly what must be
+    // reaped before a task can become terminal. detached:true gives the
+    // command its own session/group, so a negative PID cannot hit the
+    // supervisor or another task's group.
+    try {
+      process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM');
+      treeSignalled = true;
+      resolve(true);
+    } catch (error) {
+      if (error.code === 'ESRCH') return resolve(groupGone());
+      signalError = { code: error.code || 'PROCESS_GROUP_SIGNAL_FAILED', message: error.message };
+      resolve(false);
+    }
   }
 });
 const stop = async (request) => {
@@ -692,7 +720,8 @@ if (initialCancel) {
       jobProcess = await jobApi.spawnJobObjectProcess({ filePath: comspec, arguments: '/d /s /c "' + config.command + '"',
         cwd: taskDir, stdoutPath: target('runner.stdout.raw.log'), stderrPath: target('runner.stderr.raw.log'), jobName, tempRoot: taskDir });
       child = { pid: jobProcess.helperPid };
-      claim = { ...claim, supervisorPid: process.pid, pid: jobProcess.helperPid || null, jobName, jobObject: true, spawnedAt: new Date().toISOString() };
+      claim = { ...claim, supervisorPid: process.pid, pid: jobProcess.helperPid || null,
+        platform: process.platform, jobName, jobObject: true, spawnedAt: new Date().toISOString() };
       jobProcess.result.then((result) => { closed = true; exitCode = result.exitCode; exitSignal = null; resolveClose(); })
         .catch((error) => { stderr += error.message; closed = true; exitCode = 1; exitSignal = null; resolveClose(); });
     } else {
@@ -700,13 +729,18 @@ if (initialCancel) {
         cwd: taskDir, shell: true, detached: process.platform !== 'win32', windowsHide: true,
         env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
       });
+      processGroupId = process.platform === 'win32' ? null : child.pid || null;
+      sessionId = process.platform === 'win32' ? null : child.pid || null;
       child.stdout?.on('data', (chunk) => { stdout = (stdout + chunk).slice(-8 * 1024 * 1024); });
       child.stderr?.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8 * 1024 * 1024); });
       child.once('error', (error) => { stderr += error.code + ': ' + error.message; });
       child.once('close', (code, signal) => {
         closed = true; exitCode = code; exitSignal = signal; resolveClose();
       });
-      claim = { ...claim, supervisorPid: process.pid, pid: child.pid || null, spawnedAt: new Date().toISOString() };
+      claim = { ...claim, supervisorPid: process.pid, pid: child.pid || null,
+        platform: process.platform,
+        processGroupId, sessionId, processGroupSignal: process.platform === 'win32' ? null : 'negative-pid',
+        spawnedAt: new Date().toISOString() };
     }
   await write('execution-claim.json', claim);
   while (!closed || stopping) {

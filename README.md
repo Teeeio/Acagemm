@@ -264,6 +264,15 @@ npm run e2e:cpu-iteration        # Reference Fixture + 实际 CPU 执行
 npm run e2e:cpu-agent-iteration  # 真实 Agent + 实际 CPU 执行，手动验收
 ```
 
+Linux x86_64 兼容性验收（需在 Linux 主机执行；Windows 上会明确跳过 Linux 专属检查）：
+
+```bash
+npm run verify:linux-compatibility
+```
+
+该命令覆盖原生 Python 路径解析、tar/ZIP 执行包导入以及 POSIX 进程组在 leader
+提前退出后的 descendant 回收；它不把 Linux 通过外推为 C550 真机发布证据。
+
 真实 Agent E2E 默认使用已登录的 Claude Code；通过
 `E2E_AGENT_RUNTIME=codex-cli` 可选择 Codex。该测试会消耗真实 Agent 会话，因此不加入日常
 验证套件。
