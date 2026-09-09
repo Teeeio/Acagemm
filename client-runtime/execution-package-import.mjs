@@ -72,12 +72,23 @@ const collectTarArchive = async (archive, tarCommand) => {
   for (const line of String(verbose).split(/\r?\n/)) {
     if (line && !['-', 'd'].includes(line[0])) throw fail('PACKAGE_SOURCE_UNSAFE', 'Archives may contain regular files and directories only.');
   }
-  const names = [...new Set(String(listing).split(/\r?\n/).map(normalizeArchiveName).filter(Boolean))].sort();
+  // Keep the normalized package path for identity, but retain the exact
+  // archive member spelling for extraction. GNU tar on POSIX commonly emits
+  // `./run.py`; extracting `run.py` would fail even though the listing passed.
+  const archiveMembers = new Map();
+  for (const rawName of String(listing).split(/\r?\n/)) {
+    const name = normalizeArchiveName(rawName);
+    if (!name) continue;
+    const previous = archiveMembers.get(name);
+    if (previous) throw fail('PACKAGE_SOURCE_UNSAFE', 'Archive contains duplicate or colliding normalized paths.', { path: name });
+    archiveMembers.set(name, rawName);
+  }
+  const names = [...archiveMembers.keys()].sort();
   if (!names.length) throw fail('PACKAGE_SOURCE_EMPTY', 'Operator archive contains no regular files.');
   const files = {};
   try {
     for (const name of names) {
-      const { stdout } = await execFileAsync(tarCommand, ['-xOf', archive, name], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
+      const { stdout } = await execFileAsync(tarCommand, ['-xOf', archive, archiveMembers.get(name)], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
       files[name] = { encoding: 'base64', content: Buffer.from(stdout).toString('base64') };
     }
   } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'Archive file extraction failed.', { cause: error.code || 'TAR_FAILED' }); }
@@ -98,12 +109,19 @@ const collectZipArchive = async (archive, unzipCommand) => {
     || /Unix file attributes \([^)]*\):\s*[lbcps]/i.test(String(verbose))) {
     throw fail('PACKAGE_SOURCE_UNSAFE', 'Archives may contain regular files and directories only.');
   }
-  const names = [...new Set(String(listing).split(/\r?\n/).map(normalizeArchiveName).filter(Boolean))].sort();
+  const archiveMembers = new Map();
+  for (const rawName of String(listing).split(/\r?\n/)) {
+    const name = normalizeArchiveName(rawName);
+    if (!name) continue;
+    if (archiveMembers.has(name)) throw fail('PACKAGE_SOURCE_UNSAFE', 'Archive contains duplicate or colliding normalized paths.', { path: name });
+    archiveMembers.set(name, rawName);
+  }
+  const names = [...archiveMembers.keys()].sort();
   if (!names.length) throw fail('PACKAGE_SOURCE_EMPTY', 'Operator archive contains no regular files.');
   const files = {};
   try {
     for (const name of names) {
-      const { stdout } = await execFileAsync(unzipCommand, ['-p', archive, name], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
+      const { stdout } = await execFileAsync(unzipCommand, ['-p', archive, archiveMembers.get(name)], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
       files[name] = { encoding: 'base64', content: Buffer.from(stdout).toString('base64') };
     }
   } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'ZIP file extraction failed.', { cause: error.code || 'UNZIP_FAILED' }); }
@@ -132,6 +150,7 @@ const collectArchive = async (archivePath, { tarCommand = 'tar', unzipCommand = 
       if (tarError?.code !== 'PACKAGE_ARCHIVE_INVALID') throw tarError;
       try { files = await collectZipArchive(archive, unzipCommand); }
       catch (unzipError) {
+        if (unzipError?.code !== 'PACKAGE_ARCHIVE_INVALID') throw unzipError;
         throw fail('PACKAGE_ARCHIVE_INVALID', 'ZIP archive could not be read by tar or unzip.', { cause: unzipError.details?.cause || tarError.details?.cause || 'ARCHIVE_TOOL_UNAVAILABLE' });
       }
     }

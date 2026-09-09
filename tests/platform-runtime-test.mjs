@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { platformPythonLayout, quoteCommandArgument, resolvePythonExecutable } from '../client-runtime/platform-runtime.mjs';
 
-const root = 'Z:/operator-studio';
+// Use a native absolute root so the same contract test can simulate both
+// platform layouts without asking POSIX path.resolve() to interpret a
+// Windows drive-letter path (or vice versa).
+const root = path.resolve('operator-studio');
 const existing = new Set([
   path.join(root, '.gpu-venv', 'bin', 'python'),
   path.join(root, '.gpu-venv', 'Scripts', 'python.exe'),

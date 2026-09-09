@@ -39,7 +39,11 @@ const rawRequest = async (pathname, options = {}) => {
 };
 
 try {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  // Windows process startup can briefly exceed three seconds when the release
+  // gate has just exercised many child processes. Keep the probe bounded but
+  // give the production server a normal cold-start window before classifying
+  // the boundary as unavailable.
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
       const health = await rawRequest('/api/health');
       if (health.response.ok) break;
