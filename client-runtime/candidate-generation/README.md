@@ -45,14 +45,6 @@ semantic/correctness/benchmark contracts、raw intent 及未解决冲突/unknown
 `iterationContext`/`iterationEvidence`，Prompt 会将它们标记为不可信的历史证据，供下一轮
 定位失败 case、benchmark profile、候选 digest 和已尝试方向；它们不能覆盖冻结契约，也不能
 触发 Queue/Gate 决策。字段缺失时不生成对应段落，保持通用 Mission 的 Prompt 简洁。
-Mission 上的 `semanticSnapshot`（若存在）是通用算子的语义权威；Prompt 会以只读文本
-展示冻结的输入、输出、数学规则、边界、不变量以及 correctness/benchmark 契约。固定
-Profile 仍由 `fixed-operator-profiles.mjs` 提供，不允许 Agent 改写。
-`mission.iterationContext`、`mission.iterationEvidence` 以及 Baseline 上的同名诊断字段
-（若由应用层提供）只作为“不可信事实”注入，用于定位失败 case、profile 测量、已尝试
-方向和剩余差距；它们不能覆盖冻结语义，也不能改变本模块的返回结构。首轮没有这些
-字段时，仍以 Semantic Snapshot、Baseline Oracle 和 Workspace 为准。
-
 inspectCandidateDiff 的 manifest 至少包含 dirty、diff、digest 和 changedFiles。
 返回的 candidateValidation 是策略结果；调用方仍需通过命令日志保存外部效果和状态应用。
 

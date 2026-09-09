@@ -37,9 +37,11 @@ TUI / GUI
 | 状态与持久化 | `state-store.mjs`、`state-snapshot-storage.mjs`、`state-repository.mjs`、`command-journal.mjs` | 兼容组装、快照读写/恢复、串行写入、版本检查和命令幂等 | state snapshot、mutation、expected version | 原子持久化状态、冲突或恢复结果 | 状态平台开发 |
 | Agent Runtime | `agent-runtime.mjs`、`agent-runtime/`、Provider clients | 能力发现、逻辑操作分发、Provider 生命周期和 usage 归一化 | runtime ID、operation、Mission context | 统一事件、Agent 结果、token usage | Agent 集成开发 |
 | Candidate Generation（03） | `candidate-generation/` | 在冻结 Round Context 下渲染 Agent 候选 Prompt，并以 Workspace Diff、语言契约和重复摘要完成候选准入 | frozen Mission round context、Agent result、Workspace manifest | Candidate Plan、verified candidate、稳定准入错误 | Agent/工作流边界开发 |
+| Candidate Generation Evaluation（03 开发工具） | `tools/candidate-generation-eval/`、`scripts/eval-candidate-generation.mjs` | 以生产 HTTP API 驱动一次可配置的 03 生成/队列评估，并汇总耗时、token、correctness、benchmark | semanticDraft、baseline oracle、testSpec、Agent/后端配置 | 非发布评估报告和原始观察 | Agent/工作流边界开发 |
 | Workspace 与 Source | `workspace-manager.mjs`、`baseline-resolver.mjs`、`baseline-materializer.mjs`、`source-mirror-policy.mjs` | 隔离工作区、Diff/Checkpoint、Baseline 来源和材料化 | Mission、仓库、Source Registry、Candidate | Workspace identity、Diff、Baseline artifact | 工具链开发 |
 | 测试队列 | `operator-test-queue.mjs` | 串行测试生命周期、轮询、取消和终态持久化 | 参数化 test payload、执行端口 | task snapshot、terminal outcome | 执行平台开发 |
 | C550 执行适配器 | `local-c500-service-client.mjs`、`tools/local-c500-runner.py` | 把统一测试任务转换为本地 C550 执行和证据 | Candidate 工件、Baseline oracle、固定矩阵 | correctness、benchmark、环境和诊断工件 | 后端/算子开发 |
+| 平台运行时适配器 | `platform-runtime.mjs` | 解析本地 Python 环境布局及跨平台命令参数 | 平台、环境变量、仓库根目录 | 可执行路径和 shell-safe 参数 | 执行平台开发 |
 | Composition Root | `local-server.mjs`、`start.mjs`、`dev.mjs` | 构造服务、注入端口、绑定 HTTP、管理进程生命周期 | 环境变量和模块构造器 | 可运行的本地后端进程 | 平台集成开发 |
 | Tests 与 Fixtures | `tests/`、`test-fixtures/`、`test-service/` | 保护模块合同、极端状态和端到端路径 | 测试输入、隔离运行目录 | 断言、fixture evidence、门禁结果 | 各模块主责共同维护 |
 
@@ -185,6 +187,7 @@ TUI / GUI
 | [`operator-test-tool.mjs`](../../client-runtime/operator-test-tool.md) | Test Tool Port | 单一队列的异步调用边界 | 等待完整执行、重复调度 |
 | `operator-test-queue.mjs` | Execution Port | 串行任务、poll/cancel、终态持久化 | Mission 推进和采用 |
 | `local-c500-service-client.mjs` | C550 Adapter | 本地 C550 任务与工件适配 | Gate 和迭代决策 |
+| `platform-runtime.mjs` | Platform Adapter | Windows/Linux 可执行路径与命令参数解析 | workflow、queue、硬件策略 |
 | `local-server.mjs` | Composition Root | 组装模块、注入依赖、进程生命周期 | 新增领域规则 |
 
 ## 客户端文件归属
