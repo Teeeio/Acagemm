@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createCommandJournal, executeCommand, reconcileCommandJournal, hashKey } from '../client-runtime/command-journal.mjs';
+import { createCommandJournal, executeCommand, inspectCommandJournal, reconcileCommandJournal, hashKey } from '../client-runtime/command-journal.mjs';
 import { createOperatorTestQueue } from '../client-runtime/operator-test-queue.mjs';
 import { createBenchmarkCommands } from '../client-runtime/application/benchmark-command.mjs';
 
@@ -101,6 +101,27 @@ try {
   await assert.rejects(unknown.execute(), (error) => error.code === 'COMMAND_EFFECT_OUTCOME_UNKNOWN');
   await assert.rejects(unknown.execute({ type: 'other', registry: { ...unknown.registry, other: { apply() { throw new Error('must not execute'); } } } }), (error) => error.code === 'COMMAND_PENDING_RECOVERY');
   assert.equal(unknown.effects(), 1);
+
+  // A same-process GET/SSE inspection must not mistake an in-flight effect for
+  // an orphaned command. The active marker is intentionally non-persistent;
+  // only a fresh journal instance should enter conservative recovery.
+  const concurrent = harness('concurrent-inspection');
+  let releaseSlowPrepare;
+  const slowRegistry = {
+    task: {
+      ...concurrent.registry.task,
+      prepare: async ({ intent, runEffect }) => {
+        await new Promise((resolve) => { releaseSlowPrepare = resolve; });
+        return runEffect(async () => ({ payload: { taskId: intent.taskId }, result: { taskId: intent.taskId, receipt: 'slow' } }));
+      },
+    },
+  };
+  const inFlight = concurrent.execute({ registry: slowRegistry });
+  for (let attempt = 0; attempt < 50 && !(await concurrent.journal.readAll()).length; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 1));
+  const inspectedInFlight = await inspectCommandJournal(concurrent.load(), { journal: concurrent.journal, registry: slowRegistry });
+  assert.deepEqual(inspectedInFlight.blocked, [], 'live same-process command must not be projected as recovery blocker');
+  releaseSlowPrepare();
+  await inFlight;
 
 
   const confirmedAbsent = harness('confirmed-absent');

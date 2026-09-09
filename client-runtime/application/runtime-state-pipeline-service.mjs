@@ -11,7 +11,13 @@ export const createRuntimeStatePipelineService = ({ maintenance, processTests, m
     let changed = maintained.changed || migration.changed || baselineFailureChanged;
     const projection = await runtimeProjection.project({ state, runtime });
     changed ||= projection.changed;
-    try { await processTests({ allowStart: canStart(projection.state) }); }
+    // Pausing suppresses new Agent/iteration work, but a benchmark command
+    // already committed in state owns a queue slot and must still be allowed
+    // to submit/poll to reach a terminal outcome. This does not enable
+    // adoption or the next round while the Mission remains paused.
+    const hasCommittedBenchmark = projection.state.benchmark?.status === 'running'
+      && Boolean(projection.state.benchmark?.testTaskId);
+    try { await processTests({ allowStart: canStart(projection.state) || hasCommittedBenchmark }); }
     catch (error) { if (error.code !== 'OPERATOR_TEST_QUEUE_BUSY') throw error; }
     const benchmark = await benchmarkProjection.project({ state: projection.state });
     changed ||= benchmark.changed;

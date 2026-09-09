@@ -55,6 +55,17 @@ npm run eval:candidate-generation -- --config ./03-vector-add.json --output ./ar
 `gpt-5.6-sol`，也可显式使用 `gpt-5.5`。每次运行有总超时和测试任务超时，超时后写出
 `failure.json`，不会无限等待。
 
+在 WSL2 上运行共享 GPU 评估时，将 GPU Python 和 `nvidia-smi` 显式指向 WSL 路径：
+
+```bash
+export OPERATOR_GPU_PYTHON=/mnt/f/.toolchains/acagemm-gpu-venv/bin/python
+export OPERATOR_GPU_NVIDIA_SMI=/usr/lib/wsl/lib/nvidia-smi
+npm run eval:candidate-generation -- --config ./03-vector-add.json --output ./artifacts/03-vector-add
+```
+
+Python/Torch 运行路径不要求安装 `nvcc`；只有编译型 CUDA 算子适配器才需要额外设置
+`OPERATOR_GPU_REQUIRE_NVCC=1`。
+
 输出目录包括：
 
 - `evaluation.json`：机器可读的生成耗时、队列等待、provider/runtime 耗时、token 用量、准入、correctness 和 benchmark。

@@ -60,12 +60,16 @@ export const probeSharedGpuRuntime = async ({
   nvidiaSmi = process.env.OPERATOR_GPU_NVIDIA_SMI || 'nvidia-smi',
   nvcc = process.env.OPERATOR_GPU_NVCC || 'nvcc',
   python = resolvePythonExecutable(),
+  // Python/Torch GPU operators only need a visible device and CUDA-capable
+  // framework. CUDA compiler availability is required by compile-time
+  // adapters, not by this shared Python adapter.
+  requireCudaToolkit = true,
   timeoutMs = 5000,
 } = {}) => {
   const timeout = positiveTimeout(timeoutMs);
   const common = { timeout, encoding: 'utf8' };
   let gpu;
-  let cudaToolkit;
+  let cudaToolkit = null;
   try {
     const result = await run(nvidiaSmi, ['--query-gpu=name,driver_version,memory.total', '--format=csv,noheader,nounits'], common);
     gpu = parseNvidiaSmi(result.stdout);
@@ -77,7 +81,7 @@ export const probeSharedGpuRuntime = async ({
     const result = await run(nvcc, ['--version'], common);
     cudaToolkit = parseNvcc(result.stdout);
   } catch (error) {
-    throw Object.assign(new Error('CUDA toolkit is unavailable for the shared GPU adapter.'), { code: 'GPU_TOOLCHAIN_UNAVAILABLE', status: 503, cause: error });
+    if (requireCudaToolkit) throw Object.assign(new Error('CUDA toolkit is unavailable for the shared GPU adapter.'), { code: 'GPU_TOOLCHAIN_UNAVAILABLE', status: 503, cause: error });
   }
   let pythonRuntime = parsePythonRuntime('{}');
   try {
@@ -88,7 +92,7 @@ export const probeSharedGpuRuntime = async ({
     // is reported as unavailable instead of making the whole probe hang/fail.
   }
   const capabilities = {
-    gpu, cudaToolkit, pythonRuntime,
+    gpu, cudaToolkit, cudaCompiler: { available: Boolean(cudaToolkit), version: cudaToolkit }, pythonRuntime,
     target: SHARED_GPU_TARGET,
     executionMode: 'shared-host-gpu',
     isolation: { kind: 'shared-host-gpu', enforced: false },

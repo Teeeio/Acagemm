@@ -25,7 +25,7 @@ const { createOperatorTestTool } = await import('../client-runtime/operator-test
 const { createExecutionPackageStore, contentDigest } = await import('../client-runtime/execution-package-store.mjs');
 const { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARED_GPU_PACKAGE_ADAPTER } = await import('../client-runtime/local-shared-gpu-package-adapter.mjs');
 const packageRoot = path.join(runtime, 'execution-packages');
-const environmentResolver = createSharedGpuEnvironmentResolver();
+const environmentResolver = createSharedGpuEnvironmentResolver({ probeOptions: { requireCudaToolkit: false } });
 const packageAdapter = createSharedGpuPackageAdapter({ rootDir: path.join(packageRoot, 'adapter') });
 // The first trusted NVIDIA probe may import torch and exceed the generic
 // 5-second inspection budget on a contended developer host. Keep the probe

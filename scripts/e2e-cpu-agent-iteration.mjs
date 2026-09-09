@@ -172,7 +172,24 @@ try {
   assert.deepEqual(baselineTask.result.correctness.categories, [...matrix.testSpec.correctness.requiredCategories].sort());
   assert.deepEqual(baselineTask.result.benchmark.map((row) => row.profile), matrix.testSpec.benchmark.requiredProfiles);
 
-  const started = await request(`/api/missions/${encodeURIComponent(missionId)}/runs`, { method: 'POST', body: { goal } });
+  // Auto-tick may commit the first run immediately after the baseline reaches
+  // idle. Treat that expected race as an observation/recovery path instead of
+  // failing the end-to-end harness on a harmless 409.
+  let started;
+  try {
+    started = await request(`/api/missions/${encodeURIComponent(missionId)}/runs`, { method: 'POST', body: { goal } });
+  } catch (error) {
+    if (error.payload?.code !== 'AGENT_RUN_ALREADY_ACTIVE') throw error;
+    // The auto-tick owns the competing journal transaction. Do not issue a
+    // read while its effect is still preparing: inspection would correctly
+    // treat that in-flight command as unknown. Give it a bounded commit window
+    // before observing the already-owned run.
+    await sleep(2_000);
+    const recovered = (await request('/api/state')).state;
+    assert.equal(recovered.agent?.missionId, missionId, '409 active run belongs to another Mission');
+    assert.equal(recovered.agent?.status, 'running', '409 active run is not running');
+    started = { state: recovered };
+  }
   const firstRunId = started.state.agent?.runId;
   assert.ok(firstRunId, 'first real Agent run did not start');
   const writesAtRunStart = writes.length;
@@ -191,7 +208,7 @@ try {
     if (progress !== lastProgress) { console.log(`[cpu-agent-e2e] ${progress}`); lastProgress = progress; }
     if (firstCandidateTask?.status === 'failed') throw new Error(`first candidate CPU test failed: ${JSON.stringify(firstCandidateTask.error || firstCandidateTask.logs?.at(-1))}`);
     if (firstCandidateTask?.status === 'completed' && firstRound && state.agent?.runId && state.agent.runId !== firstRunId) break;
-    if (state.iterationStats?.loopStatus === 'needs_human') throw new Error(`workflow requested human intervention: ${state.iterationStats.loopStatusReason}`);
+    if (state.iterationStats?.loopStatus === 'needs_human') throw new Error(`workflow requested human intervention: ${state.iterationStats.loopStatusReason}: ${JSON.stringify({ workflowFailure: state.workflowFailure, workflowRecovery: state.workflowRecovery })}`);
     if (childExit) throw new Error(`runtime exited early: ${JSON.stringify(childExit)}\n${runtimeLog.join('')}`);
     await sleep(500);
   }

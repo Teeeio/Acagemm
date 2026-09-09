@@ -4,7 +4,9 @@
 Correctness/Benchmark contract and process supervisor while replacing the C550
 probe with `nvidia-smi` and CUDA event timing. It requires a CUDA-enabled Python
 runtime (the repository setup uses `.gpu-venv`) and executes the candidate and
-independent oracle from the task-owned directory.
+independent oracle from the task-owned directory. `nvcc` is only required when
+the selected language adapter needs CUDA compilation; Python/Torch execution
+can use a driver-visible GPU without a compiler installation.
 
 The adapter is selected by `OPERATOR_TEST_BACKEND=local-shared-gpu` and can be
 used through the existing `local-c500-service-client` queue port. It does not
@@ -12,6 +14,10 @@ create a second scheduler. `OPERATOR_GPU_PYTHON` can point to another CUDA
 Python installation on the same drive. Without that override, the runtime picks
 `.gpu-venv/bin/python` on Linux/POSIX or `.gpu-venv/Scripts/python.exe` on
 Windows, then falls back to `python3` or `python` from `PATH` respectively.
+On WSL, set `OPERATOR_GPU_NVIDIA_SMI=/usr/lib/wsl/lib/nvidia-smi` when that
+directory is not already on `PATH`. The production Python adapter passes
+`requireCudaToolkit=false`; compile-time adapters should opt into the stricter
+probe with `OPERATOR_GPU_REQUIRE_NVCC=1`.
 
 This is a shared, non-isolated development backend. Package admission must
 declare `isolation.kind=shared-host-gpu`, `policy.allowSharedHostGpu=true`, and

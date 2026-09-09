@@ -559,6 +559,7 @@ const supervisorSource = String.raw`
 // Task-owned CPU/C550 process supervisor. No Mission/workflow policy.
 import { spawn, execFile } from 'node:child_process';
 import { readFile, writeFile, rename } from 'node:fs/promises';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { access } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -586,10 +587,31 @@ const closeWithin = (ms) => Promise.race([closedPromise.then(() => true), wait(m
 const groupGone = () => {
   if (!child?.pid) return true;
   if (process.platform === 'win32') return closed && (!cancellation || treeSignalled || exitCode === 0 && exitSignal === null);
+  const groupMembers = () => {
+    try {
+      return readdirSync('/proc').filter((name) => /^\d+$/.test(name)).flatMap((name) => {
+        try {
+          const stat = readFileSync('/proc/' + name + '/stat', 'utf8');
+          const close = stat.lastIndexOf(')');
+          if (close < 0) return [];
+          const fields = stat.slice(close + 2).trim().split(/\s+/);
+          return Number(fields[2]) === Number(child.pid) ? [{ pid: Number(name), state: fields[0] }] : [];
+        } catch { return []; }
+      });
+    } catch { return null; }
+  };
   // A negative PID probes the complete process group. ESRCH means that the
   // group no longer exists; EPERM means it still exists but is not signalable
   // by this account, so fail closed and keep the task quarantined.
-  try { process.kill(-child.pid, 0); return false; }
+  try {
+    process.kill(-child.pid, 0);
+    // Linux may retain an already-reaped process group as an all-zombie
+    // entry briefly (notably under WSL). Zombies cannot execute or retain
+    // worker resources; treat an all-zombie group as released while still
+    // failing closed for any live/unknown member.
+    const members = groupMembers();
+    return Boolean(members?.length && members.every((member) => member.state === 'Z'));
+  }
   catch (error) {
     if (error.code === 'ESRCH') return true;
     if (error.code === 'EPERM') return false;

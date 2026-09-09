@@ -167,7 +167,11 @@ const sharedGpuPackageRoot = process.env.OPERATOR_EXECUTION_PACKAGE_DIR
   ? path.resolve(process.env.OPERATOR_EXECUTION_PACKAGE_DIR)
   : path.join(runtimeDir, 'execution-packages');
 const sharedGpuEnvironmentResolver = localC500Config.kind === 'local-shared-gpu'
-  ? createSharedGpuEnvironmentResolver({ probeOptions: { python: resolvePythonExecutable({ rootDir }) } }) : null;
+  ? createSharedGpuEnvironmentResolver({ probeOptions: {
+    python: process.env.OPERATOR_GPU_PYTHON || resolvePythonExecutable({ rootDir }),
+    nvidiaSmi: process.env.OPERATOR_GPU_NVIDIA_SMI || 'nvidia-smi',
+    requireCudaToolkit: process.env.OPERATOR_GPU_REQUIRE_NVCC === '1',
+  } }) : null;
 const sharedGpuPackageAdapter = localC500Config.kind === 'local-shared-gpu'
   ? createSharedGpuPackageAdapter({ rootDir: path.join(sharedGpuPackageRoot, 'adapter') }) : null;
 const executionPackageStore = sharedGpuPackageAdapter

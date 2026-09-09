@@ -23,6 +23,17 @@ assert.equal(result.environment.policy.allowSharedHostGpu, true);
 assert.equal(result.capabilities.pythonRuntime.cudaAvailable, false);
 assert.equal(calls.length, 3);
 
+const pythonOnly = await probeSharedGpuRuntime({
+  run: async (command) => {
+    if (command === 'nvidia-smi') return { stdout: 'RTX test, 1.2.3, 4096\n' };
+    if (command === 'nvcc') throw Object.assign(new Error('nvcc absent'), { code: 'ENOENT' });
+    return { stdout: JSON.stringify({ executable: 'python', framework: 'torch', frameworkVersion: 'cuda', cudaAvailable: true, deviceName: 'RTX test' }) };
+  }, requireCudaToolkit: false, timeoutMs: 1000,
+});
+assert.equal(pythonOnly.capabilities.cudaToolkit, null);
+assert.equal(pythonOnly.capabilities.cudaCompiler.available, false);
+assert.equal(pythonOnly.capabilities.pythonRuntime.cudaAvailable, true);
+
 await assert.rejects(
   () => probeSharedGpuRuntime({ run: async () => { throw new Error('missing'); } }),
   (error) => error.code === 'GPU_DEVICE_UNAVAILABLE',

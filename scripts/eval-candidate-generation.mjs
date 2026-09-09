@@ -26,9 +26,13 @@ if (!configPath || process.argv.includes('--help')) {
 const config = JSON.parse(await readFile(path.resolve(configPath), 'utf8'));
 assert.ok(config.experienceGuidance == null || (Array.isArray(config.experienceGuidance) && config.experienceGuidance.length <= 20), 'experienceGuidance must be an array with at most 20 human-guidance records');
 const timeoutMs = Math.max(30_000, Number(config.timeoutMs || 10 * 60_000));
+const evaluationDeadline = Date.now() + timeoutMs;
 const model = config.model || process.env.OPERATOR_CODEX_MODEL || 'gpt-5.6-sol';
 const runtimeMode = config.runtimeMode || process.env.E2E_AGENT_RUNTIME || 'codex-cli';
 const backend = config.backend || 'local-cpu';
+const backendEnvironment = backend === 'local-cpu'
+  ? { testBackend: 'local-c500', localCpu: '1' }
+  : { testBackend: backend, localCpu: '0' };
 const runRoot = await mkdtemp(path.join(os.tmpdir(), 'operator-studio-03-eval-'));
 const outputDir = path.resolve(arg('--output') || path.join(root, '.tmp-candidate-generation-eval', Date.now().toString(36)));
 await mkdir(outputDir, { recursive: true });
@@ -42,7 +46,7 @@ const runtimeDir = path.join(runRoot, 'runtime');
 const dataDir = path.join(runRoot, 'data');
 const projectRoot = path.join(runRoot, 'project');
 const cpuRunner = path.join(root, 'tools', 'local-cpu-runner.py');
-const pythonExecutable = resolvePythonExecutable({ rootDir: root });
+const pythonExecutable = config.pythonExecutable || process.env.OPERATOR_GPU_PYTHON || resolvePythonExecutable({ rootDir: root });
 const source = String(config.baselineRunPy || await readFile(path.resolve(config.baselinePath), 'utf8'));
 const matrix = config.testMatrix || { environments: ['CPU'], stages: ['Correctness', 'Full Benchmark'], correctnessCases: 4, warmup: 2, repeats: 10,
   testSpec: { schemaVersion: 'operator-studio.test-spec/v1', correctness: { requestedCases: 4, requiredCategories: ['minimal', 'representative', 'boundary'], atol: 1e-5, rtol: 1e-5, requireNamedCases: true }, benchmark: { requiredProfiles: ['primary'], primaryProfile: 'primary', warmup: 2, repeats: 10 } } };
@@ -53,7 +57,8 @@ let child;
 let missionId = null;
 let runId = null;
 const request = async (pathname, options = {}) => {
-  const response = await fetch(baseUrl + pathname, { ...options, signal: AbortSignal.timeout(Math.min(timeoutMs, 120_000)), headers: { 'content-type': 'application/json', ...(options.headers || {}) }, body: options.body == null || typeof options.body === 'string' ? options.body : JSON.stringify(options.body) });
+  const remaining = Math.max(1_000, Math.min(120_000, evaluationDeadline - Date.now()));
+  const response = await fetch(baseUrl + pathname, { ...options, signal: AbortSignal.timeout(remaining), headers: { 'content-type': 'application/json', ...(options.headers || {}) }, body: options.body == null || typeof options.body === 'string' ? options.body : JSON.stringify(options.body) });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(new Error(`${pathname}: ${response.status} ${payload.error || response.statusText}`), { code: payload.code, payload });
   return payload;
@@ -69,18 +74,33 @@ const waitFor = async (predicate, label, limit = timeoutMs) => {
   }
   throw new Error(`${label} timed out after ${limit}ms: ${JSON.stringify(last?.workflowFailure || last?.agent || last?.benchmark)}`);
 };
+const waitForServer = async (limit = 30_000) => {
+  const deadline = Date.now() + Math.min(limit, Math.max(1_000, evaluationDeadline - Date.now()));
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const health = await request('/api/health');
+      if (health?.service === 'operator-studio-client-runtime') return health;
+    } catch (error) {
+      lastError = error;
+      if (!/fetch failed|ECONNREFUSED|ECONNRESET|UND_ERR_CONNECT_TIMEOUT/i.test(error.message || '')) throw error;
+    }
+    await sleep(Math.min(250, Math.max(25, deadline - Date.now())));
+  }
+  throw new Error(`Runtime startup timed out after ${limit}ms: ${lastError?.message || 'health endpoint unavailable'}`);
+};
 try {
   const env = {
     ...process.env, API_PORT: String(port), SERVE_WEB: 'false', OPERATOR_RUNTIME_MODE: runtimeMode,
-    OPERATOR_CODEX_MODEL: model, OPERATOR_AUTO_TICK: '0', OPERATOR_TEST_BACKEND: backend,
-    OPERATOR_LOCAL_CPU: backend === 'local-cpu' ? '1' : '0', OPERATOR_LOCAL_C500_MOCK: '0', OPERATOR_LOCAL_C500_SIMULATION: '0',
+    OPERATOR_CODEX_MODEL: model, OPERATOR_AUTO_TICK: '0', OPERATOR_TEST_BACKEND: backendEnvironment.testBackend,
+    OPERATOR_LOCAL_CPU: backendEnvironment.localCpu, OPERATOR_LOCAL_C500_MOCK: '0', OPERATOR_LOCAL_C500_SIMULATION: '0',
     OPERATOR_LOCAL_C500_COMMAND: backend === 'local-cpu' ? `${quoteCommandArgument(pythonExecutable)} ${quoteCommandArgument(cpuRunner)}` : '',
     OPERATOR_LOCAL_C500_TIMEOUT_SECONDS: String(config.taskTimeoutSeconds || 60), OPERATOR_DATA_DIR: dataDir,
     OPERATOR_RUNTIME_DIR: runtimeDir, OPERATOR_LOCAL_C500_DIR: path.join(runRoot, 'tasks'),
   };
   child = spawn(process.execPath, ['client-runtime/local-server.mjs'], { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env });
   child.stdout.on('data', (chunk) => logs.push(String(chunk))); child.stderr.on('data', (chunk) => logs.push(String(chunk)));
-  await waitFor((state) => state && state.activeMissionId !== undefined, 'runtime startup', 30_000).catch(async (error) => { throw new Error(`${error.message}\n${logs.join('')}`); });
+  await waitForServer(30_000).catch(async (error) => { throw new Error(`${error.message}\n${logs.join('')}`); });
   const project = (await request('/api/projects', { method: 'POST', body: { name: config.projectName || `03-${operator}`, root: projectRoot, initializeGit: true } })).project;
   await writeFile(path.join(project.repository, config.entrypoint || 'run.py'), source, 'utf8');
   await execFileAsync('git', ['add', '.'], { cwd: project.repository });
@@ -108,31 +128,35 @@ try {
   const baselineTask = (await request('/api/operator-tests')).tasks?.find((task) => task.taskId === state.baseline?.evidence?.testTaskId || task.id === state.baseline?.evidence?.testTaskId) || (await request(`/api/operator-tests/${encodeURIComponent(state.baseline.evidence.testTaskId)}`)).task;
   await request(`/api/missions/${encodeURIComponent(missionId)}/runs`, { method: 'POST', body: { goal } });
   state = (await request('/api/state')).state; runId = state.agent?.runId;
-  // Freeze automatic adoption/next-round actions while still permitting polling and projection.
-  await request('/api/state', { method: 'PATCH', body: { missionPaused: true } });
+  if (!runId) throw Object.assign(new Error('Candidate generation did not create a run identity.'), { code: 'CANDIDATE_RUN_NOT_STARTED' });
   const candidateState = await waitFor((current) => current.agent?.runId === runId && ['awaiting_action', 'failed', 'completed'].includes(current.agent?.status), 'candidate generation', timeoutMs);
   state = candidateState;
   const candidateValidation = candidateState.agent?.candidateValidation || null;
-  const candidate = candidateState.candidateEvaluations?.[0];
+  const candidate = [...(candidateState.candidateEvaluations || [])].reverse().find((item) => !candidateValidation?.digest || item.patchDigest === candidateValidation.digest) || null;
   let candidateTask = null;
   if (candidateValidation?.passed && candidate?.id) {
-    await request('/api/state', { method: 'PATCH', body: { missionPaused: false } });
     await request('/api/actions/apply-patch', { method: 'POST', body: { candidate: candidate.id } });
     const candidateSubmission = await request('/api/actions/start-benchmark', { method: 'POST', body: { purpose: 'candidate', candidate: candidate.id, candidateDigest: candidate.patchDigest, operator, matrix, timeoutSeconds: config.taskTimeoutSeconds || 60 } });
-    // Pause before any runtime advancement. Queue inspection is the only driver
-    // used below; this prevents a passing development result from entering the
-    // production adoption/next-round path.
+    // Pause automatic adoption/next-round actions only after the benchmark
+    // command is committed. The runtime pipeline still dispatches this frozen
+    // benchmark while paused; GET remains read-only.
     await request('/api/state', { method: 'PATCH', body: { missionPaused: true } });
     const candidateDeadline = Date.now() + Math.min(timeoutMs, 120_000);
+    let finalCandidateState = null;
     while (Date.now() < candidateDeadline) {
       candidateTask = candidateSubmission.taskId
         ? (await request(`/api/operator-tests/${encodeURIComponent(candidateSubmission.taskId)}`)).task
         : null;
       state = (await request('/api/state')).state;
       await request('/api/runtime/advance', { method: 'POST', body: {} });
-      if (state.benchmark?.purpose === 'candidate' && ['complete', 'failed'].includes(state.benchmark?.status)) break;
+      state = (await request('/api/state')).state;
+      if (candidateSubmission.taskId) candidateTask = (await request(`/api/operator-tests/${encodeURIComponent(candidateSubmission.taskId)}`)).task;
+      const taskTerminal = candidateTask && ['completed', 'failed', 'cancelled', 'quarantined'].includes(candidateTask.status);
+      const benchmarkTerminal = state.benchmark?.purpose === 'candidate' && ['complete', 'failed', 'cancelled'].includes(state.benchmark?.status);
+      if (taskTerminal && benchmarkTerminal) { finalCandidateState = state; break; }
       await sleep(Number(config.pollMs || 250));
     }
+    if (!finalCandidateState) throw Object.assign(new Error('Candidate benchmark did not reach a terminal queue and Mission state outcome before its deadline.'), { code: 'CANDIDATE_EVALUATION_TIMEOUT', details: { taskId: candidateSubmission.taskId, taskStatus: candidateTask?.status, benchmarkStatus: state?.benchmark?.status } });
     if (!candidateTask && state.benchmark?.testTaskId) candidateTask = (await request(`/api/operator-tests/${encodeURIComponent(state.benchmark.testTaskId)}`)).task;
   }
   const events = (await request(`/api/missions/${encodeURIComponent(missionId)}/events`)).events || [];
@@ -143,6 +167,9 @@ try {
   await writeFile(path.join(outputDir, 'evaluation.json'), `${JSON.stringify(report.summary, null, 2)}\n`, 'utf8');
   await writeFile(path.join(outputDir, 'evaluation.md'), `${report.markdown}\n`, 'utf8');
   await writeFile(path.join(outputDir, 'observations.json'), `${JSON.stringify({ missionId, runId, state, baselineTask, candidateTask, events, logs }, null, 2)}\n`, 'utf8');
+  if (report.summary.outcome !== 'evaluated') {
+    throw Object.assign(new Error(`Candidate evaluation did not complete: ${report.summary.outcome}`), { code: 'CANDIDATE_EVALUATION_INCOMPLETE' });
+  }
   console.log(JSON.stringify({ status: 'passed', outputDir, outcome: report.summary.outcome, missionId, runId }, null, 2));
 } catch (error) {
   await writeFile(path.join(outputDir, 'failure.json'), `${JSON.stringify({ status: 'failed', error: error.message, stack: error.stack, logs }, null, 2)}\n`, 'utf8').catch(() => {});

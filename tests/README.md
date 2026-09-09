@@ -156,7 +156,9 @@ evidence. `local-c500-recovery-test.mjs` exercises the same Job Object path in t
 production adapter for parent restart, deadline, cancellation races and durable
 single-launch recovery. On POSIX it additionally verifies detached
 process-group/session identity and reaps a descendant after the group leader
-exits; this case is skipped on Windows where Job Objects provide the equivalent
+exits; a fast POSIX supervisor may reap that descendant before the read-only
+observation, in which case the terminal release receipt remains the assertion.
+This case is skipped on Windows where Job Objects provide the equivalent
 ownership guarantee.
 
 `shared-gpu-runtime-test` is a read-only capability/policy contract test.

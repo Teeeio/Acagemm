@@ -14,6 +14,15 @@ const writeDurably = async (target, content, flags) => {
 };
 
 export const createCommandJournal = ({ filePath } = {}) => {
+  // Commands execute under the Runtime writer lock, but read-only GET/SSE
+  // projections may inspect the same journal concurrently. Keep an in-process
+  // marker so inspection distinguishes an effect that is still preparing from
+  // an effect orphaned by a crashed process. The marker is deliberately not
+  // persisted: a new process must still recover conservatively.
+  const activeSequences = new Set();
+  const markActive = (seq) => { activeSequences.add(Number(seq)); };
+  const clearActive = (seq) => { activeSequences.delete(Number(seq)); };
+  const isActive = (seq) => activeSequences.has(Number(seq));
   const readAll = async () => {
     if (!filePath) return [];
     let raw;
@@ -56,7 +65,7 @@ export const createCommandJournal = ({ filePath } = {}) => {
   const findByKey = async (key) => (await readAll()).findLast((entry) => entry.idempotencyKey === key) || null;
   const entriesAfter = async (seq) => (await readAll()).filter((entry) => Number(entry.seq) > Number(seq));
   const reset = async () => { if (filePath) await rm(filePath, { force: true }); };
-  return { filePath, readAll, nextSeq, append, patch, findByKey, entriesAfter, reset };
+  return { filePath, readAll, nextSeq, append, patch, findByKey, entriesAfter, reset, markActive, clearActive, isActive };
 };
 
 const recoveryError = (entry, code = 'COMMAND_EFFECT_OUTCOME_UNKNOWN', cause = null) => Object.assign(
@@ -155,27 +164,36 @@ export async function executeCommand({ journal, saveState, registry, state, type
   if (pending && (!existing || Number(pending.seq) !== Number(existing.seq))) throw recoveryError(pending, 'COMMAND_PENDING_RECOVERY');
 
   let entry;
-  if (existing && isPending(existing)) {
-    assertRecoveryState(existing, state);
-    entry = await recoverEntry({ command, entry: existing, state, journal, deps });
-  } else {
-    const seq = await journal.nextSeq();
-    const effectId = workflowEffectId({ missionId: state.activeMissionId, type, round: state.iterationStats?.round || 0, subject: `${key}:${seq}` });
-    const intent = command.plan ? await command.plan({ state, body, effectId, deps }) : null;
-    entry = {
-      schemaVersion: 2, seq, commandId: `cmd_${seq}_${type}`, effectId, idempotencyKey: key,
-      type, missionId: state.activeMissionId, body: structuredClone(body), intent: structuredClone(intent),
-      stateVersionBefore: Number(state.stateVersion || 0), stateVersionAfter: null,
-      status: 'preparing', effectStarted: false, payload: null, result: null, appliedAt: null,
-    };
-    await journal.append(entry);
-    entry = await prepareEntry({ command, entry, state, journal, deps });
+  let activeSeq = null;
+  try {
+    if (existing && isPending(existing)) {
+      assertRecoveryState(existing, state);
+      activeSeq = Number(existing.seq);
+      journal.markActive?.(activeSeq);
+      entry = await recoverEntry({ command, entry: existing, state, journal, deps });
+    } else {
+      const seq = await journal.nextSeq();
+      activeSeq = Number(seq);
+      journal.markActive?.(activeSeq);
+      const effectId = workflowEffectId({ missionId: state.activeMissionId, type, round: state.iterationStats?.round || 0, subject: `${key}:${seq}` });
+      const intent = command.plan ? await command.plan({ state, body, effectId, deps }) : null;
+      entry = {
+        schemaVersion: 2, seq, commandId: `cmd_${seq}_${type}`, effectId, idempotencyKey: key,
+        type, missionId: state.activeMissionId, body: structuredClone(body), intent: structuredClone(intent),
+        stateVersionBefore: Number(state.stateVersion || 0), stateVersionAfter: null,
+        status: 'preparing', effectStarted: false, payload: null, result: null, appliedAt: null,
+      };
+      await journal.append(entry);
+      entry = await prepareEntry({ command, entry, state, journal, deps });
+    }
+    await applyEntry(command, entry, state, journal);
+    const saved = await saveState(state);
+    const completed = { status: 'applied', stateVersionAfter: saved.stateVersion, appliedAt: new Date().toISOString() };
+    await journal.patch(entry.seq, completed);
+    return { status: 'applied', state: saved, entry: { ...entry, ...completed }, result: entry.result, stateVersion: saved.stateVersion };
+  } finally {
+    if (activeSeq != null) journal.clearActive?.(activeSeq);
   }
-  await applyEntry(command, entry, state, journal);
-  const saved = await saveState(state);
-  const completed = { status: 'applied', stateVersionAfter: saved.stateVersion, appliedAt: new Date().toISOString() };
-  await journal.patch(entry.seq, completed);
-  return { status: 'applied', state: saved, entry: { ...entry, ...completed }, result: entry.result, stateVersion: saved.stateVersion };
 }
 
 // Inspection must not acknowledge records, invoke recovery adapters, replay
@@ -183,7 +201,7 @@ export async function executeCommand({ journal, saveState, registry, state, type
 export async function inspectCommandJournal(state, { journal, registry }) {
   if (!journal || !registry) return { state, replayed: [], blocked: [] };
   const pending = (await journal.entriesAfter(Number(state.commandJournalSeq || 0)))
-    .filter((entry) => entry.status === 'applied' || isPending(entry))
+    .filter((entry) => !journal.isActive?.(entry.seq) && (entry.status === 'applied' || isPending(entry)))
     .sort((a, b) => Number(a.seq) - Number(b.seq));
   for (const entry of pending) {
     const command = registry[entry.type];
@@ -210,7 +228,7 @@ export async function reconcileCommandJournal(state, { journal, registry }) {
     }
   }
   const pending = (await journal.entriesAfter(Number(state.commandJournalSeq || 0)))
-    .filter((entry) => entry.status === 'applied' || isPending(entry))
+    .filter((entry) => !journal.isActive?.(entry.seq) && (entry.status === 'applied' || isPending(entry)))
     .sort((a, b) => Number(a.seq) - Number(b.seq));
   const replayed = [];
   const blocked = [];

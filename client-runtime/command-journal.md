@@ -34,6 +34,10 @@ unavailable recovery queries, or changed state block recovery instead of duplica
 work. Legacy `applied` records remain replayable. An unresolved record is never skipped
 to apply a later record. Runtime state exposes the blocker and pauses advancement.
 
+Within one Runtime process, the journal keeps a non-persistent active-sequence marker
+while `prepare`/`apply` is in flight. Read-only inspection ignores those live entries;
+after a process restart the marker is absent and conservative recovery rules apply.
+
 The journal provides process-crash recovery under one Runtime writer. Recovery queries
 must be authoritative. Providers without such a query require inspection when an
 effect outcome is unknown. Cross-process coordination and hardware execution

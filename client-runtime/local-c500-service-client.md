@@ -65,6 +65,10 @@ PID loaded from an old claim: cancellation is handled by the original
 supervisor through the durable marker. Unknown orphan claims have no automatic
 restart or force-release path. A stored result alone never proves process exit.
 
+On Linux/WSL, the supervisor also treats a process group whose members are all
+zombies as released: those processes cannot execute or retain worker resources,
+while any live or unreadable member still keeps the task quarantined.
+
 Successful natural exit, or confirmed cancellation cleanup, permits a matching
 receipt to settle exactly one atomic terminal task. Result written before exit
 remains nonterminal. Metadata reconciliation preserves the first confirmed terminal

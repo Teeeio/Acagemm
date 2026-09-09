@@ -42,7 +42,7 @@ def _load_base():
 
 
 def _probe_nvidia(torch, device):
-    executable = shutil.which("nvidia-smi")
+    executable = os.environ.get("OPERATOR_GPU_NVIDIA_SMI") or shutil.which("nvidia-smi")
     if not executable:
         raise RuntimeError("nvidia-smi is unavailable; shared GPU provenance cannot be established")
     probe = subprocess.run(

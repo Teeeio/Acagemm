@@ -30,4 +30,8 @@ calls.length = 0;
 allowWork = false;
 await service.advance({ state: {}, runtime: { mode: 'mock' } });
 assert.deepEqual(calls, ['migration', 'record', 'baseline', 'runtime', 'poll-only', 'benchmark', 'advance'], 'barrier must prevent maintenance adoption, new test dispatch and repository writes while still observing existing work');
+calls.length = 0;
+await service.advance({ state: { missionPaused: true, benchmark: { status: 'running', testTaskId: 'queue_existing' } }, runtime: { mode: 'mock' } });
+assert.equal(calls.includes('process-tests'), true, 'a committed benchmark remains dispatchable while Mission workflow is paused');
+assert.equal(calls.includes('adoption'), false, 'paused committed benchmark must not trigger adoption');
 console.log('[runtime-state-pipeline-service] ordered advancement and queue contention contract passed');
