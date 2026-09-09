@@ -24,6 +24,7 @@ if (!configPath || process.argv.includes('--help')) {
   process.exit(configPath ? 0 : 2);
 }
 const config = JSON.parse(await readFile(path.resolve(configPath), 'utf8'));
+assert.ok(config.experienceGuidance == null || (Array.isArray(config.experienceGuidance) && config.experienceGuidance.length <= 20), 'experienceGuidance must be an array with at most 20 human-guidance records');
 const timeoutMs = Math.max(30_000, Number(config.timeoutMs || 10 * 60_000));
 const model = config.model || process.env.OPERATOR_CODEX_MODEL || 'gpt-5.6-sol';
 const runtimeMode = config.runtimeMode || process.env.E2E_AGENT_RUNTIME || 'codex-cli';
@@ -84,6 +85,19 @@ try {
   await writeFile(path.join(project.repository, config.entrypoint || 'run.py'), source, 'utf8');
   await execFileAsync('git', ['add', '.'], { cwd: project.repository });
   await execFileAsync('git', ['-c', 'user.name=03-eval', '-c', 'user.email=03-eval@operator.studio', 'commit', '-m', '03 evaluation baseline'], { cwd: project.repository });
+  for (const guidance of (config.experienceGuidance || [])) {
+    await request(`/api/projects/${encodeURIComponent(project.id)}/experiences`, {
+      method: 'POST',
+      body: {
+        title: guidance.title,
+        content: guidance.content,
+        author: guidance.author || '03-evaluation',
+        confidence: guidance.confidence || 'medium',
+        scope: guidance.scope || { operator, hardware: hardware.map((item) => String(item).toLowerCase()) },
+        ...(guidance.visibility ? { visibility: guidance.visibility } : {}),
+      },
+    });
+  }
   const goal = config.goal || `优化 ${operator} 的 ${config.entrypoint || 'run.py'} 实现；保持语义、输入工厂、reference 和测试矩阵不变，只提交一个可量化的真实 Diff。`;
   const mission = await request('/api/missions', { method: 'POST', body: { projectId: project.id, title: config.title || `03 ${operator} evaluation`, operator, goal, hardware, metric: config.metric || 'latency p50', implementation: config.implementation || 'pytorch-python', testMatrix: matrix, objective: config.objective || { mode: 'threshold', metric: config.metric || 'latency p50', direction: 'minimize', targetRelativeImprovement: 0 }, missionBudgetMs: timeoutMs, semanticDraft: config.semanticDraft || {} } });
   missionId = mission.state.activeMissionId;
@@ -97,6 +111,7 @@ try {
   // Freeze automatic adoption/next-round actions while still permitting polling and projection.
   await request('/api/state', { method: 'PATCH', body: { missionPaused: true } });
   const candidateState = await waitFor((current) => current.agent?.runId === runId && ['awaiting_action', 'failed', 'completed'].includes(current.agent?.status), 'candidate generation', timeoutMs);
+  state = candidateState;
   const candidateValidation = candidateState.agent?.candidateValidation || null;
   const candidate = candidateState.candidateEvaluations?.[0];
   let candidateTask = null;

@@ -45,6 +45,13 @@ semantic/correctness/benchmark contracts、raw intent 及未解决冲突/unknown
 `iterationContext`/`iterationEvidence`，Prompt 会将它们标记为不可信的历史证据，供下一轮
 定位失败 case、benchmark profile、候选 digest 和已尝试方向；它们不能覆盖冻结契约，也不能
 触发 Queue/Gate 决策。字段缺失时不生成对应段落，保持通用 Mission 的 Prompt 简洁。
+生产流程中的上一轮经验优先来自应用层冻结的 `experienceContext`：
+`roundExperienceService` 按 Project、Mission、Round 和 Scope 检索并绑定人工指导、已验证
+的执行观察与版本摘要，再由 Agent Runtime 以 `experienceInstruction` 传入 Prompt。它与
+`iterationContext`/`iterationEvidence` 是不同层次：前者是受 Project/版本约束的经验上下文，
+后者是本轮或上一轮的局部诊断快照。两者都只是不可信事实，不能替代 Semantic Snapshot、
+独立 oracle、固定测试矩阵或 Gate；执行观察必须来自已验证的测试队列终态，不能由普通经验
+写入 API 伪造。
 inspectCandidateDiff 的 manifest 至少包含 dirty、diff、digest 和 changedFiles。
 返回的 candidateValidation 是策略结果；调用方仍需通过命令日志保存外部效果和状态应用。
 
