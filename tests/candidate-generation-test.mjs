@@ -32,6 +32,53 @@ assert.match(prompt, /Mission ID: MIS_CANDIDATE_GENERATION/);
 assert.match(prompt, /run\.py/);
 assert.match(prompt, /BOUNDARY/);
 assert.match(prompt, /Return one JSON object/);
+assert.doesNotMatch(prompt, /Frozen Semantic Snapshot/);
+
+const semanticPrompt = buildCandidateGenerationPrompt({
+  mission: {
+    ...mission,
+    semanticSnapshot: {
+      snapshotId: 'SEM_INPUTS_01', status: 'frozen', digest: 'sha256:semantic-digest',
+      semanticContract: {
+        operator: 'vector_add',
+        inputs: [{ name: 'lhs', shape: ['N', 16], dtype: 'float16', device: 'cuda' }],
+        outputs: [{ name: 'out', dtype: 'float16' }],
+        math: { equation: 'out = lhs + rhs' },
+        immutableRules: ['preserve dtype'],
+      },
+      correctnessContract: { requiredCategories: ['exact', 'edge'], uncovered: [] },
+      benchmarkContract: { primaryProfile: 'small', profiles: [{ name: 'small', shape: [1, 16] }] },
+      rawIntent: { operator: 'vector_add', goal: 'elementwise addition' },
+      conflicts: [], unknowns: [],
+    },
+    iterationEvidence: {
+      roundId: 'MIS_CANDIDATE_GENERATION:round:2',
+      candidateDigest: digest,
+      correctness: { passed: false, failures: [{ case: 'empty_input', reason: 'shape mismatch' }] },
+      benchmark: { profiles: [{ name: 'small', value: 12.5, unit: 'us' }] },
+      attemptedDirection: 'shared memory tiling',
+    },
+  },
+  goal: 'reduce latency',
+  workspace: 'C:/workspace/MIS_CANDIDATE_GENERATION',
+  baseline: {
+    status: 'ready',
+    oracleRunPy: 'def reference(inputs): return inputs',
+    iterationEvidence: { priorCandidateDigest: 'sha256:prior', decision: 'discard', reason: 'correctness_failed' },
+  },
+  testMatrix: { environments: ['local-gpu'] },
+});
+assert.match(semanticPrompt, /Frozen Semantic Snapshot \(authoritative contract/);
+assert.match(semanticPrompt, /SEM_INPUTS_01/);
+assert.match(semanticPrompt, /sha256:semantic-digest/);
+assert.match(semanticPrompt, /vector_add/);
+assert.match(semanticPrompt, /Correctness contract \(JSON\)/);
+assert.match(semanticPrompt, /Benchmark contract \(JSON\)/);
+assert.match(semanticPrompt, /MISSION ITERATION EVIDENCE/);
+assert.match(semanticPrompt, /empty_input/);
+assert.match(semanticPrompt, /shared memory tiling/);
+assert.match(semanticPrompt, /BASELINE ITERATION EVIDENCE/);
+assert.match(semanticPrompt, /correctness_failed/);
 
 const context = { mission, runHistory: [] };
 const matching = inspectCandidateDiff({

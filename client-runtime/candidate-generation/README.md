@@ -39,12 +39,55 @@ agent-runtime.mjs 的 provider 生命周期中抽出。模块只定义候选生�
 
 buildCandidateGenerationPrompt 的 boundaryInstruction、Workspace inventory 和
 Baseline 内容必须由应用层/Workspace 端口提供。该函数只渲染字符串，不读取路径。
+当 Mission 带有 `semanticSnapshot` 时，Prompt 会显式渲染其 snapshot identity/digest、
+semantic/correctness/benchmark contracts、raw intent 及未解决冲突/unknowns；这些字段是
+算子语义的权威事实，Agent 不得自行弱化或猜测。若 Mission 或 Baseline 带有可选的
+`iterationContext`/`iterationEvidence`，Prompt 会将它们标记为不可信的历史证据，供下一轮
+定位失败 case、benchmark profile、候选 digest 和已尝试方向；它们不能覆盖冻结契约，也不能
+触发 Queue/Gate 决策。字段缺失时不生成对应段落，保持通用 Mission 的 Prompt 简洁。
+Mission 上的 `semanticSnapshot`（若存在）是通用算子的语义权威；Prompt 会以只读文本
+展示冻结的输入、输出、数学规则、边界、不变量以及 correctness/benchmark 契约。固定
+Profile 仍由 `fixed-operator-profiles.mjs` 提供，不允许 Agent 改写。
+`mission.iterationContext`、`mission.iterationEvidence` 以及 Baseline 上的同名诊断字段
+（若由应用层提供）只作为“不可信事实”注入，用于定位失败 case、profile 测量、已尝试
+方向和剩余差距；它们不能覆盖冻结语义，也不能改变本模块的返回结构。首轮没有这些
+字段时，仍以 Semantic Snapshot、Baseline Oracle 和 Workspace 为准。
 
 inspectCandidateDiff 的 manifest 至少包含 dirty、diff、digest 和 changedFiles。
 返回的 candidateValidation 是策略结果；调用方仍需通过命令日志保存外部效果和状态应用。
 
 finalizeCandidateAdmission 不修改任何输入对象。它要求 workspaceFiles 和 entryContent
 已由 Workspace 端口读取，并通过 validateOperatorLanguageCandidate 执行当前语言契约。
+
+## Adding test inputs for another operator
+
+新增算子类型时只增加 Mission 的语义与测试数据，不复制候选生成流程。先冻结一个
+`semanticSnapshot`，至少填写：
+
+```json
+{
+  "semanticContract": {
+    "operator": "vector_add",
+    "inputs": [{"name":"x","shape":["B","N"],"dtype":["float16","float32"],"layout":"contiguous"}],
+    "outputs": [{"shape":["B","N"],"dtype":"same-as-x"}],
+    "math": {"formula":"y = x + bias"},
+    "edgeCases": ["N=1", "N not divisible by tile"],
+    "invariants": ["不修改输入", "输出 shape 与 x 相同"]
+  },
+  "correctnessContract": {"requiredCategories":["minimal","representative","boundary"]},
+  "benchmarkContract": {"primaryProfile":"primary","metric":"latency_p50"}
+}
+```
+
+然后在冻结 `testSpec` 中声明 correctness 类别、容差、benchmark profiles、warmup 和
+repeats；由 Baseline Oracle 实现 `get_test_cases()` 与 `get_benchmark_inputs()`，每个
+输入都应是确定性的、具名的、可序列化的包内数据。Candidate 只能修改实现路径，不能
+修改这些输入工厂或 `reference(inputs)`。Python/Triton 使用 `run.py` bridge；C++/CUDA
+等语言通过对应 language adapter 声明入口和允许文件，测试输入结构保持不变。
+
+推荐为每种算子至少覆盖：最小规模、代表规模、非整除/边界规模、不同 dtype，以及与
+生产最接近的 primary benchmark。新增 case 后必须同步更新 semantic snapshot digest、
+Baseline oracle 和 testSpec，避免 Agent 看到的语义与队列实际执行的输入不一致。
 
 ## Dependencies
 
@@ -71,4 +114,3 @@ npm run test:module-boundary
 当前 Prompt 仍包含固定的 run.py bridge 说明，这是现有 Python/Triton Profile 的兼容要求。
 未来 C++/CUDA/Rust 适配器应通过语言契约提供对应 entrypoint 说明，不应在本模块重新复制
 Workflow 或 Gate 规则。
-
