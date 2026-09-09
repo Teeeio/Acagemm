@@ -14,6 +14,8 @@ const selections = [];
 const make = (overrides = {}) => ({ missionState: { selectMission(state, id) { selections.push(id); state.activeMissionId = id; return state; } }, loadState: async () => structuredClone({ ...base, ...overrides.state }), persistState: async (state) => state, executeCommand: async ({ type, state }) => ({ status: 'applied', state, result: { runId: `RUN_${type}` } }), journal: {}, registry: {}, agentRuntime: { async describe() { return { mode: 'fixture' }; } }, buildRuntimePreflight: async () => ({ ready: true, workspace: '/tmp/workspace' }), nowMs: () => Date.parse('2026-09-07T00:00:00.000Z'), assertMissionIntent() {}, isStrictZeroSourceMission: () => false, isFixedOperatorMission: () => false, ...overrides });
 const service = createRunService(make());
 assert.equal((await service.start('MIS_1', {})).result.result.runId, 'RUN_runs');
+const activeService = createRunService(make({ state: { agent: { runId: 'RUN_ACTIVE', status: 'running' } } }));
+await assert.rejects(activeService.start('MIS_1', {}), error => error.code === 'AGENT_RUN_ALREADY_ACTIVE' && error.status === 409);
 const selected = await service.start('MIS_2', {});
 assert.equal(selected.result.state.activeMissionId, 'MIS_2');
 assert.deepEqual(selections, ['MIS_2']);

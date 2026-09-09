@@ -127,7 +127,14 @@ export const createCodexClient = (options = {}) => {
   const bridgeDir = options.bridgeDir || path.resolve(process.env.OPERATOR_BRIDGE_DIR || path.join(runtimeDir, 'agent-bridge'));
   const sandboxMode = options.sandboxMode || process.env.OPERATOR_CODEX_SANDBOX || 'workspace-write';
   const model = options.model || process.env.OPERATOR_CODEX_MODEL || process.env.CODEX_MODEL || null;
-  const windowsSandbox = options.windowsSandbox ?? process.env.OPERATOR_CODEX_WINDOWS_SANDBOX ?? null;
+  // The MVP deliberately uses Codex's Windows unelevated fallback unless an
+  // operator explicitly selects another sandbox mode. The repository still
+  // confines writes to the Mission Workspace and owns process cleanup through
+  // the runtime/Job Object boundary; requiring the optional Windows sandbox
+  // setup helper would make ordinary local Agent runs fail closed when that
+  // helper is absent from a portable Codex installation.
+  const windowsSandbox = options.windowsSandbox ?? process.env.OPERATOR_CODEX_WINDOWS_SANDBOX
+    ?? (process.platform === 'win32' ? 'unelevated' : null);
   const runsDir = path.join(bridgeDir, 'codex-runs');
   const children = new Map();
   const userName = options.userName ?? process.env.USERNAME ?? process.env.USER ?? '';

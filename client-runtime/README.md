@@ -122,6 +122,11 @@ All external outcomes must be normalized before changing Mission state.
 - External failures use `workflow-error.mjs` normalization.
 - Runtime events use `runtime-events.mjs`; do not define local event appenders.
 - Provider capability checks use the Agent Runtime registry.
+- Windows Codex MVP runs with the explicit `unelevated` fallback when the
+  optional Codex Sandbox helper is unavailable. Candidate writes remain bound
+  to the active Mission Workspace, and process-tree cleanup remains owned by
+  the runtime/Job Object boundary; operators may override this with
+  `OPERATOR_CODEX_WINDOWS_SANDBOX`.
 - `OPERATOR_LOCAL_CPU=1` is restricted to the deterministic CPU E2E runner. Its results use
   `source=cpu-e2e` and `liveHardware=false`; this mode must never satisfy C550 evidence requirements.
 - C550 is the only current MetaX production target. New Mission hardware, test-matrix environments,

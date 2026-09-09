@@ -88,7 +88,9 @@ try {
   assert.equal(record.status, 'completed');
   assert.equal(record.threadId, 'thread-test');
   assert.equal((await client.readEvents('codex_TEST')).length, 3);
-  const expectedWindowsSandboxArgs = [];
+  const expectedWindowsSandboxArgs = process.platform === 'win32'
+    ? ['-c', 'windows.sandbox="unelevated"']
+    : [];
   assert.deepEqual(spawnCalls[0].args, ['exec', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, '--cd', root, '-']);
   await client.start({ runId: 'codex_RESUME', missionId: 'MIS_TEST', goal: 'continue operator', workspace: root, resumeThreadId: 'thread-test' });
   await new Promise((resolve) => setTimeout(resolve, 150));

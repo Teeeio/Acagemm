@@ -61,7 +61,10 @@ export const runtimeDefinitions = frozen([
       eventText: 'eventText',
     }),
     configurationAuthority: 'local-codex',
-    defaultStallMs: 2 * 60 * 1000,
+    // A full candidate prompt may require several tool turns before the first
+    // file change. Keep the stall guard below the 15-minute round budget while
+    // allowing normal provider/tool latency on a local Windows host.
+    defaultStallMs: 5 * 60 * 1000,
     managedWorkspace: true,
     capabilities: frozen({
       research: true,

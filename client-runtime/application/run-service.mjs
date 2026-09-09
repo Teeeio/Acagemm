@@ -34,6 +34,16 @@ export const createRunService = ({ loadState, persistState, executeCommand, jour
     const mission = state.missions.find((item) => item.id === missionId);
     if (!mission) throw notFound();
     if (state.activeMissionId !== missionId) missionState.selectMission(state, missionId);
+    // Auto-tick and explicit Run commands share the writer lock. If auto-tick
+    // has already started this Mission, reject before opening a journal entry
+    // or creating a checkpoint. A late admission rejection inside runEffect
+    // would otherwise leave an ambiguous external-effect marker.
+    if (state.agent?.runId && ['running', 'executing', 'awaiting_action', 'cancel_requested', 'awaiting_approval'].includes(state.agent.status)) {
+      throw Object.assign(new Error('An Agent run is already active for this Mission.'), {
+        code: 'AGENT_RUN_ALREADY_ACTIVE', status: 409,
+        details: { missionId, runId: state.agent.runId },
+      });
+    }
     let goal = body.goal?.trim() || mission.goal;
     if (!body.goal && state.iterationStats?.pendingInjection) {
       goal = `${goal}\n【调研注入】${state.iterationStats.pendingInjection.briefing}`;

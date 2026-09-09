@@ -148,7 +148,7 @@ assert.match(hardwareMockContract, /every provider run must have exact token usa
 assert.doesNotMatch(hardwareMockE2e, /runtimeId\s*===\s*['"](?:codex-cli|claude-code)['"]/);
 assert.match(runtimeRegistry, /productionWorkflowCapabilities/);
 assert.match(runtimeRegistry, /inspectRuntimeCapabilities/);
-assert.doesNotMatch(codexClient, /OPERATOR_CODEX_WINDOWS_SANDBOX \|\| 'unelevated'/);
+assert.match(codexClient, /OPERATOR_CODEX_WINDOWS_SANDBOX[\s\S]*process\.platform === 'win32' \? 'unelevated'/);
 assert.match(productionApi, /mxSmi:\s*checkCommand\('mx-smi', \[\]\)/);
 assert.doesNotMatch(productionApi, /ixsmi/i);
 assert.match(productionApi, /resolveLocalC500LaunchMode/);

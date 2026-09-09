@@ -37,7 +37,9 @@ const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
     API_PORT: String(port),
     SERVE_WEB: 'false',
     OPERATOR_RUNTIME_MODE: runtimeMode,
-    OPERATOR_AUTO_TICK: '1',
+    // Production keeps auto-tick enabled. Deterministic troubleshooting can
+    // set OPERATOR_AUTO_TICK=0 and drive POST /api/runtime/advance explicitly.
+    OPERATOR_AUTO_TICK: process.env.OPERATOR_AUTO_TICK || '1',
     OPERATOR_AUTO_TICK_INTERVAL_MS: '250',
     OPERATOR_MAIN_AGENT_BUDGET_MS: process.env.OPERATOR_MAIN_AGENT_BUDGET_MS || '180000',
     OPERATOR_TEST_BACKEND: 'local-c500',
@@ -247,7 +249,11 @@ try {
   if (missionId && childExit === null) await request('/api/actions/stop-mission', { method: 'POST', body: {} }).catch(() => null);
   child.kill();
   if (child.exitCode === null) await new Promise((resolve) => child.once('exit', resolve));
-  await rm(runRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  if (process.env.E2E_KEEP_ARTIFACTS === '1') {
+    console.error(`[cpu-agent-e2e] kept diagnostic artifacts at ${runRoot}`);
+  } else {
+    await rm(runRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
 }
 
 console.log(JSON.stringify(summary, null, 2));
