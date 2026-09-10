@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
 import { createScopedGitEnvironment } from './git-environment.mjs';
 import { resolveCliInvocation } from './cli-command.mjs';
-import { createJobName, jobObjectSupported, spawnJobObjectProcess } from './windows-job-object.mjs';
+import { DEFAULT_JOB_HELPER_TIMEOUT_MS, createJobName, jobObjectSupported, spawnJobObjectProcess } from './windows-job-object.mjs';
 
 const defaultTimeoutMs = 12_000;
 
@@ -65,6 +65,15 @@ const enabledSetting = (value, fallback = true) => {
   if (value === undefined || value === null || value === '') return fallback;
   if (typeof value === 'boolean') return value;
   return /^(1|true|yes|on)$/i.test(String(value));
+};
+
+// Schedule-delay-tolerant override for the Job supervisor's helper timeout.
+// A value below the floor would turn an ordinary loaded-machine cold start
+// into a false CODEX_JOB_START_TIMEOUT, so an unusable setting falls back
+// rather than shrinking the bound.
+const helperTimeoutSetting = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 1_000 ? parsed : fallback;
 };
 
 // Serialize an argv array for CreateProcessW using the CommandLineToArgvW
@@ -240,6 +249,13 @@ export const createCodexClient = (options = {}) => {
   const jobObjectRequested = enabledSetting(options.useJobObject ?? process.env.OPERATOR_CODEX_JOB_OBJECT, true);
   const jobObjectEligible = jobObjectSupported(platform) && !injectedSpawn && !/\.cmd$/i.test(command);
   const useWindowsJobObject = jobObjectRequested && jobObjectEligible;
+  // Bounded liveness check for the Job helper, not a release deadline. It is
+  // generous enough that machine load alone cannot expire it; expiry still
+  // fails closed through the same quarantine path.
+  const jobStartTimeoutMs = helperTimeoutSetting(
+    options.jobStartTimeoutMs ?? process.env.OPERATOR_CODEX_JOB_START_TIMEOUT_MS,
+    DEFAULT_JOB_HELPER_TIMEOUT_MS,
+  );
   const runsDir = path.join(bridgeDir, 'codex-runs');
   const children = new Map();
   const userName = options.userName ?? process.env.USERNAME ?? process.env.USER ?? '';
@@ -614,6 +630,7 @@ export const createCodexClient = (options = {}) => {
           jobName: createJobName(runId),
           tempRoot: bridgeDir,
           env: runEnvironment,
+          startTimeoutMs: jobStartTimeoutMs,
           onStdout: consumeStdout,
           onStderr: consumeStderr,
         });

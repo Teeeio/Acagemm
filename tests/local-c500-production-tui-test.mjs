@@ -148,7 +148,11 @@ assert.match(hardwareMockContract, /every provider run must have exact token usa
 assert.doesNotMatch(hardwareMockE2e, /runtimeId\s*===\s*['"](?:codex-cli|claude-code)['"]/);
 assert.match(runtimeRegistry, /productionWorkflowCapabilities/);
 assert.match(runtimeRegistry, /inspectRuntimeCapabilities/);
-assert.match(codexClient, /OPERATOR_CODEX_WINDOWS_SANDBOX[\s\S]*process\.platform === 'win32' \? 'unelevated'/);
+// The win32 sandbox default is read through the injected `platform` alias
+// (options.platform || process.platform) like every other Windows branch in
+// the adapter, so tests can exercise the Windows path on any host. Production
+// behaviour is unchanged: an unset option falls back to process.platform.
+assert.match(codexClient, /OPERATOR_CODEX_WINDOWS_SANDBOX[\s\S]*platform === 'win32' \? 'unelevated'/);
 assert.match(productionApi, /mxSmi:\s*checkCommand\('mx-smi', \[\]\)/);
 assert.doesNotMatch(productionApi, /ixsmi/i);
 assert.match(productionApi, /resolveLocalC500LaunchMode/);

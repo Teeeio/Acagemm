@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { removeTreeEventually } from '../client-runtime/windows-job-object.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Keep the fixture outside the repository runtime tree.  Some managed Windows
@@ -123,16 +124,9 @@ try {
   child.kill();
   if (child.exitCode === null) await new Promise((resolve) => child.once('exit', resolve));
   // Windows can keep a just-closed repository directory busy for a short
-  // interval after the HTTP child exits.  Cleanup retries are bounded and do
-  // not affect any runtime assertion; they prevent an environmental handle
-  // race from masking the actual release-guard result.
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    try {
-      await rm(testRoot, { recursive: true, force: true });
-      break;
-    } catch (error) {
-      if (!['EBUSY', 'ENOTEMPTY', 'EPERM', 'EACCES'].includes(error.code) || attempt === 7) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
-    }
-  }
+  // interval after the HTTP child exits.  Cleanup is bounded and does not
+  // affect any runtime assertion; it prevents an environmental handle race
+  // from masking the actual release-guard result.  The shared helper keeps a
+  // single retry budget across every teardown in this suite.
+  await removeTreeEventually(testRoot);
 }

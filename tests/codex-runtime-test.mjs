@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { classifyCodexFailure, createCodexClient } from '../client-runtime/codex-client.mjs';
+import { removeTreeEventually } from '../client-runtime/windows-job-object.mjs';
 import { createAgentRuntime } from '../client-runtime/agent-runtime.mjs';
 import { parseAgentResult } from '../client-runtime/agent-result.mjs';
 import { emptyExperienceStore, appendExperience, retrieveExperienceContext } from '../client-runtime/experience-contract.mjs';
@@ -72,6 +73,7 @@ const spawnImpl = (command, args, options) => {
   return child;
 };
 
+let cleanupOk = false;
 try {
   const client = createCodexClient({ command: 'codex-test', bridgeDir: path.join(root, 'bridge'), execFileImpl, spawnImpl });
   const descriptor = await client.describe();
@@ -137,7 +139,7 @@ try {
   assert.equal(jobRecord.resourceRelease.releaseProof.activeProcessCount, 0);
   assert.equal(jobRecord.observability.transport, 'windows-job-object-file-tail');
   assert.ok(jobInvocation.arguments.includes('--json'));
-  await rm(jobBridgeDir, { recursive: true, force: true });
+  assert.ok(await removeTreeEventually(jobBridgeDir), 'job bridge directory should be removable after the run settles');
 
   await client.start({ runId: 'codex_RESUME', missionId: 'MIS_TEST', goal: 'continue operator', workspace: root, resumeThreadId: 'thread-test' });
   await new Promise((resolve) => setTimeout(resolve, 150));
@@ -401,13 +403,6 @@ try {
   console.log('[codex] native CLI adapter contract passed');
 } finally {
   await new Promise((resolve) => setTimeout(resolve, 250));
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    try {
-      await rm(root, { recursive: true, force: true });
-      break;
-    } catch (error) {
-      if (!['ENOTEMPTY', 'EPERM', 'EACCES'].includes(error.code) || attempt === 5) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
-    }
-  }
+  cleanupOk = await removeTreeEventually(root);
 }
+assert.ok(cleanupOk, 'codex runtime test root should be removable after every bridge handle closes');

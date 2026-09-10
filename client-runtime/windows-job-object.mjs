@@ -7,9 +7,53 @@ import { StringDecoder } from 'node:string_decoder';
 
 const helperScript = fileURLToPath(new URL('./windows-job-object-helper.ps1', import.meta.url));
 
+/**
+ * Liveness bound for a single helper invocation: the start handshake
+ * (CreateProcess + assign + resume + ready sidecar) and the terminate request
+ * are both dominated by PowerShell cold start. This is a scheduling-delay
+ * tolerance, not a release deadline: when it expires the run still fails
+ * closed through the same quarantine path, only later.
+ *
+ * Measured on the development machine (Node v22.23.2, Windows PowerShell
+ * cold start included): 1.3-1.9 s idle, 5.2-9.4 s under 16-way CPU load, and
+ * over 15 s when the supervisor runs inside an already saturated test suite.
+ * The previous 15 s default sat below 2x the observed loaded latency and
+ * turned pure scheduling delay into CODEX_JOB_START_TIMEOUT, which the caller
+ * records as an unconfirmed release and a quarantined workspace.
+ */
+export const DEFAULT_JOB_HELPER_TIMEOUT_MS = 60_000;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const encode = value => Buffer.from(String(value ?? ''), 'utf8').toString('base64');
+
+/** Windows keeps a directory handle busy for a short window after the owning
+ *  process exits. Every teardown in this area must tolerate that window
+ *  instead of surfacing EPERM/ENOTEMPTY as a test or runtime failure. */
+export const RETRYABLE_CLEANUP_CODES = ['EBUSY', 'ENOTEMPTY', 'EPERM', 'EACCES'];
+
+/**
+ * Delete a directory tree with a bounded, load-tolerant retry budget.
+ * Returns true when the tree is gone, false when it is still held after the
+ * budget is exhausted. It never throws: cleanup is best effort by design, and
+ * callers that must not leak should assert on the return value.
+ */
+export const removeTreeEventually = async (target, { attempts = 10, baseDelayMs = 100 } = {}) => {
+  const total = Math.max(1, Number(attempts) || 1);
+  for (let attempt = 0; attempt < total; attempt += 1) {
+    try {
+      await rm(target, { recursive: true, force: true });
+      return true;
+    } catch (error) {
+      if (!RETRYABLE_CLEANUP_CODES.includes(error?.code) || attempt === total - 1) return false;
+      await sleep(Math.max(1, Number(baseDelayMs) || 1) * (attempt + 1));
+    }
+  }
+  return false;
+};
+
 const runPowerShell = (args, options = {}) => new Promise((resolve, reject) => {
   execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', ...args],
-    { windowsHide: true, timeout: options.timeoutMs || 15_000, maxBuffer: 1024 * 1024 },
+    { windowsHide: true, timeout: options.timeoutMs || DEFAULT_JOB_HELPER_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
     (error, stdout, stderr) => {
       if (error) { error.stdout = stdout; error.stderr = stderr; reject(error); return; }
       resolve({ stdout, stderr });
@@ -20,20 +64,6 @@ export const jobObjectSupported = (platform = process.platform) => platform === 
 
 export const createJobName = (ownerId = 'task') => `Local\\Acagemm-${String(ownerId).replace(/[^a-zA-Z0-9_.-]/g, '_')}-${process.pid}-${Date.now()}`;
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-const encode = value => Buffer.from(String(value ?? ''), 'utf8').toString('base64');
-const removeTreeEventually = async (target) => {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    try {
-      await rm(target, { recursive: true, force: true });
-      return true;
-    } catch (error) {
-      if (!['EBUSY', 'ENOTEMPTY', 'EPERM', 'EACCES'].includes(error?.code) || attempt === 7) return false;
-      await sleep(50 * (attempt + 1));
-    }
-  }
-  return false;
-};
 const decodeJson = (value, label) => {
   try { return JSON.parse(String(value || '').replace(/^\uFEFF/, '').trim()); }
   catch (cause) { throw Object.assign(new Error(`${label} returned malformed JSON.`), { code: 'CODEX_JOB_PROTOCOL_INVALID', cause }); }
@@ -81,14 +111,15 @@ const tailFile = async (filePath, decoder, state, onChunk) => {
  * callbacks provide the Codex supervisor contract. `started` means
  * CreateProcess + AssignProcessToJobObject + ResumeThread have succeeded.
  * `result` is authoritative for release and is resolved only after the final
- * stdout/stderr tail drain.
+ * stdout/stderr tail drain and after the helper's temporary config tree has
+ * been removed, so callers may delete their own directory once it settles.
  */
 export async function spawnJobObjectProcess({
   filePath, arguments: args = '', cwd, stdoutPath, stderrPath,
   stdinPath = null, readyPath = null, receiptPath = null,
   jobName = createJobName(), tempRoot, env,
   ownerPid = process.pid,
-  onStdout, onStderr, pollMs = 30, startTimeoutMs = 15_000,
+  onStdout, onStderr, pollMs = 30, startTimeoutMs = DEFAULT_JOB_HELPER_TIMEOUT_MS,
 } = {}) {
   if (!jobObjectSupported()) throw new Error('Windows Job Objects are only available on win32.');
   if (!filePath || !cwd || !stdoutPath || !stderrPath) throw new TypeError('filePath, cwd, stdoutPath and stderrPath are required.');
@@ -144,8 +175,8 @@ export async function spawnJobObjectProcess({
     // A caller that only retained `result` must not leave an unacknowledged
     // helper and target running.  The terminate request is best effort; the
     // receipt still decides whether release was actually confirmed.
-    void terminateJobObject(jobName, { timeoutMs: Math.max(1_000, Number(startTimeoutMs) || 15_000) }).catch(() => {});
-  }, Math.max(100, Number(startTimeoutMs) || 15_000));
+    void terminateJobObject(jobName, { timeoutMs: Math.max(1_000, Number(startTimeoutMs) || DEFAULT_JOB_HELPER_TIMEOUT_MS) }).catch(() => {});
+  }, Math.max(100, Number(startTimeoutMs) || DEFAULT_JOB_HELPER_TIMEOUT_MS));
   const watchReady = (async () => {
     while (!startedSettled) {
       const ready = await readSidecar(effectiveReadyPath).catch(error => {
@@ -171,33 +202,54 @@ export async function spawnJobObjectProcess({
   const result = new Promise((resolve, reject) => {
     // Spawn failures emit 'error' before 'close'. Keep them in the result
     // protocol so a missing/denied PowerShell executable cannot crash the
-    // supervisor and lose its durable fail-closed receipt.
-    helper.once('error', (error) => reject(Object.assign(new Error('Job helper could not start: ' + error.message), { code: error.code, cause: error })));
+    // supervisor and lose its durable fail-closed receipt. The error is
+    // recorded rather than rejected here: settling only in the 'close'
+    // handler keeps the ordering guarantee below intact.
+    let helperError = null;
+    helper.once('error', (error) => { helperError = error; });
     helper.once('close', async (code, signal) => {
     polling = false;
     await pollingTask.catch(() => {});
+    if (helperError) {
+      // 'close' always follows 'error' for a failed spawn, so the startup
+      // handshake is settled here rather than on the error event.
+      if (!startedSettled) {
+        startedSettled = true;
+        clearTimeout(startedTimer);
+        rejectStarted(Object.assign(new Error('Job helper could not start: ' + helperError.message), {
+          code: helperError.code, cause: helperError, stderr: err,
+        }));
+      }
+      await removeTreeEventually(configDir);
+      reject(Object.assign(new Error('Job helper could not start: ' + helperError.message), { code: helperError.code, cause: helperError }));
+      return;
+    }
     if (!startedSettled) {
       startedSettled = true;
       clearTimeout(startedTimer);
       rejectStarted(Object.assign(new Error(err.trim() || `Job helper exited before startup (${code})`), { code: 'CODEX_JOB_START_FAILED', helperCode: code, signal, stderr: err }));
     }
+    let settlement;
     try {
       const receipt = await readSidecar(effectiveReceiptPath) || decodeJson(out, 'Job helper');
       if (receipt.release !== 'confirmed' || !Number.isInteger(receipt.exitCode) || receipt.jobName !== jobName) {
         throw Object.assign(new Error('Job helper receipt identity or release status is invalid.'), { code: 'CODEX_JOB_RELEASE_UNCONFIRMED', receipt });
       }
-      resolve({ ...receipt, helperPid: helper.pid, jobName, stdoutPath, stderrPath, stdoutError: stdoutState.error?.message || null });
-    }
-    catch (error) {
-      reject(Object.assign(new Error(error.message || 'Job helper returned malformed JSON.'), {
+      settlement = { ok: true, value: { ...receipt, helperPid: helper.pid, jobName, stdoutPath, stderrPath, stdoutError: stdoutState.error?.message || null } };
+    } catch (error) {
+      settlement = { ok: false, error: Object.assign(new Error(error.message || 'Job helper returned malformed JSON.'), {
         code: error.code || 'CODEX_JOB_RELEASE_UNCONFIRMED', cause: error, stdout: out, stderr: err,
-      }));
-    } finally {
-      await removeTreeEventually(configDir);
+      }) };
     }
+    // Cleanup must finish before `result` settles. Callers delete their own
+    // parent directory as soon as this promise settles, and a concurrent
+    // retry-delete of the same tree is what turned a slow-but-successful
+    // Windows teardown into EPERM/ENOTEMPTY failures under load.
+    await removeTreeEventually(configDir);
+    if (settlement.ok) resolve(settlement.value); else reject(settlement.error);
     });
   });
-  const terminate = ({ timeoutMs = 15_000 } = {}) => terminateJobObject(jobName, { timeoutMs });
+  const terminate = ({ timeoutMs = DEFAULT_JOB_HELPER_TIMEOUT_MS } = {}) => terminateJobObject(jobName, { timeoutMs });
   // Keep the watcher referenced so Node does not garbage-collect the promise;
   // its result is intentionally observable through `started`.
   void watchReady;
@@ -208,7 +260,7 @@ export async function spawnJobObjectProcess({
   return { helper, helperPid: helper.pid, jobName, stdoutPath, stderrPath, started, result, terminate };
 }
 
-export async function terminateJobObject(jobName, { timeoutMs = 15_000 } = {}) {
+export async function terminateJobObject(jobName, { timeoutMs = DEFAULT_JOB_HELPER_TIMEOUT_MS } = {}) {
   if (!jobObjectSupported()) throw new Error('Windows Job Objects are only available on win32.');
   if (!jobName) throw new TypeError('jobName is required.');
   const { stdout } = await runPowerShell(['-File', helperScript, '-Action', 'terminate', '-JobName', jobName], { timeoutMs });

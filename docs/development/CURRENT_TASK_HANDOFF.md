@@ -20,6 +20,27 @@ P0（失败分类、恢复归属、有限终态）已经在 9b80437 完成并推
 4. 提交、推送并更新验证记录；
 5. 再回到 Linux 兼容、真实 Codex 对照和通用算子长期能力。
 
+## 1.1 本轮收口结果（2026-09-10 完成）
+
+上述五项目标已由接手者执行完毕。两项总门禁本轮**真实通过**（完整日志见 `$TEMP/gate-local.log`、`$TEMP/gate-robust.log`，非历史记录）：
+
+| 命令 | 结果 | exit code |
+|---|---|---|
+| `npm run verify:local-c500-release` | `[release-check] PASS: 126 checks completed` | 0 |
+| `npm run verify:non-hardware-robustness` | `[non-hardware-check] PASS: 28 checks completed without physical hardware` | 0 |
+
+环境：Windows 10、Node v22.23.2、npm 10.9.8、分支 `handoff/codex-job-supervisor-p1`（基线 `138f9cf`）。**未使用真实 provider**：本轮证明的是本地确定性 fixture、进程收容与状态转换，不证明模型服务容量、TLS 信任链或云端排队。
+
+审查发现并修复的缺陷（细节见 §7.5）：
+
+1. `result` 承诺早于 helper 临时目录清理结算，调用方随即删除父目录，造成并发双删 → 负载下 `EPERM`（原 flake 的真正根因，不是重试预算不足）。
+2. helper 预算 15s 低于实测负载延迟，把普通调度延迟误报为 `CODEX_JOB_START_TIMEOUT` 并隔离健康工作区。
+3. 测试用固定 `delay(200)` / 3s 死线代替握手证据，在负载下必然失败。
+4. `findPython` 只容忍 `ENOENT`/`EACCES`，无法跳过 Windows Store 的 python3 别名桩（退出码 9009）。
+5. `test:local-c500-production-tui` 的源码断言停留在 `process.platform`，被 P1 WIP 改成注入式 `platform` 后失效——**该测试在 WIP 之后从未重跑过**，这正是"门禁未完成就不能算 PASS"的实例。
+
+仍未完成、需在下一轮处理的部分见 §9.1（P1 验收边界）与 §12（短期任务）。本轮**没有**放宽候选 Gate、固定测试矩阵、资源释放屏障或证据 provenance。
+
 ## 2. 项目与产品背景
 
 ### 2.1 产品目标
@@ -191,21 +212,55 @@ helper 内嵌 C# Win32 调用，当前目标是：
 
 这些结果证明主要路径和确定性 fixture 可用，但不能证明真实 provider 网络稳定，也不能替代完整发布门禁。
 
-### 7.2 最近一次总门禁的真实状态
+### 7.2 最近一次总门禁的真实状态（已由本轮取代）
 
-最近启动的是：
-
-    npm run verify:non-hardware-robustness
-
-它包含 verify:local-c500-release。该轮在用户中断时已经打印并通过大量前置检查，包括 execution package、experience、Queue liveness、local C500 recovery、Windows Job Object 3/3、generic iteration fault injection、candidate generation、module boundary 等；中断点在：
+历史情况（保留，不得再引用为本轮结论）：当时启动的是 `npm run verify:non-hardware-robustness`。该轮在用户中断时已经打印并通过大量前置检查，包括 execution package、experience、Queue liveness、local C500 recovery、Windows Job Object 3/3、generic iteration fault injection、candidate generation、module boundary 等；中断点在：
 
     test:state-storage-adapters
 
-因此当前 handoff 不能写“本轮 verify:non-hardware-robustness 全部通过”。接手者必须从头重新运行，并记录最终 exit code。中断的 node 进程/服务也要先确认没有占用测试端口；不要凭进程名盲杀用户的 Node 服务。
+那一轮因此**不能**算 PASS。
+
+本轮（2026-09-10）已从头重跑并真实通过两项门禁，见 §1.1。重跑时发现的两个环境问题，供下一位参考：
+
+- 在 Git Bash 里跑 `npm run` 时，`/usr/bin/tar`（GNU tar 1.35）会遮蔽 `C:\Windows\System32\tar.exe`（bsdtar），并把 `C:\...` 当作远程主机而报 `tar: Cannot connect to C: resolve failed`。这是运行器 PATH 问题，不是代码缺陷；请在 PowerShell/cmd 中运行门禁，或让 System32 优先于 MSYS 路径。
+- 本机未安装 `python3`，只有 `python`（`F:\Python312`）与 `py` 启动器；`C:\...\WindowsApps\python3.exe` 是 Store 别名桩，退出码 9009。相关测试的候选探测已修复（见 §7.5 第 4 条）。
+
+中断的 node 进程/服务也要先确认没有占用测试端口；不要凭进程名盲杀用户的 Node 服务。
 
 ### 7.3 历史验证材料的使用规则
 
 GENERIC_OPERATOR_VERIFICATION.json 和 .log.txt 是以前一轮的机器可读摘要/日志，里面的“PASS 数量”不一定覆盖当前未提交差异。可以用于了解命令顺序，不能作为本轮 P1 的验收证明。
+
+### 7.4 本轮聚焦测试结果（2026-09-10）
+
+以下全部 exit 0：`codex-runtime-test`、`windows-job-object-test`（3/3）、`codex-cancellation-test`、`agent-cancellation-liveness-test`、`module-boundary-test`、`release-guard-test`、`local-c500-production-tui-test`、`execution-package-import-test`、`git diff --check`。
+
+另做了负载归因实验（`tests/windows-job-object-test.mjs`）：修复前在 16 路 CPU 负载下 2 次中失败 1 次、9 次中失败 5 次；修复后同样负载下 12/12 通过。修复过程还抓到了两份证据——`OpenJobObject failed`（Job 尚未创建就发出 terminate 请求）和残留的 `acagemm-job-*/config.txt`（旧清理预算耗尽后泄漏的配置目录），二者都指向"测试用固定墙钟猜测代替握手证据"，而不是 Job Object 逻辑错误。
+
+### 7.5 本轮审查发现的缺陷与处置
+
+**已修复（5 项）**
+
+1. **`result` 早于清理结算（flaky 根因）。** `windows-job-object.mjs` 原本在 `finally` 里 `await removeTreeEventually(configDir)`，而 `resolve/reject` 已经先执行；调用方一拿到结算就删除自己的父目录，两边并发删同一子树 → 负载下 `EPERM`。现在清理完成后才结算，且 spawn 失败路径也改为在 `close` 处理器里结算（已验证 Node 对 spawn 失败必定发出 `close`：`error:ENOENT -> close:code=-4058`）。同时把清理预算从 8×50ms（约 400ms，且静默失败）提升为 10×100ms 并导出复用。
+2. **helper 15s 预算过紧。** 实测 PowerShell 冷启动：空闲 1.3–1.9s，16 路负载 5.2–9.4s，在已饱和的测试套件内超过 15s。原默认值不足实测负载延迟的 2×，会把纯调度延迟变成 `CODEX_JOB_START_TIMEOUT`，进而被记录为释放未确认并隔离健康工作区。现默认 `DEFAULT_JOB_HELPER_TIMEOUT_MS = 60_000`，可用 `OPERATOR_CODEX_JOB_START_TIMEOUT_MS` 覆盖（低于 1s 的取值回落到默认值而不是缩小上限）。**这是存活期上界，不是释放期限**：超时后仍然按原路径 fail-closed。
+3. **测试用固定死线代替握手证据。** `windows-job-object-test.mjs` 用 `await delay(200)` 猜测 Job 已创建；负载下 helper 还在冷启动，terminate 于 `OpenJobObject failed` 失败。现改为等待 `child.started` 握手。另外两处 3s 的 descendant 死线在负载下也不够（owner 自身都起不来），改为 30s——断言语义仍是"最终记录到/最终释放"，不是"在空闲机器的时限内"。
+4. **`findPython` 无法跳过 Store 别名桩。** `tests/execution-package-import-test.mjs` 原本对非 `ENOENT`/`EACCES` 的失败直接 `throw`，而 `python3` 别名桩以 9009 退出，于是本机明明有可用的 `python` 也会失败。现在遍历所有候选并在最终错误里列出各自的失败原因。
+5. **`test:local-c500-production-tui` 的过时源码断言。** 该断言要求 `OPERATOR_CODEX_WINDOWS_SANDBOX` 后跟 `process.platform === 'win32' ? 'unelevated'`；P1 WIP 把该处改成注入式 `platform`（`options.platform || process.platform`，与文件内另外 6 处 Windows 判断一致），断言随之失效。生产行为不变（选项未注入时回落到 `process.platform`），因此更新的是断言而不是代码，未放宽保护强度。
+
+清理策略也已统一：`release-guard-test`、`codex-runtime-test`、`windows-job-object-test`、`execution-package-import-test` 现在共用导出的 `removeTreeEventually`，不再各自维护一份重试副本——副本不一致正是这个 flake 长期漏掉 `windows-job-object-test.mjs` 的原因。会泄漏的调用点改为断言返回值。
+
+**已复核、结论为无缺陷（危险点 2/3/4/7/8）**
+
+- helper 的 `releaseProof` 在 `ActiveProcessCount` 查询失败时返回 `null` 并置 `release: unconfirmed`，调用方随之拒绝 → fail-closed。
+- `ownerWatchdog: false` 明确表示"watchdog 未启用"，与 `ownerLost: true`（已因 owner 消失而终止 Job）语义可区分。
+- `stdinPath` 为空时回退到 `NUL` 而非空句柄；`ERROR_ALREADY_EXISTS(183)` 会拒绝复用同名 Job。
+- Job 路径的 bridge 文件位于 `.operator-studio-local/runtime/agent-bridge`，已被 `.gitignore` 覆盖，不进入 Workspace Diff。**残余风险**：若显式设置 `OPERATOR_BRIDGE_DIR`/`OPERATOR_RUNTIME_DIR` 指向工作区内路径，该保证不再成立。
+- 释放未确认时 `runtime-advance-service` 会因 `isResourceReleaseQuarantined` 阻止 advance，不会自动启动下一 attempt。
+- Job 路径在 `appendChain` 排空后才 `finishClosed`，最后一段无换行内容不会丢失。
+
+**已记录、本轮未修复（低危）**
+
+- `windows-job-object-helper.ps1` 的 `Quote()` 复用了 JSON 转义，把 argv[0] 中的每个 `\` 变成 `\\`。因为 `lpApplicationName` 单独传入，该字符串只影响子进程看到的 argv[0]，**不会造成参数错位**（引号仍正确闭合），属外观性偏差。修它需要改动内嵌 C# 并重跑负载验证，留到下一轮连同 §12 的观测字段一起处理。
 
 ## 8. 接手后的立即执行顺序（短期任务）
 
@@ -280,6 +335,23 @@ WIP 已经推送到专用分支。测试和审查完成后，只显式暂存新�
 - 恢复 attempt 产生的 candidate、Queue request、evidence 都指向实际生成该 candidate 的 sourceRunId；不会回查最初失败的 run。
 - 测试请求在超时、调用方丢响应、Queue 重启时使用同一稳定身份，不重复执行权威任务。
 - 聚焦测试和两项 release gate 通过，并记录运行日期、Node/CLI 版本、是否真实 provider。
+
+### 9.1 本轮对这九条的核对结果
+
+**已满足（本轮亲自复核或重跑）**：第 1、2、3、4、5、6、7 条；第 9 条已由本轮两项门禁 + 聚焦测试 + §1.1 的环境记录满足。第 8 条（Queue 稳定身份）在 P0 已实现稳定 `requestId`，本轮未回归，但**尚未**具备专家要求的三项交错测试（见下）。
+
+**部分满足**：第 8 条。"同一稳定请求"已成立；但专家 §6 要求的三项交错测试——(a) 首次 attempt 失败、恢复成功、结算投影迟到；(b) 本地取消与迟到 `turn.completed` 交错、Round 只结算一次；(c) Queue 已接受但调用方丢失响应后不产生并发 runner——都还没有落地为 fixture。
+
+**明确未做（属于下一轮，不属于本轮 P1 收口范围）**：专家清单里下列条目仍未实现，**不要把它们读成已完成**：
+
+- `cancel.origin` 枚举（`user|watchdog|e2e_teardown|shutdown|superseded`）；当前只有自由文本 `cancelReason`。
+- `candidates: []` 的六类区分；`patch_fallback` 降级成功标记（`degraded = true`、`degradationReason`）——当前 patch 回退是**静默成功**。
+- attempt 级重试预算与 5–15s / 15–45s 随机退避；CLI 内部重试与 Runtime 新 attempt 的分别计数。
+- 释放证据的完整五项（`rootProcessExited`、`containmentCoverageVerified`、`stdoutCaptureComplete`、`stderrCaptureComplete`）；当前只有 `activeProcessCount` 与 `ownerWatchdog`/`ownerLost`。
+- 五层观测的第 4–5 层（adapter 归一化、Runtime 持久化）与逐请求 token 字段、prompt 字节/token 估算。
+- 三层启动预检（安装/配置、网络/证书、同运行时栈探针）；当前没有真实 provider 往返。
+- §4 的 8 项 SLO 指标与 N=20 回归门禁。
+- 上述 `Quote()` argv[0] 转义（低危，见 §7.5）。
 
 ## 10. 已知限制与风险（不要误报为已解决）
 

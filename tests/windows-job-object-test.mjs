@@ -1,9 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { spawnJobObjectProcess, terminateJobObject } from '../client-runtime/windows-job-object.mjs';
+import {
+  removeTreeEventually,
+  spawnJobObjectProcess,
+  terminateJobObject,
+} from '../client-runtime/windows-job-object.mjs';
+
+// The owner has to cold-start a Node child under whatever load the machine is
+// already under. These assertions mean "the descendant is eventually recorded"
+// and "the descendant was eventually released", not "within an idle-machine
+// interval": a 3 s deadline expired on a saturated box and reported a
+// scheduling delay as a Job Object defect.
+const TREE_SETTLE_DEADLINE_MS = 30_000;
 
 test('job object helper manages and terminates a child process tree', { skip: process.platform !== 'win32' }, async () => {
   const root = await mkdtemp(join(process.cwd(), '.tmp-job-test-'));
@@ -16,13 +27,19 @@ test('job object helper manages and terminates a child process tree', { skip: pr
     cwd: root, stdoutPath, stderrPath, tempRoot: root, jobName,
   });
   assert.ok(child.helperPid > 0);
-  await delay(200);
+  // Wait for the start handshake instead of guessing with a fixed delay: the
+  // Job Object only exists once the helper has returned its ready sidecar, so
+  // a 200 ms sleep turned PowerShell cold start under load into
+  // "OpenJobObject failed" rather than a measured contract violation.
+  const started = await child.started;
+  assert.equal(started.jobName, jobName);
+  assert.ok(started.pid > 0);
   const terminated = await terminateJobObject(child.jobName);
   assert.equal(terminated.terminated, true);
   const result = await child.result;
   assert.equal(result.release, 'confirmed');
   await assert.doesNotReject(() => readFile(stdoutPath));
-  await rm(root, { recursive: true, force: true });
+  assert.ok(await removeTreeEventually(root), 'test root should be removable after the helper closes');
 });
 
 test('job object termination releases descendants and helper failures fail closed', { skip: process.platform !== 'win32' }, async () => {
@@ -40,6 +57,7 @@ test('job object termination releases descendants and helper failures fail close
   const jobName = `Local\\Acagemm-Tree-${process.pid}-${Date.now()}`;
   let owner;
   let descendantPid = null;
+  let cleanupOk = false;
   try {
     owner = await spawnJobObjectProcess({
       filePath: process.execPath,
@@ -47,7 +65,7 @@ test('job object termination releases descendants and helper failures fail close
       cwd: root, stdoutPath, stderrPath, tempRoot: root, jobName,
     });
     descendantPid = await (async () => {
-      const deadline = Date.now() + 3_000;
+      const deadline = Date.now() + TREE_SETTLE_DEADLINE_MS;
       while (Date.now() < deadline) {
         try { return Number((await readFile(pidPath, 'utf8')).trim()); } catch { await delay(40); }
       }
@@ -72,7 +90,7 @@ test('job object termination releases descendants and helper failures fail close
       assert.equal(result.release, 'confirmed');
       if (descendantPid) {
         await (async () => {
-          const deadline = Date.now() + 3_000;
+          const deadline = Date.now() + TREE_SETTLE_DEADLINE_MS;
           while (Date.now() < deadline) {
             try { process.kill(descendantPid, 0); } catch { return; }
             await delay(40);
@@ -81,8 +99,9 @@ test('job object termination releases descendants and helper failures fail close
         })();
       }
     }
-    await rm(root, { recursive: true, force: true });
+    cleanupOk = await removeTreeEventually(root);
   }
+  assert.ok(cleanupOk, 'test root should be removable once every Job Object in it has been released');
 });
 
 test('job object supervisor bridges stdin and tails JSONL before the receipt', { skip: process.platform !== 'win32' }, async () => {
@@ -105,6 +124,7 @@ test('job object supervisor bridges stdin and tails JSONL before the receipt', {
   const lines = [];
   const errors = [];
   const jobName = `Local\\Acagemm-Stream-${process.pid}-${Date.now()}`;
+  let cleanupOk = false;
   try {
     const supervisor = await spawnJobObjectProcess({
       filePath: process.execPath,
@@ -131,6 +151,7 @@ test('job object supervisor bridges stdin and tails JSONL before the receipt', {
     assert.equal(JSON.parse((await readFile(readyPath, 'utf8')).replace(/^\uFEFF/, '')).jobName, jobName);
     assert.ok((await readFile(receiptPath, 'utf8')).includes('releaseProof'));
   } finally {
-    await rm(root, { recursive: true, force: true });
+    cleanupOk = await removeTreeEventually(root);
   }
+  assert.ok(cleanupOk, 'test root should be removable once the streamed Job Object is released');
 });

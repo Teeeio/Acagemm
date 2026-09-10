@@ -26,6 +26,22 @@ pipe alone is never treated as process-tree release. Set
 `OPERATOR_CODEX_JOB_OBJECT=0` only for a controlled compatibility diagnostic;
 the legacy path remains fail-closed when its process tree cannot be verified.
 
+The helper timeout (`DEFAULT_JOB_HELPER_TIMEOUT_MS`, 60s) bounds one helper
+invocation: the start handshake and the terminate request, both dominated by
+PowerShell cold start. It is a scheduling-delay tolerance, not a release
+deadline — expiry still fails closed through the normal quarantine path, only
+later. Override with `OPERATOR_CODEX_JOB_START_TIMEOUT_MS`; a value below 1s
+falls back to the default rather than shrinking the bound. Measured cold-start
+latency on the development machine was 1.3–1.9s idle and 5.2–9.4s under
+16-way CPU load, so the earlier 15s default misreported ordinary load as
+`CODEX_JOB_START_TIMEOUT` and quarantined a healthy workspace.
+
+`windows-job-object.mjs` also exports `removeTreeEventually(target, { attempts,
+baseDelayMs })` and `RETRYABLE_CLEANUP_CODES`. Windows holds a directory busy
+for a short window after its owner exits; every teardown in this area must use
+that bounded, non-throwing helper instead of a bare `rm`, and should assert on
+its return value when a leak would matter.
+
 Agent 运行的失败原因与资源生命周期是两条独立契约：`agent.primaryFailure`
 保存 Provider/传输等上游原因，`resourceRelease` 保存进程树是否已确认退出。
 取消在有限重试后会进入 `needs_human` 与 `blocked/quarantined` 投影；释放未确认
