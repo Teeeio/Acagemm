@@ -16,6 +16,7 @@
 | `MODULE_OWNERSHIP.md` | 功能属于哪个模块，应该由谁主责 | 新增、拆分、合并或转移职责 |
 | `GENERIC_OPERATOR_GOAL.md` | 通用算子闭环、执行包与隔离环境的范围和验证记录 | 本轮实施/阻塞/验收变化 |
 | `STATE_DOMAIN_GOAL.md` | 当前状态领域解耦的范围、决策、风险和验收记录 | 实施阶段或验证结果改变 |
+| `CODEX_AGENT_DIAGNOSTIC_HANDOFF.md` | 真实 Codex Agent 闭环的证据、复现命令、开放问题和专家交接 | Agent/CLI/网络/进程生命周期诊断变化 |
 | 模块 `README.md` | 目录公开合同是什么 | 输入、输出、API、不变量或副作用改变 |
 | `application/*.md` | 单个应用服务如何调用 | 服务参数、返回值、错误或依赖改变 |
 | `operator-studio-module-workflow.html` | 模块如何参与完整 workflow | 状态、调用关系或数据流改变 |
