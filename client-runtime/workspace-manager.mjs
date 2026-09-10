@@ -508,8 +508,11 @@ export function createWorkspaceManager(options = {}) {
     const patchPath = path.join(repository, `.operator-studio-agent-${process.pid}-${Date.now()}.patch`);
     await writeFile(patchPath, text, 'utf8');
     try {
-      await git(['apply', '--check', '--binary', patchPath], repository);
-      await git(['apply', '--binary', patchPath], repository);
+      // Agent-produced unified diffs occasionally contain correct hunks with
+      // stale line counts after JSON rendering. Git can safely recalculate
+      // those counts while retaining the actual context and path checks.
+      await git(['apply', '--recount', '--check', '--binary', patchPath], repository);
+      await git(['apply', '--recount', '--binary', patchPath], repository);
       inspectionCache.delete(await normalizePath(repository));
       return { files: [...new Set(paths)] };
     } finally {

@@ -91,10 +91,10 @@ try {
   const expectedWindowsSandboxArgs = process.platform === 'win32'
     ? ['-c', 'windows.sandbox="unelevated"']
     : [];
-  assert.deepEqual(spawnCalls[0].args, ['exec', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, '--cd', root, '-']);
+  assert.deepEqual(spawnCalls[0].args, ['exec', '--ignore-user-config', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, '--cd', root, '-']);
   await client.start({ runId: 'codex_RESUME', missionId: 'MIS_TEST', goal: 'continue operator', workspace: root, resumeThreadId: 'thread-test' });
   await new Promise((resolve) => setTimeout(resolve, 150));
-  assert.deepEqual(spawnCalls[1].args, ['exec', 'resume', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, 'thread-test', '-']);
+  assert.deepEqual(spawnCalls[1].args, ['exec', '--ignore-user-config', 'resume', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, 'thread-test', '-']);
 
   const runtime = createAgentRuntime({ mode: 'codex-cli', codexClient: client, codexWorkspace: root });
   assert.equal((await runtime.describe()).connected, true);
@@ -171,21 +171,21 @@ try {
   const envModelClient = createCodexClient({ command: 'codex-model-env', bridgeDir: path.join(root, 'bridge-model-env'), execFileImpl, spawnImpl });
   await envModelClient.start({ runId: 'codex_MODEL_ENV', missionId: 'MIS_TEST', goal: 'model env', workspace: root });
   await new Promise((resolve) => setTimeout(resolve, 150));
-  assert.deepEqual(spawnCalls[3].args.slice(0, 3), ['exec', '--model', 'gpt-5.6-sol']);
+  assert.deepEqual(spawnCalls[3].args.slice(0, 4), ['exec', '--ignore-user-config', '--model', 'gpt-5.6-sol']);
 
   const optionModelClient = createCodexClient({ command: 'codex-model-option', model: 'gpt-5.5', bridgeDir: path.join(root, 'bridge-model-option'), execFileImpl, spawnImpl });
   await optionModelClient.start({ runId: 'codex_MODEL_OPTION', missionId: 'MIS_TEST', goal: 'model option', workspace: root });
   await new Promise((resolve) => setTimeout(resolve, 150));
-  assert.deepEqual(spawnCalls[4].args.slice(0, 3), ['exec', '--model', 'gpt-5.5']);
+  assert.deepEqual(spawnCalls[4].args.slice(0, 4), ['exec', '--ignore-user-config', '--model', 'gpt-5.5']);
   await optionModelClient.start({ runId: 'codex_MODEL_RESUME', missionId: 'MIS_TEST', goal: 'model resume', workspace: root, resumeThreadId: 'thread-test' });
   await new Promise((resolve) => setTimeout(resolve, 150));
-  assert.deepEqual(spawnCalls[5].args.slice(0, 4), ['exec', '--model', 'gpt-5.5', 'resume']);
+  assert.deepEqual(spawnCalls[5].args.slice(0, 5), ['exec', '--ignore-user-config', '--model', 'gpt-5.5', 'resume']);
 
   delete process.env.OPERATOR_CODEX_MODEL;
   const legacyModelClient = createCodexClient({ command: 'codex-model-legacy', bridgeDir: path.join(root, 'bridge-model-legacy'), execFileImpl, spawnImpl });
   await legacyModelClient.start({ runId: 'codex_MODEL_LEGACY', missionId: 'MIS_TEST', goal: 'legacy model', workspace: root });
   await new Promise((resolve) => setTimeout(resolve, 150));
-  assert.deepEqual(spawnCalls[6].args.slice(0, 3), ['exec', '--model', 'gpt-5.5']);
+  assert.deepEqual(spawnCalls[6].args.slice(0, 4), ['exec', '--ignore-user-config', '--model', 'gpt-5.5']);
   if (savedOperatorModel === undefined) delete process.env.OPERATOR_CODEX_MODEL; else process.env.OPERATOR_CODEX_MODEL = savedOperatorModel;
   if (savedLegacyModel === undefined) delete process.env.CODEX_MODEL; else process.env.CODEX_MODEL = savedLegacyModel;
 

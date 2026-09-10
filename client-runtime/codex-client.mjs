@@ -127,6 +127,13 @@ export const createCodexClient = (options = {}) => {
   const bridgeDir = options.bridgeDir || path.resolve(process.env.OPERATOR_BRIDGE_DIR || path.join(runtimeDir, 'agent-bridge'));
   const sandboxMode = options.sandboxMode || process.env.OPERATOR_CODEX_SANDBOX || 'workspace-write';
   const model = options.model || process.env.OPERATOR_CODEX_MODEL || process.env.CODEX_MODEL || null;
+  // User/project Codex config can inject a very large instruction context into
+  // every non-interactive run. Operator Studio already supplies its own
+  // semantic/workspace contract and enforces the write boundary, so keep the
+  // CLI context bounded by default. Set OPERATOR_CODEX_IGNORE_USER_CONFIG=0
+  // when a local provider explicitly depends on Codex config.toml.
+  const ignoreUserConfigValue = options.ignoreUserConfig ?? process.env.OPERATOR_CODEX_IGNORE_USER_CONFIG ?? '1';
+  const ignoreUserConfig = ignoreUserConfigValue === true || /^(1|true|yes)$/i.test(String(ignoreUserConfigValue));
   // The MVP deliberately uses Codex's Windows unelevated fallback unless an
   // operator explicitly selects another sandbox mode. The repository still
   // confines writes to the Mission Workspace and owns process cleanup through
@@ -347,9 +354,10 @@ export const createCodexClient = (options = {}) => {
     // unified_exec is needed for apply_patch; the workspace sandbox confines it.
     const toolRestrictionArgs = boundaryEnabled && disableShellTool ? ['--disable', 'shell_tool'] : [];
     const modelArgs = model ? ['--model', model] : [];
+    const configArgs = ignoreUserConfig ? ['--ignore-user-config'] : [];
     const args = resumeThreadId
-      ? ['exec', ...modelArgs, 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
-      : ['exec', ...modelArgs, ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
+      ? ['exec', ...configArgs, ...modelArgs, 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
+      : ['exec', ...configArgs, ...modelArgs, ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
     const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, { configDir: path.join(bridgeDir, 'git-trust') });
     let child;
     try {

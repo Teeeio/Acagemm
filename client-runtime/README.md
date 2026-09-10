@@ -13,7 +13,9 @@ Windows sandbox helper is unavailable. Boundary mode keeps Codex's structured
 file-edit tools enabled by default; the workspace sandbox and post-run Mission
 Workspace Diff audit remain the write boundary. Set
 `OPERATOR_CODEX_DISABLE_SHELL_TOOL=1` only when a stricter tool surface is
-required for a controlled diagnostic run.
+required for a controlled diagnostic run. Runs also ignore the local Codex
+`config.toml` by default to prevent an unexpectedly large user-rule context from
+starving the Agent turn; set `OPERATOR_CODEX_IGNORE_USER_CONFIG=0` to opt back in.
 
 ## Inputs
 
