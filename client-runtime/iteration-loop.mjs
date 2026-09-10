@@ -1,4 +1,4 @@
-import { resourceReleaseBarrier } from './cancellation-contract.mjs';
+import { isResourceReleaseQuarantined, resourceReleaseBarrier } from './cancellation-contract.mjs';
 import { inspectRoundBudget, ensureRoundBudgetStarted, completeRoundBudget, expireRoundBudget } from './round-budget-contract.mjs';
 export { ROUND_BUDGET_MS } from './round-budget-contract.mjs';
 import { addAuditEvent, appendRuntimeEvent } from './runtime-events.mjs';
@@ -409,7 +409,45 @@ const completeMaximizeMission = (state, reason, eventType = 'loop.maximize_compl
 // deps: { startResearch, cancelResearch, startMainRound, researchDirForMission }
 export async function advanceIteration(state, deps = {}) {
   if (process.env.NO_AUTO_LOOP === '1') return { state, action: 'disabled' };
-  if (resourceReleaseBarrier(state)) return { state, action: 'resource_release_pending' };
+  const releaseBarrier = resourceReleaseBarrier(state);
+  if (releaseBarrier) {
+    // A quarantined/blocked release is already a finite human-intervention
+    // outcome. Keep the fail-closed barrier, but do not report it as an
+    // endlessly pending transition to callers/pollers.
+    if (isResourceReleaseQuarantined(releaseBarrier) || state.agent?.status === 'needs_human') {
+      const stopped = state.missionPaused === true && state.iterationStats?.loopStatus === 'stopped';
+      const reason = state.iterationStats?.loopStatusReason || 'resource_release_unconfirmed';
+      const wasBlocked = state.iterationStats?.loopStatus === 'needs_human' && state.iterationStats?.loopStatusReason === reason;
+      if (!stopped) {
+        state.iterationStats = {
+          ...(state.iterationStats || {}),
+          loopStatus: 'needs_human',
+          loopStatusReason: reason,
+          resourceReleaseBlockedAt: state.iterationStats?.resourceReleaseBlockedAt || new Date().toISOString(),
+        };
+        const mission = state.missions?.find((item) => item.id === state.activeMissionId);
+        if (mission && mission.status !== 'stopped') mission.status = 'needs_human';
+        if (state.agent && state.agent.status !== 'needs_human') {
+          state.agent = {
+            ...state.agent,
+            status: 'needs_human',
+            phase: '执行资源释放未确认，Mission 已隔离',
+            currentAction: null,
+          };
+        }
+        if (!state.runtimeEvents?.some((event) => event.type === 'loop.resource_release_quarantined')) {
+          addAuditEvent(state, '执行资源释放未确认', '原 Agent 资源未能在有限窗口内确认退出，Mission 已隔离；禁止自动恢复、重试或工作区写入。', 'warning', 'ShieldAlert');
+          appendRuntimeEvent(state, 'loop.resource_release_quarantined', {
+            reason,
+            primaryFailure: state.agent?.primaryFailure || releaseBarrier.primaryFailure || null,
+            resources: releaseBarrier.resources || [],
+          }, { kind: 'policy', mode: 'client' });
+        }
+      }
+      return { state, action: 'needs_human', reason, changed: !wasBlocked && !stopped };
+    }
+    return { state, action: 'resource_release_pending' };
+  }
   const clockNow = () => Number(typeof deps.now === 'function' ? deps.now() : Date.now());
   const nowMs = clockNow();
   const guardReason = detectLoopGuard(state, { nowMs });

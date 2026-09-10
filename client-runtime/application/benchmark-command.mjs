@@ -59,6 +59,7 @@ export const createBenchmarkCommands = ({
       const baselineSource = baselinePlan?.baselineSource || null;
       const candidateId = purpose === 'baseline' ? baselinePlan.candidateId : (body.candidate || state.appliedCandidateId);
       const appliedCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === candidateId);
+      const candidateSourceRunId = purpose === 'baseline' ? null : (appliedCandidate?.sourceRunId || null);
       const baselineDigestSeed = baselinePlan?.digestSeed || '';
       let candidateDigest = body.candidateDigest || appliedCandidate?.patchDigest || (purpose === 'baseline' ? `sha256:baseline-${hashKey(String(baselineDigestSeed))}` : null);
       if (!candidateDigest) {
@@ -85,7 +86,7 @@ export const createBenchmarkCommands = ({
       const request = {
         schemaVersion: 1, requestId: runId, missionId: state.activeMissionId,
         purpose, baselineKind,
-        operator: mission.operatorProfile?.operator || mission.operator || body.operator || mission.semanticSnapshot?.operator || 'mla_paged_attention', candidate: { id: candidateId, digest: candidateDigest, remoteId: body.remoteCandidateId || null },
+        operator: mission.operatorProfile?.operator || mission.operator || body.operator || mission.semanticSnapshot?.operator || 'mla_paged_attention', candidate: { id: candidateId, digest: candidateDigest, remoteId: body.remoteCandidateId || null, ...(candidateSourceRunId ? { sourceRunId: candidateSourceRunId } : {}) },
         hardware: mission.hardware || matrix.environments, runtime: body.runtime || 'client-managed-runtime', metric: mission.metric || 'latency_p50',
         matrix: normalizedMatrix, tracer: { enabled: !localC500Config.executionMode?.startsWith('cpu'), format: 'operator-trace/v1' }, profiler: { enabled: !localC500Config.executionMode?.startsWith('cpu'), format: 'operator-profile/v1' },
         limits: { timeoutSeconds: Number(body.timeoutSeconds || timeoutSeconds) },
@@ -129,6 +130,7 @@ export const createBenchmarkCommands = ({
           semanticBinding, baselineResolution: baselinePlan?.resolution || null,
           baselineMaterialization: baselinePlan?.materializationReport || null,
           matrix: structuredClone(matrix), normalizedMatrix, candidateId, candidateDigest,
+          ...(candidateSourceRunId ? { candidateSourceRunId } : {}),
           environments: matrix.environments, stages: matrix.stages,
           ...(request.packageDigest ? { executionPackage: {
             packageDigest: request.packageDigest, admissionId: request.admissionId,
@@ -150,7 +152,7 @@ export const createBenchmarkCommands = ({
         logs: [{ sequence: 1, progress: 0, message: `调度器已锁定 ${payload.environments.length} 个环境快照` }], matrix: structuredClone(payload.matrix),
         purpose: payload.purpose, baselineKind: payload.baselineKind, baselineSource: payload.baselineSource ? structuredClone(payload.baselineSource) : null, baselineMaterialization: payload.baselineMaterialization ? structuredClone(payload.baselineMaterialization) : null,
         semanticBinding: payload.semanticBinding ? structuredClone(payload.semanticBinding) : null,
-        candidate: { id: payload.candidateId, digest: payload.candidateDigest }, testTaskId: payload.taskId, result: null,
+        candidate: { id: payload.candidateId, digest: payload.candidateDigest, ...(payload.candidateSourceRunId ? { sourceRunId: payload.candidateSourceRunId } : {}) }, testTaskId: payload.taskId, result: null,
         ...(payload.executionPackage ? { executionPackage: structuredClone(payload.executionPackage) } : {}),
         source: {
           kind: localC500Config.enabled ? `${localC500Config.kind || 'local-c500'}-adapter` : 'operator-test-service',

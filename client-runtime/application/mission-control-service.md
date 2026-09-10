@@ -24,8 +24,11 @@ change the returned state. Timeout is an unconfirmed barrier, never a false
 cancelled outcome.
 
 workflowRecovery.resourceRelease and per-role resourceRelease expose confirmed,
-status, reason, deadline, nextAction, resources with kind/id, and stable error
-codes. A failure cancelling one role does not prevent attempts for other roles.
+status, blocked/quarantined, reason, deadline, nextAction, resources with
+kind/id, and stable error codes. `primaryFailure` records the upstream Agent
+or Provider cause when one is known; `releaseFailure`/`error` records the
+separate cancellation or process-release failure. A failure cancelling one
+role does not prevent attempts for other roles.
 Unconfirmed cancellation prevents feedback from silently resuming the Mission;
 explicit advancement or another cancellation can later establish release.
 A repeated stop/release cannot erase an unresolved resource whose kind/id no

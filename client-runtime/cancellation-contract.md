@@ -21,8 +21,14 @@ projection. No filesystem, clock, process, provider or persistence effects.
   (409) when a barrier remains. Used before resume, new dispatch, or workspace
   mutation; it does not initiate cancellation.
 
-A release summary includes confirmed, status, reason, deadline, nextAction and
-per-resource kind/id. pending/unconfirmed is never a terminal execution result.
+A release summary includes confirmed, status, reason, deadline, nextAction,
+`blocked`/`quarantined` markers and per-resource kind/id. After the bounded
+cancellation attempts are exhausted, the workflow may expose
+`needs_human` plus these markers; this is a finite business outcome, not proof
+that the process has exited. The barrier remains active until owner-aware
+release evidence is supplied. `primaryFailure` describes the upstream cause
+when known and must not be overwritten by a release error. pending/unconfirmed
+is never a terminal execution result.
 Explicit confirmed=false wins over a conflicting textual status.
 
 Tests: `node tests/agent-cancellation-liveness-test.mjs`.

@@ -2,6 +2,11 @@
 const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
 export const isExecutionReleased = (snapshot = {}) => TERMINAL.has(snapshot.status)
   && snapshot.resourceRelease?.confirmed !== false;
+export const isResourceReleaseQuarantined = (release = {}) => Boolean(
+  release?.blocked === true
+  || release?.quarantined === true
+  || ['quarantined', 'blocked'].includes(release?.status),
+);
 
 export const pendingMissionResources = (state = {}) => [
   { kind: 'agent', id: state.agent?.runId, snapshot: state.agent },
@@ -32,9 +37,18 @@ const projectReleaseSummary = (state = {}) => {
       confirmed: true, status: 'confirmed', reason: 'Execution resource release is confirmed.',
       nextAction: 'No action required.', error: null };
   });
-  const confirmed = resources.every(resource => resource.confirmed === true);
+  // An empty or legacy summary with `confirmed:false` has no owner evidence;
+  // vacuous `[].every(...) === true` must not turn that uncertainty into a
+  // release proof.
+  const confirmed = resources.length > 0
+    ? resources.every(resource => resource.confirmed === true)
+    : previous.confirmed === true;
+  const quarantined = !confirmed && (isResourceReleaseQuarantined(previous)
+    || resources.some((resource) => isResourceReleaseQuarantined(resource)));
   return { ...previous, resources, confirmed,
-    status: confirmed ? 'confirmed' : resources.some(resource => resource.status === 'unconfirmed') ? 'unconfirmed' : 'pending',
+    status: confirmed ? 'confirmed' : (previous.status === 'unconfirmed' || resources.some(resource => resource.status === 'unconfirmed')) ? 'unconfirmed' : 'pending',
+    blocked: quarantined,
+    quarantined,
     nextAction: confirmed ? 'All recorded execution resources have been released.' : previous.nextAction };
 };
 
@@ -52,12 +66,18 @@ export const resourceReleaseBarrier = (state = {}) => {
   const release = projectReleaseSummary(state);
   if (release && (release.confirmed === false || (release.confirmed !== true && release.status !== 'confirmed'))) return release;
   const resources = pendingMissionResources(state).filter(({ snapshot }) =>
-    snapshot?.status === 'cancel_requested' || (snapshot?.resourceRelease?.confirmed === false && snapshot?.resourceRelease?.status !== 'active') || ['pending', 'unconfirmed'].includes(snapshot?.resourceRelease?.status));
+    snapshot?.status === 'cancel_requested' || (snapshot?.resourceRelease?.confirmed === false && snapshot?.resourceRelease?.status !== 'active') || ['pending', 'unconfirmed', 'quarantined', 'blocked'].includes(snapshot?.resourceRelease?.status)
+      || snapshot?.resourceRelease?.quarantined === true || snapshot?.resourceRelease?.blocked === true);
   if (!resources.length) return null;
+  const quarantined = resources.some(({ snapshot }) => isResourceReleaseQuarantined(snapshot?.resourceRelease));
   return {
     confirmed: false, status: resources.some(({ snapshot }) => snapshot?.resourceRelease?.status === 'unconfirmed') ? 'unconfirmed' : 'pending',
+    blocked: quarantined,
+    quarantined,
     reason: 'Waiting for active execution resources to stop before another mutation.',
-    nextAction: 'Inspect or retry cancellation; do not start another run or change its workspace.',
+    nextAction: quarantined
+      ? 'Resource release is quarantined; inspect the original owner before starting another run or changing its workspace.'
+      : 'Inspect or retry cancellation; do not start another run or change its workspace.',
     resources: resources.map(({ kind, id, snapshot }) => ({ ...snapshot.resourceRelease, kind, id })),
   };
 };

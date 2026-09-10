@@ -68,6 +68,7 @@ const { resourceReleaseBarrier, assertResourcesReleased } = await import('../cli
 assert.ok(resourceReleaseBarrier({ agent: { runId: 'failed-owner', status: 'failed', resourceRelease: { confirmed: false } } }));
 assert.equal(resourceReleaseBarrier({ agent: { runId: 'active', status: 'running', resourceRelease: { confirmed: false, status: 'active' } } }), null);
 assert.throws(() => assertResourcesReleased({ workflowRecovery: { resourceRelease: { confirmed: false, status: 'pending', reason: 'waiting' } } }), error => error.code === 'MISSION_RESOURCE_RELEASE_PENDING');
+assert.ok(resourceReleaseBarrier({ workflowRecovery: { resourceRelease: { confirmed: false, status: 'unconfirmed', resources: [] } } }), 'an ownerless empty summary must not be cleared by vacuous every()');
 
 let lateResolve;
 const pendingState = {

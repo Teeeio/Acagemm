@@ -75,9 +75,31 @@ export const classifyCodexFailure = (run = {}, events = []) => {
       detail: '当前 Provider 已收到请求，但账号或模型权限不足。请检查本机 Codex 的 Provider 与模型权限后重试。',
     };
   }
+  if (/selected model is at capacity|\bat capacity\b|(?:provider|model|service).{0,32}(?:overloaded|capacity)|(?:overloaded|capacity).{0,32}(?:provider|model|service)/i.test(rawDiagnostic)) {
+    return {
+      code: 'CODEX_PROVIDER_CAPACITY',
+      category: 'provider_capacity',
+      retryable: true,
+      phase: 'Codex Provider 容量暂不可用',
+      title: '当前 Codex Provider 暂时满载',
+      detail: 'Provider 明确返回容量暂不可用。先确认本次 Agent 资源已释放，再在剩余 Round 预算内进行有限恢复；不要把该次 attempt 当作候选生成失败。',
+    };
+  }
+  if (/invalid peer certificate|unknownissuer|certificate (?:verify|validation|trust)|unable to verify (?:the )?first certificate|self[- ]signed certificate|CERT_(?:UNTRUSTED|AUTHORITY_INVALID|VERIFY_FAILED)/i.test(rawDiagnostic)) {
+    return {
+      code: 'CODEX_TLS_TRUST_FAILED',
+      category: 'tls_trust',
+      retryable: false,
+      phase: 'Codex TLS 信任链失败',
+      title: 'Codex Provider 证书不受信任',
+      detail: 'Codex 连接路径返回证书信任错误。请修复代理/CA/中间证书并重新执行同运行栈预检；不要关闭证书校验或在相同配置下无限重试。',
+    };
+  }
   if (/\b429\b|rate.?limit|too many requests|quota/i.test(rawDiagnostic)) {
     return {
       code: 'CODEX_RATE_LIMITED',
+      category: 'provider_rate_limit',
+      retryable: true,
       phase: 'Codex 请求受限',
       title: '本机 Codex Provider 请求受限',
       detail: '当前 Provider 返回限流或配额错误。稍后重试，或在本机 Provider 管理工具中切换可用配置。',
@@ -86,6 +108,8 @@ export const classifyCodexFailure = (run = {}, events = []) => {
   if (/ENOTFOUND|ECONN(?:RESET|REFUSED)|ETIMEDOUT|network|dns|websocket.*(?:failed|closed)|failed to connect|connection (?:failed|closed|refused)/i.test(rawDiagnostic)) {
     return {
       code: 'CODEX_NETWORK_FAILED',
+      category: 'network',
+      retryable: false,
       phase: 'Codex 网络失败',
       title: '本机 Codex 无法连接 Provider',
       detail: 'Codex CLI 无法连接当前 Provider。请检查本机网络、代理和 Provider 地址后重试。',
@@ -268,7 +292,7 @@ export const createCodexClient = (options = {}) => {
     try { process.kill(-execution.child.pid, 0); return false; }
     catch (error) { return error.code === 'ESRCH'; }
   };
-  const settleClosed = async (execution) => {
+  const settleClosed = async (execution, events = []) => {
     const { record } = execution;
     if (!execution.closed) return false;
     if (record.cancelRequested && !groupReleased(execution)) return false;
@@ -279,6 +303,24 @@ export const createCodexClient = (options = {}) => {
     record.error = record.status === 'failed'
       ? record.error || { code: 'CODEX_EXIT_' + (execution.exitCode ?? execution.exitSignal), message: sanitizeCodexDiagnostic(execution.stderr) || 'Codex exited without a successful result.' }
       : null;
+    const turnCompleted = events.some((event) => event?.type === 'turn.completed');
+    const failureEvent = events.some((event) => {
+      const type = String(event?.type || '').toLowerCase();
+      const text = eventText(event);
+      return type === 'turn.failed' || type === 'response.failed'
+        || (type === 'error' && /provider|transport|connection|certificate|unknownissuer|capacity|rate.?limit|quota|network|dns|timeout/i.test(text));
+    });
+    if (record.status === 'failed' || (!turnCompleted && failureEvent) || record.resourceRelease?.code === 'CODEX_CANCEL_UNCONFIRMED') {
+      const classified = classifyCodexFailure(record, events);
+      record.primaryFailure = {
+        code: classified.code,
+        category: classified.category || null,
+        retryable: classified.retryable ?? null,
+        title: classified.title,
+        detail: classified.detail,
+        phase: classified.phase,
+      };
+    }
     await saveRun(record);
     children.delete(record.runId);
     return true;
@@ -408,7 +450,7 @@ export const createCodexClient = (options = {}) => {
       void appendChain.then(async () => {
         const events = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
         record.logicalCompleted ||= hasCompletedTurn(events);
-        await settleClosed(execution);
+        await settleClosed(execution, events);
       }).catch(() => {});
     });
     await saveRun(record);

@@ -132,8 +132,14 @@ legacy backend has none, so it is explicitly skipped, not upgraded into evidence
 Mutation/resume paths enforce [resource-release barriers](../cancellation-contract.md).
 Runtime advancement checks budget guards before Autopilot and uses the injected
 Mission control releaseResources port for budget shutdown. A pending release
-prevents new dispatch, workspace mutation and adoption; snapshot queries remain
-read-only. Baseline CPU requests include their own separate frozen oracle.
+prevents new dispatch, workspace mutation and adoption; an exhausted release
+becomes an explicit `needs_human`/`blocked`/`quarantined` outcome while the
+barrier remains fail-closed. `primaryFailure` (Provider/Agent cause) and
+`releaseFailure` (cancellation/ownership cause) are persisted separately.
+Snapshot queries remain read-only. Candidate Benchmark requests carry the
+candidate's `sourceRunId`, so recovery attempts cannot be confused with the
+run that actually produced the tested workspace. Baseline CPU requests include
+their own separate frozen oracle.
 
 Run Service receives an explicit nowMs clock. Fixed-Profile arming uses the
 canonical iteration guards and freezes a permitted round before persistence;

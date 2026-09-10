@@ -17,6 +17,13 @@ required for a controlled diagnostic run. Runs also ignore the local Codex
 `config.toml` by default to prevent an unexpectedly large user-rule context from
 starving the Agent turn; set `OPERATOR_CODEX_IGNORE_USER_CONFIG=0` to opt back in.
 
+Agent 运行的失败原因与资源生命周期是两条独立契约：`agent.primaryFailure`
+保存 Provider/传输等上游原因，`resourceRelease` 保存进程树是否已确认退出。
+取消在有限重试后会进入 `needs_human` 与 `blocked/quarantined` 投影；释放未确认
+前，Mission Workspace、恢复和新测试始终 fail-closed。恢复尝试生成的候选必须
+携带 `candidate.sourceRunId`，Queue 请求与 `benchmark.candidate.sourceRunId`
+沿用该来源，不能用 Round 的首次 attempt ID 代替。
+
 ## Inputs
 
 - HTTP commands from the TUI or Web client.

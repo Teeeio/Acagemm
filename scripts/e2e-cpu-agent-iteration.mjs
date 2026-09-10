@@ -14,6 +14,28 @@ const cpuRunner = path.join(rootDir, 'tools', 'local-cpu-runner.py');
 const runtimeMode = process.env.E2E_AGENT_RUNTIME || 'claude-code';
 const timeoutMs = Number(process.env.E2E_AGENT_TIMEOUT_MS || 10 * 60 * 1000);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const candidateIdentity = (task) => ({
+  candidateId: task?.payload?.candidate?.id || task?.payload?.candidateId || null,
+  candidateDigest: task?.payload?.candidate?.digest || task?.payload?.candidateDigest || task?.result?.environment?.candidateDigest || null,
+});
+const candidateSourceRun = (state, task) => {
+  const { candidateId, candidateDigest } = candidateIdentity(task);
+  const candidate = (state?.candidateEvaluations || []).find((item) => (
+    (candidateDigest && (item.patchDigest === candidateDigest || item.digest === candidateDigest))
+    || (candidateId && item.id === candidateId)
+  ));
+  return {
+    candidate,
+    candidateId,
+    candidateDigest,
+    // The durable Queue payload is authoritative after a reset/archive race;
+    // fall back to the live candidate projection only for legacy tasks.
+    sourceRunId: task?.payload?.candidate?.sourceRunId
+      || task?.payload?.candidateSourceRunId
+      || candidate?.sourceRunId
+      || null,
+  };
+};
 const reservePort = () => new Promise((resolve, reject) => {
   const server = createServer();
   server.once('error', reject);
@@ -199,17 +221,35 @@ try {
   let tasks = [];
   let firstCandidateTask = null;
   let firstRound = null;
+  let firstCandidateSource = null;
+  let candidateSourceSnapshot = null;
   let lastProgress = '';
   while (Date.now() < deadline) {
     state = (await request('/api/state')).state;
     tasks = (await request('/api/operator-tests')).tasks || [];
-    firstCandidateTask = tasks.find((task) => task.payload?.purpose === 'candidate' && ['completed', 'failed'].includes(task.status));
-    firstRound = (state.runHistory || []).find((round) => round.runId === firstRunId)
-      || (state.iterationStats?.lastCountedRunId === firstRunId ? { runId: firstRunId, benchmark: state.benchmark, decisionReview: state.decisionReview } : null);
+    firstCandidateTask = tasks.find((task) => task.payload?.missionId === missionId
+      && task.payload?.purpose === 'candidate'
+      && ['completed', 'failed'].includes(task.status));
+    const observedCandidateSource = firstCandidateTask?.status === 'completed' ? candidateSourceRun(state, firstCandidateTask) : null;
+    // Capture the producing run at the first observation. A subsequent
+    // recovery tick may reset candidateEvaluations while archiving the round;
+    // attribution must survive that projection race.
+    if (observedCandidateSource?.sourceRunId) candidateSourceSnapshot = observedCandidateSource;
+    firstCandidateSource = candidateSourceSnapshot || observedCandidateSource;
+    // A provider recovery may produce the candidate from a later run than the
+    // initial attempt (for example, after a transient capacity failure). The
+    // candidate's persisted sourceRunId is authoritative; never attribute the
+    // evidence to firstRunId merely because it was the run started by this
+    // harness. This is the regression guard for the 3zyDlz false-negative.
+    const producingRunId = firstCandidateSource?.sourceRunId || null;
+    firstRound = producingRunId
+      ? (state.runHistory || []).find((round) => round.runId === producingRunId)
+        || (state.iterationStats?.lastCountedRunId === producingRunId ? { runId: producingRunId, benchmark: state.benchmark, decisionReview: state.decisionReview } : null)
+      : null;
     const progress = `${state.stage}|${state.agent?.status}|${state.agent?.runId || '-'}|${state.benchmark?.status}|${tasks.length}|${state.iterationStats?.round || 0}`;
     if (progress !== lastProgress) { console.log(`[cpu-agent-e2e] ${progress}`); lastProgress = progress; }
     if (firstCandidateTask?.status === 'failed') throw new Error(`first candidate CPU test failed: ${JSON.stringify(firstCandidateTask.error || firstCandidateTask.logs?.at(-1))}`);
-    if (firstCandidateTask?.status === 'completed' && firstRound && state.agent?.runId && state.agent.runId !== firstRunId) break;
+    if (firstCandidateTask?.status === 'completed' && firstCandidateSource?.sourceRunId && firstRound && state.agent?.runId && state.agent.runId !== firstCandidateSource.sourceRunId) break;
     if (state.iterationStats?.loopStatus === 'needs_human') throw new Error(`workflow requested human intervention: ${state.iterationStats.loopStatusReason}: ${JSON.stringify({ workflowFailure: state.workflowFailure, workflowRecovery: state.workflowRecovery })}`);
     if (childExit) throw new Error(`runtime exited early: ${JSON.stringify(childExit)}\n${runtimeLog.join('')}`);
     await sleep(500);
@@ -226,6 +266,8 @@ try {
   assert.deepEqual(firstCandidateTask.result.correctness.categories, [...matrix.testSpec.correctness.requiredCategories].sort());
   assert.deepEqual(firstCandidateTask.result.benchmark.map((row) => row.profile), matrix.testSpec.benchmark.requiredProfiles);
   assert.ok(firstRound, 'first iteration was not archived as a closed round');
+  assert.ok(firstCandidateSource?.sourceRunId, 'completed candidate has no persisted sourceRunId');
+  assert.equal(firstRound.runId, firstCandidateSource.sourceRunId, 'candidate evidence must be attributed to the run that produced the candidate, not the initial attempt');
   const outcome = firstRound.decisionReview?.resolution?.outcome;
   assert.ok(['reference', 'reject'].includes(outcome), `impossible target unexpectedly resolved as ${outcome}`);
   assert.ok(state.agent?.runId && state.agent.runId !== firstRunId, 'unmet target did not automatically start the next Agent round');
@@ -236,13 +278,15 @@ try {
   assert.notEqual(taskRunPy, baselineRunPy);
   assert.equal(taskOraclePy, baselineRunPy);
   assert.equal(firstCandidateTask.payload?.candidate?.digest, firstCandidateTask.result?.environment?.candidateDigest);
+  assert.equal(firstCandidateSource.candidateDigest, firstCandidateTask.result?.environment?.candidateDigest, 'candidate source digest must match tested artifact');
 
   summary = {
     status: 'passed', runtime: runtimeMode, missionId, firstRunId, continuedRunId: state.agent.runId,
     completedRounds: state.iterationStats?.round || 1, firstRoundOutcome: outcome, candidateTaskId: firstCandidateTask.taskId || firstCandidateTask.id,
     correctnessCases: firstCandidateTask.result.benchmark[0].correctness.total,
     benchmarkProfiles: firstCandidateTask.result.benchmark.map((item) => ({ profile: item.profile, value: item.value, unit: item.unit })),
-    candidateDigest: firstCandidateTask.payload.candidate.digest, testedArtifactDiffersFromBaseline: true,
+    candidateDigest: firstCandidateTask.payload.candidate.digest, candidateSourceRunId: firstCandidateSource.sourceRunId,
+    testedArtifactDiffersFromBaseline: true,
     oracleMatchesPersistedBaseline: true, workflowWritesAfterRunStart: writes.length - writesAtRunStart, liveHardware: false,
   };
 } finally {

@@ -366,6 +366,10 @@ const NON_RECOVERABLE_MANAGED_FAILURE_CODES = new Set([
   'CODEX_BILLING_UNAVAILABLE',
   'CODEX_NETWORK_FAILED',
   'CODEX_SPAWN_FAILED',
+  'CODEX_TLS_TRUST_FAILED',
+  'CODEX_RUNTIME_PERMISSION_DENIED',
+  'CODEX_USER_CONTEXT_UNAVAILABLE',
+  'CODEX_WINDOWS_SANDBOX_SETUP_FAILED',
 ]);
 const DEFAULT_MAIN_AGENT_STALL_MS = 2 * 60 * 1000;
 
@@ -1125,36 +1129,58 @@ export function createAgentRuntime(options = {}) {
         } }); });
     });
   };
-  const cancellationProjection = (previous, resourceRelease = {}, { timedOut = previous.timedOut, reason = 'Agent cancellation awaits process exit.' } = {}) => ({
+  const cancellationProjection = (previous, resourceRelease = {}, { timedOut = previous.timedOut, reason = 'Agent cancellation awaits process exit.', primaryFailure = previous.primaryFailure || previous.resourceRelease?.primaryFailure || null } = {}) => ({
     ...previous, status: 'cancel_requested', currentAction: null, completedAt: null,
+    primaryFailure: primaryFailure || previous.primaryFailure || null,
     phase: previous.phase?.startsWith('正在取消') ? previous.phase : '正在取消 Agent，等待执行资源释放',
     timedOut: timedOut || undefined,
-    resourceRelease: { confirmed: false, status: 'pending', reason,
+    resourceRelease: { ...(previous.resourceRelease || {}), confirmed: false, status: 'pending', reason,
       requestedAt: previous.resourceRelease?.requestedAt || new Date().toISOString(),
       deadline: previous.resourceRelease?.deadline || new Date(Date.now() + cancellationTimeoutMs).toISOString(),
       nextAction: 'Inspect cancellation status; no workspace mutation or new run is permitted until release is confirmed.',
-      ...resourceRelease, status: resourceRelease.status === 'unconfirmed' ? 'unconfirmed' : 'pending', confirmed: false },
+      ...resourceRelease, primaryFailure: resourceRelease.primaryFailure || primaryFailure,
+      blocked: Boolean(previous.resourceRelease?.blocked || resourceRelease.blocked),
+      quarantined: Boolean(previous.resourceRelease?.quarantined || resourceRelease.quarantined),
+      status: ['unconfirmed', 'quarantined', 'blocked'].includes(resourceRelease.status)
+        ? resourceRelease.status
+        : ['unconfirmed', 'quarantined', 'blocked'].includes(previous.resourceRelease?.status)
+          ? previous.resourceRelease.status
+          : 'pending', confirmed: false },
   });
-  const settleCancellation = async (previous, run, expired = false, logicalDone = false) => {
+  const settleCancellation = async (previous, run, expired = false, logicalDone = false, { primaryFailure = null } = {}) => {
+    const previousWithFailure = primaryFailure
+      ? { ...previous, primaryFailure, resourceRelease: { ...(previous.resourceRelease || {}), primaryFailure } }
+      : previous;
     if (isExecutionReleased(run)) { cancellationRetries.delete(previous.runId); return { run, projection: null }; }
-    const cancelling = expired || logicalDone || previous.status === 'cancel_requested' || ['completed', 'failed', 'cancelled'].includes(run.status)
-      || ['pending', 'unconfirmed'].includes(run.resourceRelease?.status);
+    const cancelling = expired || logicalDone || previousWithFailure.status === 'cancel_requested' || ['completed', 'failed', 'cancelled'].includes(run.status)
+      || run.resourceRelease?.confirmed === false
+      || ['pending', 'unconfirmed', 'quarantined', 'blocked'].includes(run.resourceRelease?.status);
     if (!cancelling) return { run, projection: null };
     let outcome = run;
-    const releasePending = ['pending', 'unconfirmed'].includes(run.resourceRelease?.status);
-    const retryCount = cancellationRetries.get(previous.runId) || 0;
-    const shouldRequest = (previous.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') || releasePending;
+    const releasePending = expired || logicalDone || previousWithFailure.status === 'cancel_requested'
+      || run.resourceRelease?.confirmed === false
+      || ['pending', 'unconfirmed', 'quarantined', 'blocked'].includes(run.resourceRelease?.status);
+    const retryCount = cancellationRetries.get(previousWithFailure.runId) || 0;
+    const shouldRequest = (previousWithFailure.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') || releasePending;
     if (shouldRequest && retryCount < MAX_CANCELLATION_RETRIES) {
-      cancellationRetries.set(previous.runId, retryCount + 1);
-      outcome = await requestCancellation(previous.runId);
+      cancellationRetries.set(previousWithFailure.runId, retryCount + 1);
+      outcome = await requestCancellation(previousWithFailure.runId);
       if (isExecutionReleased(outcome)) return { run: { ...run, ...outcome }, projection: null };
     }
-    const exhausted = releasePending && (cancellationRetries.get(previous.runId) || 0) >= MAX_CANCELLATION_RETRIES;
-    const projection = cancellationProjection(previous, outcome.resourceRelease, { timedOut: expired || previous.timedOut });
+    const exhausted = releasePending && (cancellationRetries.get(previousWithFailure.runId) || 0) >= MAX_CANCELLATION_RETRIES;
+    const projection = cancellationProjection(previousWithFailure, outcome.resourceRelease, { timedOut: expired || previousWithFailure.timedOut, primaryFailure });
     if (exhausted) {
       projection.status = 'needs_human';
       projection.phase = '取消释放需要人工确认';
-      projection.resourceRelease.nextAction = '人工确认 Agent 进程树已释放后，清理该 Mission 执行占用。';
+      projection.resourceRelease = {
+        ...projection.resourceRelease,
+        // Preserve the legacy `status=unconfirmed` contract while exposing an
+        // explicit finite blocked/quarantined state for orchestration and UI.
+        blocked: true,
+        quarantined: true,
+        blockedAt: new Date().toISOString(),
+        nextAction: '人工确认 Agent 进程树已释放后，清理该 Mission 执行占用；在确认前禁止恢复、重试或工作区写入。',
+      };
     }
     return { run: outcome, projection };
   };
@@ -1589,7 +1615,22 @@ export function createAgentRuntime(options = {}) {
         const elapsed = state.agent.startedAt ? Date.now() - new Date(state.agent.startedAt).getTime() : 0;
         const stalled = !completed && !failed && run.status !== 'cancelled' && lastEventAt && Date.now() - lastEventAt >= mainAgentStallMs;
         const budgetExceeded = !completed && !failed && run.status !== 'cancelled' && elapsed >= (state.agent.budgetMs || mainAgentBudgetMs);
-        const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded);
+        const turnCompletedObserved = events.some((event) => event?.type === 'turn.completed');
+        const providerFailureSignal = Boolean(run?.error) || events.some((event) => {
+          const type = String(event?.type || '').toLowerCase();
+          const text = String(runtimeEngine.invoke(mode, 'eventText', event) || '');
+          if (type === 'turn.failed' || type === 'response.failed') return true;
+          return type === 'error' && /provider|transport|connection|certificate|unknownissuer|capacity|rate.?limit|quota|network|dns|timeout/i.test(text);
+        });
+        // Capture the upstream cause before cancellation can replace the live
+        // run with an unconfirmed release projection. This is only diagnostic
+        // state; it never makes an unreleased run eligible for admission.
+        const preSettlementFailure = failed
+          ? classifyManagedFailure(run, events)
+          : !completed && !turnCompletedObserved && providerFailureSignal
+            ? classifyManagedFailure(run, events)
+            : null;
+        const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded, false, { primaryFailure: preSettlementFailure });
         if (settlement.projection) {
           const changed = runtimeChanged || usageChanged || JSON.stringify(settlement.projection) !== JSON.stringify(state.agent);
           state.agent = settlement.projection;
@@ -1600,11 +1641,17 @@ export function createAgentRuntime(options = {}) {
         const timedOut = isExecutionReleased(run) && (stalled || budgetExceeded || (run.status === 'cancelled' && state.agent.timedOut === true));
         const nextStatus = failed ? 'failed' : completed ? 'completed' : timedOut ? 'completed' : run.status === 'cancelled' ? 'cancelled' : state.agent.status === 'cancel_requested' ? 'cancel_requested' : 'running';
         const failure = failed ? classifyManagedFailure(run, events) : null;
+        // Do not turn a recoverable tool `error` followed by a successful
+        // `turn.completed` into a primary run failure. Conversely, retain a
+        // provider/transport cause while the owner is still being released.
+        const observedFailure = failure || (!completed && !turnCompletedObserved ? preSettlementFailure : null);
         const projectedMessages = assistantEvents.slice(-8).map((event, index) => ({ id: event.id || `${managedMeta.slug}-event-${index}`, phase: event.type || managedMeta.name, status: failed ? 'waiting' : 'completed', title: event.type || `${managedMeta.name} 事件`, detail: runtimeEngine.invoke(mode, 'eventText', event) || `${managedMeta.name} 已产生新的运行事件`, time: event.timestamp || '刚刚' }));
-        if (failure) projectedMessages.push({ id: `${managedMeta.slug}-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: failure.title, detail: failure.detail, time: run.completedAt || '刚刚', errorCode: failure.code });
+        if (observedFailure) projectedMessages.push({ id: `${managedMeta.slug}-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: observedFailure.title, detail: observedFailure.detail, time: run.completedAt || '刚刚', errorCode: observedFailure.code });
         const terminalCompleted = completed || timedOut;
         const terminalReached = terminalCompleted || failed;
-        const recoverableGenerationFailure = timedOut || (failed && failure && !NON_RECOVERABLE_MANAGED_FAILURE_CODES.has(failure.code));
+        const recoverableGenerationFailure = timedOut || (failed && failure
+          && failure.retryable !== false
+          && !NON_RECOVERABLE_MANAGED_FAILURE_CODES.has(failure.code));
         let candidateValidation = null;
         let verifiedCandidates = agentResult.candidates;
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
@@ -1646,8 +1693,9 @@ export function createAgentRuntime(options = {}) {
         const nextAgent = {
           ...state.agent,
           status: nextStatus,
+          primaryFailure: observedFailure ? { code: observedFailure.code, category: observedFailure.category || null, retryable: observedFailure.retryable ?? null, title: observedFailure.title, detail: observedFailure.detail, phase: observedFailure.phase } : state.agent.primaryFailure || null,
           resourceRelease: run.resourceRelease || (isExecutionReleased(run) ? { confirmed: true, status: 'confirmed' } : state.agent.resourceRelease),
-          phase: failure?.phase || (timedOut ? `${managedMeta.name} 单轮停滞，已收敛为无候选` : completed ? `${managedMeta.name} 分析完成` : state.agent.status === 'cancel_requested' ? `正在取消 ${managedMeta.name}` : `${managedMeta.name} 正在分析`),
+          phase: observedFailure?.phase || (timedOut ? `${managedMeta.name} 单轮停滞，已收敛为无候选` : completed ? `${managedMeta.name} 分析完成` : state.agent.status === 'cancel_requested' ? `正在取消 ${managedMeta.name}` : `${managedMeta.name} 正在分析`),
           progress: completed || failed || timedOut ? 100 : Math.max(5, Math.min(95, 5 + events.length * 3)),
           threadId: run.threadId || threadEvent?.thread_id || threadEvent?.threadId || state.agent.threadId || null,
           messages: projectedMessages.length ? projectedMessages : state.agent.messages,
@@ -1743,7 +1791,9 @@ export function createAgentRuntime(options = {}) {
         return { state, changed };
       } catch (error) {
         if (!isExecutionReleased(observedRun || {})) {
-          state.agent = cancellationProjection(state.agent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message });
+          state.agent = cancellationProjection(state.agent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message }, {
+            primaryFailure: state.agent.primaryFailure || { code: error.code || 'AGENT_STATUS_UNAVAILABLE', detail: error.message, phase: 'Agent runtime status unavailable' },
+          });
           return { state, changed: true };
         }
         const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }] };

@@ -489,6 +489,30 @@ const activeState = makeState({ agent: { status: 'running', runId: 'codex_MAIN' 
 assert.equal((await advanceIteration(activeState, deps)).action, 'wait_main');
 assert.equal(startMainRoundCalls, 0);
 
+// 取消释放超过有限窗口后必须收敛为可观察的人工阻断，而不是永远
+// 返回 resource_release_pending；屏障本身仍保留，禁止任何新写入。
+const quarantinedReleaseState = makeState({
+  agent: {
+    status: 'cancel_requested',
+    runId: 'codex_ORPHAN',
+    resourceRelease: { confirmed: false, status: 'unconfirmed', blocked: true, quarantined: true },
+    primaryFailure: { code: 'CODEX_TLS_TRUST_FAILED' },
+  },
+  workflowRecovery: {
+    resourceRelease: {
+      confirmed: false, status: 'unconfirmed', blocked: true, quarantined: true,
+      resources: [{ kind: 'agent', id: 'codex_ORPHAN', confirmed: false, status: 'unconfirmed', blocked: true, quarantined: true }],
+    },
+  },
+});
+const quarantinedAdvance = await advanceIteration(quarantinedReleaseState, deps);
+assert.equal(quarantinedAdvance.action, 'needs_human');
+assert.equal(quarantinedAdvance.state.iterationStats.loopStatus, 'needs_human');
+assert.equal(quarantinedAdvance.state.iterationStats.loopStatusReason, 'resource_release_unconfirmed');
+assert.equal(quarantinedAdvance.state.missions[0].status, 'needs_human');
+assert.equal(quarantinedAdvance.state.agent.status, 'needs_human');
+assert.ok(quarantinedAdvance.state.runtimeEvents.some((event) => event.type === 'loop.resource_release_quarantined'));
+
 // 研究员不可用（startResearch 不产生 runId，如非 codex-cli 模式）→ 不升级、不发误导审计
 resetCounters();
 const noopEscalation = await advanceIteration(makeState({

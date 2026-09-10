@@ -258,6 +258,22 @@ try {
   assert.equal(windowsSandboxFailure.code, 'CODEX_WINDOWS_SANDBOX_SETUP_FAILED');
   assert.match(windowsSandboxFailure.detail, /unelevated fallback/);
 
+  const capacityFailure = classifyCodexFailure(
+    { error: { code: 'CODEX_EXIT_1', message: 'Selected model is at capacity' } },
+    [],
+  );
+  assert.equal(capacityFailure.code, 'CODEX_PROVIDER_CAPACITY');
+  assert.equal(capacityFailure.category, 'provider_capacity');
+  assert.equal(capacityFailure.retryable, true);
+
+  const tlsFailure = classifyCodexFailure(
+    { error: { code: 'CODEX_EXIT_1', message: 'request failed: invalid peer certificate: UnknownIssuer' } },
+    [],
+  );
+  assert.equal(tlsFailure.code, 'CODEX_TLS_TRUST_FAILED');
+  assert.equal(tlsFailure.category, 'tls_trust');
+  assert.equal(tlsFailure.retryable, false);
+
   await execFileAsync('git', ['checkout', '--', 'kernel.cu'], { cwd: root });
   const completedWithToolFailureRuntime = createAgentRuntime({
     mode: 'codex-cli',
@@ -305,6 +321,36 @@ try {
   assert.equal(failedProjection.state.agent.phase, 'Codex 认证失败');
   assert.equal(failedProjection.state.agent.messages.at(-1).errorCode, 'CODEX_AUTH_FAILED');
   assert.match(failedProjection.state.agent.messages.at(-1).detail, /Provider/);
+
+  // A transport failure may arrive before the CLI emits a terminal turn. The
+  // cause must survive the bounded cancellation projection separately from
+  // the still-unconfirmed process release, and the third observation must
+  // converge to an explicit human/quarantine state.
+  const tlsRuntime = createAgentRuntime({
+    mode: 'codex-cli',
+    cancellationTimeoutMs: 20,
+    mainAgentStallMs: 1,
+    codexClient: {
+      describe: async () => ({ installed: true, loggedIn: true, version: 'codex-tls-fixture' }),
+      readRun: async () => ({ runId: 'codex_TLS_PENDING', status: 'running', workspace: root, resourceRelease: { confirmed: false, status: 'pending' } }),
+      readEvents: async () => [{ type: 'error', error: { message: 'request failed: invalid peer certificate: UnknownIssuer' } }],
+      cancel: async () => ({ runId: 'codex_TLS_PENDING', status: 'cancel_requested', resourceRelease: { confirmed: false, status: 'unconfirmed', code: 'CODEX_CANCEL_UNCONFIRMED' } }),
+      eventText: (event) => event.error?.message || '',
+    },
+  });
+  const tlsState = {
+    activeMissionId: 'MIS_TLS_PENDING', runtimeEvents: [], stage: 'diagnosis', candidateEvaluations: [],
+    agent: { runId: 'codex_TLS_PENDING', runtimeKind: 'codex-cli', status: 'running', startedAt: new Date(Date.now() - 100).toISOString(), budgetMs: 1, messages: [], toolCalls: [], artifacts: [] },
+  };
+  await tlsRuntime.projectState(tlsState);
+  assert.equal(tlsState.agent.primaryFailure.code, 'CODEX_TLS_TRUST_FAILED');
+  assert.equal(tlsState.agent.resourceRelease.confirmed, false);
+  assert.equal(tlsState.agent.resourceRelease.code, 'CODEX_CANCEL_UNCONFIRMED');
+  await tlsRuntime.projectState(tlsState);
+  await tlsRuntime.projectState(tlsState);
+  assert.equal(tlsState.agent.status, 'needs_human');
+  assert.equal(tlsState.agent.resourceRelease.quarantined, true);
+  assert.equal(tlsState.agent.primaryFailure.code, 'CODEX_TLS_TRUST_FAILED');
   console.log('[codex] native CLI adapter contract passed');
 } finally {
   await new Promise((resolve) => setTimeout(resolve, 250));

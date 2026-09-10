@@ -7,6 +7,7 @@ const retainUntrackedResources = (state, current, requestedAt, deadline) => {
   return previous.filter(resource => resource.confirmed !== true
     && !current.some(item => item.kind === resource.kind && item.id === resource.id)).map(resource => ({
     ...resource, kind: resource.kind || 'unknown', id: resource.id || 'untracked', confirmed: false, status: 'unconfirmed',
+    blocked: true, quarantined: true,
     reason: 'The recorded execution no longer has a matching Mission resource; release cannot be inferred.',
     requestedAt: resource.requestedAt || requestedAt, deadline: resource.deadline || deadline,
     nextAction: 'Inspect the original execution owner and confirm termination; repeating stop cannot discard unknown resources.',
@@ -62,11 +63,37 @@ export const createMissionControlService = ({ loadState, persistState, agentRunt
       });
       const result = kind === 'test' ? outcome.value : outcome.value?.result;
       const confirmed = !outcome.error && isExecutionReleased(result || {});
+      // Keep the cause of the operation failure separate from the lifecycle
+      // truth of the resource. A timeout/unknown release must not overwrite a
+      // provider failure (for example TLS or capacity) and must remain
+      // fail-closed even when the caller's cancellation deadline expires.
+      const primaryFailure = snapshot.primaryFailure
+        || result?.primaryFailure
+        || outcome.value?.state?.agent?.primaryFailure
+        || outcome.value?.state?.researchAgent?.primaryFailure
+        || outcome.value?.state?.baseline?.materializer?.primaryFailure
+        || null;
+      const releaseUnconfirmed = !confirmed;
+      const quarantine = releaseUnconfirmed && (Boolean(outcome.error)
+        || ['unconfirmed', 'quarantined', 'blocked'].includes(result?.resourceRelease?.status)
+        || result?.resourceRelease?.blocked === true
+        || result?.resourceRelease?.quarantined === true);
       const release = {
         kind, id, confirmed, status: confirmed ? 'confirmed' : outcome.error || result?.resourceRelease?.status === 'unconfirmed' ? 'unconfirmed' : 'pending',
         reason: confirmed ? 'Execution has confirmed termination.' : outcome.error?.message || result?.resourceRelease?.reason || 'Cancellation requested; execution resource release is not yet confirmed.',
         requestedAt, deadline,
-        nextAction: confirmed ? 'No action required.' : 'Inspect or retry cancellation. Resume and workspace changes remain blocked until release is confirmed.',
+        // `blocked`/`quarantined` are additive lifecycle markers. `status`
+        // remains backward-compatible (`pending`/`unconfirmed`) for existing
+        // adapters and fixtures while callers migrate to the explicit fields.
+        blocked: quarantine || result?.resourceRelease?.blocked === true,
+        quarantined: quarantine || result?.resourceRelease?.quarantined === true,
+        primaryFailure,
+        nextAction: confirmed ? 'No action required.' : quarantine
+          ? 'Resource release is unconfirmed; Mission is quarantined and no retry or workspace mutation is permitted until owner-aware inspection confirms termination.'
+          : 'Inspect or retry cancellation. Resume and workspace changes remain blocked until release is confirmed.',
+        ...(outcome.error || result?.resourceRelease?.code ? {
+          releaseFailure: outcome.error || { code: result.resourceRelease.code, message: result.resourceRelease.reason },
+        } : {}),
         ...(outcome.error ? { error: outcome.error } : result?.resourceRelease?.code ? { error: { code: result.resourceRelease.code, message: result.resourceRelease.reason } } : {}),
       };
       const updated = kind === 'agent' ? outcome.value?.state?.agent
@@ -84,8 +111,13 @@ export const createMissionControlService = ({ loadState, persistState, agentRunt
     }
     const releases = [...results.map(item => item.release), ...untracked];
     const confirmed = releases.every(resource => resource.confirmed);
+    const quarantined = !confirmed && releases.some(resource => resource.quarantined === true || resource.blocked === true);
+    const primaryFailure = releases.find(resource => resource.primaryFailure)?.primaryFailure || null;
     const summary = { confirmed, status: confirmed ? 'confirmed' : releases.some(resource => resource.status === 'unconfirmed') ? 'unconfirmed' : 'pending',
-      reason, requestedAt, deadline, nextAction: confirmed ? 'All active execution resources have been released.' : 'Inspect pending resources or retry cancellation before resuming.',
+      blocked: quarantined, quarantined, primaryFailure,
+      reason, requestedAt, deadline, nextAction: confirmed ? 'All active execution resources have been released.' : quarantined
+        ? 'Mission is quarantined because resource release is unconfirmed; inspect the original owner before any retry or workspace mutation.'
+        : 'Inspect pending resources or retry cancellation before resuming.',
       resources: releases };
     state.workflowRecovery = { ...state.workflowRecovery, resourceRelease: summary };
     return summary;

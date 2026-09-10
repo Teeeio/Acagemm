@@ -337,6 +337,7 @@ try {
   assert.equal(rerun.state.publishedAssets.length, 0);
   assert.equal(rerun.state.knowledgeMaintenance.status, 'idle');
   assert.equal(rerun.state.runHistory[0].runId, startedMission.state.agent.runId);
+  assert.equal(rerun.state.runHistory[0].candidateSourceRunId, startedMission.state.agent.runId);
   console.log('[smoke] full mission workflow passed');
 } finally {
   child.kill();

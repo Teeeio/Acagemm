@@ -202,6 +202,9 @@ try {
     const tasks = queueRaw.split('\n').filter(Boolean).map((line) => JSON.parse(line));
     assert.equal(tasks.filter((task) => task.payload?.requestId === baseline.runId).length, 1, 'baseline benchmark should submit exactly once');
     assert.equal(tasks.filter((task) => task.payload?.requestId === first.runId).length, 1, 'same benchmark should submit exactly once');
+    const candidateTask = tasks.find((task) => task.payload?.requestId === first.runId);
+    assert.equal(candidateTask.payload.candidate.sourceRunId, first.state.agent.runId, 'queue payload must retain the run that produced the candidate');
+    assert.equal(first.state.benchmark.candidate.sourceRunId, first.state.agent.runId, 'benchmark projection must retain candidate source attribution');
     // 命令日志已记录 start-benchmark 且 stateVersionAfter 已补全
     const journalRaw = await readFile(path.join(smokeRoot, 'runtime', 'command-journal.jsonl'), 'utf8');
     const journalEntries = journalRaw.split('\n').filter(Boolean).map((line) => JSON.parse(line));

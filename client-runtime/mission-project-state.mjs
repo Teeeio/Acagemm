@@ -484,6 +484,10 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
   function resetMissionRunState(state, goal, { referenceFixture = false } = {}) {
     assertResourcesReleased(state);
     if (state.agent?.runId) {
+      const historyCandidateId = state.appliedCandidateId || state.decisionReview?.candidateId || state.benchmark?.candidate?.id || null;
+      const historyCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === historyCandidateId)
+        || (state.candidateEvaluations || []).find((candidate) => candidate.patchDigest && candidate.patchDigest === state.benchmark?.candidate?.digest)
+        || null;
       state.runHistory = [
         {
           runId: state.agent.runId,
@@ -491,8 +495,10 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
           runtimeKind: state.agent.runtimeKind || null,
           goal: state.agent.goal,
           stage: state.stage,
-          candidateId: state.appliedCandidateId || state.decisionReview?.candidateId || state.benchmark?.candidate?.id || null,
-          candidateDigest: state.benchmark?.candidate?.digest || (state.candidateEvaluations || []).find((candidate) => candidate.id === (state.appliedCandidateId || state.decisionReview?.candidateId))?.patchDigest || null,
+          candidateId: historyCandidateId,
+          candidateDigest: state.benchmark?.candidate?.digest || historyCandidate?.patchDigest || null,
+          candidateSourceRunId: historyCandidate?.sourceRunId
+            || (historyCandidateId && state.benchmark?.purpose === 'candidate' ? state.agent.runId : null),
           benchmark: structuredClone(state.benchmark),
           decisionReview: structuredClone(state.decisionReview),
           currentBest: structuredClone(state.currentBest),

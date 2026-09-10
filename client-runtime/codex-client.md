@@ -24,6 +24,11 @@ and preserve runId, missionId, workspace, threadId and event path, adding
   a persisted PID that may have been reused; such recovery requires inspection.
 - turn.completed records logical completion, not process release. Only child
   close and any required cancellation cleanup publish completed/cancelled/failed.
+- `classifyCodexFailure` keeps upstream causes explicit: provider capacity is a
+  bounded retryable condition (`CODEX_PROVIDER_CAPACITY`), while certificate
+  trust failures are non-retryable under the same configuration
+  (`CODEX_TLS_TRUST_FAILED`). The Agent Runtime stores this as
+  `primaryFailure`; it never replaces the separate resource-release status.
 - cancel(runId) persists intent before termination. Windows uses bounded taskkill
   /T, escalating to /F; if taskkill is denied, the live ChildProcess handle may
   receive a best-effort parent stop, but this never counts as tree termination.
@@ -35,7 +40,7 @@ and preserve runId, missionId, workspace, threadId and event path, adding
 - Late events cannot overwrite an already confirmed process exit with a running
   snapshot. Writes are serialized and atomically renamed.
 
-Cancellation grace/force waits default to 1 second each; CLI termination requests
+Cancellation grace/force waits default to 2 and 5 seconds; CLI termination requests
 also have a force-wait timeout. logicalCleanupMs defaults to 15 seconds after a
 turn.completed event so short-lived Windows PowerShell/tool descendants can drain
 before cancellation is classified as unconfirmed. Options cancelGraceMs, cancelForceMs, logicalCleanupMs and

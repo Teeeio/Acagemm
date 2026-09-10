@@ -40,6 +40,12 @@ Creation/start mutate memory, not workspaces or real Agents. Start defaults to a
 fixture reset. Clock/UUID metadata is generated; Mission timestamp IDs may collide.
 There is no I/O or execution.
 
+When `resetMissionRunState` archives a run, `runHistory` also records
+`candidateSourceRunId` when the archived candidate has a known
+`candidate.sourceRunId`. This keeps recovery attempts and their candidate
+evidence attributable to the producing run rather than the first attempt in a
+Round.
+
 Fixed Profile operator identity takes precedence over an optional generic operator
 label. Without a Profile, the explicit operator is preserved for generic tests and
 experience scope; it is not replaced with a demo operator.
