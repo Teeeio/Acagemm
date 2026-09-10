@@ -2,7 +2,7 @@
 
 > 交接版本：2026-09-10（Asia/Shanghai）  
 > 交接对象：下一位开发者、代码审查者或负责恢复 Goal 的 Agent  
-> 当前状态：P0 已提交并推送；P1 的 Windows Job Object/观测改动已完成主要实现，但尚未提交、尚未完成本轮总门禁。
+> 当前状态：P0 已提交到 main；P1 的 Windows Job Object/观测改动已作为 WIP 推送到专用交接分支，但尚未合并 main、尚未完成本轮总门禁。
 
 本文件不是历史设计草稿，而是接手当前工作树后可以直接执行的操作清单。若本文件与代码冲突，以代码中的测试、模块合同和最近一次已确认的持久化状态为准；若本文件与用户的新指令冲突，以用户新指令为准。
 
@@ -10,7 +10,7 @@
 
 产品主线是“后端/云端测试队列可替换的通用算子迭代闭环”。当前最紧急的运行时问题不是换模型，而是让每个 Agent attempt 有可解释的失败终态、可验证的进程释放证据和正确的候选/测试归属。
 
-P0（失败分类、恢复归属、有限终态）已经在 9b80437 完成并推送。当前工作树正在收尾 P1：Windows 原生 Codex 进程默认进入 Job Object，实时 JSONL 仍被采集，取消/退出后通过 receipt 查询活动进程数并形成 release proof，同时记录 stdout/stderr/解析层观测数据。
+P0（失败分类、恢复归属、有限终态）已经在 9b80437 完成并推送。P1 当前保存在 handoff/codex-job-supervisor-p1：Windows 原生 Codex 进程默认进入 Job Object，实时 JSONL 仍被采集，取消/退出后通过 receipt 查询活动进程数并形成 release proof，同时记录 stdout/stderr/解析层观测数据。
 
 接手者的第一目标不是继续扩展功能，而是：
 
@@ -61,17 +61,20 @@ P0（失败分类、恢复归属、有限终态）已经在 9b80437 完成并推
 ### 4.1 当前分支与远端
 
     工作目录：F:\设计\快速项目\acagemm原型
-    分支：main
-    HEAD：9b80437 fix: close agent failure and release attribution contracts
+    稳定分支：main
+    稳定基线：9b80437 fix: close agent failure and release attribution contracts
+    交接分支：handoff/codex-job-supervisor-p1
+    首个 WIP 交接提交：c63b132 wip: hand off codex job supervisor p1
     origin：https://github.com/Teeeio/Acagemm.git
-    origin/main：当前已包含 9b80437
+    origin/main：当前已包含 9b80437，未包含 P1 WIP
+    origin/handoff/codex-job-supervisor-p1：包含 P1 当前代码与本 handoff
     运行环境：Windows；Node v22.23.2（Node 可执行文件位于 F:\Node\node.exe）
 
 用户已经明确授权将验证后的改动推送到远端；接手者不需要再次等待授权，但仍不得把未审查的实验产物或用户文件提交。
 
-### 4.2 当前未提交的受控改动
+### 4.2 交接分支中的受控改动
 
-以下 7 个 tracked 文件是本轮 P1 差异，尚未提交：
+以下 7 个 tracked 文件是本轮 P1 代码差异，已经进入专用 WIP 分支，但未合并 main：
 
     client-runtime/README.md
     client-runtime/codex-client.mjs
@@ -81,7 +84,7 @@ P0（失败分类、恢复归属、有限终态）已经在 9b80437 完成并推
     tests/release-guard-test.mjs
     tests/windows-job-object-test.mjs
 
-当前差异规模约为 644 行新增、69 行删除（以接手时 git diff --stat 为准）。必须先读 diff 和测试再决定是否拆 commit；不要直接 git add -A。
+P1 代码差异规模约为 644 行新增、69 行删除；加上 handoff 后，首个 WIP 提交 c63b132 共约 1069 行新增、69 行删除。必须先读提交 diff 和测试，再决定如何修正或整理提交；不要把 WIP commit 直接当作已验收发布。
 
 ### 4.3 必须保留的未跟踪文件
 
@@ -206,9 +209,12 @@ GENERIC_OPERATOR_VERIFICATION.json 和 .log.txt 是以前一轮的机器可读�
 
 ## 8. 接手后的立即执行顺序（短期任务）
 
-### T0：建立安全快照
+### T0：拉取交接分支并建立安全快照
 
-    Set-Location 'F:\设计\快速项目\acagemm原型'
+    git clone https://github.com/Teeeio/Acagemm.git
+    Set-Location Acagemm
+    git fetch origin
+    git switch --track origin/handoff/codex-job-supervisor-p1
     git status --short
     git diff --stat
     git diff --check
@@ -216,7 +222,7 @@ GENERIC_OPERATOR_VERIFICATION.json 和 .log.txt 是以前一轮的机器可读�
     git log -1 --oneline
     git remote -v
 
-把 git diff > $env:TEMP\acagemm-p1-job-supervisor.patch 保存为可回滚证据；不要用 git reset --hard 或 git checkout -- 清理工作树。
+若是在原工作目录接手，先确认当前分支和未跟踪文件；若还会继续修改，把 git show c63b132 > $env:TEMP\acagemm-p1-job-supervisor.patch 保存为可回滚证据。不要用 git reset --hard 或 git checkout -- 清理用户工作树。
 
 ### T1：阅读并审查差异
 
@@ -249,16 +255,17 @@ GENERIC_OPERATOR_VERIFICATION.json 和 .log.txt 是以前一轮的机器可读�
 
 verify:non-hardware-robustness 会再次包含 local release gate；如果时间有限，至少先完成 local gate，并在交接记录中明确第二个命令未完成。禁止把被中断的命令写成 PASS。
 
-### T4：提交与推送
+### T4：完成审查后的提交与推送
 
-测试通过后只显式暂存受控文件：
+WIP 已经推送到专用分支。测试和审查完成后，只显式暂存新增修复；不要把用户动画文件带入后续提交：
 
-    git add client-runtime/README.md client-runtime/codex-client.mjs client-runtime/windows-job-object-helper.ps1 client-runtime/windows-job-object.mjs tests/codex-runtime-test.mjs tests/release-guard-test.mjs tests/windows-job-object-test.mjs docs/development/CURRENT_TASK_HANDOFF.md docs/development/README.md
+    git status --short
+    git add <本次明确修改的文件>
     git diff --cached --name-only
-    git commit -m "feat: contain codex runs with observable job supervisor"
-    git push origin main
+    git commit -m "fix: finish codex job supervisor p1"
+    git push origin handoff/codex-job-supervisor-p1
 
-如果代码审查要求拆分 commit，可拆为“实现/测试/文档”，但必须保持每个 commit 不破坏门禁。推送后记录新的 commit hash 和远端 URL。
+如果代码审查要求拆分 commit，可在最终合并前整理为“实现/测试/文档”，但必须保持每个可合并 commit 不破坏门禁。完成验收后再由负责人合并或 cherry-pick 到 main，并记录新的 main commit hash。
 
 ## 9. P1 完成验收标准
 
@@ -408,7 +415,7 @@ Linux 继续采用 process group/等价 supervisor，但把通用接口抽象为
 
 可以直接转发以下内容：
 
-> 请先拉取 https://github.com/Teeeio/Acagemm.git 的 main，阅读 docs/development/CURRENT_TASK_HANDOFF.md、docs/development/ARCHITECTURE.md 和 client-runtime/README.md。远端已包含 P0 提交 9b80437；当前本地还有一组尚未提交的 Windows Job Object/实时 JSONL/release proof 改动，交接文档列出了具体文件。先检查工作树，不要删除未跟踪的动画 HTML；先跑 node tests/codex-runtime-test.mjs、node tests/windows-job-object-test.mjs、node tests/codex-cancellation-test.mjs，再跑两个 release gate。只有在确认释放证据、候选 sourceRunId 和 Queue 幂等都没有回归后，才提交并推送。真实 Codex/provider 稳定性仍需单独探针验证，不能用本地 fixture 代替。
+> 请拉取 https://github.com/Teeeio/Acagemm.git 的 handoff/codex-job-supervisor-p1 分支，阅读 docs/development/CURRENT_TASK_HANDOFF.md、docs/development/ARCHITECTURE.md 和 client-runtime/README.md。main 已包含 P0 提交 9b80437；交接分支从该提交分出，并包含 WIP 提交 c63b132（Windows Job Object、实时 JSONL、release proof 及 handoff）。先检查工作树，不要删除或提交未跟踪的动画 HTML；先跑 node tests/codex-runtime-test.mjs、node tests/windows-job-object-test.mjs、node tests/codex-cancellation-test.mjs，再跑两个 release gate。只有在确认释放证据、候选 sourceRunId 和 Queue 幂等都没有回归后，才合并到 main。真实 Codex/provider 稳定性仍需单独探针验证，不能用本地 fixture 代替。
 
 ## 16. 完成定义
 
@@ -421,4 +428,3 @@ Linux 继续采用 process group/等价 supervisor，但把通用接口抽象为
 5. 完成或明确记录总门禁的最终结果；
 6. 提交/推送后留下新的 commit hash 和后续未决任务；
 7. 不把 TLS、模型容量、外部 broker 或真实云端稳定性尚未验证的部分写成已解决。
-
