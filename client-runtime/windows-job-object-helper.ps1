@@ -30,6 +30,7 @@ namespace Acagemm {
     const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     const uint STARTF_USESTDHANDLES = 0x00000100;
     const uint WAIT_OBJECT_0 = 0x00000000;
+    const uint WAIT_TIMEOUT = 0x00000102;
     const uint INFINITE = 0xffffffff;
     const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
     const int JobObjectExtendedLimitInformation = 9;
@@ -40,6 +41,9 @@ namespace Acagemm {
     const uint OPEN_EXISTING = 3;
     const uint FILE_ATTRIBUTE_NORMAL = 0x80;
     const uint HANDLE_FLAG_INHERIT = 1;
+    const uint JOB_OBJECT_QUERY = 0x0004;
+    const uint SYNCHRONIZE = 0x00100000;
+    const int JobObjectBasicAccountingInformation = 1;
     const uint DUPLICATE_SAME_ACCESS = 2;
 
     [StructLayout(LayoutKind.Sequential)] struct SECURITY_ATTRIBUTES {
@@ -69,6 +73,11 @@ namespace Acagemm {
       public IO_COUNTERS IoInfo; public UIntPtr ProcessMemoryLimit; public UIntPtr JobMemoryLimit;
       public UIntPtr PeakProcessMemoryUsed; public UIntPtr PeakJobMemoryUsed;
     }
+    [StructLayout(LayoutKind.Sequential)] struct JOBOBJECT_BASIC_ACCOUNTING_INFORMATION {
+      public long TotalUserTime; public long TotalKernelTime; public long ThisPeriodTotalUserTime;
+      public long ThisPeriodTotalKernelTime; public uint TotalPageFaultCount; public uint TotalProcesses;
+      public uint ActiveProcesses; public uint TotalTerminatedProcesses;
+    }
 
     [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
     static extern IntPtr CreateJobObjectW(IntPtr attrs, string name);
@@ -79,6 +88,8 @@ namespace Acagemm {
     [DllImport("kernel32.dll", SetLastError=true)]
     static extern bool SetInformationJobObject(IntPtr job, int infoType, IntPtr info, uint length);
     [DllImport("kernel32.dll", SetLastError=true)]
+    static extern bool QueryInformationJobObject(IntPtr job, int infoType, IntPtr info, uint length, IntPtr returned);
+    [DllImport("kernel32.dll", SetLastError=true)]
     static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
     [DllImport("kernel32.dll", SetLastError=true)]
     static extern bool TerminateJobObject(IntPtr job, uint code);
@@ -88,6 +99,8 @@ namespace Acagemm {
     static extern uint ResumeThread(IntPtr thread);
     [DllImport("kernel32.dll", SetLastError=true)]
     static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    static extern IntPtr OpenProcess(uint access, bool inherit, uint processId);
     [DllImport("kernel32.dll", SetLastError=true)]
     static extern bool GetExitCodeProcess(IntPtr process, out uint code);
     [DllImport("kernel32.dll", SetLastError=true)]
@@ -111,9 +124,26 @@ namespace Acagemm {
       if (!SetHandleInformation(h, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)) { CloseHandle(h); Fail("SetHandleInformation"); }
       return h;
     }
+    static uint ActiveProcessCount(IntPtr job) {
+      var info = new JOBOBJECT_BASIC_ACCOUNTING_INFORMATION();
+      var size = Marshal.SizeOf(info); var ptr = Marshal.AllocHGlobal(size);
+      try {
+        if (!QueryInformationJobObject(job, JobObjectBasicAccountingInformation, ptr, (uint)size, IntPtr.Zero)) return UInt32.MaxValue;
+        info = Marshal.PtrToStructure<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>(ptr);
+        return info.ActiveProcesses;
+      } finally { Marshal.FreeHGlobal(ptr); }
+    }
+    static void WriteSidecar(string path, string value) {
+      if (String.IsNullOrWhiteSpace(path)) return;
+      var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+      File.WriteAllText(temporary, value, Encoding.UTF8);
+      if (File.Exists(path)) File.Delete(path);
+      File.Move(temporary, path);
+    }
     static string Quote(string s) { return "\"" + (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""; }
 
-    public static string Start(string app, string args, string cwd, string jobName, string stdoutPath, string stderrPath) {
+    public static string Start(string app, string args, string cwd, string jobName, string stdoutPath, string stderrPath,
+      string stdinPath, string readyPath, string receiptPath, int ownerPid) {
       var job = CreateJobObjectW(IntPtr.Zero, jobName);
       var createError = GetLastError();
       if (job == IntPtr.Zero) Fail("CreateJobObject");
@@ -132,10 +162,11 @@ namespace Acagemm {
         Marshal.StructureToPtr(limit, ptr, false);
         if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, ptr, (uint)size)) Fail("SetInformationJobObject");
       } finally { Marshal.FreeHGlobal(ptr); }
-      IntPtr input = IntPtr.Zero, output = IntPtr.Zero, error = IntPtr.Zero;
+      IntPtr input = IntPtr.Zero, output = IntPtr.Zero, error = IntPtr.Zero, owner = IntPtr.Zero;
       PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
       try {
-        input = FileHandle("NUL", true); output = FileHandle(stdoutPath, false); error = FileHandle(stderrPath, false);
+        input = FileHandle(String.IsNullOrWhiteSpace(stdinPath) ? "NUL" : stdinPath, true);
+        output = FileHandle(stdoutPath, false); error = FileHandle(stderrPath, false);
         var si = new STARTUPINFO(); si.cb = Marshal.SizeOf(typeof(STARTUPINFO)); si.dwFlags = (int)STARTF_USESTDHANDLES;
         si.hStdInput = input; si.hStdOutput = output; si.hStdError = error;
         var cmd = new StringBuilder(Quote(app) + (String.IsNullOrWhiteSpace(args) ? "" : " " + args));
@@ -144,13 +175,51 @@ namespace Acagemm {
         if (!AssignProcessToJobObject(job, pi.hProcess)) { TerminateProcessSafe(pi.hProcess); Fail("AssignProcessToJobObject"); }
         if (ResumeThread(pi.hThread) == 0xffffffff) { TerminateProcessSafe(pi.hProcess); Fail("ResumeThread"); }
         CloseHandle(pi.hThread); pi.hThread = IntPtr.Zero;
-        var wait = WaitForSingleObject(pi.hProcess, INFINITE); if (wait != WAIT_OBJECT_0) Fail("WaitForSingleObject");
+        var ready = "{\"jobName\":\"" + Escape(jobName) + "\",\"pid\":" + pi.dwProcessId + ",\"startedAt\":\"" + DateTime.UtcNow.ToString("o") + "\"}";
+        WriteSidecar(readyPath, ready);
+        if (ownerPid > 0) owner = OpenProcess(SYNCHRONIZE, false, (uint)ownerPid);
+        var ownerWatchdog = owner != IntPtr.Zero;
+        var ownerLost = false;
+        uint wait = WAIT_TIMEOUT;
+        while (wait == WAIT_TIMEOUT) {
+          wait = WaitForSingleObject(pi.hProcess, 250);
+          if (wait != WAIT_TIMEOUT) break;
+          if (ownerWatchdog && WaitForSingleObject(owner, 0) == WAIT_OBJECT_0) {
+            // The Node owner disappeared. Close the Job through termination so
+            // the target and all descendants cannot outlive the supervisor.
+            TerminateJobObject(job, 1);
+            ownerLost = true;
+            ownerWatchdog = false;
+          }
+        }
+        if (wait != WAIT_OBJECT_0) Fail("WaitForSingleObject");
         uint code; if (!GetExitCodeProcess(pi.hProcess, out code)) Fail("GetExitCodeProcess");
-        var result = "{\"jobName\":\"" + Escape(jobName) + "\",\"pid\":" + pi.dwProcessId + ",\"exitCode\":" + code + ",\"release\":\"confirmed\"}";
+        // A target can exit while a descendant remains in the Job.  Query the
+        // Job before closing its handle; if necessary terminate the remaining
+        // members and boundedly re-query.  releaseProof is separate from the
+        // target exit code so callers never mistake a closed stdout pipe for
+        // complete process-tree release.
+        uint active = UInt32.MaxValue;
+        for (int i = 0; i < 50; i++) {
+          active = ActiveProcessCount(job);
+          if (active == 0) break;
+          System.Threading.Thread.Sleep(100);
+        }
+        if (active != 0 && active != UInt32.MaxValue) {
+          TerminateJobObject(job, 1);
+          for (int i = 0; i < 50; i++) {
+            active = ActiveProcessCount(job);
+            if (active == 0) break;
+            System.Threading.Thread.Sleep(100);
+          }
+        }
+        var proof = active == 0 ? "true" : "false";
+        var result = "{\"jobName\":\"" + Escape(jobName) + "\",\"pid\":" + pi.dwProcessId + ",\"exitCode\":" + code + ",\"release\":\"" + (active == 0 ? "confirmed" : "unconfirmed") + "\",\"releaseProof\":{\"activeProcessCount\":" + (active == UInt32.MaxValue ? "null" : active.ToString()) + ",\"confirmed\":" + proof + ",\"ownerWatchdog\":" + (ownerWatchdog ? "true" : "false") + ",\"ownerLost\":" + (ownerLost ? "true" : "false") + ",\"checkedAt\":\"" + DateTime.UtcNow.ToString("o") + "\"}}";
+        WriteSidecar(receiptPath, result);
         CloseHandle(pi.hProcess); pi.hProcess = IntPtr.Zero; CloseHandle(job); job = IntPtr.Zero; return result;
       } finally {
         if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread); if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess);
-        if (input != IntPtr.Zero) CloseHandle(input); if (output != IntPtr.Zero) CloseHandle(output); if (error != IntPtr.Zero) CloseHandle(error);
+        if (input != IntPtr.Zero) CloseHandle(input); if (output != IntPtr.Zero) CloseHandle(output); if (error != IntPtr.Zero) CloseHandle(error); if (owner != IntPtr.Zero) CloseHandle(owner);
         if (job != IntPtr.Zero) CloseHandle(job);
       }
     }
@@ -178,7 +247,9 @@ if ($Action -eq 'start') {
   $cfg = [pscustomobject]$values
   $argText = [string]$cfg.arguments
   $result = [Acagemm.JobRunner]::Start([string]$cfg.filePath, $argText, [string]$cfg.cwd,
-    [string]$cfg.jobName, [string]$cfg.stdoutPath, [string]$cfg.stderrPath)
+    [string]$cfg.jobName, [string]$cfg.stdoutPath, [string]$cfg.stderrPath,
+    [string]$cfg.stdinPath, [string]$cfg.readyPath, [string]$cfg.receiptPath,
+    [int]$cfg.ownerPid)
   [Console]::Out.WriteLine($result)
   exit 0
 }

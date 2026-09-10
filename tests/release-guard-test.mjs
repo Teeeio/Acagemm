@@ -69,7 +69,7 @@ const expectFailure = async (pathname, status, code, options = {}) => {
 };
 
 const waitForServer = async () => {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     try { await request('/api/health'); return; } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
   }
   throw new Error('CLI guard test server did not start.');
@@ -122,5 +122,17 @@ try {
 } finally {
   child.kill();
   if (child.exitCode === null) await new Promise((resolve) => child.once('exit', resolve));
-  await rm(testRoot, { recursive: true, force: true });
+  // Windows can keep a just-closed repository directory busy for a short
+  // interval after the HTTP child exits.  Cleanup retries are bounded and do
+  // not affect any runtime assertion; they prevent an environmental handle
+  // race from masking the actual release-guard result.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      await rm(testRoot, { recursive: true, force: true });
+      break;
+    } catch (error) {
+      if (!['EBUSY', 'ENOTEMPTY', 'EPERM', 'EACCES'].includes(error.code) || attempt === 7) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+    }
+  }
 }

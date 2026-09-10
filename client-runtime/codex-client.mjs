@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
 import { createScopedGitEnvironment } from './git-environment.mjs';
 import { resolveCliInvocation } from './cli-command.mjs';
+import { createJobName, jobObjectSupported, spawnJobObjectProcess } from './windows-job-object.mjs';
 
 const defaultTimeoutMs = 12_000;
 
@@ -25,6 +26,69 @@ const parseLines = (content) => content.split(/\r?\n/).map((line) => line.trim()
 });
 
 const hasCompletedTurn = (events = []) => events.some((event) => event?.type === 'turn.completed');
+
+// Keep transport/protocol evidence separate from the business result.  A
+// missing `turn.completed` is only useful for diagnosis when we can tell
+// whether bytes stopped at the provider, the child-process pipe, or the JSONL
+// parser.  These counters are deliberately additive and bounded; they never
+// influence candidate admission or Gate decisions.
+const emptyStreamObservability = (transport = 'child-process-stdio') => ({
+  transport,
+  stdoutBytes: 0,
+  stderrBytes: 0,
+  stdoutChunks: 0,
+  stderrChunks: 0,
+  parsedEventCount: 0,
+  parseErrorCount: 0,
+  firstStdoutAt: null,
+  lastStdoutAt: null,
+  firstStderrAt: null,
+  lastStderrAt: null,
+  firstEventAt: null,
+  lastEventAt: null,
+  terminalEventType: null,
+});
+
+const markStreamActivity = (observability, stream, byteLength, now = new Date().toISOString()) => {
+  if (!observability || !byteLength) return;
+  const bytesKey = stream === 'stderr' ? 'stderrBytes' : 'stdoutBytes';
+  const chunksKey = stream === 'stderr' ? 'stderrChunks' : 'stdoutChunks';
+  const firstKey = stream === 'stderr' ? 'firstStderrAt' : 'firstStdoutAt';
+  const lastKey = stream === 'stderr' ? 'lastStderrAt' : 'lastStdoutAt';
+  observability[bytesKey] += byteLength;
+  observability[chunksKey] += 1;
+  observability[firstKey] ||= now;
+  observability[lastKey] = now;
+};
+
+const enabledSetting = (value, fallback = true) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  return /^(1|true|yes|on)$/i.test(String(value));
+};
+
+// Serialize an argv array for CreateProcessW using the CommandLineToArgvW
+// escaping rules.  The Job helper receives lpApplicationName separately; this
+// string contains only target arguments.
+const quoteWindowsArgument = (value) => {
+  const argument = String(value ?? '');
+  if (argument && !/[\s"]/u.test(argument)) return argument;
+  let result = '"';
+  let slashes = 0;
+  for (const character of argument) {
+    if (character === '\\') { slashes += 1; continue; }
+    if (character === '"') {
+      result += '\\'.repeat(slashes * 2 + 1) + '"';
+      slashes = 0;
+      continue;
+    }
+    result += '\\'.repeat(slashes) + character;
+    slashes = 0;
+  }
+  return result + '\\'.repeat(slashes * 2) + '"';
+};
+
+const windowsCommandLine = (args = []) => args.map(quoteWindowsArgument).join(' ');
 
 const eventText = (event) => event?.text || event?.message || event?.item?.text || event?.item?.aggregated_output || event?.item?.output || event?.item?.command || event?.item?.content || event?.error?.message || '';
 
@@ -142,11 +206,14 @@ export const classifyCodexFailure = (run = {}, events = []) => {
 };
 
 export const createCodexClient = (options = {}) => {
+  const platform = options.platform || process.platform;
   const configuredCommand = options.command || process.env.CODEX_COMMAND || 'codex';
   const invocation = resolveCliInvocation({ provider: 'codex', configuredCommand });
   const command = invocation.command;
   const commandArgs = (args) => [...invocation.prefixArgs, ...args];
+  const injectedSpawn = typeof options.spawnImpl === 'function';
   const spawnImpl = options.spawnImpl || nodeSpawn;
+  const spawnJobObjectImpl = options.spawnJobObjectProcessImpl || spawnJobObjectProcess;
   const execFileImpl = options.execFileImpl || nodeExecFile;
   const bridgeDir = options.bridgeDir || path.resolve(process.env.OPERATOR_BRIDGE_DIR || path.join(runtimeDir, 'agent-bridge'));
   const sandboxMode = options.sandboxMode || process.env.OPERATOR_CODEX_SANDBOX || 'workspace-write';
@@ -165,7 +232,14 @@ export const createCodexClient = (options = {}) => {
   // setup helper would make ordinary local Agent runs fail closed when that
   // helper is absent from a portable Codex installation.
   const windowsSandbox = options.windowsSandbox ?? process.env.OPERATOR_CODEX_WINDOWS_SANDBOX
-    ?? (process.platform === 'win32' ? 'unelevated' : null);
+    ?? (platform === 'win32' ? 'unelevated' : null);
+  // Real Windows Codex runs are contained by default. Tests and injected
+  // transports keep their own deterministic child-process implementation.
+  // A .cmd shim cannot be passed to CreateProcessW as an executable; the CLI
+  // resolver normally replaces it with codex.exe or node.exe.
+  const jobObjectRequested = enabledSetting(options.useJobObject ?? process.env.OPERATOR_CODEX_JOB_OBJECT, true);
+  const jobObjectEligible = jobObjectSupported(platform) && !injectedSpawn && !/\.cmd$/i.test(command);
+  const useWindowsJobObject = jobObjectRequested && jobObjectEligible;
   const runsDir = path.join(bridgeDir, 'codex-runs');
   const children = new Map();
   const userName = options.userName ?? process.env.USERNAME ?? process.env.USER ?? '';
@@ -225,7 +299,11 @@ export const createCodexClient = (options = {}) => {
       version: descriptor.version,
       configurationAuthority: 'local-codex',
       sandbox: sandboxMode,
-      windowsSandbox: process.platform === 'win32' ? (windowsSandbox || 'codex-config') : null,
+      windowsSandbox: platform === 'win32' ? (windowsSandbox || 'codex-config') : null,
+      processSupervisor: useWindowsJobObject ? 'windows-job-object' : 'child-process',
+      processSupervisorReason: platform === 'win32' && jobObjectRequested && !jobObjectEligible
+        ? 'native-executable-unavailable'
+        : null,
     };
   };
 
@@ -262,8 +340,25 @@ export const createCodexClient = (options = {}) => {
   const terminateTree = options.terminateProcessTree || (async ({ child, force, execution }) => {
     // The ChildProcess close receipt ends our authority to signal its PID.
     // A later force pass must never act on a possibly reused numeric PID.
+    if (execution?.jobSupervisor) {
+      if (execution.closed) return execution.jobReceipt?.release === 'confirmed';
+      try {
+        await execution.jobSupervisor.terminate({ timeoutMs: force ? forceMs : graceMs });
+        // TerminateJobObject is only a request.  `treeSignalled` remains false
+        // until the supervisor receipt proves that all Job members exited.
+        return true;
+      } catch (error) {
+        // A target may have naturally exited while the helper is still
+        // draining its files. Treat an already-closed Job as a wait condition;
+        // any other failure remains fail-closed.
+        if (/OpenJobObject|not found|不存在|invalid handle/i.test(String(error?.message || '')) && !execution.closed) return true;
+        throw Object.assign(new Error('Codex Job Object termination was requested, but release could not be verified.'), {
+          code: error?.code || 'CODEX_PROCESS_TREE_UNVERIFIED', cause: error,
+        });
+      }
+    }
     if (!child?.pid || execution?.closed) return false;
-    if (process.platform === 'win32') {
+    if (platform === 'win32') {
       const pid = Number(child.pid);
       try {
         await execFileAsync(execFileImpl, 'taskkill.exe', ['/pid', String(pid), '/t', ...(force ? ['/f'] : [])],
@@ -288,7 +383,9 @@ export const createCodexClient = (options = {}) => {
     return true;
   });
   const groupReleased = (execution) => {
-    if (process.platform === 'win32' || options.terminateProcessTree) return execution.treeSignalled;
+    if (execution?.jobSupervisor) return execution.jobReceipt?.release === 'confirmed'
+      && execution.jobReceipt?.releaseProof?.confirmed !== false;
+    if (platform === 'win32' || options.terminateProcessTree) return execution.treeSignalled;
     try { process.kill(-execution.child.pid, 0); return false; }
     catch (error) { return error.code === 'ESRCH'; }
   };
@@ -296,7 +393,22 @@ export const createCodexClient = (options = {}) => {
     const { record } = execution;
     if (!execution.closed) return false;
     if (record.cancelRequested && !groupReleased(execution)) return false;
-    record.resourceRelease = { confirmed: true, status: 'confirmed', reason: 'Agent process exited and cancellation cleanup is confirmed.', confirmedAt: new Date().toISOString() };
+    if (execution.jobSupervisor && !groupReleased(execution)) {
+      record.resourceRelease = {
+        ...(record.resourceRelease || {}), confirmed: false, status: 'unconfirmed',
+        code: execution.jobError?.code || 'CODEX_JOB_RELEASE_UNCONFIRMED',
+        reason: sanitizeCodexDiagnostic(execution.jobError?.message) || 'Windows Job Object did not provide a complete release proof.',
+        nextAction: 'Inspect the Job receipt and quarantine the workspace before any recovery attempt.',
+      };
+      await saveRun(record);
+      return false;
+    }
+    record.resourceRelease = {
+      ...(record.resourceRelease || {}), confirmed: true, status: 'confirmed',
+      reason: execution.jobSupervisor ? 'Agent Job Object exited and active-process query confirmed release.' : 'Agent process exited and cancellation cleanup is confirmed.',
+      confirmedAt: new Date().toISOString(),
+      ...(execution.jobReceipt?.releaseProof ? { releaseProof: execution.jobReceipt.releaseProof } : {}),
+    };
     record.process = { ...record.process, exitedAt: new Date().toISOString(), exitCode: execution.exitCode, signal: execution.exitSignal };
     record.status = record.logicalCompleted ? 'completed' : record.cancelRequested ? 'cancelled' : execution.exitCode === 0 ? 'completed' : 'failed';
     record.completedAt ||= new Date().toISOString();
@@ -389,9 +501,14 @@ export const createCodexClient = (options = {}) => {
     const disableShellTool = String(environment.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? process.env.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? '').toLowerCase() === '1'
       || String(environment.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? process.env.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? '').toLowerCase() === 'true';
     const record = { schemaVersion: 2, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null,
-      process: { pid: null, ownerPid: process.pid, instanceId }, resourceRelease: { confirmed: false, status: 'active', reason: 'Agent execution is active.' } };
+      process: { pid: null, ownerPid: process.pid, instanceId },
+      // This is a diagnostic projection only.  It records each boundary that
+      // the adapter can observe and is intentionally not used to infer a
+      // provider terminal state or to weaken fail-closed cleanup.
+      observability: emptyStreamObservability(),
+      resourceRelease: { confirmed: false, status: 'active', reason: 'Agent execution is active.' } };
     await saveRun(record);
-    const sandboxArgs = process.platform === 'win32' && windowsSandbox ? ['-c', `windows.sandbox="${windowsSandbox}"`] : [];
+    const sandboxArgs = platform === 'win32' && windowsSandbox ? ['-c', `windows.sandbox="${windowsSandbox}"`] : [];
     const gitRepoArgs = skipGitRepoCheck ? ['--skip-git-repo-check'] : [];
     // unified_exec is needed for apply_patch; the workspace sandbox confines it.
     const toolRestrictionArgs = boundaryEnabled && disableShellTool ? ['--disable', 'shell_tool'] : [];
@@ -401,34 +518,36 @@ export const createCodexClient = (options = {}) => {
       ? ['exec', ...configArgs, ...modelArgs, 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
       : ['exec', ...configArgs, ...modelArgs, ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
     const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, { configDir: path.join(bridgeDir, 'git-trust') });
-    let child;
-    try {
-      child = spawnImpl(command, commandArgs(args), { cwd: record.workspace, stdio: ['pipe', 'pipe', 'pipe'],
-        detached: process.platform !== 'win32', windowsHide: true, env: { ...scopedEnvironment, ...environment } });
-    } catch (error) {
-      record.status = 'failed'; record.error = { code: error.code || 'CODEX_SPAWN_FAILED', message: sanitizeCodexDiagnostic(error.message) };
-      record.resourceRelease = { confirmed: true, status: 'confirmed', reason: 'No Agent process was created.' };
-      record.completedAt = new Date().toISOString();
-      await saveRun(record);
-      throw error;
-    }
+    const runEnvironment = { ...scopedEnvironment, ...environment };
+    const runJobObject = useWindowsJobObject
+      && enabledSetting(environment.OPERATOR_CODEX_JOB_OBJECT, true);
+    let child = null;
+    let jobSupervisor = null;
     let resolveClosed;
-    const execution = { child, record, closed: false, closedPromise: new Promise(resolve => { resolveClosed = resolve; }),
-      treeSignalled: false, stderr: '', cancelling: null, exitCode: null, exitSignal: null };
+    const execution = { child: null, record, closed: false, closedPromise: new Promise(resolve => { resolveClosed = resolve; }),
+      treeSignalled: false, stderr: '', cancelling: null, exitCode: null, exitSignal: null,
+      jobSupervisor: null, jobReceipt: null, jobError: null };
     children.set(runId, execution);
-    record.process.pid = child.pid || null;
     let eventBuffer = '';
     let terminalCleanupTimer = null;
     let appendChain = Promise.resolve();
-    child.stderr?.on('data', chunk => { execution.stderr = (execution.stderr + chunk.toString()).slice(-4_000); });
-    child.stdout?.on('data', chunk => {
-      const text = chunk.toString();
-      appendChain = appendChain.then(() => appendFile(eventsPath(runId), text, 'utf8')).catch(() => {});
+
+    const consumeEventText = (text) => {
+      if (!text) return;
       eventBuffer += text;
       const lines = eventBuffer.split(/\r?\n/);
       eventBuffer = lines.pop() || '';
       for (const line of lines) {
-        let event; try { event = JSON.parse(line); } catch { continue; }
+        let event;
+        try { event = JSON.parse(line); }
+        catch { record.observability.parseErrorCount += 1; continue; }
+        const eventAt = new Date().toISOString();
+        record.observability.parsedEventCount += 1;
+        record.observability.firstEventAt ||= eventAt;
+        record.observability.lastEventAt = eventAt;
+        if (event?.type === 'turn.completed' || event?.type === 'turn.failed' || event?.type === 'response.failed') {
+          record.observability.terminalEventType = event.type;
+        }
         if (event.thread_id || event.threadId || event.thread?.id) record.threadId ||= event.thread_id || event.threadId || event.thread.id;
         if (event.type !== 'turn.completed' || record.logicalCompleted) continue;
         record.logicalCompleted = true;
@@ -437,26 +556,143 @@ export const createCodexClient = (options = {}) => {
         terminalCleanupTimer = setTimeout(() => { void cancel(runId, { reason: 'turn_completed' }).catch(() => {}); }, logicalCleanupMs);
         terminalCleanupTimer.unref?.();
       }
-    });
-    child.once('error', error => {
-      record.error = { code: error.code || 'CODEX_SPAWN_FAILED', message: sanitizeCodexDiagnostic(error.message) };
-      if (!child.pid) execution.treeSignalled = true;
-      void saveRun(record).catch(() => {});
-    });
-    child.once('close', (code, signal) => {
-      execution.closed = true; execution.exitCode = code; execution.exitSignal = signal;
-      if (terminalCleanupTimer) clearTimeout(terminalCleanupTimer);
-      resolveClosed();
-      void appendChain.then(async () => {
-        const events = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
-        record.logicalCompleted ||= hasCompletedTurn(events);
-        await settleClosed(execution, events);
-      }).catch(() => {});
-    });
-    await saveRun(record);
-    child.stdin?.on('error', error => { record.error ||= { code: error.code || 'CODEX_STDIN_FAILED', message: sanitizeCodexDiagnostic(error.message) }; });
-    child.stdin?.end(`${goal || ''}\n`);
-    return { ...record, pid: child.pid || null };
+    };
+    const consumeStdout = (chunk) => {
+      const text = chunk?.toString?.() ?? String(chunk || '');
+      markStreamActivity(record.observability, 'stdout', Buffer.byteLength(text, 'utf8'));
+      appendChain = appendChain.then(() => appendFile(eventsPath(runId), text, 'utf8')).catch(() => {});
+      consumeEventText(text);
+    };
+    const consumeStderr = (chunk) => {
+      const text = chunk?.toString?.() ?? String(chunk || '');
+      markStreamActivity(record.observability, 'stderr', Buffer.byteLength(text, 'utf8'));
+      execution.stderr = (execution.stderr + text).slice(-4_000);
+    };
+    const finishClosed = async () => {
+      const rawEvents = await readFile(eventsPath(runId), 'utf8').catch(() => '');
+      const events = parseLines(rawEvents);
+      // A final JSON line may arrive without a trailing newline. Re-read the
+      // durable log at close so the projection does not claim fewer events
+      // than the persisted evidence contains.
+      record.observability.parsedEventCount = Math.max(record.observability.parsedEventCount || 0, events.length);
+      record.observability.lastEventAt ||= events.length ? new Date().toISOString() : null;
+      record.logicalCompleted ||= hasCompletedTurn(events);
+      await settleClosed(execution, events);
+    };
+    const attachChild = (target) => {
+      target.stderr?.on('data', consumeStderr);
+      target.stdout?.on('data', consumeStdout);
+      target.once('error', error => {
+        record.error ||= { code: error.code || 'CODEX_SPAWN_FAILED', message: sanitizeCodexDiagnostic(error.message) };
+        if (!target.pid) execution.treeSignalled = true;
+        void saveRun(record).catch(() => {});
+      });
+      target.once('close', (code, signal) => {
+        execution.closed = true; execution.exitCode = code; execution.exitSignal = signal;
+        if (terminalCleanupTimer) clearTimeout(terminalCleanupTimer);
+        resolveClosed();
+        void appendChain.then(finishClosed).catch(() => {});
+      });
+    };
+
+    try {
+      if (runJobObject) {
+        const safeRunId = String(runId).replace(/[^a-zA-Z0-9_.-]/g, '_');
+        const jobDir = path.join(runsDir, `${safeRunId}.job`);
+        await mkdir(jobDir, { recursive: true });
+        const stdinPath = path.join(jobDir, 'stdin.txt');
+        const stdoutPath = path.join(jobDir, 'stdout.log');
+        const stderrPath = path.join(jobDir, 'stderr.log');
+        const readyPath = path.join(jobDir, 'ready.json');
+        const receiptPath = path.join(jobDir, 'receipt.json');
+        await writeFile(stdinPath, `${goal || ''}\n`, 'utf8');
+        jobSupervisor = await spawnJobObjectImpl({
+          filePath: command,
+          arguments: windowsCommandLine(commandArgs(args)),
+          cwd: record.workspace,
+          stdinPath, stdoutPath, stderrPath, readyPath, receiptPath,
+          jobName: createJobName(runId),
+          tempRoot: bridgeDir,
+          env: runEnvironment,
+          onStdout: consumeStdout,
+          onStderr: consumeStderr,
+        });
+        child = jobSupervisor.helper;
+        execution.child = child;
+        execution.jobSupervisor = jobSupervisor;
+        record.observability.transport = 'windows-job-object-file-tail';
+        record.process = { ...record.process, supervisorPid: jobSupervisor.helperPid, jobName: jobSupervisor.jobName, jobObject: true,
+          stdoutPath, stderrPath, readyPath, receiptPath };
+        // The helper owns the target. Its result, rather than the helper's
+        // close event, is the release authority and includes active-process
+        // query evidence.
+        jobSupervisor.result.then(async receipt => {
+          execution.jobReceipt = receipt;
+          execution.treeSignalled = receipt.release === 'confirmed' && receipt.releaseProof?.confirmed !== false;
+          execution.closed = true;
+          execution.exitCode = receipt.exitCode;
+          execution.exitSignal = null;
+          record.process.pid = receipt.pid || record.process.pid;
+          resolveClosed();
+          await appendChain.then(finishClosed);
+        }).catch(async error => {
+          execution.jobError = error;
+          execution.closed = true;
+          execution.exitCode = null;
+          record.error ||= { code: error.code || 'CODEX_JOB_RELEASE_UNCONFIRMED', message: sanitizeCodexDiagnostic(error.message || execution.stderr) };
+          record.resourceRelease = { ...(record.resourceRelease || {}), confirmed: false, status: 'unconfirmed',
+            code: error.code || 'CODEX_JOB_RELEASE_UNCONFIRMED', reason: sanitizeCodexDiagnostic(error.message),
+            nextAction: 'Inspect the Job receipt and quarantine the workspace before recovery.' };
+          record.cancelRequested = true;
+          record.status = 'cancel_requested';
+          resolveClosed();
+          children.delete(runId);
+          const events = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
+          const classified = classifyCodexFailure(record, events);
+          record.primaryFailure = {
+            code: classified.code,
+            category: classified.category || null,
+            retryable: classified.retryable ?? null,
+            title: classified.title,
+            detail: classified.detail,
+            phase: classified.phase,
+          };
+          await saveRun(record);
+        }).finally(() => { void rm(stdinPath, { force: true }).catch(() => {}); });
+        const started = await jobSupervisor.started;
+        record.process.pid = started.pid;
+        record.process.startedAt = started.startedAt || new Date().toISOString();
+        await saveRun(record);
+      } else {
+        child = spawnImpl(command, commandArgs(args), { cwd: record.workspace, stdio: ['pipe', 'pipe', 'pipe'],
+          detached: platform !== 'win32', windowsHide: true, env: runEnvironment });
+        execution.child = child;
+        record.process.pid = child.pid || null;
+        attachChild(child);
+        await saveRun(record);
+        child.stdin?.on('error', error => { record.error ||= { code: error.code || 'CODEX_STDIN_FAILED', message: sanitizeCodexDiagnostic(error.message) }; });
+        child.stdin?.end(`${goal || ''}\n`);
+      }
+    } catch (error) {
+      // A native spawn failure proves no managed target only when the legacy
+      // child was never created. Job startup failures remain unconfirmed and
+      // therefore keep the workspace fail-closed.
+      if (!child && !jobSupervisor) {
+        children.delete(runId);
+        record.status = 'failed';
+        record.error = { code: error.code || 'CODEX_SPAWN_FAILED', message: sanitizeCodexDiagnostic(error.message) };
+        record.resourceRelease = { confirmed: true, status: 'confirmed', reason: 'No Agent process was created.' };
+        record.completedAt = new Date().toISOString();
+      } else {
+        record.error ||= { code: error.code || 'CODEX_JOB_START_FAILED', message: sanitizeCodexDiagnostic(error.message) };
+        record.resourceRelease = { ...(record.resourceRelease || {}), confirmed: false, status: 'unconfirmed',
+          code: error.code || 'CODEX_JOB_START_FAILED', reason: sanitizeCodexDiagnostic(error.message),
+          nextAction: 'Inspect supervisor state; no recovery attempt is permitted until release is confirmed.' };
+      }
+      await saveRun(record);
+      throw error;
+    }
+    return { ...record, pid: record.process.pid || child?.pid || null };
   };
   const readEvents = async (runId) => parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
   return { command, sandboxMode, windowsSandbox, describe, preflight, start, readRun, readEvents, cancel, eventText };

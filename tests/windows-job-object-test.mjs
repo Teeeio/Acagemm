@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawnJobObjectProcess, terminateJobObject } from '../client-runtime/windows-job-object.mjs';
@@ -81,6 +81,56 @@ test('job object termination releases descendants and helper failures fail close
         })();
       }
     }
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('job object supervisor bridges stdin and tails JSONL before the receipt', { skip: process.platform !== 'win32' }, async () => {
+  const root = await mkdtemp(join(process.cwd(), '.tmp-job-stream-test-'));
+  const stdoutPath = join(root, 'stdout.log');
+  const stderrPath = join(root, 'stderr.log');
+  const stdinPath = join(root, 'stdin.txt');
+  const readyPath = join(root, 'ready.json');
+  const receiptPath = join(root, 'receipt.json');
+  const script = [
+    "let body = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', chunk => body += chunk);",
+    "process.stdin.on('end', () => {",
+    "  process.stdout.write(JSON.stringify({type:'thread.started', text:body}) + '\\n');",
+    "  setTimeout(() => { process.stdout.write(JSON.stringify({type:'turn.completed', usage:{input_tokens:7, output_tokens:2}}) + '\\n'); }, 80);",
+    "});",
+  ].join('');
+  await writeFile(stdinPath, 'operator prompt\n', 'utf8');
+  const lines = [];
+  const errors = [];
+  const jobName = `Local\\Acagemm-Stream-${process.pid}-${Date.now()}`;
+  try {
+    const supervisor = await spawnJobObjectProcess({
+      filePath: process.execPath,
+      arguments: `--input-type=module -e ${JSON.stringify(script)}`,
+      cwd: root, stdoutPath, stderrPath, stdinPath, readyPath, receiptPath,
+      tempRoot: root, jobName,
+      onStdout: chunk => lines.push(chunk),
+      onStderr: chunk => errors.push(chunk),
+      pollMs: 15,
+    });
+    const started = await supervisor.started;
+    assert.equal(started.jobName, jobName);
+    assert.ok(started.pid > 0);
+    const receipt = await supervisor.result;
+    assert.equal(receipt.release, 'confirmed');
+    assert.equal(receipt.releaseProof.confirmed, true);
+    assert.equal(receipt.releaseProof.activeProcessCount, 0);
+    assert.equal(receipt.releaseProof.ownerLost, false);
+    const output = lines.join('');
+    assert.match(output, /thread\.started/);
+    assert.match(output, /operator prompt/);
+    assert.match(output, /turn\.completed/);
+    assert.equal(errors.join(''), '');
+    assert.equal(JSON.parse((await readFile(readyPath, 'utf8')).replace(/^\uFEFF/, '')).jobName, jobName);
+    assert.ok((await readFile(receiptPath, 'utf8')).includes('releaseProof'));
+  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });

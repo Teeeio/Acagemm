@@ -88,10 +88,57 @@ try {
   assert.equal(record.status, 'completed');
   assert.equal(record.threadId, 'thread-test');
   assert.equal((await client.readEvents('codex_TEST')).length, 3);
+  assert.equal(record.observability.transport, 'child-process-stdio');
+  assert.ok(record.observability.stdoutBytes > 0);
+  assert.ok(record.observability.stdoutChunks >= 1);
+  assert.equal(record.observability.stderrBytes, 0);
+  assert.equal(record.observability.parsedEventCount, 3);
+  assert.equal(record.observability.parseErrorCount, 0);
+  assert.equal(record.observability.terminalEventType, 'turn.completed');
   const expectedWindowsSandboxArgs = process.platform === 'win32'
     ? ['-c', 'windows.sandbox="unelevated"']
     : [];
   assert.deepEqual(spawnCalls[0].args, ['exec', '--ignore-user-config', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, '--cd', root, '-']);
+
+  // The Windows Job path must preserve the same stdin/JSONL contract while
+  // using the helper receipt—not a PID or closed stdout pipe—as release proof.
+  let jobInvocation;
+  const jobBridgeDir = path.join(os.tmpdir(), `operator-job-bridge-${process.pid}-${Date.now()}`);
+  const jobClient = createCodexClient({
+    platform: 'win32',
+    command: 'C:\\tools\\codex.exe',
+    bridgeDir: jobBridgeDir,
+    execFileImpl,
+    useJobObject: true,
+    spawnJobObjectProcessImpl: async (jobOptions) => {
+      jobInvocation = jobOptions;
+      const helper = new EventEmitter();
+      helper.pid = 4321;
+      const jobName = jobOptions.jobName;
+      const started = Promise.resolve({ jobName, pid: 8765, helperPid: helper.pid, startedAt: new Date().toISOString() });
+      const result = (async () => {
+        assert.equal(await readFile(jobOptions.stdinPath, 'utf8'), 'job-contained prompt\n');
+        jobOptions.onStdout(JSON.stringify({ type: 'thread.started', thread_id: 'thread-job' }) + '\n');
+        jobOptions.onStdout(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 7, output_tokens: 2 } }) + '\n');
+        await new Promise(resolve => setTimeout(resolve, 10));
+        return { jobName, pid: 8765, exitCode: 0, release: 'confirmed', releaseProof: { confirmed: true, activeProcessCount: 0 } };
+      })();
+      return { helper, helperPid: helper.pid, jobName, started, result, terminate: async () => ({ jobName, terminated: true }) };
+    },
+  });
+  const jobRun = await jobClient.start({ runId: 'codex_JOB', missionId: 'MIS_JOB', goal: 'job-contained prompt', workspace: root });
+  assert.equal(jobRun.pid, 8765);
+  assert.equal(jobRun.process.jobObject, true);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  const jobRecord = await jobClient.readRun('codex_JOB');
+  assert.equal(jobRecord.status, 'completed');
+  assert.equal(jobRecord.threadId, 'thread-job');
+  assert.equal(jobRecord.resourceRelease.confirmed, true);
+  assert.equal(jobRecord.resourceRelease.releaseProof.activeProcessCount, 0);
+  assert.equal(jobRecord.observability.transport, 'windows-job-object-file-tail');
+  assert.ok(jobInvocation.arguments.includes('--json'));
+  await rm(jobBridgeDir, { recursive: true, force: true });
+
   await client.start({ runId: 'codex_RESUME', missionId: 'MIS_TEST', goal: 'continue operator', workspace: root, resumeThreadId: 'thread-test' });
   await new Promise((resolve) => setTimeout(resolve, 150));
   assert.deepEqual(spawnCalls[1].args, ['exec', '--ignore-user-config', 'resume', '--json', '--sandbox', 'workspace-write', ...expectedWindowsSandboxArgs, 'thread-test', '-']);

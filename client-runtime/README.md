@@ -17,6 +17,15 @@ required for a controlled diagnostic run. Runs also ignore the local Codex
 `config.toml` by default to prevent an unexpectedly large user-rule context from
 starving the Agent turn; set `OPERATOR_CODEX_IGNORE_USER_CONFIG=0` to opt back in.
 
+On Windows, native Codex executables are launched through the Job Object
+supervisor by default. Each run receives an independent Job, a file-backed
+stdin bridge, a `started` handshake after containment and resume, and live
+stdout/stderr tailing into the normal JSONL event path. The terminal receipt
+contains `releaseProof.activeProcessCount`; a closed helper or closed output
+pipe alone is never treated as process-tree release. Set
+`OPERATOR_CODEX_JOB_OBJECT=0` only for a controlled compatibility diagnostic;
+the legacy path remains fail-closed when its process tree cannot be verified.
+
 Agent 运行的失败原因与资源生命周期是两条独立契约：`agent.primaryFailure`
 保存 Provider/传输等上游原因，`resourceRelease` 保存进程树是否已确认退出。
 取消在有限重试后会进入 `needs_human` 与 `blocked/quarantined` 投影；释放未确认
