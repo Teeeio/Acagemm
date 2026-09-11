@@ -140,7 +140,7 @@ All external outcomes must be normalized before changing Mission state.
 | `runtime-events.mjs` | canonical Mission and audit events | state, event fields | in-memory event |
 | `agent-runtime.mjs` | Agent use-case lifecycle | Mission context, runtime events | Agent state/results |
 | `agent-runtime/` | definitions, registry, dispatch, capabilities | runtime ID, operation | definition or provider call |
-| `candidate-generation/` | Candidate prompt, Workspace Diff admission, language/repeat guards, and candidate identity | frozen Mission round context, Agent result, Workspace manifest | candidate prompt and verified candidate admission |
+| `candidate-generation/` | Candidate prompt, Workspace Diff admission, empty-candidate root-cause classification, degraded generation-path markers, language/repeat guards, and candidate identity | frozen Mission round context, Agent result, Workspace manifest | candidate prompt and verified candidate admission |
 | `cli-command.mjs` | Resolve direct Agent executables behind Windows npm shims | provider and configured command | executable plus fixed argument prefix |
 | `operator-test-queue.mjs` | serialized test lifecycle | test payload | persisted task snapshot |
 | `local-c500-service-client.mjs` | C550 production execution and isolated CPU E2E command execution | queue task payload | correctness/benchmark artifacts |
@@ -158,9 +158,27 @@ All external outcomes must be normalized before changing Mission state.
 - Runtime API, SSE projection, and auto tick state access share the State Repository exclusive queue.
 - No simulation result is publishable.
 - Test evidence and workspace candidate identities match.
+- The Workspace Git Diff is the only candidate admission authority. A Provider that
+  did not terminate normally yields no candidates at all, and a candidate the Agent
+  never declared is admitted only as explicitly degraded (`workspace_observed`).
+- `candidates: []` always carries exactly one root-cause classification
+  (`upstream_failure_no_candidate`, `no_candidate_generated`, `parse_mapping_loss`,
+  `tool_failed_patch_pending`, `workspace_capture_gap`, `patch_admission_failed`,
+  `task_contract_unmet`). Degraded markers describe the generation path only; they never
+  relax the language contract, the repeat guard, the fixed test matrix, or the Gate.
+- Structured edit-tool identity is read only from a structured tool field, never from command
+  text. Codex reports the edit tool as `item.type: 'file_change'`, while `claude-client.mjs`
+  normalizes every tool into `item.type: 'command_execution'` and keeps the real identity in
+  `item.name` (`Write` / `Edit` / `Bash`). A declared tool name therefore outranks the event
+  type. An edit tool that never appeared is `absent` and is never a degradation; only an edit
+  tool that appeared and failed is, and the first failure is not overturned by a later
+  successful shell write.
 - Every Candidate test uses the persisted Baseline `oracleRunPy`; Candidate-owned
   `reference()` code is never the correctness authority.
 - External failures use `workflow-error.mjs` normalization.
+- Durable state is replaced by write-to-temp then rename. A Windows handle overlap
+  (`EPERM`/`EBUSY`/`EACCES`) is retried a bounded number of times and then rethrown — never
+  swallowed, so a bounded operation cannot be left half-applied by a transient lock.
 - Runtime events use `runtime-events.mjs`; do not define local event appenders.
 - Provider capability checks use the Agent Runtime registry.
 - Windows Codex MVP runs with the explicit `unelevated` fallback when the
@@ -190,6 +208,12 @@ All external outcomes must be normalized before changing Mission state.
 - The real-Agent test intentionally uses an unreachable performance target so the continuation branch
   is deterministic. After observing the next round it calls the public stop action solely for cleanup.
   It is intentionally excluded from routine verification because it consumes a live Agent session.
+- `E2E_RUN_ROOT` overrides the harness run root. On Windows the default `os.tmpdir()` may be an
+  8.3 short name containing `~`, and the Claude Code path-permission guard refuses writes under
+  such a path; the run would then silently use the result-patch fallback while still reporting
+  green. The emitted `summary` reports `candidateGenerationPath`, `editToolStatus`,
+  `degradedGeneration` and `degradationReason` so the report is self-describing. A
+  result-patch fallback is a legitimate recovery path and is deliberately not asserted against.
 
 ## Command recovery
 

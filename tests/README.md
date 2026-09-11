@@ -119,6 +119,15 @@ that an unmet Accept Gate closes the current round and starts the next Agent
 round without harness intervention. It is excluded from routine verification
 because it consumes a live Agent session.
 
+On Windows the harness run root defaults to `os.tmpdir()`, which can be an 8.3 short name
+containing `~` (non-ASCII user names). The Claude Code path-permission guard refuses
+writes under such a path, so the Agent silently falls back to the result-patch path while
+the acceptance still reports green. Set `E2E_RUN_ROOT` to a `~`-free directory in that case.
+The printed `summary` carries `candidateGenerationPath`, `editToolStatus`,
+`degradedGeneration` and `degradationReason`, so the report states which generation path
+actually ran. Production workspaces live under `<project>/.operator-studio/workspaces/`
+and are not affected.
+
 ## Generic execution foundations
 
 execution-package-contract-test and execution-package-store-test cover portable

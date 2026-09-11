@@ -41,6 +41,198 @@ P0（失败分类、恢复归属、有限终态）已经在 9b80437 完成并推
 
 仍未完成、需在下一轮处理的部分见 §9.1（P1 验收边界）与 §12（短期任务）。本轮**没有**放宽候选 Gate、固定测试矩阵、资源释放屏障或证据 provenance。
 
+## 1.2 第二轮收口结果（2026-09-11 完成）
+
+本轮范围（用户确认）：P1 档剩余缺口 + 专家在 `lastest_demand_for_job.md` §六点名"必须通过"的三项交错测试。
+明确**未**并入 §二.2（冻结 `roundStartSnapshot`）与 §二.3（attempt 退避预算）。
+
+两项总门禁在**修复后的同一棵树**上**连跑两轮均真实通过**（日志：`%TEMP%\gate-release.log` / `%TEMP%\gate-robust.log`，
+复跑 `%TEMP%\final-release.log` / `%TEMP%\final-robust.log`；非历史记录、非中断回填）。
+注意：本轮的第一次门禁尝试**真的失败了**，根因见下面的「门禁首次未通过」小节——不是沿用历史结论，也不是中断后回填：
+
+| 命令 | 结果 | exit code |
+|---|---|---|
+| `npm run verify:local-c500-release` | `[release-check] PASS: 128 checks completed` | 0 |
+| `npm run verify:non-hardware-robustness` | `[non-hardware-check] PASS: 30 checks completed without physical hardware` | 0 |
+
+较上一轮各 +2：新增 `test:agent-runtime-candidate-admission` 与 `test:round-settlement-interleaving`
+（两条都已写入 `package.json`，并同时登记进两道总门禁的 `checks` 数组；门禁没有自动发现机制）。
+
+### 门禁首次未通过：两个 Windows 原子写竞态（已修）
+
+本轮第一次跑 `verify:non-hardware-robustness` 时**真实失败**（exit 1，`[non-hardware-check] FAILED: verify:local-c500-release`），
+之后单独复跑 release 门禁又在另一处失败。两次都与候选/准入无关，根因是同一类 Windows 缺陷，且**都不是本轮引入的**
+（`operator-test-queue.mjs` 与内嵌 supervisor 源码在本轮其它改动中均未被触碰）：
+
+| # | 失败点 | 根因 | 处置 |
+|---|---|---|---|
+| 1 | `test:local-c500-recovery` 的 `actual parent process restart cannot spawn a claimed task twice` | supervisor 写 `execution-claim.json` 时 `rename` 撞上客户端仍持有的旧句柄，Windows 返回 `EPERM`；该异常被宽 catch 统一报成误导性的 `Job Object launch failed`，任务被判 `resourceRelease.confirmed: false` 并隔离 | `runner-supervisor` 的 `write` 改为与 `local-c500-service-client.atomicJson` 同形的有界重试（`EPERM`/`EBUSY`/`EACCES`，12 次退避）；catch 的 reason 改为携带真实错误，不再误报为 Job Object 问题 |
+| 2 | `test:queue-liveness`（`task deadline cancels independently of a stalled get` 等，约 1/8 复现） | `operator-test-queue.persist` 的 `rename` 同样撞上 `EPERM`，reject 掉一次 `locked` 操作 → 该次取消结算被吞掉 → 任务停在 `quarantined`，总截止时间到期后再也不落到 `failed` | `persist` 改为同样的有界重试 |
+
+诊断依据（不是推测）：失败运行时测试把工件保留在 `%TEMP%\operator-local-recovery-*`，其中 `runner.stderr.log` 与
+`execution-exit.json` 直接记录了 `EPERM: operation not permitted, rename ... execution-claim.json.<pid>.tmp`；
+队列侧则用带 trace 的**树外临时副本**复现，抓到 `flight-reject ... EPERM ... rename ... .jsonl.<uuid>.tmp`，
+并确认失败记录停在 `status: quarantined` / `failures: { poll: 1 }`。
+
+修复后：`test:queue-liveness` 连跑 40 次、`test:local-c500-recovery` 连跑 6 次全部 exit 0；两道总门禁在修复后的
+同一棵树上真实通过（128 / 30，exit 0）。为了这次通过**没有**放宽任何 Gate、测试矩阵、观察窗口或重试预算。
+
+仍缺同类重试的原子写点（同一模式，本轮未改，属第三轮候选）：`command-journal.mjs`、`execution-package-store.mjs`、
+`state-snapshot-storage.mjs`、`state-workspace.mjs`、`claude-client.mjs`、`codex-client.mjs`。它们不在本轮失败点上，
+但 Windows 下同样可能瞬时 `EPERM`。
+
+### 修了一个真实的 fail-open（是缺陷，不是加固）
+
+`agent-runtime.mjs` 准入块原先写 `let verifiedCandidates = agentResult.candidates;`。当失败属于不可恢复类
+（`CODEX_TLS_TRUST_FAILED` / `CODEX_AUTH_FAILED` 等）时 `candidateInspectionEligible === false`，
+跳过工作区 Git Diff 校验；但 `terminalReached` 仍为真，准入判断照样成立——声明候选带着
+`patchDigest === undefined` 进入 `state.candidateEvaluations`，且 `candidateValidation` 为 `null`。
+这直接违反 `admission.mjs` 与 `candidate-generation/CONSTRAINTS.md` 声明的"工作区 Git Diff 是候选准入权威"。
+现在改为 `verifiedCandidates = []`，并在 `terminalReached && !candidateInspectionEligible && 有声明候选` 时
+给出 `*_CANDIDATE_INSPECTION_SKIPPED`（`passed: false`）→ 走既有 `candidate.diff_rejected` 路径，
+且**不发** `candidate.not_proposed`。`tests/agent-runtime-candidate-admission-test.mjs` 用例 1 钉死该行为。
+
+### 空候选不再是无因标签
+
+新增 `client-runtime/candidate-generation/classification.mjs`（纯函数、零 import、零副作用），
+把专家的逐层重放固化为固定优先级的唯一根因码：
+
+1 `upstream_failure_no_candidate` → 3 `parse_mapping_loss` → 4 `tool_failed_patch_pending`
+→ 6 `patch_admission_failed` → 7 `task_contract_unmet` → 2 `no_candidate_generated`；
+第 5 类 `workspace_capture_gap` 由 `inspectCandidateDiff` 的工作区观测产出，不参与该序列。
+
+分类落在 `state.agent.candidateValidation.classification` 与 `candidate.not_proposed` 事件载荷上。
+`parseAgentResult` 同时开始记录 `rawCandidatesType` / `rawCandidateCount` / `droppedCandidateCount`
+与解析层分类，映射丢失因此可追溯。
+
+### 降级的是生成路径，不是准入标准
+
+`candidateGenerationPath` / `degraded` / `degradationReason` / `editToolStatus` / `patchValidation` /
+`workspaceAdmission` 六个字段透传到候选与事件载荷，**不参与任何 `passed` 判定**。两条曾经静默的路径现在会说话：
+
+- 结果内 patch 回退：事件 `candidate.patch_fallback_generation`（未降级）或
+  `candidate.degraded_generation`（结构化编辑工具失败）。
+- Agent 没返回候选、工作区却有真实 Diff：此前伪造的 `candidate-01` 现在标记
+  `workspace_observed` + `degraded: true` + `candidates_absent_but_diff_observed`。
+
+"编辑工具失败"与"编辑工具缺失"严格区分：工具身份只看事件的类型/名称字段，从不读命令正文；
+编辑工具从未出现（`absent`）永不判降级。`tests/candidate-generation-test.mjs` 用"降级候选仍被语言契约拒绝"
+钉死"降级不降标"。
+
+### runHistory 去重与归属
+
+`resetMissionRunState` 原先无条件前插 `[entry, ...runHistory]`，缺少 `agent-runtime.mjs` 那样的 runId 去重；
+同一 `state.agent.runId` 的迟到结算投影会产生两条相同的 `runHistory[0]`，而 `finalizeCandidateAdmission`
+正是读 `runHistory` 的 digest 做重复拒绝——重复条目会污染该输入。现改为按 runId 就地替换（保持时序位置，
+`slice(0, 20)` 不变），并新增平面归属字段 `roundId` / `queueRequestId` / `candidateGenerationPath` /
+`degraded` / `degradationReason`。
+
+### 专家三项交错测试
+
+| # | 场景 | 落点 |
+|---|---|---|
+| 1 | 首次失败 / 恢复成功 / 结算投影迟到 | 新增 `tests/round-settlement-interleaving-test.mjs`：A 去重与最新投影、B 归属是恢复 run 而非首次失败 run、C 同一 idempotencyKey 重放得到 `skipped_idempotent` 且队列中该 requestId 只出现一次；另含 Round 级"已取消 Round 不得重启"（`confirmed:false` 与 `quarantined` 两条 fail-closed 用例，并用正常终结轮次作正对照，证明断言确实走在 `settledForResume` 上） |
+| 2 | 本地取消 × 迟到 `turn.completed` | 扩展 `tests/codex-cancellation-test.mjs`：先结算为 `cancelled`，再注入迟到 `turn.completed`，断言状态、`resourceRelease` 与 `completedAt` 均不被改写 |
+| 3 | Queue 已接受但调用方丢响应 | 已由 `tests/local-c500-recovery-test.mjs` 与 `tests/generic-iteration-fault-injection-test.mjs` 覆盖且已在门禁内；本轮在既有用例内补了"并发恢复查询不得产生并发重复 runner"的断言 |
+
+第 1 项的纯 CLI 版本 `scripts/e2e-cpu-agent-iteration.mjs` 仍是 opt-in 的真实 Agent 验收脚本（需要真实 CLI 连接），
+本轮**未改写它**，而是补了确定性替代品。
+
+### 本轮明确延后（原计划第三轮；实际第三轮只修了编辑工具身份判定，见 §1.3，本节各项**仍然延后**）
+
+§二.2 冻结 `roundStartSnapshot`（需动 Workspace 快照生命周期与失败工件保留）；§二.3 attempt 退避预算
+（3 次上限已存在，缺的是退避与预算覆盖门，会改 `iteration-loop` 调度节奏）；`cancel.origin` 枚举；
+释放证据五项补齐（`rootProcessExited` / `containmentCoverageVerified` / `stdoutCaptureComplete` /
+`stderrCaptureComplete` 等，需改内嵌 C# helper）；五层观测第 4–5 层与 per-request token（会动已持久化的
+`operator-studio.token-usage/v2`，需 v3 迁移）；三层启动预检、8 项 SLO、N=20 回归门、P2 模型/上下文兼容；
+`Quote()` argv[0] 转义（低危，已记录）。
+
+本轮**没有**放宽候选 Gate、固定测试矩阵、资源释放屏障或证据 provenance。
+
+## 1.3 第三轮：编辑工具身份判定修复 + E2E harness 静默路径（2026-09-11 完成）
+
+### 根因：`editToolSignal` 在两个 Provider 下都恒定返回 `absent`
+
+专家 §三.4 要求区分 `file_change` 的**失败**与**缺失**。第二轮把它实现成了只认 `apply_patch` 的正则匹配。
+该形状是**推断出来的、不是采集来的**：在 78 个真实 Codex run 文件里，`apply_patch` 作为 `item.type` 出现 **0 次**；
+真实的结构化编辑事件是 `item.type: 'file_change'`（64 次）。而 Claude Code 的 `claude-client.mjs` 把**每一个**
+`tool_use` 都规范化成 `item.type: 'command_execution'`，真正的工具身份只留在 `item.name`（`Write` / `Edit` / `Bash`）。
+
+后果不是「漏了一个 Provider」，而是**两个 Provider 在生产里都恒定落回 `absent`**：`editToolStatus` 恒为 `absent`
+→ `structuredEditFailed` 恒为 `false` → 专家分类表**行 4 `tool_failed_patch_pending` 在生产中不可达**，
+同时行 5 `workspace_capture_gap` 被过度上报。测试夹具是按同一个错误假设写的（也用 `apply_patch`），
+于是实现与测试互相验证了彼此的错误——这正是 128 + 30 项门禁全绿却掩盖该缺陷的原因。
+
+真实降级样本（原先被读成「缺失」）：`codex_MTUULWMN_40A19CE7.jsonl`（`in_progress → failed → in_progress → failed`）
+与 `codex_MTUYPJ8S_CB10DC61.jsonl`（`in_progress → failed`）。
+
+### 修复
+
+`client-runtime/candidate-generation/classification.mjs` 的 `editToolSignal` 改为**分两个字段通道**判定，
+且**工具名优先于事件类型**：先看声明的工具名（`Write` / `Edit` / `Bash` / …），再看事件类型
+（`file_change` / `command_execution`）。命令正文永远不参与匹配，所以 `git apply foo.patch` 这类普通 shell 文本
+不会把一次成功写入误标成降级。三条语义不变：出现且失败 = `failed`、出现且正常 = `succeeded`、
+从未出现 = `absent`（缺失永不判降级）；首个失败的编辑工具即定调，后续 shell 写盘成功不给它翻案。
+
+回归断言逐字使用**真实采集到的事件形状**（夹具注释里带采集文件路径），不再是推断的 schema：
+`tests/candidate-generation-test.mjs` 新增 8 条，覆盖 Codex `file_change` 与 Claude `command_execution + name`
+两种布局，以及「先失败、后 shell 成功」的交错。`resetMissionRunState` 的归档条目补 `editToolStatus`，
+使验收报告能看出生成路径为什么降级。
+
+### E2E harness：含 `~` 的路径会把「兜底路径」报成绿的
+
+`scripts/e2e-cpu-agent-iteration.mjs` 的 run root 取自 `os.tmpdir()`。在非 ASCII 用户名下该值可能是 8.3 短名
+（本机为 `C:\Users\棉被暖~3\AppData\Local\Temp`），而 Claude Code 的路径权限守卫拒绝写含 `~` 的路径——
+`Write` / `Edit` 被拒后 Agent 只能走结果内 patch 兜底，**验收却照样报绿**。
+
+已用 5 组探针把触发条件收敛到单因子：`C:\claude-path-probe\plain\repository` ✅、
+`C:\claude-path-probe\.operator-studio\workspaces\MIS\repository` ✅（点目录不是原因）、
+`C:\path-probe~1\repository` ❌、`C:\Users\棉被暖人心\AppData\Local\Temp\...` ✅ → **`~` 是唯一触发因子**。
+生产工作区在 `<project>/.operator-studio/workspaces/...` 下，**不受影响**。
+
+harness 现在支持 `E2E_RUN_ROOT` 覆盖，并在 `summary` 里输出 `candidateGenerationPath` / `editToolStatus` /
+`degradedGeneration` / `degradationReason`，让验收报告自述实际走的是哪条生成路径。
+**没有**加「必须 `structured_edit`」的硬断言——patch 兜底是合法的恢复路径，硬断言会造出新的假失败。
+### 本轮验证（真实执行，非历史回填）
+
+单测全部 exit 0（日志 `%TEMP%\round3-units.log`）：`test:candidate-generation`、
+`test:agent-runtime-candidate-admission`、`test:round-settlement-interleaving`、`test:codex-cancellation`、
+`test:local-c500-recovery`、`test:agent-runtime-timeout-recovery`、`test:mission-project-state`、`test:loop`、
+`test:module-boundary`、`test:state-domain-boundary`。
+
+| 命令 | 结果 | exit code |
+|---|---|---|
+| `npm run verify:local-c500-release` | `[release-check] PASS: 128 checks completed` | 0 |
+| `npm run verify:non-hardware-robustness` | `[non-hardware-check] PASS: 30 checks completed without physical hardware` | 0 |
+
+日志 `%TEMP%\round3-gates.log`，在**修复后的同一棵树**上重跑。两道的检查数与上一轮相同（128 / 30），
+这是预期的：本轮改的是 `editToolSignal` 的内部判定与一处归档字段，没有新增门禁项；断言强度的提升落在
+`tests/candidate-generation-test.mjs` 的**既有**条目内部（新增 8 条 `editToolSignal` 断言），而不是新增计数。
+为了这次通过**没有**放宽任何 Gate、测试矩阵、观察窗口或重试预算。
+
+真实 Claude Agent E2E（`E2E_RUN_ROOT=C:\agent-e2e-tmp E2E_KEEP_ARTIFACTS=1 npm run e2e:cpu-agent-iteration`，
+exit 0，日志 `%TEMP%\round3-e2e-claude.log`）的关键字段：
+
+    candidateGenerationPath: "structured_edit"
+    editToolStatus: "succeeded"
+    degradedGeneration: false
+    degradationReason: null
+    workflowWritesAfterRunStart: 0
+    firstRoundOutcome: "reference"    # 第 1 轮未达标并自动开启第 2 轮
+    liveHardware: false
+
+修复前同样的验收：run root 含 `~` 时得到 `candidateGenerationPath: "patch_fallback"`；
+而 `editToolStatus` 因实现只认 `apply_patch` 而**恒为 `absent`**——两个标记现在都如实反映实际路径。
+
+仍**没有** C550 liveHardware 证据：`source=cpu-e2e`、`liveHardware=false`，不能用于发布证明。
+
+本机 Claude 会话累计消耗：3 轮探针 + 2 次真实 E2E ≈ $0.88。
+
+文档改动（§1.3、§10.2、两个 README）发生在门禁之后，因此补跑了会读取这些 README 的两个测试：
+`test:module-boundary`（`module-boundary-test.mjs:175+`）与 `test:state-domain-boundary`（`state-domain-boundary-test.mjs:89`）——
+两者只断言文档存在、非空并被 `MODULE_OWNERSHIP.md` 链接，不解析正文；连同 `test:candidate-generation` 均 exit 0。
+`git diff --check` 无空白错误。非 markdown 文件在门禁前后逐字节未变。
+
 ## 2. 项目与产品背景
 
 ### 2.1 产品目标
@@ -212,7 +404,9 @@ helper 内嵌 C# Win32 调用，当前目标是：
 
 这些结果证明主要路径和确定性 fixture 可用，但不能证明真实 provider 网络稳定，也不能替代完整发布门禁。
 
-### 7.2 最近一次总门禁的真实状态（已由本轮取代）
+### 7.2 最近一次总门禁的真实状态（已由 §1.1 / §1.2 / §1.3 取代）
+
+> **最新一次真实门禁状态见 §1.3**：在第三轮修复后的同一棵树上重跑，`verify:local-c500-release` 128 checks / exit 0，`verify:non-hardware-robustness` 30 checks / exit 0（日志 `%TEMP%\round3-gates.log`）。本节以下内容只作历史记录，**不得再引用为当前结论**。
 
 历史情况（保留，不得再引用为本轮结论）：当时启动的是 `npm run verify:non-hardware-robustness`。该轮在用户中断时已经打印并通过大量前置检查，包括 execution package、experience、Queue liveness、local C500 recovery、Windows Job Object 3/3、generic iteration fault injection、candidate generation、module boundary 等；中断点在：
 
@@ -365,6 +559,10 @@ Job tests 使用确定性本地进程和注入 supervisor；它们证明的是�
 - turn.started 后无 turn.completed 归因成模型静默；
 - 浏览器能联网归因成 Codex provider 路径正常；
 - 20 次本地 fixture 成功归因成生产稳定率。
+- 单次真实 Claude E2E 通过归因成 Provider 稳定率或 C550 可发布证据。§1.3 那次验收证明的是
+  「默认 Provider 下工作区真实写入 → 工作区 Diff 准入 → CPU 正确性/基准 → Gate → 自动续轮」这条路径走通，
+  且 `editToolStatus` 如实反映结构化编辑工具确实成功；它**不**证明模型容量、限流、成本或长期稳定性，
+  `source=cpu-e2e` / `liveHardware=false` 也不构成 C550 证据。
 
 ### 10.2 Windows 兼容边界
 
@@ -372,6 +570,11 @@ Job tests 使用确定性本地进程和注入 supervisor；它们证明的是�
 - Job supervisor 能证明它实际收容的进程；如果存在外部 broker、提权服务或 sandbox helper，不应假设它们自动在同一 Job 中。
 - unelevated sandbox 不是完整隔离承诺；sandbox 决定访问边界，Job supervisor 决定生命周期，两者不能互相替代。
 - helper 目前依赖 Windows PowerShell、Win32 API 和本地临时文件；真实部署还应验证路径 ACL、杀毒软件句柄、长路径和非 ASCII 路径。
+- Claude Code 的路径权限守卫**拒绝写含 `~` 的路径**。在非 ASCII 用户名下 `os.tmpdir()` 会返回 8.3 短名
+  （本机 `C:\Users\棉被暖~3\AppData\Local\Temp`），真实 Agent 因此改不动工作区。
+  生产工作区在 `<project>/.operator-studio/workspaces/...` 下、路径不含 `~`，**不受影响**；受影响的是把 run root
+  放在 `%TEMP%` 的测试/验收脚本（`e2e:cpu-agent-iteration` 已提供 `E2E_RUN_ROOT` 覆盖）。
+  这不是隔离问题，也不是 Claude 不能改工作区——单因子探针已确认 `~` 是唯一触发条件。
 
 ### 10.3 尚未覆盖的测试
 

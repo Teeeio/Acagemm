@@ -17,6 +17,10 @@ agent-runtime.mjs 的 provider 生命周期中抽出。模块只定义候选生�
 | inspectCandidateDiff() | Agent 结果、Workspace Diff manifest、稳定检查点摘要、provider 元数据 | 候选准入结果和候选列表 |
 | candidateWorkspaceRequirements() | Mission | required workspace/content files |
 | finalizeCandidateAdmission() | 准入结果、Mission、Workspace 文件/内容、历史摘要、轮次号 | 语言检查、重复 Diff 检查和候选 ordinal 结果 |
+| CANDIDATE_OUTCOME / CANDIDATE_GENERATION_PATH / CANDIDATE_PARSE_CLASSIFICATION | — | 冻结的分类枚举（空候选七类、生成路径三类、解析层六类） |
+| classifyEmptyCandidateOutcome() / classifyParsedCandidateGeneration() | Provider 终结事实、候选声明与丢弃计数、编辑工具状态、patch 结果 | 唯一根因分类（固定优先级，纯函数） |
+| editToolSignal() | Provider 事件流 | `failed` / `succeeded` / `absent`（只读事件类型与名称字段，从不读命令正文） |
+| describeGenerationPath() | 生成路径、编辑工具状态、降级原因 | `candidateGenerationPath` / `degraded` / `degradationReason` / `editToolStatus` 标记 |
 
 ## Responsibilities
 
@@ -25,6 +29,8 @@ agent-runtime.mjs 的 provider 生命周期中抽出。模块只定义候选生�
 - 检查 Agent 声明的文件清单与实际 Diff 是否一致。
 - 检查语言契约、必需文件和候选 Diff 是否已经在历史轮次使用。
 - 生成稳定的 candidateId/version，保留 Agent 原始身份。
+- 对 `candidates: []` 给出唯一根因分类，不留下无因标签。
+- 对 patch 回退等非结构化生成路径显式标记降级，但绝不因此放宽准入标准。
 
 ## Non-Responsibilities
 
@@ -101,11 +107,31 @@ Agent runtime facade 和 Node effectful builtins。
 准入失败使用现有稳定错误码（*_CANDIDATE_DIFF_EMPTY、*_CANDIDATE_FILES_MISMATCH、
 CANDIDATE_LANGUAGE_CONTRACT_FAILED 和 *_CANDIDATE_DIFF_REPEATED），由应用层映射为有限终态。
 Candidate 的 patchDigest 必须来自实际 Workspace manifest；Agent 自报的来源只作信息标记。
+`classification.mjs` 提供的分类常量（`CANDIDATE_OUTCOME`、`CANDIDATE_GENERATION_PATH`、
+`CANDIDATE_PARSE_CLASSIFICATION`）是这些终态的语义载体：`*_CANDIDATE_NOT_PROPOSED` 承载
+空候选七类之一，`*_CANDIDATE_INSPECTION_SKIPPED` 表示 Provider 未正常终结因而声明候选
+全部丢弃，`*_CANDIDATE_UPSTREAM_FAILURE` 表示这不是候选生成失败。降级标记
+（`degraded` / `degradationReason` / `candidateGenerationPath` / `editToolStatus` /
+`patchValidation` / `workspaceAdmission`）只描述生成路径，不参与任何 `passed` 判定。
+
+`editToolStatus` 由 `editToolSignal()` 产出，**必须分两个字段通道**判定工具身份，命令正文永远不参与匹配：
+
+| Provider | 结构化编辑 | shell / 只读工具 | 身份来源 |
+|---|---|---|---|
+| Codex | `item.type: 'file_change'` | `item.type: 'command_execution'` | `item.type` |
+| Claude Code | `item.name: 'Write' / 'Edit'` | `item.name: 'Bash' / 'Read'` | `item.name`（`item.type` 恒为 `command_execution`） |
+
+工具名优先于事件类型，否则 Claude 那条 `item.type: 'command_execution'` 的 `Write` 会被 shell 分支排除。
+`absent`（编辑工具从未出现）永不判降级——Agent 用普通 shell 写盘是合法的生成路径；只有出现且失败才是
+`failed`，且首个失败即定调，后续 shell 写盘成功不给它翻案。回归夹具使用真实采集到的事件形状，
+不是推断的 schema。
 
 ## Verification
 
 ~~~bash
 npm run test:candidate-generation
+npm run test:agent-runtime-candidate-admission
+npm run test:round-settlement-interleaving
 npm run test:agent-runtime
 npm run test:module-boundary
 ~~~
