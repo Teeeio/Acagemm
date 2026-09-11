@@ -41,6 +41,8 @@ const checks = [
   'test:semantic-tui-extreme',
   'test:module-extreme-contract',
   'test:runtime',
+  'test:agent-runtime-candidate-admission',
+  'test:round-settlement-interleaving',
   'test:agent-boundary',
   'test:baseline-materializer',
   'test:baseline-resolver',

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,11 @@ import { fileURLToPath } from 'node:url';
 
 const execFileAsync = promisify(execFile);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const runRoot = await mkdtemp(path.join(os.tmpdir(), 'operator-studio-cpu-agent-e2e-'));
+// Claude Code 的路径权限守卫会拒绝写含 `~` 的工作区（Windows 8.3 短名，例如中文用户名下的 %TEMP%）。这类环境里 mkdtemp(os.tmpdir())会让真实 Agent 永远改不动工作区、只能靠结果内 patch 兜底，而验收照样报绿 —— 那等于静默地测了另一条路径。
+// 用 E2E_RUN_ROOT 把运行根目录指到不含 `~` 的路径；生产工作区在项目目录下，不受影响。
+const runRootBase = process.env.E2E_RUN_ROOT || os.tmpdir();
+await mkdir(runRootBase, { recursive: true });
+const runRoot = await mkdtemp(path.join(runRootBase, 'operator-studio-cpu-agent-e2e-'));
 const cpuRunner = path.join(rootDir, 'tools', 'local-cpu-runner.py');
 const runtimeMode = process.env.E2E_AGENT_RUNTIME || 'claude-code';
 const timeoutMs = Number(process.env.E2E_AGENT_TIMEOUT_MS || 10 * 60 * 1000);
@@ -286,6 +290,11 @@ try {
     correctnessCases: firstCandidateTask.result.benchmark[0].correctness.total,
     benchmarkProfiles: firstCandidateTask.result.benchmark.map((item) => ({ profile: item.profile, value: item.value, unit: item.unit })),
     candidateDigest: firstCandidateTask.payload.candidate.digest, candidateSourceRunId: firstCandidateSource.sourceRunId,
+    // 生成路径必须自述：patch 兜底是合法的恢复路径，但它不等于主编辑路径跑通了。
+    candidateGenerationPath: firstRound.candidateGenerationPath || null,
+    degradedGeneration: firstRound.degraded === true,
+    degradationReason: firstRound.degradationReason || null,
+    editToolStatus: firstRound.editToolStatus || null,
     testedArtifactDiffersFromBaseline: true,
     oracleMatchesPersistedBaseline: true, workflowWritesAfterRunStart: writes.length - writesAtRunStart, liveHardware: false,
   };

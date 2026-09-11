@@ -569,7 +569,18 @@ const read = async (name) => { try { return JSON.parse(await readFile(target(nam
 const write = async (name, value) => {
   const temporary = target(name + '.' + process.pid + '.tmp');
   await writeFile(temporary, JSON.stringify(value) + '\n', 'utf8');
-  await rename(temporary, target(name));
+  // The client and any previous owner of this task can still hold the target
+  // handle open while this supervisor publishes its claim. Windows reports
+  // that short overlap as EPERM/EBUSY; bounded replacement retries preserve
+  // the atomic-write contract without turning a transient handle into a
+  // quarantined execution slot.
+  for (let attempt = 0; ; attempt += 1) {
+    try { await rename(temporary, target(name)); return; }
+    catch (error) {
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || attempt === 11) throw error;
+      await wait(25 * (attempt + 1));
+    }
+  }
 };
 const config = await read('execution-config.json');
 let claim = await read('execution-claim.json');
@@ -777,7 +788,7 @@ if (initialCancel) {
   } catch (error) {
     stderr += error.message;
     closed = true; exitCode = 1;
-    await finish(false, 'Job Object launch failed; resource release is unconfirmed.');
+    await finish(false, 'Runner supervision failed before a confirmed release: ' + (error && error.message ? error.message : String(error)));
   }
 }
 `;

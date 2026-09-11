@@ -132,6 +132,7 @@ test('local durable execution ownership', { timeout: 30_000 }, async (t) => {
 
     await t.test('lost submit response is recovered across queue recreation and executes once', async () => {
       let submitCalls = 0;
+      const input = payload('lost-after-accept');
       const backend = {
         submit: async (input) => {
           submitCalls += 1;
@@ -149,11 +150,20 @@ test('local durable execution ownership', { timeout: 30_000 }, async (t) => {
       await first.dispose();
       const recreated = createOperatorTestQueue({ serviceClient: backend, filePath: filename, ioTimeoutMs: 1_000 });
       queues.push(recreated);
+      // 恢复查询与队列推进并发：同一个 requestId 不得因此产生第二个 runner。
+      const [recoveryQuery] = await Promise.all([
+        recreated.findByRequestId(input.requestId, input.missionId, input),
+        recreated.process(),
+      ]);
+      assert.equal(recoveryQuery.taskId, queued.taskId, 'recovery query must return the same durable test request');
       await recreated.process();
       const complete = await observe(async () => { await recreated.process(); return recreated.readTask(queued.taskId); }, ended);
       assert.equal(complete.status, 'completed');
       assert.equal(submitCalls, 1);
       assert.equal(await launches(complete.remoteTaskId), 1);
+      const settledQuery = await recreated.findByRequestId(input.requestId, input.missionId, input);
+      assert.equal(settledQuery.taskId, queued.taskId);
+      assert.equal(await launches(settledQuery.remoteTaskId), 1, 'a concurrent recovery query must not launch a duplicate runner');
     });
 
     await t.test('unknown orphan is quarantined and cannot relaunch, even with result bytes', async () => {

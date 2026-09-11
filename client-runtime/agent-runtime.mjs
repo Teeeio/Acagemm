@@ -14,6 +14,13 @@ import { prepareAgentBoundary } from './agent-boundary.mjs';
 import { loadSourceMirrorPolicy, normalizeRepositoryIdentity, resolveSourceTransport, verifySourceTransportSnapshot } from './source-mirror-policy.mjs';
 import { buildCandidateGenerationPrompt } from './candidate-generation/prompt.mjs';
 import { candidateWorkspaceRequirements, finalizeCandidateAdmission, inspectCandidateDiff } from './candidate-generation/admission.mjs';
+import {
+  CANDIDATE_GENERATION_PATH,
+  CANDIDATE_OUTCOME,
+  classifyEmptyCandidateOutcome,
+  describeGenerationPath,
+  editToolSignal,
+} from './candidate-generation/classification.mjs';
 import { testSpecAgentInstruction } from './test-spec.mjs';
 import { formatExperienceContext } from './experience-contract.mjs';
 import { fixedOperatorPrompt } from './fixed-operator-profiles.mjs';
@@ -1653,7 +1660,15 @@ export function createAgentRuntime(options = {}) {
           && failure.retryable !== false
           && !NON_RECOVERABLE_MANAGED_FAILURE_CODES.has(failure.code));
         let candidateValidation = null;
-        let verifiedCandidates = agentResult.candidates;
+        // Fail-closed：候选绝不能从原始解析结果直接进入候选池。只有 inspectCandidateDiff
+        // （以工作区 Git Diff 为准入权威）产出的候选才允许进入下面的准入判断。
+        let verifiedCandidates = [];
+        let generationPath = null;
+        let patchFallbackRejected = false;
+        let patchFallbackWithoutDiff = false;
+        // 「编辑工具失败」与「编辑工具缺失」是两件事：Agent 用普通 shell 写盘属于合法
+        // 生成路径，缺失从来不判降级。该信号只作为事实标记透传，不参与任何 passed 判定。
+        const editToolStatus = editToolSignal(events);
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
         const candidateInspectionEligible = terminalCompleted || recoverableGenerationFailure;
         if (candidateInspectionEligible && (agentResult.candidates.length || !workflowAdvanced)) {
@@ -1663,18 +1678,65 @@ export function createAgentRuntime(options = {}) {
               const applied = await workspaceManager.applyWorkspacePatch({ repository: run.workspace, patch: agentResult.patch });
               appendRuntimeEvent(state, 'candidate.patch_applied_from_result', { runId: state.agent.runId, files: applied.files }, { kind: 'candidate', mode });
               manifest = await workspaceManager.captureDiff(run.workspace);
+              // patch 回退不再静默成功：生成路径、编辑工具状态、patch 校验与工作区准入
+              // 结果全部落账。降级标记只描述生成路径，不放宽 correctness / oracle / Gate。
+              generationPath = describeGenerationPath({
+                path: CANDIDATE_GENERATION_PATH.PATCH_FALLBACK,
+                editToolStatus,
+                degraded: editToolStatus === 'failed',
+                degradationReason: editToolStatus === 'failed' ? 'structured_edit_failed' : null,
+              });
+              patchFallbackWithoutDiff = !manifest.changedFiles?.length;
+              appendRuntimeEvent(state, generationPath.degraded ? 'candidate.degraded_generation' : 'candidate.patch_fallback_generation', {
+                runId: state.agent.runId,
+                roundId: state.iterationStats?.roundBudget?.roundId || null,
+                ...generationPath,
+                patchValidation: patchFallbackWithoutDiff ? 'rejected' : 'passed',
+                workspaceAdmission: patchFallbackWithoutDiff ? 'failed' : 'passed',
+                detail: generationPath.degraded
+                  ? '结构化编辑工具失败，改用结果内 patch 回退生成候选 Diff；生成路径降级，准入标准不变。'
+                  : '工作区没有 Diff，改用结果内 patch 回退生成候选 Diff。',
+              }, { kind: 'candidate', mode });
             } catch (error) {
+              patchFallbackRejected = true;
               appendRuntimeEvent(state, 'candidate.patch_result_rejected', { runId: state.agent.runId, errorCode: error.code || 'AGENT_PATCH_REJECTED', detail: error.message }, { kind: 'policy', mode });
             }
           }
           const stableDigest = state.workflowRecovery?.checkpoints?.at(-1)?.stableDigest || null;
+          // patch 存在但不合法，同样算准入失败：结果内 patch 既抛错、也没能产出 Diff。
+          const patchRejected = patchFallbackRejected || patchFallbackWithoutDiff;
           ({ candidateValidation, verifiedCandidates } = inspectCandidateDiff({
             agentResult,
             manifest,
             stableDigest,
             provider: managedMeta,
             runId: state.agent.runId,
+            generationPath: {
+              path: generationPath?.candidateGenerationPath || CANDIDATE_GENERATION_PATH.STRUCTURED_EDIT,
+              editToolStatus,
+              degraded: generationPath?.degraded === true,
+              degradationReason: generationPath?.degradationReason || null,
+              patchRejected,
+            },
           }));
+        }
+        // Fail-closed 守卫：Provider 未正常终结时（不可恢复失败，例如 TLS 信任链失败或
+        // 认证失败），声明的候选从未经过工作区 Git Diff 校验，一个都不许进候选池。
+        if (terminalReached && !candidateInspectionEligible && agentResult.candidates.length && !workflowAdvanced) {
+          verifiedCandidates = [];
+          candidateValidation = {
+            passed: false,
+            code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_INSPECTION_SKIPPED`,
+            classification: CANDIDATE_OUTCOME.CANDIDATE_INSPECTION_SKIPPED,
+            detail: `${managedMeta.name} 未正常终结（${observedFailure?.code || 'unknown'}），声明的 ${agentResult.candidates.length} 个候选未经工作区 Git Diff 准入校验，已全部丢弃。`,
+            declaredCandidateCount: agentResult.candidates.length,
+            degraded: true,
+            degradationReason: 'admission_inspection_not_reached',
+            editToolStatus,
+            candidateGenerationPath: null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
         }
         if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
           const { requiredWorkspaceFiles, contentFiles } = candidateWorkspaceRequirements(activeMission);
@@ -1747,15 +1809,64 @@ export function createAgentRuntime(options = {}) {
           nextAgent.status = 'completed';
           nextAgent.phase = failed ? `${managedMeta.name} 执行失败，等待同轮重试` : `${managedMeta.name} 分析完成，未生成候选`;
           nextAgent.currentAction = null;
+          // `candidates: []` 只是结果表现，不是根因。这里按固定优先级重放原始结果与
+          // 工作区观测，给出唯一根因码，让该事件从「无因标签」变成可判定证据。
+          const generationEvidence = agentResult.candidateGeneration || {};
+          const emptyClassification = classifyEmptyCandidateOutcome({
+            providerFinishedNormally: true,
+            droppedCandidateCount: generationEvidence.droppedCandidateCount || 0,
+            structuredEditFailed: editToolStatus === 'failed',
+            patchRejected: patchFallbackRejected || patchFallbackWithoutDiff,
+            textOnly: agentResult.format === 'text-fallback' && !agentResult.patch,
+          });
+          candidateValidation = {
+            passed: null,
+            code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_NOT_PROPOSED`,
+            classification: emptyClassification,
+            detail: `${managedMeta.name} 正常终结但未产生可准入候选：${emptyClassification}。`,
+            declaredCandidateCount: generationEvidence.rawCandidateCount ?? 0,
+            droppedCandidateCount: generationEvidence.droppedCandidateCount ?? 0,
+            patchProvided: Boolean(agentResult.patch),
+            degraded: emptyClassification === CANDIDATE_OUTCOME.TOOL_FAILED_PATCH_PENDING,
+            degradationReason: emptyClassification === CANDIDATE_OUTCOME.TOOL_FAILED_PATCH_PENDING ? 'structured_edit_failed' : null,
+            editToolStatus,
+            candidateGenerationPath: generationPath?.candidateGenerationPath || null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
+          nextAgent.candidateValidation = candidateValidation;
           if (!state.runtimeEvents?.some((event) => event.type === 'candidate.not_proposed' && event.payload?.runId === state.agent.runId)) {
             appendRuntimeEvent(state, 'candidate.not_proposed', {
               runId: state.agent.runId,
               summary: agentResult.summary,
+              format: agentResult.format,
+              classification: emptyClassification,
+              declaredCandidateCount: candidateValidation.declaredCandidateCount,
+              droppedCandidateCount: candidateValidation.droppedCandidateCount,
+              patchProvided: candidateValidation.patchProvided,
+              editToolStatus,
               recoverable: recoverableGenerationFailure,
               errorCode: failure?.code || null,
               error: failure?.detail || null,
             }, { kind: 'agent', mode });
           }
+        } else if (terminalReached && !agentResult.candidates.length && !workflowAdvanced) {
+          // 上游失败（专家七类表的行 1）：这不是候选生成失败。既不写候选池，也不发
+          // candidate.not_proposed —— 否则上层会把它当成「生成了一轮但没有产出」。
+          candidateValidation = {
+            passed: null,
+            code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_UPSTREAM_FAILURE`,
+            classification: CANDIDATE_OUTCOME.UPSTREAM_FAILURE_NO_CANDIDATE,
+            detail: `上游失败（${failure?.code || observedFailure?.code || 'unknown'}）：该结果不是候选生成失败，不写入候选池也不发 candidate.not_proposed。`,
+            declaredCandidateCount: agentResult.candidates.length,
+            degraded: false,
+            degradationReason: null,
+            editToolStatus,
+            candidateGenerationPath: null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
+          nextAgent.candidateValidation = candidateValidation;
         }
         if (workflowAdvanced) {
           nextAgent.status = state.agent.status;

@@ -39,6 +39,8 @@ const checks = [
   'test:cli-command',
   'test:workflow-kernel',
   'test:candidate-generation',
+  'test:agent-runtime-candidate-admission',
+  'test:round-settlement-interleaving',
   'test:candidate-generation-eval-report',
   'test:module-boundary',
   'test:state-domain-boundary',

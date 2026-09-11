@@ -296,6 +296,9 @@ export const settleGenerationAttemptBeforeStart = (state = {}, mission = {}, { r
       attempt,
       limit,
       runId: previousRunId,
+      // 只做标注诚实化：把根因码透传给消费者，不改变重试策略本身。
+      classification: state.agent?.candidateValidation?.classification || null,
+      candidateValidationCode: state.agent?.candidateValidation?.code || null,
     }, { kind: 'iteration', mode: 'policy' });
   }
   const blocked = attempt >= limit;
@@ -304,7 +307,7 @@ export const settleGenerationAttemptBeforeStart = (state = {}, mission = {}, { r
     state.agent = { ...state.agent, status: 'completed', phase: '候选生成重试已耗尽，需要人工调整 Agent 后端或指令', progress: 100, currentAction: null };
     mission.status = 'needs_human';
     if (!state.runtimeEvents?.some((event) => event.type === 'loop.needs_human' && event.payload?.reason === 'candidate_generation_failed')) {
-      appendRuntimeEvent(state, 'loop.needs_human', { reason: 'candidate_generation_failed', attempt, limit }, { kind: 'policy', mode: 'client' });
+      appendRuntimeEvent(state, 'loop.needs_human', { reason: 'candidate_generation_failed', attempt, limit, classification: state.agent?.candidateValidation?.classification || null }, { kind: 'policy', mode: 'client' });
     }
   }
   return { state, blocked, counted: !alreadyCounted, attempt, limit };
@@ -799,6 +802,9 @@ export async function advanceIteration(state, deps = {}) {
         attempt,
         limit: Math.max(1, Number(phasedPolicy.maxGenerationAttempts || 1)),
         runId: latestRound.runId,
+        // 只做标注诚实化：把根因码透传给消费者，不改变重试策略本身。
+        classification: state.agent?.candidateValidation?.classification || null,
+        candidateValidationCode: state.agent?.candidateValidation?.code || null,
       }, { kind: 'iteration', mode: 'policy' });
       return { state, action: 'generation_attempt_counted' };
     }

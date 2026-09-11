@@ -488,26 +488,41 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
       const historyCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === historyCandidateId)
         || (state.candidateEvaluations || []).find((candidate) => candidate.patchDigest && candidate.patchDigest === state.benchmark?.candidate?.digest)
         || null;
-      state.runHistory = [
-        {
-          runId: state.agent.runId,
-          threadId: state.agent.threadId || null,
-          runtimeKind: state.agent.runtimeKind || null,
-          goal: state.agent.goal,
-          stage: state.stage,
-          candidateId: historyCandidateId,
-          candidateDigest: state.benchmark?.candidate?.digest || historyCandidate?.patchDigest || null,
-          candidateSourceRunId: historyCandidate?.sourceRunId
-            || (historyCandidateId && state.benchmark?.purpose === 'candidate' ? state.agent.runId : null),
-          benchmark: structuredClone(state.benchmark),
-          decisionReview: structuredClone(state.decisionReview),
-          currentBest: structuredClone(state.currentBest),
-          publishedAssets: structuredClone(state.publishedAssets),
-          knowledgeMaintenance: structuredClone(state.knowledgeMaintenance),
-          completedAt: state.benchmark?.completedAt || state.decisionReview?.resolvedAt || null,
-        },
-        ...(state.runHistory || []),
-      ].slice(0, 20);
+      const archivedEntry = {
+        runId: state.agent.runId,
+        threadId: state.agent.threadId || null,
+        runtimeKind: state.agent.runtimeKind || null,
+        goal: state.agent.goal,
+        stage: state.stage,
+        // 归属字段：这一轮属于哪个 Round、哪个队列请求，必须随归档一起留下。
+        // 结算投影迟到时，恢复 run 的归属不能被写成首次失败的 runId。
+        roundId: state.iterationStats?.roundBudget?.roundId || null,
+        queueRequestId: state.benchmark?.runId || null,
+        candidateId: historyCandidateId,
+        candidateDigest: state.benchmark?.candidate?.digest || historyCandidate?.patchDigest || null,
+        candidateSourceRunId: historyCandidate?.sourceRunId
+          || (historyCandidateId && state.benchmark?.purpose === 'candidate' ? state.agent.runId : null),
+        candidateGenerationPath: historyCandidate?.candidateGenerationPath || null,
+        degraded: historyCandidate?.degraded === true,
+        degradationReason: historyCandidate?.degradationReason || null,
+        // 编辑工具的失败与缺失是两件事，归档必须带着这个事实标记，否则验收报告看不出生成路径为什么降级。
+        editToolStatus: historyCandidate?.editToolStatus || null,
+        benchmark: structuredClone(state.benchmark),
+        decisionReview: structuredClone(state.decisionReview),
+        currentBest: structuredClone(state.currentBest),
+        publishedAssets: structuredClone(state.publishedAssets),
+        knowledgeMaintenance: structuredClone(state.knowledgeMaintenance),
+        completedAt: state.benchmark?.completedAt || state.decisionReview?.resolvedAt || null,
+      };
+      // 同一个 runId 只允许有一条归档记录。无条件前插会产生两条相同的 runHistory[0]，
+      // 而 finalizeCandidateAdmission 正是读 runHistory 的 digest 做重复拒绝——重复条目
+      // 会污染该输入。就地替换保持时序位置，新一轮仍排在最前。
+      const archivedHistory = state.runHistory || [];
+      const archivedIndex = archivedHistory.findIndex((round) => round?.runId === archivedEntry.runId);
+      state.runHistory = (archivedIndex >= 0
+        ? archivedHistory.map((round, index) => (index === archivedIndex ? archivedEntry : round))
+        : [archivedEntry, ...archivedHistory]
+      ).slice(0, 20);
     }
     state.stage = 'diagnosis';
     state.patchApplied = false;
