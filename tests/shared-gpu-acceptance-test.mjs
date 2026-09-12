@@ -30,6 +30,18 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sha256 = (value) => createHash('sha256').update(value, 'utf8').digest('hex');
 const utf8Bytes = (value) => Buffer.byteLength(value, 'utf8');
 
+// Frozen model-observation contract (docs/development/MODEL_OBSERVATION_ACCEPTANCE.md):
+// only provider-reported assistant.message.model metadata may identify the responding
+// model, and a comparable fingerprint requires that response to be explicitly observed
+// with the frozen status/schema. The literals are used here because the pure production
+// module is not part of this test's import graph; the independent driver/ledger matrix
+// lives in tests/model-observation-acceptance-test.mjs.
+const MODEL_OBSERVATION_SCHEMA_VERSION = 'operator-studio.model-observation/v1';
+const OBSERVED_RESPONSE_MODEL = 'claude-sonnet-5';
+const OBSERVED_RESPONSE_MISSION = 'MIS_MODEL_PROOF';
+const OBSERVED_RESPONSE_RUN = 'run_model_proof';
+const OBSERVED_RESPONSE_SESSION = 'sess_model_proof';
+
 // ---------------------------------------------------------------------------
 // Part A — continuation audit (P1 §14.5 observation retained)
 // ---------------------------------------------------------------------------
@@ -582,7 +594,10 @@ const cleanRollback = [{ payload: { workspaceClean: true } }];
 const baseAcceptanceConfig = () => ({
   provider: {
     runtime: 'claude-code', cliVersion: '1.2.3', cliVersionSource: 'runtime-descriptor',
-    model: 'claude-sonnet-5', modelSource: 'observed',
+    model: OBSERVED_RESPONSE_MODEL, modelSource: 'observed',
+    // Explicit actual-response observation proof: the provider-reported
+    // assistant.message.model response, observed under the frozen schema/status.
+    modelObservationStatus: 'observed', modelObservationVersion: MODEL_OBSERVATION_SCHEMA_VERSION,
   },
   backend: { kind: 'local-shared-gpu', executionMode: 'gpu', publishable: false },
   hardware: ['nvidia-gpu'],
@@ -597,11 +612,47 @@ const baseAcceptanceConfig = () => ({
   code: { commit: 'a'.repeat(40), dirty: false, contentDigest: `sha256:${'b'.repeat(64)}` },
 });
 
+// Explicit per-required-run response observation evidence. The provider labels in
+// `config.provider` are derived from this summary; the per-run DTOs and required-run
+// list stay at the attempt/summary top level, outside the config hash.
+const observedResponseProof = () => ({
+  modelObservations: [{
+    schemaVersion: MODEL_OBSERVATION_SCHEMA_VERSION,
+    provider: 'claude-code',
+    runId: OBSERVED_RESPONSE_RUN,
+    missionId: OBSERVED_RESPONSE_MISSION,
+    sessionId: OBSERVED_RESPONSE_SESSION,
+    status: 'observed',
+    model: OBSERVED_RESPONSE_MODEL,
+    source: 'assistant.message.model',
+    models: [OBSERVED_RESPONSE_MODEL],
+    configuredModels: ['claude-opus-5[1m]'],
+    usageModels: ['claude-opus-5[1m]'],
+    observations: [{ eventIndex: 1, sessionId: OBSERVED_RESPONSE_SESSION, model: OBSERVED_RESPONSE_MODEL }],
+    reasons: [],
+  }],
+  modelObservationRequiredRuns: [{
+    provider: 'claude-code', runId: OBSERVED_RESPONSE_RUN,
+    missionId: OBSERVED_RESPONSE_MISSION, sessionId: OBSERVED_RESPONSE_SESSION,
+  }],
+  modelObservationSummary: {
+    schemaVersion: MODEL_OBSERVATION_SCHEMA_VERSION,
+    status: 'observed',
+    model: OBSERVED_RESPONSE_MODEL,
+    modelSource: 'observed',
+    models: [OBSERVED_RESPONSE_MODEL],
+    requiredRunCount: 1,
+    observedRunCount: 1,
+    reasons: [],
+  },
+});
+
 const fullSuccessRecord = (index, { config = baseAcceptanceConfig(), runDir = null, attemptId = null } = {}) => {
   const id = attemptId || `attempt-${index}`;
   const dir = runDir || `C:/retained/gpu-run-${index}`;
   const fingerprint = buildConfigFingerprint(config, { code: config.code }).fingerprint;
   const familyOutcome = { family: 'affine', outcome: 'full_success', fullSuccess: true };
+  const proof = observedResponseProof();
   return {
     runDir: dir,
     attempt: {
@@ -609,11 +660,13 @@ const fullSuccessRecord = (index, { config = baseAcceptanceConfig(), runDir = nu
       phase: 'terminal', status: 'terminal', outcome: 'full_success', fullSuccess: true,
       config, code: config.code, configFingerprint: fingerprint,
       families: ['affine'], candidateTasks: 2, familyOutcomes: [{ ...familyOutcome }],
+      ...proof,
     },
     summary: {
       schemaVersion: GPU_SUMMARY_SCHEMA_VERSION, status: 'passed', outcome: 'full_success', fullSuccess: true,
       config, code: config.code, configFingerprint: fingerprint, families: ['affine'],
       summaries: [{ ...familyOutcome }],
+      ...proof,
     },
   };
 };
@@ -675,8 +728,6 @@ const terminalRecord = (index, { outcome, status, familyOutcome, config = baseAc
   envCli.provider = { ...envCli.provider, cliVersionSource: 'env' };
   const unknownModel = baseAcceptanceConfig();
   unknownModel.provider = { ...unknownModel.provider, model: 'unknown' };
-  const probedModel = baseAcceptanceConfig();
-  probedModel.provider = { ...probedModel.provider, modelSource: 'probe' };
   const missingBudget = baseAcceptanceConfig();
   missingBudget.budgets = { missionBudgetMs: 720_000, mainAgentBudgetMs: null };
 
@@ -696,9 +747,18 @@ const terminalRecord = (index, { outcome, status, familyOutcome, config = baseAc
     assert.equal(ledger.groups[0].comparable, false);
     assert.equal(ledger.groups[0].n20.eligible, false);
   }
-  const probed = buildConfigFingerprint(probedModel, { code: probedModel.code });
-  assert.equal(probed.unknownFields.includes('provider.model'), false, 'an observed model is comparable');
-  assert.equal(probed.comparable, true);
+  // The former "probe model is comparable" claim is migrated to the frozen
+  // contract: the positive case is now an explicitly observed
+  // assistant.message.model response carrying status/schema proof, and it stays
+  // comparable. `probe` is no longer accepted as model provenance.
+  const observedWithProof = baseAcceptanceConfig();
+  const observedBuilt = buildConfigFingerprint(observedWithProof, { code: observedWithProof.code });
+  assert.deepEqual(observedBuilt.unknownFields, [],
+    'an observed response model with explicit status/schema proof has no unknown field');
+  assert.equal(observedBuilt.comparable, true, 'an observed response model with proof is comparable');
+  assert.equal(observedWithProof.provider.modelSource, 'observed');
+  assert.equal(observedWithProof.provider.modelObservationStatus, 'observed');
+  assert.equal(observedWithProof.provider.modelObservationVersion, MODEL_OBSERVATION_SCHEMA_VERSION);
 }
 
 // Mixing provider/CLI/model/matrix/budget/code must never merge groups.

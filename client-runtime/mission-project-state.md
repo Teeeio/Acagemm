@@ -101,6 +101,20 @@ only the delivery `target` in iterationStats follows the admitted Round. Raw
 runHistory fields still refresh in place for legacy late-settlement consumers.
 A reset with no `agent.runId` leaves previous facts untouched. The archive also
 retains the run's `promptAudit` reference when available.
+
+### Response-model observation archive
+
+`resetMissionRunState` keeps the run's response-model observation as a detached
+`runHistory[].modelObservation` copy (see
+[model-observation](model-observation.md)), but only when it binds exactly — byte
+for byte, with no session trimming — to the archived run's
+provider/run/Mission/session (the live stream session, not a resume hint). The
+live `state.agent.modelObservation` is always cleared, so a new run never inherits
+an old observation (`startAgentRun` explicitly starts with `null`). A repeated
+reset for the same `runId` reuses the first valid archived copy instead of deleting
+it, and an old archive is never used to backfill a currently foreign or
+inconsistent identity. Round facts, prompt audit and Gate decisions remain
+independent of the observation.
 `selectRoundFactsForPrompt(state, mission)` returns a deep clone of
 the snapshot only when its schema version matches, `target.missionId` equals the
 supplied Mission, `target.roundId` equals the current `iterationStats.roundBudget.roundId`,

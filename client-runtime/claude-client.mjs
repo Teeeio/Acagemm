@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
 import { createScopedGitEnvironment } from './git-environment.mjs';
 import { resolveCliInvocation } from './cli-command.mjs';
+import { observeClaudeModel } from './model-observation.mjs';
 
 const defaultTimeoutMs = 12_000;
 
@@ -30,6 +31,26 @@ export const isClaudeTelemetryEvent = (event) => {
     ? event.message.content
     : [];
   return content.length > 0 && content.every((item) => item?.type === 'thinking');
+};
+
+// Minimal, I/O-free metadata projection of one raw Claude stream event. It runs
+// before telemetry filtering so thinking-only assistant responses still contribute
+// their provider-reported model; text/thinking/tool payloads are never copied.
+const claudeModelMetadataFromEvent = (event) => {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return null;
+  if (event.type === 'assistant') {
+    return { type: 'assistant', session_id: event.session_id, message: { model: event.message?.model } };
+  }
+  if (event.type === 'system' && event.subtype === 'init') {
+    return { type: 'system', subtype: 'init', session_id: event.session_id, model: event.model };
+  }
+  if (event.type === 'result') {
+    const usage = event.modelUsage && typeof event.modelUsage === 'object' && !Array.isArray(event.modelUsage)
+      ? Object.keys(event.modelUsage)
+      : [];
+    return { type: 'result', session_id: event.session_id, modelUsage: Object.fromEntries(usage.map((key) => [key, null])) };
+  }
+  return null;
 };
 
 const contentText = (content) => {
@@ -312,6 +333,11 @@ export const createClaudeClient = (options = {}) => {
     const directories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const role = environment.OPERATOR_AGENT_ROLE || 'stage';
     const roots = environment.OPERATOR_AGENT_ROOTS ? JSON.parse(environment.OPERATOR_AGENT_ROOTS) : { workspace: path.resolve(workspace) };
+    // Every run starts unknown: a resume hint is a request parameter, never an
+    // observed response identity. The real session is learned from this stream and
+    // then fixed; until it is learned, no session identity is claimed at all.
+    const observationEvents = [];
+    let streamSessionId = null;
     const record = {
       schemaVersion: 1,
       provider: 'claude-code',
@@ -319,8 +345,8 @@ export const createClaudeClient = (options = {}) => {
       missionId,
       workspace: workspace || process.cwd(),
       additionalDirectories: directories,
-      threadId: resumeThreadId,
-      sessionId: resumeThreadId,
+      threadId: null,
+      sessionId: null,
       status: 'running',
       startedAt: new Date().toISOString(),
       lastActivityAt: new Date().toISOString(),
@@ -329,6 +355,7 @@ export const createClaudeClient = (options = {}) => {
       permissionMode,
       boundary: { role, roots, enforcement: 'claude-permissions-and-workflow-diff' },
       activity: { kind: 'startup', status: 'running', name: 'Claude Code', summary: '正在启动候选生成智能体', updatedAt: new Date().toISOString() },
+      modelObservation: observeClaudeModel({ runId, missionId, sessionId: '', events: [] }),
       error: null,
     };
     await persistRun(runId, record);
@@ -368,6 +395,24 @@ export const createClaudeClient = (options = {}) => {
     let logicalTerminal = false;
     let appendChain = Promise.resolve();
     let lastActivityPersistedAt = Date.now();
+    // Recompute the pure DTO from accumulated safe metadata; persist on change so a
+    // metadata-only update is durable without waiting for the next activity write.
+    const refreshModelObservation = () => {
+      const next = observeClaudeModel({ runId, missionId, sessionId: streamSessionId || '', events: observationEvents });
+      if (JSON.stringify(next) === JSON.stringify(record.modelObservation)) return;
+      record.modelObservation = next;
+      appendChain = appendChain.then(() => persistRun(runId, record)).catch(() => {});
+    };
+    // The first real session in the current stream becomes the run identity and is
+    // fixed for the rest of the run: a later (foreign) event can never replace it,
+    // and session bytes are compared exactly, never trimmed or normalized.
+    const learnStreamSession = (value) => {
+      if (typeof value !== 'string' || !value.trim() || streamSessionId) return false;
+      streamSessionId = value;
+      record.sessionId = value;
+      record.threadId = value;
+      return true;
+    };
     child.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
     child.stdout?.on('data', (chunk) => {
       const text = chunk.toString();
@@ -386,13 +431,18 @@ export const createClaudeClient = (options = {}) => {
           appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${line}\n`, 'utf8')).catch(() => {});
           continue;
         }
+        // Safe model metadata is captured before telemetry filtering, so
+        // thinking-only responses are still observed without persisting thinking.
+        const modelMetadata = claudeModelMetadataFromEvent(event);
+        if (modelMetadata) observationEvents.push(modelMetadata);
+        const learnedSession = learnStreamSession(event.session_id);
+        if (modelMetadata || learnedSession) refreshModelObservation();
         const previousActivity = record.activity;
         record.activity = claudeActivityFromEvent(event, previousActivity);
         const significantActivityChange = record.activity !== previousActivity
           && (record.activity?.kind !== previousActivity?.kind || record.activity?.toolId !== previousActivity?.toolId || record.activity?.status !== previousActivity?.status);
         if (significantActivityChange) appendChain = appendChain.then(() => persistRun(runId, record)).catch(() => {});
         if (!isClaudeTelemetryEvent(event)) appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${line}\n`, 'utf8')).catch(() => {});
-        if (event.session_id) record.threadId = record.threadId || event.session_id, record.sessionId = record.sessionId || event.session_id;
         if (event.type !== 'result' || logicalTerminal) continue;
         logicalTerminal = true;
         const failed = event.is_error === true || (event.subtype && event.subtype !== 'success');
@@ -411,12 +461,20 @@ export const createClaudeClient = (options = {}) => {
     child.on('close', async (code, signal) => {
       children.delete(runId);
       const cancelled = cancellationRequested.delete(runId);
-      if (eventBuffer.trim()) {
+      // Capture the unterminated final line locally and clear the buffer first:
+      // the deferred append/persist must never read an already-cleared buffer.
+      const tailLine = eventBuffer;
+      eventBuffer = '';
+      if (tailLine.trim()) {
         let tailEvent = null;
-        try { tailEvent = JSON.parse(eventBuffer); } catch { /* preserve non-JSON diagnostics */ }
-        if (!isClaudeTelemetryEvent(tailEvent)) appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${eventBuffer}\n`, 'utf8')).catch(() => {});
-        eventBuffer = '';
+        try { tailEvent = JSON.parse(tailLine); } catch { /* preserve non-JSON diagnostics */ }
+        const tailMetadata = claudeModelMetadataFromEvent(tailEvent);
+        if (tailMetadata) observationEvents.push(tailMetadata);
+        const learnedSession = learnStreamSession(tailEvent?.session_id);
+        if (tailMetadata || learnedSession) refreshModelObservation();
+        if (!isClaudeTelemetryEvent(tailEvent)) appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${tailLine}\n`, 'utf8')).catch(() => {});
       }
+      refreshModelObservation();
       await appendChain;
       const rawEvents = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
       const session = rawEvents.find((event) => event.session_id)?.session_id || null;

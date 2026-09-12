@@ -298,6 +298,62 @@ This test continues the cancelled `task_8825a5839e92468184c69d5d7166ac47`
 contracts and makes no new production change and no N=20 or publishability
 claim. It runs in both verification gates.
 
+## Model observation acceptance (hardware-free)
+
+`model-observation-test.mjs` and `model-observation-acceptance-test.mjs` are the
+independent acceptance matrices for the frozen response-model observation contract
+in `docs/development/MODEL_OBSERVATION_ACCEPTANCE.md`. They are hardware-free and
+read-only: no Claude CLI, Python runner, network, GPU or N=20 batch is started.
+`model-observation-test.mjs` dynamically imports the pure
+`client-runtime/model-observation.mjs` so a missing module is reported as
+`MODEL_OBSERVATION_API_MISSING`, then drives the real Claude adapter through an
+injected fake child stream, the real `agent-runtime` projection and the real
+`resetMissionRunState` archive path. `model-observation-acceptance-test.mjs`
+drives the pure observer/binding/summary API and the fingerprint/ledger rules.
+Observation comes only from `assistant.message.model`; init/config/env/usage
+labels and bare probe provenance are never promoted to a response observation.
+This is provider-reported metadata, not independent attestation of the remote
+service, and a non-observed model never proves or disproves a live run. The
+positive/negative matrix covers matching responses versus init/usage mismatch,
+env/init-only, missing/blank/synthetic labels, mixed-model conflict, foreign or
+absent sessions, thinking-only metadata without thinking leakage, the unterminated
+final JSON line, cancellation retention, JSON round trip, malformed DTOs and all
+four identity swaps, plus detached projection/archive and stale clearing. The
+summary/ledger matrix covers complete multi-run same-model acceptance versus
+missing failed/recovery runs, foreign provider/mission/session, conflicting or
+contradictory duplicates, empty required lists, dishonest config labels,
+attempt/summary disagreement, and fingerprint stability across run/session IDs
+with changes for model/code/matrix/budget. A green result is classification
+evidence only — never a hardware sample, stability or publishability claim — and
+the tests must not be weakened to match a pre-integration tree. Both register in
+`package.json` and in BOTH verification gates; the upstream runs the final gates
+after the production module lands. `tests/shared-gpu-acceptance-test.mjs` retains
+its existing assertions and is registered once, not duplicated here.
+
+## Shared-GPU model collector acceptance (hardware-free)
+
+`shared-gpu-model-collector-test.mjs` is the independent acceptance for the frozen
+consumer helpers `collectModelObservationEvidence` and `evaluateMissionStopReceipt`
+in `scripts/shared-gpu-acceptance.mjs`, plus the ledger model-proof boundaries in
+`scripts/summarize-gpu-agent-runs.mjs`. It is hardware-free: every run record and
+stop receipt is an in-memory fixture, and no Runtime, provider, Agent, GPU,
+filesystem collection or N=20 batch is started, so a green result is contract and
+ledger evidence only and never a real-machine, stability or publishability claim.
+
+The collector is bound to the current attempt's `final` records as authority: a
+later `unknown` or conflicting final record invalidates an earlier observed
+snapshot, the record's own provider/run/Mission/session identity — never the DTO —
+supplies the expected binding, session and thread must agree, and a foreign
+provider or Mission file cannot relabel a known start. A started run whose final
+record is missing, unreadable or malformed stays in the denominator as unbound
+evidence with a nonblank reason, so an absent record is never dropped from the
+required count. The stop receipt is confirmed only by a proving current-Mission
+release: HTTP 202 alone is not success, a pending/unconfirmed/blocked/quarantined
+or foreign-bound release and a current Agent without release proof are rejected,
+and the helper stays pure. The test registers in `package.json` and in BOTH
+verification gates; the upstream runs the final gates after the production
+helpers land, and it must not be weakened to match a pre-integration tree.
+
 ## Naming
 
 - `*-test.mjs`: Node unit/contract/integration test.

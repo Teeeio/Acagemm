@@ -85,6 +85,31 @@ audit artifact and does not claim `audit.prompt === provider start.goal` against
 live provider. This contract makes no real-GPU, real-Agent, long-run or N=20
 stability claim.
 
+## Response-model observation projection
+
+For the managed Claude Code branch, `projectState` reads the current run record
+and projects only an exact current provider/run/mission/session-bound DTO via the
+shared `bindModelObservation` authority (see
+[model-observation](model-observation.md)) to `state.agent.modelObservation`. The
+expected identity comes from the current agent + active Mission, never from the
+run record: a record that claims another run, Mission or provider is foreign and
+is rejected rather than re-labelled. The expected Mission must agree with both
+`state.activeMissionId` and `state.agent.missionId` when both are present. The
+expected session is an independent run-record identity compared byte-exactly
+(never trimmed): the record's actual `sessionId`, or its compatible `threadId`
+when no session was recorded, and the two must agree when both are present. The
+DTO's own `sessionId` is never an authority — there is no cancellation
+self-binding fallback, so a DTO whose session disagrees with the record is
+refused even when the run is cancelled. A missing,
+foreign, malformed or stale observation clears the value instead of keeping an old
+one, and a failed run read clears it too; the projected value is a deep-detached
+copy, and a metadata-only change (for example new `usageModels`) sets
+`changed=true` without touching status or event count. Cancellation settlement —
+including the early `settleCancellation` return — preserves the pre-settlement
+exact binding when the release receipt carries no DTO, and never widens status or
+resource release. The observation is diagnostic metadata: it never gates
+candidates, Gate decisions, workflow advancement or resource release.
+
 ## Cancellation and projection
 
 All three start methods enforce the shared cancellation resource barrier.

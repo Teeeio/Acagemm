@@ -132,11 +132,62 @@ version, model, backend kind, hardware, architecture, device, driver version,
 families, candidate task count, matrix, experience selection policy, budgets, code
 commit and content digest). Missing detection recurses into nested objects, so a
 nested `null`/`unknown`/empty container is unknown, not known. Provenance is
-enforced for `provider.cliVersion` and `provider.model`: only an observed value
-(`runtime-descriptor`/`probe`/`observed`) counts — an `env`/`configured-default`
+enforced for `provider.cliVersion` and `provider.model`: an `env`/`configured-default`
 self-report is `declared` and keeps the group non-comparable, and a value that
-cannot be observed stays `unknown` rather than guessed. Any unknown field makes
-the group explicitly non-comparable.
+cannot be observed stays `unknown` rather than guessed. `provider.cliVersion`
+keeps the existing real-probe rules (`runtime-descriptor`/`probe`/`observed`),
+while `provider.model` additionally requires a **provider-reported response
+observation**: `modelSource === 'observed'`, `modelObservationStatus ===
+'observed'` and `modelObservationVersion ===
+operator-studio.model-observation/v1`. A bare `observed` label without that
+retained status/schema proof, or a `probe`/`init`/`env`/`declared` model source,
+is non-comparable. Per-run/session identifiers (`sessionId`, `threadId`, run and
+mission ids, paths, timestamps) are stripped before hashing. Any unknown field
+makes the group explicitly non-comparable.
+
+## Response-model proof and ledger recomputation
+
+The driver retains the frozen per-run DTOs and required-run identities at
+**top level**, outside the config hash:
+`modelObservations` (array of `operator-studio.model-observation/v1` DTOs),
+`modelObservationRequiredRuns` (provider/runId/missionId/sessionId bindings, one
+per started run including failed/recovery/zero-candidate runs, with the
+`<unresolved-mission>` / `<unresolved-session>` placeholders standing in when the
+real identity was never observed),
+`modelObservationSummary` (the pure summary) and `modelObservationUnboundRuns`
+(runs whose real session was never learned). `provider.model` /
+`modelSource` / `modelObservationStatus` / `modelObservationVersion` in the final
+config are derived from that summary; `declaredModel` / `declaredModelSource`
+remain separate requested-configuration fields and never upgrade the proof.
+
+`summarizeAcceptanceRuns` does **not** trust the retained summary. For each run it
+recomputes `summarizeModelObservations(modelObservations,
+{ requiredRuns: modelObservationRequiredRuns })` and makes the run non-comparable
+when:
+
+- attempt or summary model evidence is absent/incomplete (legacy runs stay
+  counted but non-comparable — no back-fill from another directory or the host);
+- attempt and summary disagree on required-run bindings, retained DTOs, the
+  recomputed summary, or the recomputed model;
+- the retained `modelObservationSummary` is malformed: a missing required field
+  (including `reasons`), a non-array/blank-element reasons list, or an `observed`
+  verdict that still carries a reason;
+- the retained summary disagrees with the recomputation;
+- the config claims `observed` while the recomputed evidence is unknown/conflict,
+  or mismatches the recomputed model/source/status/schema version.
+
+Duplicate aliases are compared by outcome, config **and per-run model proof**: the
+same alias/config/outcome with contradictory `modelObservations` /
+`modelObservationRequiredRuns` / `modelObservationSummary` on either file is a
+duplicate conflict (counted once as failure, non-comparable), not a harmless alias
+of the first good record.
+
+Missing, malformed, foreign or contradictory per-run evidence can never establish
+comparability or N=20. Model comparability never changes a run's classified
+outcome: a real `full_success` stays `full_success` even when its model is
+unknown, and a failure is never hidden. `counts` / stability denominator
+semantics (`full_success`, `budget_terminal`, `failure`, `timeout`,
+`missing_summary`, duplicate handling) are unchanged.
 
 `summarizeAcceptanceRuns(records)` (pure; records are `{ runDir, attempt, summary }`
 with either JSON possibly `null`):
@@ -155,11 +206,91 @@ with either JSON possibly `null`):
   `issues`;
 - groups by computed fingerprint; a group is comparable only when **every** entry
   is comparable, and it reports the union of unknown fields. A declared
-  fingerprint that disagrees with the recomputed one, or an attempt/summary config
-  or fingerprint mismatch, makes the run non-comparable; any group containing a
+  fingerprint that disagrees with the recomputed one, an attempt/summary config
+  or fingerprint mismatch, or a per-run model-proof failure (missing/foreign/
+  malformed/contradictory DTOs, attempt-summary disagreement or a config claim the
+  recomputation contradicts) makes the run non-comparable; any group containing a
   run without a valid terminal attempt is never N=20 eligible;
 - reports `n20.eligible` only for comparable groups with ≥20 retained unique
   attempts. It never asserts stability and never infers hardware samples.
+
+## Frozen consumer helpers (driver observation)
+
+The live driver does not keep a private reader or a DTO ranking. It calls the two
+I/O-free helpers in this module; the frozen independent test
+`tests/shared-gpu-model-collector-test.mjs` exercises the same functions.
+
+### `collectModelObservationEvidence({ provider, missionIds, knownRuns, records })`
+
+Returns `{ observations, requiredRuns, summary, unboundRuns }`.
+
+- `knownRuns` are independently observed start identities
+  `{provider, runId, missionId?, sessionId?}`. They dedupe by provider/run (not by
+  success); every distinct started run stays required, including failed, recovery
+  and zero-candidate runs. A blank Mission/session is only *pending* and may be
+  completed from the current-attempt final record. Two **concrete** but
+  contradictory Missions (or sessions) for one started run identity never resolve
+  first-wins: the run is retained exactly once and marked invalid, so it can never
+  produce an observation.
+- `records` are the FINAL filesystem read results `{fileName, record, error}`.
+  Only safe single-basename `.json` files (alphanumeric first character, no
+  separator) are read; the read filename, `record.runId`, expected provider,
+  expected Mission and the independent `record.sessionId`/`threadId` must agree
+  (if both nonblank they must match). A DTO's own fields never supply an expected
+  identity, and a concrete identity conflict is never overwritten.
+- Final records are the authority, and a filename resolves to exactly one
+  semantics: all reads of the same filename must be semantically identical (JSON
+  key order is irrelevant, so an identical re-read dedupes). Conflicting content
+  for one filename fails closed **in either order** — there is no last-write-wins
+  map — and an earlier observed snapshot is never preferred over a later
+  unknown/conflict/missing state.
+- A safe file whose content is unreadable/invalid, or a started run with no final
+  record, remains an unbound required identity and fails the summary closed —
+  it is never silently skipped, and it is never dropped by an early `continue`.
+  The same holds for a **new** safe file that no known start references but that
+  carries no usable identity (`{}`, `[]`, a missing Mission, a foreign provider,
+  a mismatched `runId`, no session): it joins the denominator as required/unbound
+  rather than vanishing. Only a file with a **concrete** Mission outside the
+  expected set that no known start references is ignored as foreign.
+- An unresolved Mission/session is retained through the explicit non-bindable
+  placeholders `UNRESOLVED_RUN_MISSION` / `UNRESOLVED_RUN_SESSION`
+  (`<unresolved-mission>` / `<unresolved-session>`). They keep the started run in
+  the frozen `requiredRuns` denominator without inventing an identity the attempt
+  never observed, and since `bindModelObservation` requires an exact identity
+  match no placeholder can ever yield an observation.
+- `observations` are `bindModelObservation`-validated DTOs; `summary` is
+  `summarizeModelObservations(observations, { requiredRuns })`; `unboundRuns`
+  retain the run identity plus a nonblank reason.
+
+### `evaluateMissionStopReceipt({ missionId, receipt })`
+
+Evaluates the real Mission-stop HTTP body `{state}` (or a later bounded read-only
+`{state}` observation) and returns `{confirmed, reasons}`. It is pure: it never
+cancels, mutates or advances anything.
+
+`confirmed` requires **all** of: exact `state.activeMissionId`, `missionPaused ===
+true`, a loop intent that is exactly `stopped` (`paused`/`idle` alone are not a
+stopped intent), `state.workflowRecovery.resourceRelease` with `confirmed: true` /
+`status: 'confirmed'` and a `resources` array where every resource explicitly
+confirms release with no pending/unconfirmed/quarantined/blocked flag, and — when
+a current Agent run exists — a same-Mission Agent with explicit confirmed release
+(reusing `resourceReleaseEvidence`). The mission-level aggregate is not enough on
+its own: the existing provider-neutral `resourceReleaseBarrier(state)` from
+`client-runtime/cancellation-contract.mjs` must also report no pending execution
+resource, so a research Agent, baseline materializer, GPU test or benchmark still
+sitting in a cancellation/quarantine barrier keeps the stop unconfirmed. An empty
+`resources` array is admissible because the aggregate release itself is already
+explicitly confirmed (nothing was pending): the list describes the resources this
+stop needs to stop, so a current Agent that is already terminal may be absent
+from it. When the Mission is explicitly confirmed with `resources: []` and the
+same-Mission current Agent separately proves an explicit confirmed release
+(reusing `resourceReleaseEvidence`) with no remaining barrier, the stop is still
+confirmed. An idle placeholder Agent without a run identity needs no fabricated
+release, while a **nonblank** run without the exact same-Mission explicit release
+is rejected. An
+absent/malformed/foreign/pending release is `false` even when HTTP was 2xx or the
+Agent status is terminal. A 202 only becomes confirmed from a later proving
+read-only state, never from elapsed time or a terminal status.
 
 ## Hardware-free checks
 

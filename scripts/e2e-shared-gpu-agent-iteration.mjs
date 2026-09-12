@@ -10,8 +10,8 @@ import { resolvePythonExecutable } from '../client-runtime/platform-runtime.mjs'
 import { EXPERIENCE_SELECTION_POLICY_VERSION } from '../client-runtime/experience-contract.mjs';
 import {
   GPU_ATTEMPT_SCHEMA_VERSION, GPU_SUMMARY_SCHEMA_VERSION, ROUND_FACTS_SCHEMA_VERSION,
-  budgetTerminalEvidence, buildConfigFingerprint, combineAttemptOutcome, digestJson,
-  evaluateFamilyOutcome, hexDigest, verifyContinuationAudit,
+  budgetTerminalEvidence, buildConfigFingerprint, collectModelObservationEvidence, combineAttemptOutcome, digestJson,
+  evaluateFamilyOutcome, evaluateMissionStopReceipt, hexDigest, verifyContinuationAudit,
 } from './shared-gpu-acceptance.mjs';
 
 // Acceptance driver only: setup commands, then read-only observation of the
@@ -74,8 +74,113 @@ let runtimeSpawned = false;
 let child = null;
 const logs = [];
 const writes = [];
+const teardownWrites = [];
 const summaries = [];
 const familyTargets = [];
+const familyStopReceipts = [];
+let teardownStop = null;
+
+// --- read-only response-model observation ---------------------------------
+// The responding model is provider-reported `assistant.message.model`, never an
+// init/config/env label. This driver only reads the current attempt's own runRoot
+// bridge records and the live state projection; the frozen pure helpers in
+// scripts/shared-gpu-acceptance.mjs own the binding/summary semantics. Nothing
+// here writes workflow state or searches host/history directories.
+const providerLabel = mode === 'codex-cli' ? 'codex-cli' : 'claude-code';
+const providerRunsDirName = mode === 'codex-cli' ? 'codex-runs' : 'claude-runs';
+const modelRunsDir = path.join(runRoot, 'bridge', providerRunsDirName);
+const SAFE_RUN_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/u;
+const isNonBlank = (value) => typeof value === 'string' && value.trim().length > 0;
+// Missions this attempt created. A bridge record for any other Mission is
+// historical/foreign and never observed.
+const expectedMissionIds = new Set();
+// Independently observed start identities, keyed by provider/run. Every distinct
+// observed snapshot is retained (never merged first-wins), so the frozen pure
+// helper can see a concrete contradiction instead of the driver pre-filtering it.
+// The expected session comes only from the real runtime thread identity or the
+// final record — never from a DTO, and never relabeled with activeMissionId.
+const knownModelRuns = new Map();
+const rememberKnownRun = ({ runId, missionId, sessionId }) => {
+  if (!isNonBlank(runId)) return;
+  const key = providerLabel + ' ' + runId;
+  const snapshot = { provider: providerLabel, runId,
+    missionId: isNonBlank(missionId) ? missionId : '',
+    sessionId: isNonBlank(sessionId) ? sessionId : '' };
+  const list = knownModelRuns.get(key) || [];
+  if (!list.some((item) => item.missionId === snapshot.missionId && item.sessionId === snapshot.sessionId)) {
+    list.push(snapshot);
+  }
+  knownModelRuns.set(key, list);
+};
+// Observe every Agent run the live state exposes, including a started run whose
+// observation is still unknown: the run identity is retained so a failed,
+// recovery or zero-candidate run is never dropped from the required set. This is
+// called on every poll AND on the stop receipt / read-only final states.
+const observeStateModelRuns = (state) => {
+  if (!state || typeof state !== 'object') return;
+  const agent = state.agent;
+  if (agent?.runId && agent?.runtimeKind === providerLabel) {
+    // agent.missionId is the run's own binding; state.activeMissionId is never
+    // used to relabel a historical run.
+    rememberKnownRun({ runId: agent.runId, missionId: agent.missionId || null, sessionId: agent.threadId || null });
+  }
+  for (const round of Array.isArray(state.runHistory) ? state.runHistory : []) {
+    if (!round?.runId || round?.runtimeKind !== providerLabel) continue;
+    // An archived round carries no Mission field of its own; it is left blank so
+    // the collector completes it from this attempt's final record instead of
+    // relabeling it with the currently active Mission.
+    rememberKnownRun({ runId: round.runId, missionId: round.missionId || null, sessionId: round.threadId || null });
+  }
+};
+// Physical final bridge records for the current attempt runRoot only. Every sweep
+// REBUILDS the record set from the latest physical reads: a discovered file that
+// disappeared, a read/parse failure, or a directory enumeration failure becomes
+// an explicit error entry — an earlier successful DTO is never kept as fallback,
+// so a run started between two polls cannot be silently dropped and a lost final
+// state can never masquerade as observed.
+const discoveredRunFiles = new Set();
+const bridgeRecords = new Map();
+let bridgeEnumerationError = null;
+const collectBridgeRecords = async () => {
+  let names = null;
+  try { names = await readdir(modelRunsDir); bridgeEnumerationError = null; }
+  catch (error) { bridgeEnumerationError = `readdir failed: ${error.message}`; }
+  const present = new Set();
+  if (names) {
+    for (const name of names) {
+      if (!SAFE_RUN_FILE.test(name) || path.basename(name) !== name) continue;
+      present.add(name);
+      discoveredRunFiles.add(name);
+    }
+  }
+  for (const name of discoveredRunFiles) {
+    if (!names) {
+      bridgeRecords.set(name, { fileName: name, record: null,
+        error: bridgeEnumerationError || 'run directory enumeration failed' });
+      continue;
+    }
+    if (!present.has(name)) {
+      bridgeRecords.set(name, { fileName: name, record: null,
+        error: 'run file is missing from the current runRoot' });
+      continue;
+    }
+    const full = path.join(modelRunsDir, name);
+    let raw;
+    try { raw = await readFile(full, 'utf8'); }
+    catch (error) { bridgeRecords.set(name, { fileName: name, record: null, error: `unreadable: ${error.message}` }); continue; }
+    try { bridgeRecords.set(name, { fileName: name, record: JSON.parse(raw), error: null }); }
+    catch (error) { bridgeRecords.set(name, { fileName: name, record: null, error: `invalid JSON: ${error.message}` }); }
+  }
+  return { enumerationError: bridgeEnumerationError, discoveredFiles: [...discoveredRunFiles] };
+};
+// Frozen pure consumer helper: binds each final record DTO to its exact run
+// identity and summarizes. Never guesses a session/Mission from a DTO.
+const collectModelEvidence = () => collectModelObservationEvidence({
+  provider: providerLabel,
+  missionIds: [...expectedMissionIds],
+  knownRuns: [...knownModelRuns.values()].flat(),
+  records: [...bridgeRecords.values()],
+});
 
 // --- code/config provenance (read-only) -----------------------------------
 const gitText = async (args) => {
@@ -200,6 +305,63 @@ await writeFile(attemptPath, JSON.stringify(baseAttempt, null, 2));
 let missionId;
 let failure;
 let terminalOutcome = 'failure';
+let terminalFullSuccess = false;
+
+// The request/stop helpers are declared OUTSIDE the try so the `finally` cleanup
+// (error/timeout path) can reach them lexically. Defining them inside try made
+// the finally `stopMissionNow` reference a ReferenceError, so an errored run
+// killed its Runtime without ever issuing the production stop.
+const request = async (pathname, body) => {
+  const method = body === undefined ? 'GET' : 'POST';
+  if (method === 'POST') writes.push({ pathname, at: new Date().toISOString() });
+  const response = await fetch(base + pathname, { method, headers: { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(120_000) });
+  const value = await response.json();
+  if (!response.ok) throw Object.assign(new Error(`${pathname}: ${response.status} ${JSON.stringify(value)}`), { code: value.code });
+  return value;
+};
+// Teardown stop. This is NOT a workflow write: it is recorded separately and
+// never touches the `writes` counter, so it cannot advance the loop or inject a
+// candidate. It retains the ORIGINAL HTTP status + body `{state}` in
+// `initialReceipt` (never replaced by a later poll) plus every later bounded
+// read-only observation/final state. A 202 is only confirmed after one of those
+// read-only states proves resource release (never by elapsed time or terminal
+// status). It observes the independent start identities in every state it reads.
+const stopMissionNow = async (ownedMissionId) => {
+  let initialReceipt = null;
+  let evaluation;
+  try {
+    const response = await fetch(base + '/api/actions/stop-mission', { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({}), signal: AbortSignal.timeout(120_000) });
+    const body = await response.json().catch(() => null);
+    teardownWrites.push({ pathname: '/api/actions/stop-mission', statusCode: response.status, at: new Date().toISOString() });
+    initialReceipt = { statusCode: response.status, body };
+    observeStateModelRuns(body?.state);
+    evaluation = evaluateMissionStopReceipt({ missionId: ownedMissionId, receipt: body });
+  } catch (error) {
+    // A request failure is retained separately from any cleanup failure; nothing
+    // is reported as stopped without a real production response.
+    return { missionId: ownedMissionId, statusCode: null, confirmed: false,
+      reasons: [`stop request failed: ${error.message}`], error: error.message,
+      initialReceipt: null, observations: [], finalState: null };
+  }
+  const observations = [];
+  let finalState = null;
+  const deadline = Date.now() + 15_000;
+  while (!evaluation.confirmed && Date.now() < deadline) {
+    await sleep(500);
+    let observed;
+    try { observed = (await request('/api/state')).state; } catch { break; }
+    finalState = observed;
+    observeStateModelRuns(observed);
+    evaluation = evaluateMissionStopReceipt({ missionId: ownedMissionId, receipt: { state: observed } });
+    observations.push({ at: new Date().toISOString(), confirmed: evaluation.confirmed, reasons: evaluation.reasons });
+  }
+  return { missionId: ownedMissionId, statusCode: initialReceipt.statusCode,
+    confirmed: evaluation.confirmed, reasons: evaluation.reasons,
+    initialReceipt, observations, finalState };
+};
+
 try {
 child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
   cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
@@ -221,15 +383,6 @@ child.stdout.on('data', (value) => logs.push(String(value)));
 child.stderr.on('data', (value) => logs.push(String(value)));
 child.on('error', (error) => { exit = { error: error.message }; });
 child.on('exit', (code, signal) => { exit = { code, signal }; });
-const request = async (pathname, body) => {
-  const method = body === undefined ? 'GET' : 'POST';
-  if (method === 'POST') writes.push({ pathname, at: new Date().toISOString() });
-  const response = await fetch(base + pathname, { method, headers: { 'content-type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(120_000) });
-  const value = await response.json();
-  if (!response.ok) throw Object.assign(new Error(`${pathname}: ${response.status} ${JSON.stringify(value)}`), { code: value.code });
-  return value;
-};
 
 // --- read-only observation helpers ----------------------------------------
 const candidateDigestOf = (task) => hexDigest(task?.payload?.candidate?.digest || task?.result?.environment?.candidateDigest);
@@ -301,12 +454,16 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
       hardware: ['local-shared-gpu'], implementation: 'pytorch-python', metric: 'latency p50', testMatrix: matrix, missionBudgetMs: limit,
       objective: { mode: 'threshold', metric: 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.999999 } });
     missionId = created.state.activeMissionId;
+    // The expected Mission set is fixed when the Mission is created: only runs
+    // bound to one of these Missions may ever contribute model evidence.
+    if (isNonBlank(missionId)) expectedMissionIds.add(missionId);
     await request('/api/actions/start-benchmark', { purpose: 'baseline', baselineKind: 'naive_v0', runPy: source, operator: `generic_${family}`, matrix, timeoutSeconds: 120,
       baselineSource: { authority: 'generated', kind: 'naive_v0', type: 'naive_v0', repository: 'mission-workspace', commit: `gpu-${family}-v0`, path: 'run.py', operator: `generic_${family}`, expandedSingleFile: true, basedOn: 'v0' } });
     let state;
     const baselineDeadline = Date.now() + 150_000;
     while (Date.now() < baselineDeadline) {
       state = (await request('/api/state')).state;
+      observeStateModelRuns(state);
       if (state.baseline?.status === 'complete' && state.benchmark?.status === 'idle') break;
       if (state.benchmark?.status === 'failed') throw new Error('Baseline failed: ' + JSON.stringify(state.benchmark));
       await sleep(500);
@@ -321,6 +478,7 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
     // harmless start race into a terminal 409 failure.
     let started;
     const observedBeforeStart = (await request('/api/state')).state;
+    observeStateModelRuns(observedBeforeStart);
     if (observedBeforeStart.agent?.status === 'running' && observedBeforeStart.agent?.missionId === missionId) {
       started = { state: observedBeforeStart };
     } else {
@@ -334,6 +492,7 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
         started = { state: recovered };
       }
     }
+    observeStateModelRuns(started.state);
     const firstRun = started.state.agent.runId;
     const writesAtStart = writes.length;
     const deadline = Date.now() + limit;
@@ -346,6 +505,7 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
     let loopBroke = false;
     while (Date.now() < deadline) {
       state = (await request('/api/state')).state;
+      observeStateModelRuns(state);
       tasks = (await request('/api/operator-tests')).tasks.filter((task) => task.payload?.missionId === missionId);
       completed = tasks.filter((task) => task.payload?.purpose === 'candidate' && task.status === 'completed');
       const next = JSON.stringify({ family, stage: state.stage, agent: state.agent?.status, runId: state.agent?.runId, test: state.benchmark?.status, round: state.iterationStats?.round, completed: completed.length, experience: state.iterationStats?.experienceCollection, failure: state.workflowFailure?.code });
@@ -489,22 +649,67 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
         device: observedTarget.device || null, driverVersion: observedTarget.driverVersion || null, backend: observedTarget.backend || null } : null,
     });
     assert.notEqual(familyOutcome.outcome, 'failure', `GPU family acceptance failed: ${familyOutcome.reasons.join(', ')}`);
-    await request('/api/actions/stop-mission', {});
+    // Teardown of the owned Mission through the real production API, before the
+    // Runtime is killed. An unconfirmed release can never be a full_success and
+    // forbids starting the next Mission.
+    const stopReceipt = await stopMissionNow(missionId);
+    familyStopReceipts.push({ family, ...stopReceipt });
+    summaries.at(-1).stopReceipt = familyStopReceipts.at(-1);
+    // Read the current Mission's retained bridge records after the production stop
+    // but before the Runtime is torn down: a run started between two polls (or a
+    // teardown/recovery run) must not be lost. Read-only; expected Mission gate.
+    await collectBridgeRecords();
+    if (!stopReceipt.confirmed) {
+      throw Object.assign(new Error(`Mission stop for ${family} was not confirmed: ${stopReceipt.reasons.join(', ')}`),
+        { code: 'MISSION_STOP_UNCONFIRMED' });
+    }
     missionId = null;
   }
 } catch (error) { failure = { message: error.message, code: error.code || null, stack: error.stack }; }
 finally {
+  // Teardown: stop the still-owned current Mission through the same production
+  // API before terminating the Runtime, on error/timeout as well as on the normal
+  // path. The original failure is preserved separately; a stop failure never
+  // replaces it. Teardown never advances the loop or injects a candidate.
+  if (missionId && runtimeSpawned && !exit) {
+    try {
+      teardownStop = await stopMissionNow(missionId);
+      await collectBridgeRecords();
+    } catch (error) {
+      teardownStop = { missionId, confirmed: false, statusCode: null,
+        reasons: [`stop request failed: ${error.message}`], error: error.message };
+    }
+    missionId = null;
+  }
   // Preserve the entire disposable acceptance project and receipts for audit.
   if (!exit && runtimeSpawned) child.kill();
   if (runtimeSpawned) await Promise.race([new Promise((resolve) => child.once('exit', resolve)), sleep(3000)]);
+  // Physical final records: a run begun between the last poll and teardown is
+  // still enumerated here (safe filenames, current attempt runRoot only). The
+  // sweep rebuilds from the latest reads, so a vanished file or an enumeration
+  // failure becomes an explicit error instead of a stale observed DTO.
+  const modelSweep = await collectBridgeRecords();
   const observedHardware = [...new Set(familyTargets.flatMap((target) => Array.isArray(target.hardware) ? target.hardware : []).filter(Boolean))].sort();
   const observedArchitecture = [...new Set(familyTargets.flatMap((target) => Array.isArray(target.architecture) ? target.architecture : []).filter(Boolean))].sort();
   // Only the target the real runner reported enters the stable config; if it was
   // never observed the field stays empty (= unknown, never a declared fallback).
   const observedDevice = familyTargets.find((target) => target.device)?.device || null;
   const observedDriverVersion = familyTargets.find((target) => target.driverVersion)?.driverVersion || null;
+  // The final provider model/status/source/version are DERIVED from the frozen
+  // pure summary over the retained per-run DTOs. The declared env/configured value
+  // stays a separate requested-configuration field and never upgrades the proof.
+  const modelObservation = collectModelEvidence();
+  const modelSummary = modelObservation.summary;
+  const modelObserved = modelSummary.status === 'observed';
   const finalConfig = {
     ...config,
+    provider: {
+      ...config.provider,
+      model: modelObserved ? modelSummary.model : 'unknown',
+      modelSource: modelObserved ? 'observed' : 'unknown',
+      modelObservationStatus: modelSummary.status,
+      modelObservationVersion: modelSummary.schemaVersion,
+    },
     hardware: observedHardware,
     architecture: observedArchitecture,
     device: observedDevice,
@@ -518,7 +723,12 @@ finally {
   const timedOut = failure?.code === 'E2E_TIMEOUT';
   const outcome = combineAttemptOutcome({ failure, timedOut, familyOutcomes: summaries.map((item) => item.outcome) });
   terminalOutcome = outcome;
-  const fullSuccess = outcome === 'full_success' && !failure;
+  // An unknown/unconfirmed stop release can never produce a full_success, even if
+  // a family otherwise evaluated successfully.
+  const stopConfirmed = familyStopReceipts.every((item) => item.confirmed)
+    && (teardownStop === null || teardownStop.confirmed === true);
+  const fullSuccess = outcome === 'full_success' && !failure && stopConfirmed;
+  terminalFullSuccess = fullSuccess;
   const completedFamilies = summaries.filter((item) => item.fullSuccess).map((item) => item.family);
   const unfinishedFamilies = families.filter((family) => !completedFamilies.includes(family));
   const evidence = { runRoot, attemptPath, summaryPath, promptAuditDir, runtimeLog: runtimeLogPath,
@@ -532,9 +742,26 @@ finally {
     fullSuccess,
     runtime: mode,
     config: finalConfig,
+    // Never inherit the running attempt's declared provider copy; the terminal
+    // provider is the final, summary-derived one.
+    provider: finalConfig.provider,
     configFingerprint: fingerprint.fingerprint,
     fingerprintUnknownFields: fingerprint.unknownFields,
     comparable: fingerprint.comparable,
+    // Per-run response-model evidence stays at top level, OUTSIDE the config hash
+    // (so run/session ids cannot split a same-configuration fingerprint).
+    modelObservations: modelObservation.observations,
+    modelObservationRequiredRuns: modelObservation.requiredRuns,
+    modelObservationSummary: modelSummary,
+    modelObservationUnboundRuns: modelObservation.unboundRuns,
+    // Physical sweep result of the current attempt runRoot: which safe files were
+    // discovered and whether directory enumeration itself failed. Audit only; it
+    // is outside the config hash and never supplies an identity.
+    modelObservationSweep: modelSweep,
+    // Requested (env/configured) model labels stay a separate, non-authoritative
+    // field: they are never promoted and never enter the config fingerprint.
+    declaredModel,
+    declaredModelSource,
     // Per-family observation detail (includes the per-run sourceRunId). Kept for
     // audit only; it is deliberately excluded from the config fingerprint.
     observedTargets: familyTargets.map((target) => ({
@@ -552,7 +779,11 @@ finally {
       budgetTerminalAccepted: item.budgetTerminalAccepted, completedCandidates: item.completed.length,
     })),
     failure: failure ? { message: failure.message, code: failure.code || null } : null,
-    cleanup: { runtimeSpawned, runtimeExit: exit, artifactsRetained: true, artifactsRoot: runRoot },
+    cleanup: { runtimeSpawned, runtimeExit: exit, artifactsRetained: true, artifactsRoot: runRoot,
+      // Teardown evidence: per-family confirmed stop receipts plus the finally
+      // stop of a still-owned Mission after an error/timeout. Separate from
+      // workflowWritesAfterStart; never a loop advance.
+      stopReceipts: familyStopReceipts, teardownStop, teardownWrites },
     evidence,
   };
   await writeFile(runtimeLogPath, logs.join(''));
@@ -576,9 +807,23 @@ finally {
     summaryPath,
     evidence,
     summaries,
+    // Same top-level model evidence as the attempt, retained in every branch
+    // (success/budget_terminal/failure/timeout) so the ledger can cross-check both.
+    modelObservations: modelObservation.observations,
+    modelObservationRequiredRuns: modelObservation.requiredRuns,
+    modelObservationSummary: modelSummary,
+    modelObservationUnboundRuns: modelObservation.unboundRuns,
+    modelObservationSweep: modelSweep,
+    declaredModel,
+    declaredModelSource,
+    // Teardown evidence retained in every branch (success/budget_terminal/
+    // failure/timeout), separate from workflow writes.
+    stopReceipts: familyStopReceipts,
+    teardownStop,
+    teardownWrites,
     failure,
     writes,
   }, null, 2));
 }
 if (failure) throw new Error(failure.message + '\nArtifacts: ' + runRoot);
-console.log(JSON.stringify({ status: terminalOutcome, fullSuccess: terminalOutcome === 'full_success', runRoot, summaries }, null, 2));
+console.log(JSON.stringify({ status: terminalOutcome, fullSuccess: terminalFullSuccess, runRoot, summaries }, null, 2));

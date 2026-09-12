@@ -167,6 +167,7 @@ TUI / GUI
 | [`state-reference-runtime.mjs`](../../client-runtime/state-reference-runtime.md) | Reference State Projection | 现有 fixture 进度、日志和内存事件 | 真机/Agent 执行 |
 | [`accept-gate.mjs`](../../client-runtime/accept-gate.md) | Domain / Gate | 接受规则、Baseline 证据构造与单一版本化证据决策 | 测试执行、持久化、采用 |
 | [`evidence-decision.mjs`](../../client-runtime/evidence-decision.md) | Domain / Evidence | 诊断三判定（仅 completed+显式真实来源+绑定内核内容）、失败关闭执行分类、候选/运行绑定与冲突投影、发布限制 | I/O、存储、Provider、队列、硬件执行 |
+| [`model-observation.mjs`](../../client-runtime/model-observation.md) | Domain / Runtime Observation | 无 I/O 的响应模型 DTO（`assistant.message.model`）、按原始字节精确匹配的 provider/run/mission/session 绑定（不 trim、拒绝 cancelled 自绑定）与必需 run 汇总；unknown/conflict 不阻 workflow | 环境/标签伪造观测、把 init/usage 当响应身份、以观测做候选/Gate/释放门禁、I/O |
 | [`operator-test-evidence.mjs`](../../client-runtime/operator-test-evidence.md) | Domain / Evidence | 队列快照、候选处置和事件的内存投影 | 文件系统、队列执行 |
 | [`evidence-state.mjs`](../../client-runtime/evidence-state.md) | Shared State Contract | Review/Baseline 状态工厂 | 验收授权、I/O |
 | [`mission-objective.mjs`](../../client-runtime/mission-objective.md) | Domain / Objective | 目标模式推断与规范化 | 迭代执行、持久化 |

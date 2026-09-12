@@ -9,6 +9,12 @@
 // Contract documentation: scripts/shared-gpu-acceptance.md
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { resourceReleaseBarrier } from '../client-runtime/cancellation-contract.mjs';
+import {
+  MODEL_OBSERVATION_SCHEMA_VERSION, bindModelObservation, summarizeModelObservations,
+} from '../client-runtime/model-observation.mjs';
+
+const isNonBlankText = (value) => typeof value === 'string' && value.trim().length > 0;
 
 export const GPU_ATTEMPT_SCHEMA_VERSION = 'operator-studio.gpu-acceptance-attempt/v1';
 export const GPU_SUMMARY_SCHEMA_VERSION = 'operator-studio.gpu-acceptance-summary/v1';
@@ -32,6 +38,12 @@ export const RESOURCE_RELEASE_PENDING_STATUSES = Object.freeze(['pending', 'unco
 // values may enter a comparable N-pooling fingerprint.
 export const DECLARED_PROVENANCE = Object.freeze(['declared', 'env', 'configured-default', 'config']);
 export const OBSERVED_PROVENANCE = Object.freeze(['observed', 'probe', 'runtime-descriptor']);
+// A responding model is comparable only when the provider-reported
+// `assistant.message.model` was actually observed under the frozen schema/status.
+// `probe`/`init`/`env`/`declared` labels describe an intended configuration, never
+// the model that answered, so they can never make a group N-comparable.
+export const MODEL_OBSERVED_PROVENANCE = Object.freeze(['observed']);
+export const MODEL_OBSERVATION_STATUS_OBSERVED = 'observed';
 
 export const CONTINUATION_AUDIT_ASSERTIONS = Object.freeze([
   'pre-send audit file present for the actual round following the verified candidate source round',
@@ -129,9 +141,10 @@ export const OBSERVED_FINGERPRINT_FIELDS = Object.freeze([
 // Two runs of the same configuration must hash identically regardless of ids.
 export const VOLATILE_FINGERPRINT_KEYS = Object.freeze([
   'observedTargets', 'sourceRunId', 'runId', 'runRoot', 'runDir', 'attemptId',
-  'missionId', 'projectId', 'startedAt', 'endedAt', 'createdAt', 'updatedAt',
-  'at', 'timestamp', 'evidence', 'paths', 'attemptPath', 'summaryPath',
-  'promptAuditDir', 'runtimeLog', 'stateFiles', 'artifactsRoot',
+  'missionId', 'projectId', 'sessionId', 'threadId', 'startedAt', 'endedAt',
+  'createdAt', 'updatedAt', 'at', 'timestamp', 'evidence', 'paths',
+  'attemptPath', 'summaryPath', 'promptAuditDir', 'runtimeLog', 'stateFiles',
+  'artifactsRoot',
 ]);
 
 const stripVolatile = (value) => {
@@ -152,7 +165,21 @@ const fingerprintUnknownFields = (config) => {
   for (const { path: valuePath, provenancePath } of OBSERVED_FINGERPRINT_FIELDS) {
     if (missingFingerprintValue(readPath(config, valuePath))) continue;
     const provenance = readPath(config, provenancePath);
-    if (!OBSERVED_PROVENANCE.includes(provenance)) unknown.push(`${valuePath}:${provenance ?? 'unobserved'}`);
+    // CLI version keeps the existing real-probe rules; the model additionally
+    // requires a provider-reported response observation, never a probe/init/env
+    // label or a bare `observed` claim without retained status/schema proof.
+    const allowed = valuePath === 'provider.model' ? MODEL_OBSERVED_PROVENANCE : OBSERVED_PROVENANCE;
+    if (!allowed.includes(provenance)) unknown.push(`${valuePath}:${provenance ?? 'unobserved'}`);
+  }
+  if (!missingFingerprintValue(readPath(config, 'provider.model'))) {
+    const status = readPath(config, 'provider.modelObservationStatus');
+    if (status !== MODEL_OBSERVATION_STATUS_OBSERVED) {
+      unknown.push(`provider.modelObservationStatus:${status ?? 'missing'}`);
+    }
+    const version = readPath(config, 'provider.modelObservationVersion');
+    if (version !== MODEL_OBSERVATION_SCHEMA_VERSION) {
+      unknown.push(`provider.modelObservationVersion:${version ?? 'missing'}`);
+    }
   }
   return [...new Set(unknown)];
 };
@@ -498,6 +525,339 @@ export const evaluateFamilyOutcome = ({
   return failures.length
     ? { outcome: 'failure', fullSuccess: false, reasons: failures }
     : { outcome: 'full_success', fullSuccess: true, reasons: [] };
+};
+
+// ---------------------------------------------------------------------------
+// Frozen consumer helpers (docs/development/MODEL_OBSERVATION_ACCEPTANCE.md
+// §"Frozen consumer helper acceptance")
+// ---------------------------------------------------------------------------
+//
+// These are I/O-free. The live driver is responsible for reading the current
+// attempt's own runRoot bridge files and the live state projection; these helpers
+// only turn that in-memory evidence into frozen per-run proof. No file, provider,
+// time or environment access happens here.
+
+// A safe run file is a single basename ending `.json`, starting with an
+// alphanumeric character and containing no separator.
+const RUN_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/u;
+const isSafeRunFileName = (name) => typeof name === 'string' && name.length > 0
+  && name === name.split(/[\\/]/u).pop()
+  && RUN_FILE_NAME.test(name);
+const runIdFromFileName = (name) => name.slice(0, -'.json'.length);
+
+// An unresolved Mission/session is retained as an explicit, deliberately
+// non-bindable placeholder. It keeps a started (or newly discovered) run in the
+// frozen denominator so it can never silently disappear, without inventing a
+// real Mission/session the attempt never observed. `bindModelObservation`
+// requires an exact identity match, so a placeholder can never produce an
+// observation.
+export const UNRESOLVED_RUN_MISSION = '<unresolved-mission>';
+export const UNRESOLVED_RUN_SESSION = '<unresolved-session>';
+const requiredIdentity = ({ provider: entryProvider, runId, missionId, sessionId }) => ({
+  provider: isNonBlankText(entryProvider) ? entryProvider : '',
+  runId: typeof runId === 'string' ? runId : '',
+  missionId: isNonBlankText(missionId) ? missionId : UNRESOLVED_RUN_MISSION,
+  sessionId: isNonBlankText(sessionId) ? sessionId : UNRESOLVED_RUN_SESSION,
+});
+
+const emptyModelObservationSummary = () => summarizeModelObservations([], { requiredRuns: [] });
+
+/**
+ * Build the frozen per-run response-model evidence for the current attempt.
+ *
+ * `knownRuns` are independently observed start identities
+ * `{provider, runId, missionId?, sessionId?}`. `records` are the FINAL filesystem
+ * read results `{fileName, record, error}`. Final records are the observation
+ * authority: an earlier snapshot DTO is never a fallback, no ranking may prefer an
+ * observed snapshot over a later unknown/conflict/missing state, and a DTO's own
+ * fields never supply an expected Mission/session identity.
+ */
+export const collectModelObservationEvidence = ({ provider, missionIds = [], knownRuns = [], records = [] } = {}) => {
+  const providerKey = isNonBlankText(provider) ? provider : '';
+  const missionSet = new Set((Array.isArray(missionIds) ? missionIds : []).filter(isNonBlankText));
+  const observations = [];
+  const unboundRuns = [];
+  // Required identities that do not come from a started run: an unreadable,
+  // identity-less or conflicting new safe file, or an unusable start identity.
+  const extraRequired = [];
+
+  const pushUnbound = (entry, reason, fileName = null) => {
+    unboundRuns.push({
+      provider: entry.provider || null,
+      runId: entry.runId || null,
+      missionId: entry.missionId || null,
+      sessionId: entry.sessionId || null,
+      ...(fileName ? { fileName } : {}),
+      reason,
+    });
+  };
+  const requireExtra = ({ provider: entryProvider, runId, missionId = '', sessionId = '' }) => {
+    extraRequired.push(requiredIdentity({ provider: entryProvider || providerKey, runId, missionId, sessionId }));
+  };
+  const startKey = (entryProvider, runId) => `${entryProvider} ${runId}`;
+
+  // Known starts dedupe by provider/run identity (not success). Every distinct
+  // started run stays required even when its final record is absent/malformed or
+  // its real session/Mission was never learned; a blank start identity can never
+  // be observed but must still fail the summary closed. Two *concrete* but
+  // contradictory Missions/sessions on one run identity never resolve
+  // first-wins: the run is retained once and can never produce an observation.
+  const starts = new Map();
+  const startOrder = [];
+  for (const raw of Array.isArray(knownRuns) ? knownRuns : []) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const startProvider = isNonBlankText(raw.provider) ? raw.provider : providerKey;
+    const runId = typeof raw.runId === 'string' ? raw.runId : '';
+    const missionId = isNonBlankText(raw.missionId) ? raw.missionId : '';
+    const sessionId = isNonBlankText(raw.sessionId) ? raw.sessionId : '';
+    if (!isNonBlankText(runId)) {
+      const marker = { provider: startProvider, runId, missionId, sessionId };
+      requireExtra(marker);
+      pushUnbound(marker, 'known run start has no nonblank run identity');
+      continue;
+    }
+    const key = startKey(startProvider, runId);
+    const existing = starts.get(key);
+    if (existing) {
+      if (missionId && existing.missionId && missionId !== existing.missionId) {
+        existing.invalid ||= 'conflicting concrete Missions for one started run identity';
+      } else if (!existing.missionId && missionId) existing.missionId = missionId;
+      if (sessionId && existing.sessionId && sessionId !== existing.sessionId) {
+        existing.invalid ||= 'conflicting concrete sessions for one started run identity';
+      } else if (!existing.sessionId && sessionId) existing.sessionId = sessionId;
+      continue;
+    }
+    const entry = { provider: startProvider, runId, missionId, sessionId, resolved: false, bound: false, invalid: null };
+    starts.set(key, entry);
+    startOrder.push(entry);
+  }
+
+  // Reads are grouped by filename: the FINAL read content is the authority. Reads
+  // that are semantically identical (same error, same record content, JSON key
+  // order irrelevant) are one duplicate; conflicting reads for one file fail
+  // closed in either order instead of letting the last write win.
+  const readsByFile = new Map();
+  for (const raw of Array.isArray(records) ? records : []) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const fileName = typeof raw.fileName === 'string' ? raw.fileName : '';
+    if (!isSafeRunFileName(fileName)) continue;
+    const list = readsByFile.get(fileName);
+    if (list) list.push(raw); else readsByFile.set(fileName, [raw]);
+  }
+
+  for (const [fileName, reads] of readsByFile) {
+    const runId = runIdFromFileName(fileName);
+    const known = starts.get(startKey(providerKey, runId)) || null;
+    const normalized = reads.map((read) => ({
+      error: isNonBlankText(read.error) ? read.error.trim() : null,
+      record: read.record && typeof read.record === 'object' && !Array.isArray(read.record) ? read.record : null,
+    }));
+    const forms = new Set(normalized.map((item) => canonicalJson(item)));
+    if (forms.size > 1) {
+      const reason = 'conflicting final reads for one run file';
+      if (known) { known.resolved = true; known.invalid ||= reason; pushUnbound(known, reason, fileName); }
+      else {
+        const marker = { provider: providerKey, runId, missionId: '', sessionId: '' };
+        requireExtra(marker);
+        pushUnbound(marker, reason, fileName);
+      }
+      continue;
+    }
+    const { error, record } = normalized[0];
+    if (error || !record) {
+      const reason = error
+        ? `final run record is unreadable or invalid: ${error}`
+        : 'final run record is not a parsed object';
+      if (known) { known.resolved = true; pushUnbound(known, reason, fileName); }
+      else {
+        const marker = { provider: providerKey, runId, missionId: '', sessionId: '' };
+        requireExtra(marker);
+        pushUnbound(marker, reason, fileName);
+      }
+      continue;
+    }
+
+    const recordProvider = isNonBlankText(record.provider) ? record.provider : '';
+    const recordRunId = typeof record.runId === 'string' ? record.runId : '';
+    const recordMissionId = isNonBlankText(record.missionId) ? record.missionId : '';
+    const recordSession = isNonBlankText(record.sessionId) ? record.sessionId : '';
+    const recordThread = isNonBlankText(record.threadId) ? record.threadId : '';
+    const recordSessionId = recordSession || recordThread;
+    const ours = Boolean(known) || (recordMissionId !== '' && missionSet.has(recordMissionId));
+    if (!ours) {
+      // A *concrete* unrelated foreign-Mission file that no known start references
+      // is not this attempt's evidence. A file without any Mission identity is NOT
+      // proof of foreignness: it stays required/unbound instead of disappearing.
+      if (!recordMissionId) {
+        const marker = { provider: providerKey, runId, missionId: '', sessionId: recordSessionId };
+        requireExtra(marker);
+        pushUnbound(marker, 'final run file has no Mission identity and belongs to no started run', fileName);
+      }
+      continue;
+    }
+    // From here the file belongs to this attempt. Every rejection below keeps the
+    // run in the denominator as an unbound required identity; none may drop it.
+    const rejectOurs = (reason) => {
+      if (known) { known.resolved = true; pushUnbound(known, reason, fileName); return; }
+      const marker = { provider: providerKey, runId, missionId: recordMissionId, sessionId: recordSessionId };
+      requireExtra(marker);
+      pushUnbound(marker, reason, fileName);
+    };
+    if (recordProvider !== providerKey) { rejectOurs('final record provider does not match the expected provider'); continue; }
+    if (recordSession && recordThread && recordSession !== recordThread) {
+      rejectOurs('final record session and thread disagree'); continue;
+    }
+    if (recordRunId !== runId) { rejectOurs('final record runId does not match its filename'); continue; }
+
+    let entry = known;
+    if (entry) {
+      if (entry.invalid) { entry.resolved = true; pushUnbound(entry, entry.invalid, fileName); continue; }
+      // Only the attempt's expected Mission set is admissible, whether the start
+      // already names a Mission or must complete it from this record.
+      if (!missionSet.has(entry.missionId || recordMissionId)) {
+        entry.resolved = true; pushUnbound(entry, 'final record Mission is not in the expected Mission set', fileName); continue;
+      }
+      // The known start's concrete Mission/session may only be completed from this
+      // current-attempt record, never overwritten by a conflicting concrete value.
+      if (entry.missionId && recordMissionId && entry.missionId !== recordMissionId) {
+        entry.resolved = true; pushUnbound(entry, 'final record Mission conflicts with the started run Mission', fileName); continue;
+      }
+      if (entry.missionId && !recordMissionId) {
+        entry.resolved = true; pushUnbound(entry, 'final record has no Mission identity', fileName); continue;
+      }
+      if (!entry.missionId) entry.missionId = recordMissionId;
+      if (!entry.missionId) { entry.resolved = true; pushUnbound(entry, 'run Mission identity is unavailable', fileName); continue; }
+      if (entry.sessionId && recordSessionId && entry.sessionId !== recordSessionId) {
+        entry.resolved = true; pushUnbound(entry, 'final record session conflicts with the started run session', fileName); continue;
+      }
+      if (entry.sessionId && !recordSessionId) {
+        entry.resolved = true; pushUnbound(entry, 'final record has no session identity', fileName); continue;
+      }
+      if (!entry.sessionId) entry.sessionId = recordSessionId;
+    } else {
+      if (!recordMissionId || !missionSet.has(recordMissionId)) continue;
+      if (!recordSessionId) { rejectOurs('final record has no session identity'); continue; }
+      entry = { provider: providerKey, runId, missionId: recordMissionId, sessionId: recordSessionId,
+        resolved: false, bound: false, invalid: null };
+      starts.set(startKey(providerKey, runId), entry);
+      startOrder.push(entry);
+    }
+    entry.resolved = true;
+    const dto = record.modelObservation && typeof record.modelObservation === 'object'
+      && !Array.isArray(record.modelObservation) ? record.modelObservation : null;
+    const bound = dto ? bindModelObservation(dto, {
+      provider: entry.provider, runId: entry.runId, missionId: entry.missionId, sessionId: entry.sessionId,
+    }) : null;
+    if (bound) { observations.push(bound); entry.bound = true; }
+    else {
+      entry.bound = false;
+      pushUnbound(entry, dto
+        ? 'retained model observation does not bind to this run identity'
+        : 'no retained model observation', fileName);
+    }
+  }
+
+  // Every known start without a usable final record stays required and unbound.
+  for (const entry of startOrder) {
+    if (!entry.resolved) pushUnbound(entry, 'no final run record was retained for this started run');
+  }
+  const requiredRuns = [];
+  for (const entry of startOrder) requiredRuns.push(requiredIdentity(entry));
+  // Unresolved/extra identities are appended so the frozen summary fails closed
+  // instead of silently dropping an unreadable run from the denominator.
+  for (const marker of extraRequired) requiredRuns.push(marker);
+
+  const summary = requiredRuns.length
+    ? summarizeModelObservations(observations, { requiredRuns })
+    : emptyModelObservationSummary();
+  return { observations, requiredRuns, summary, unboundRuns };
+};
+
+// The loop intent a confirmed Mission stop must have persisted. A proving stop
+// is exactly `stopped`: `paused`/`idle` by themselves are not a stopped intent.
+const STOPPED_LOOP_STATUSES = Object.freeze(['stopped']);
+
+/**
+ * Evaluate the real Mission-stop receipt (HTTP body `{state}` or a later bounded
+ * read-only `{state}` observation). Pure: it never cancels, mutates or advances
+ * anything, and an unknown/unconfirmed release is always false.
+ */
+export const evaluateMissionStopReceipt = ({ missionId, receipt } = {}) => {
+  const reasons = [];
+  const reject = (reason) => { if (!reasons.includes(reason)) reasons.push(reason); };
+  if (!isNonBlankText(missionId)) reject('requested Mission id is missing');
+  const state = receipt && typeof receipt === 'object' && !Array.isArray(receipt)
+    && receipt.state && typeof receipt.state === 'object' && !Array.isArray(receipt.state)
+    ? receipt.state : null;
+  if (!state) {
+    reject('stop receipt state is missing or malformed');
+    return { confirmed: false, reasons };
+  }
+  if (state.activeMissionId !== missionId) reject('stop receipt does not belong to the requested active Mission');
+  if (state.missionPaused !== true) reject('Mission stop intent is not paused');
+  const loopStatus = state.iterationStats?.loopStatus;
+  if (!STOPPED_LOOP_STATUSES.includes(loopStatus)) reject('iteration loop is not in a stopped state');
+
+  const missionRelease = state.workflowRecovery?.resourceRelease;
+  if (!missionRelease || typeof missionRelease !== 'object' || Array.isArray(missionRelease)) {
+    reject('workflowRecovery.resourceRelease is missing');
+  } else {
+    if (missionRelease.confirmed !== true) reject('Mission resource release is not confirmed');
+    if (missionRelease.status !== 'confirmed') reject('Mission resource release status is not confirmed');
+    if (missionRelease.blocked === true) reject('Mission resource release is blocked');
+    if (missionRelease.quarantined === true) reject('Mission resource release is quarantined');
+    if (releasePending(missionRelease)) reject('Mission resource release is pending or unconfirmed');
+    // The array is required; an empty array is admissible only because the release
+    // itself is already explicitly confirmed above (nothing was pending).
+    if (!Array.isArray(missionRelease.resources)) {
+      reject('Mission resource release has no resources array');
+    } else {
+      for (const resource of missionRelease.resources) {
+        if (!resource || typeof resource !== 'object' || Array.isArray(resource)) { reject('a Mission resource entry is malformed'); continue; }
+        if (resource.confirmed !== true) reject('a Mission resource has no explicit confirmed release');
+        if (releasePending(resource)) reject('a Mission resource release is pending or unconfirmed');
+        if (resource.blocked === true) reject('a Mission resource release is blocked');
+        if (resource.quarantined === true) reject('a Mission resource release is quarantined');
+      }
+    }
+  }
+
+  // A still-live current Agent run must be released too, and must belong to the
+  // same Mission. A terminal Agent status alone is never release proof. An idle
+  // placeholder Agent without a current run does not invent an execution
+  // resource, so it must not require a fabricated Agent release.
+  const agent = state.agent;
+  if (agent !== undefined && agent !== null) {
+    if (typeof agent !== 'object' || Array.isArray(agent)) {
+      reject('current Agent state is malformed');
+    } else {
+      const agentRunId = isNonBlankText(agent.runId) ? agent.runId : '';
+      if (agentRunId) {
+        if (agent.missionId !== missionId) reject('current Agent run belongs to a foreign Mission');
+        const agentRelease = agent.resourceRelease;
+        if (!agentRelease || typeof agentRelease !== 'object' || Array.isArray(agentRelease)) {
+          reject('current Agent has no explicit release proof');
+        } else {
+          if (agentRelease.confirmed !== true) reject('current Agent release is not confirmed');
+          if (agentRelease.status !== 'confirmed') reject('current Agent release status is not confirmed');
+          if (releasePending(agentRelease)) reject('current Agent release is pending or quarantined');
+        }
+        const barrier = resourceReleaseEvidence(state, { missionId, runId: agentRunId });
+        if (!barrier.confirmed) reject('current Agent resource release barrier is unresolved');
+      }
+    }
+  }
+
+  // A confirmed Mission aggregate is not enough: the existing provider-neutral
+  // cancellation contract must also prove that no other execution resource
+  // (research Agent, baseline materializer, GPU test/benchmark) is still in a
+  // cancellation/quarantine barrier.
+  const resourceBarrier = resourceReleaseBarrier(state);
+  if (resourceBarrier) {
+    reject('an execution resource release barrier is still pending');
+    if (resourceBarrier.quarantined === true) reject('an execution resource release is quarantined');
+  }
+  return { confirmed: reasons.length === 0, reasons };
 };
 
 // Overall attempt outcome from the per-family outcomes, never hiding a failure.

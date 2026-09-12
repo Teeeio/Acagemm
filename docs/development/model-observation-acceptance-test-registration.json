@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "operator-studio.test-registration/v1",
+  "batch": "model-observation-acceptance",
+  "authority": "docs/development/MODEL_OBSERVATION_ACCEPTANCE.md",
+  "createdAt": "2026-09-13",
+  "status": "pending-single-writer",
+  "note": "Isolated registration manifest only. This batch must not edit package.json, the two verification scripts, tests/README.md or any production file; a later single writer registers both tests in package.json, both gates and tests/README.md, then the upstream runs integration and the final gates.",
+  "tests": [
+    {
+      "file": "tests/model-observation-acceptance-test.mjs",
+      "kind": "hardware-free contract/acceptance",
+      "npmScript": "test:model-observation-acceptance",
+      "npmCommand": "node tests/model-observation-acceptance-test.mjs",
+      "registerInGates": [
+        "verify:local-c500-release",
+        "verify:non-hardware-robustness"
+      ],
+      "readmeSection": "Model observation / run-ledger acceptance (hardware-free)",
+      "implementationDependency": "client-runtime/model-observation.mjs (pure, I/O-free; exports MODEL_OBSERVATION_SCHEMA_VERSION, observeClaudeModel, bindModelObservation, summarizeModelObservations)",
+      "expectedCurrentState": "red (ERR_MODULE_NOT_FOUND for client-runtime/model-observation.mjs) until the pure module and the frozen fingerprint/ledger eligibility rules are implemented",
+      "covers": [
+        "assistant.message.model is the only response identity; init/config/env/usage labels never become observations",
+        "missing/blank/unknown/null/undefined/<synthetic> response labels stay unknown; mixed concrete models conflict",
+        "foreign/absent sessions never replace the requested session identity",
+        "bindModelObservation exact provider/run/mission/session identity, complete DTO shape, deep-detached result, malformed/inconsistent DTO rejection",
+        "summarizeModelObservations: complete multi-run same-model observed; failed and recovery runs retained in the denominator; missing failed/recovery run, foreign provider/mission/session, conflicting models, empty/invalid required list and malformed evidence never observed; repeated identical evidence adds no run; contradictory duplicates fail closed",
+        "buildConfigFingerprint: same model/config with different run/session identifiers hashes identically; model/code/budget/matrix changes hash differently; bare observed labels and probe/init/env model provenance are non-comparable",
+        "summarizeAcceptanceRuns: attempt/summary model-DTO disagreement, bare observed config without retained DTO/required-run proof and dishonest config labels are non-comparable and never N=20 eligible; missing summaries/timeouts/failures stay in the stability denominator"
+      ]
+    },
+    {
+      "file": "tests/shared-gpu-acceptance-test.mjs",
+      "kind": "hardware-free contract/acceptance (fixture migration)",
+      "npmScript": "test:shared-gpu-acceptance",
+      "npmCommand": "node tests/shared-gpu-acceptance-test.mjs",
+      "registerInGates": [
+        "verify:local-c500-release",
+        "verify:non-hardware-robustness"
+      ],
+      "alreadyRegistered": true,
+      "change": "Positive fixtures now carry explicit actual-response observation proof (modelObservations/modelObservationRequiredRuns/modelObservationSummary and provider.modelObservationStatus/modelObservationVersion). The legacy probe-model-claims-comparable positive was migrated to an observed assistant.message.model with proof. All pre-existing ledger/budget/audit assertions are retained unchanged.",
+      "expectedCurrentState": "green (no new production dependency; new-contract negatives live in tests/model-observation-acceptance-test.mjs)"
+    }
+  ],
+  "registrationEditsForSingleWriter": [
+    "package.json: add \"test:model-observation-acceptance\": \"node tests/model-observation-acceptance-test.mjs\"",
+    "scripts/verify-local-c500-release.mjs: append 'test:model-observation-acceptance'",
+    "scripts/verify-non-hardware-robustness.mjs: append 'test:model-observation-acceptance'",
+    "tests/README.md: add a section documenting both tests under the shared-GPU observer/run-ledger coverage"
+  ],
+  "mustNotChange": [
+    "package.json",
+    "scripts/verify-local-c500-release.mjs",
+    "scripts/verify-non-hardware-robustness.mjs",
+    "tests/README.md",
+    "client-runtime/model-observation.mjs (not yet implemented)",
+    "scripts/shared-gpu-acceptance.mjs",
+    "scripts/summarize-gpu-agent-runs.mjs"
+  ],
+  "verificationCommands": [
+    "node --check tests/model-observation-acceptance-test.mjs",
+    "node --check tests/shared-gpu-acceptance-test.mjs",
+    "node tests/model-observation-acceptance-test.mjs",
+    "node tests/shared-gpu-acceptance-test.mjs"
+  ],
+  "boundaries": [
+    "No live provider, Agent, GPU or N=20 batch is started by these tests.",
+    "A passing run of tests/shared-gpu-acceptance-test.mjs is observer/ledger classification evidence only; it is never a hardware sample or stability claim.",
+    "The frozen contract and its acceptance matrix are upstream-owned; test authors must not weaken them to match a pre-integration tree."
+  ]
+}

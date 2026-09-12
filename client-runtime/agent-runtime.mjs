@@ -30,6 +30,7 @@ import { createAgentRuntimeEngine } from './agent-runtime/engine.mjs';
 import { isManagedWorkspaceRuntimeMode, normalizeAgentRuntimeMode } from './agent-runtime/capabilities.mjs';
 import { appendRuntimeEvent } from './runtime-events.mjs';
 import { selectRoundFactsForPrompt } from './mission-project-state.mjs';
+import { bindModelObservation } from './model-observation.mjs';
 
 export { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
 export { appendRuntimeEvent } from './runtime-events.mjs';
@@ -49,6 +50,32 @@ const AUDIT_REPLACE_RETRY_CODES = ['EPERM', 'EBUSY', 'EACCES'];
 const safeAuditRunId = (runId) => typeof runId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(runId) && !runId.includes('..');
 const auditFailure = (message, code, cause) => Object.assign(new Error(message), { code, status: 500, ...(cause ? { cause } : {}) });
 const missionProjectIdFor = (state, mission) => mission?.projectId || state?.missions?.find((item) => item.id === mission?.id)?.projectId || state?.activeProjectId || null;
+const isNonBlankString = (value) => typeof value === 'string' && value.trim().length > 0;
+// §model-observation: project only an exact current provider/run/mission/session
+// bound DTO, deep detached by the shared validation authority. Missing, foreign,
+// malformed or stale evidence clears the projected value; the observation is
+// diagnostic metadata and never a control gate for candidates or release.
+//
+// The expected identity comes from the current agent + active Mission, never from
+// the run record: a record claiming another run/mission/provider is foreign and is
+// rejected instead of being re-labelled onto the current identity.
+//
+// The expected session is an independent identity owned by the run record: its
+// actual `sessionId`, or the compatible `threadId` when no session was recorded.
+// When both are present they must be byte-equal. The DTO's own `sessionId` is
+// never an authority — accepting it would let an observation bind itself,
+// including in cancellation settlement, so there is no such fallback.
+const projectRunModelObservation = ({ provider, run, runId, missionId }) => {
+  if (!run || typeof run !== 'object' || run.runId !== runId) return null;
+  if (run.missionId != null && run.missionId !== missionId) return null;
+  if (run.provider != null && run.provider !== provider) return null;
+  const recordedSession = isNonBlankString(run.sessionId) ? run.sessionId : null;
+  const recordedThread = isNonBlankString(run.threadId) ? run.threadId : null;
+  if (recordedSession && recordedThread && recordedSession !== recordedThread) return null;
+  const expectedSession = recordedSession || recordedThread;
+  if (!expectedSession) return null;
+  return bindModelObservation(run.modelObservation, { provider, runId, missionId, sessionId: expectedSession });
+};
 // 只投递绑定当前 Mission 与当前 Round 的选择清单，不泄漏别轮/别 Mission 的审计元数据。
 const promptAuditSelection = (state, { missionId, projectId, roundId, experienceContext }) => {
   const selection = state?.iterationStats?.roundExperienceSelection;
@@ -1696,9 +1723,26 @@ export function createAgentRuntime(options = {}) {
     }
     if (managedCliMode && state.agent?.runtimeKind === mode && state.agent?.runId) {
       let observedRun = null;
+      // Current-agent identity is fixed for this projection; the run record must
+      // match it, never define it. The expected Mission must agree with both the
+      // current agent and the active Mission: an agent still labelled with an old
+      // Mission while another is active is a foreign identity, not a hint.
+      const agentMissionId = isNonBlankString(state.agent.missionId) ? state.agent.missionId : null;
+      const activeMissionId = isNonBlankString(state.activeMissionId) ? state.activeMissionId : null;
+      const expectedMissionId = agentMissionId && activeMissionId && agentMissionId !== activeMissionId
+        ? null
+        : (activeMissionId ?? agentMissionId);
+      const observationContext = {
+        provider: mode,
+        runId: state.agent.runId,
+        missionId: expectedMissionId,
+      };
       try {
         let run = await runtimeEngine.invoke(mode, 'readRun', state.agent.runId);
         observedRun = run;
+        let projectedModelObservation = mode === 'claude-code'
+          ? projectRunModelObservation({ ...observationContext, run })
+          : null;
         const events = await runtimeEngine.invoke(mode, 'readEvents', state.agent.runId);
         const usageBefore = JSON.stringify(state.tokenUsage || null);
         recordRunTokenUsage(state, { runId: state.agent.runId, phase: 'iteration', provider: mode, events });
@@ -1736,11 +1780,17 @@ export function createAgentRuntime(options = {}) {
             : null;
         const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded, false, { primaryFailure: preSettlementFailure });
         if (settlement.projection) {
-          const changed = runtimeChanged || usageChanged || JSON.stringify(settlement.projection) !== JSON.stringify(state.agent);
-          state.agent = settlement.projection;
+          // Cancellation settlement must not drop the latest exact-bound observation,
+          // and must not keep one that the current run no longer supports.
+          const projection = mode === 'claude-code'
+            ? { ...settlement.projection, modelObservation: projectedModelObservation }
+            : settlement.projection;
+          const changed = runtimeChanged || usageChanged || JSON.stringify(projection) !== JSON.stringify(state.agent);
+          state.agent = projection;
           return { state, changed };
         }
         run = settlement.run; observedRun = run;
+        if (mode === 'claude-code') projectedModelObservation = projectRunModelObservation({ ...observationContext, run });
         failed = run.status === 'failed'; completed = run.status === 'completed';
         const timedOut = isExecutionReleased(run) && (stalled || budgetExceeded || (run.status === 'cancelled' && state.agent.timedOut === true));
         const nextStatus = failed ? 'failed' : completed ? 'completed' : timedOut ? 'completed' : run.status === 'cancelled' ? 'cancelled' : state.agent.status === 'cancel_requested' ? 'cancel_requested' : 'running';
@@ -1874,6 +1924,7 @@ export function createAgentRuntime(options = {}) {
           eventCount,
           lastEventAt,
           timedOut: timedOut || undefined,
+          ...(mode === 'claude-code' ? { modelObservation: projectedModelObservation } : {}),
         };
         if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
           state.candidateEvaluations = verifiedCandidates;
@@ -1998,13 +2049,20 @@ export function createAgentRuntime(options = {}) {
         if (nextStatus !== previousStatus && !lifecycleEventRecorded) appendRuntimeEvent(state, lifecycleEventType, { runId: state.agent.runId, threadId: nextAgent.threadId, eventCount: events.length, errorCode: failure?.code || null }, { kind: 'agent', mode });
         return { state, changed };
       } catch (error) {
+        // A failed/partial read cannot confirm that any previously projected
+        // observation still matches the current run's actual session. Rebind only
+        // when the run record itself was read; otherwise clear the stale value.
+        const survivedObservation = mode === 'claude-code' && observedRun
+          ? projectRunModelObservation({ ...observationContext, run: observedRun })
+          : null;
         if (!isExecutionReleased(observedRun || {})) {
-          state.agent = cancellationProjection(state.agent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message }, {
+          const projection = cancellationProjection(state.agent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message }, {
             primaryFailure: state.agent.primaryFailure || { code: error.code || 'AGENT_STATUS_UNAVAILABLE', detail: error.message, phase: 'Agent runtime status unavailable' },
           });
+          state.agent = mode === 'claude-code' ? { ...projection, modelObservation: survivedObservation } : projection;
           return { state, changed: true };
         }
-        const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }] };
+        const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }], ...(mode === 'claude-code' ? { modelObservation: survivedObservation } : {}) };
         state.agent = nextAgent;
         return { state, changed: true };
       }

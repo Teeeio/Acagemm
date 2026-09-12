@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "operator-studio.test-registration/v1",
+  "batch": "shared-gpu-model-collector",
+  "authority": "docs/development/MODEL_OBSERVATION_ACCEPTANCE.md",
+  "createdAt": "2026-09-13",
+  "status": "pending-single-writer",
+  "note": "Isolated registration manifest only. This batch delivers one independent test plus this manifest and edits no production file, no existing test, package.json, the two verification gates or tests/README.md. A later single writer registers the one npm script, both gate entries and the tests/README.md section.",
+  "hardwareFree": true,
+  "hardwareFreeStatement": "Every known-run, final-record and stop-receipt input is an in-memory fixture. The test starts no Runtime, Claude/Codex provider, Python runner, GPU process, filesystem collection or N=20 batch; a pass is contract/ledger evidence only and is never a hardware sample or a stability claim.",
+  "tests": [
+    {
+      "file": "tests/shared-gpu-model-collector-test.mjs",
+      "kind": "hardware-free contract/acceptance (fixture-only)",
+      "npmScript": "test:shared-gpu-model-collector",
+      "npmCommand": "node tests/shared-gpu-model-collector-test.mjs",
+      "registerInGates": [
+        "verify:local-c500-release",
+        "verify:non-hardware-robustness"
+      ],
+      "readmeSection": "Shared GPU model collector / stop receipt (hardware-free)",
+      "implementationDependency": "scripts/shared-gpu-acceptance.mjs must export collectModelObservationEvidence({provider, missionIds, knownRuns, records}) and evaluateMissionStopReceipt({missionId, receipt}); scripts/summarize-gpu-agent-runs.mjs must reject a malformed declared modelObservationSummary and a contradictory duplicate alias.",
+      "expectedCurrentState": "red — both helpers are absent (namespace dynamic import reports a non-callable function) and the two ledger boundary rules are not implemented. The red is only the pending frozen contract; the one positive ledger anchor (complete observed proof stays comparable) passes.",
+      "actualRedBaseline": {
+        "mainTree": {
+          "command": "node tests/shared-gpu-model-collector-test.mjs",
+          "result": "1/65 independent cases passed; 64 expected-red",
+          "cause": "scripts/shared-gpu-acceptance.mjs still exports neither collectModelObservationEvidence nor evaluateMissionStopReceipt in the production main tree, and the two ledger model-proof boundaries are absent."
+        },
+        "consumerSecondCandidateIsolatedReadOnly": {
+          "source": ".dispatch-data/attempts/run_2b95024340fe47b8850037545380d79b/workspace (read-only copy in the task scratch .scratch-collector-edge, no candidate byte changed)",
+          "command": "node .scratch-collector-edge/consumer-baseline/tests/shared-gpu-model-collector-test.mjs",
+          "result": "53/65 independent cases passed; 12 expected-red",
+          "note": "All 48 original cases still pass on that candidate; the 12 red cases are exactly the frozen edges, so they locate consumer defects rather than a fixture error.",
+          "redCases": [
+            "conflicting duplicate final records fail closed in either order - the candidate keeps only the last read per filename, so unknown-then-observed is still reported observed",
+            "an invalid extra safe run file stays unbound and required - a parsed {} / missing-Mission / expected-Mission-but-foreign-provider record is silently skipped instead of staying a required unbound run",
+            "contradictory known starts for one provider/run (two concrete Missions, or two concrete sessions) are resolved first-wins, so a final record matching the first start is still reported observed instead of failing closed in either order",
+            "a cancel_requested / pending research Agent release, an unconfirmed materializer release and a quarantined / cancel_requested benchmark release are ignored while the Mission aggregate looks confirmed",
+            "a paused or idle loopStatus is accepted as explicit stopped intent",
+            "an idle null-run Agent (runId:null, missionId:null) with a stopped Mission and an explicit confirmed empty resources array is rejected instead of confirming without fabricating an Agent release"
+          ],
+          "newCasesGreenOnThatCandidate": [
+            "semantically identical duplicates with nested JSON key order are not a conflict",
+            "a concrete unrelated foreign-Mission file is still ignored and never miscounted",
+            "a current Agent run that is idle but has no release proof is rejected",
+            "a known start missing Mission and session is completed only by the current actual record (consistent duplicate starts/records add no denominator entry)",
+            "a DTO never supplies an unknown known-start Mission or session"
+          ]
+        }
+      },
+      "existingAssertionsUnchanged": "The original 48 cases and the 13 cases delivered by the previous revision of this batch (61 total) are byte-for-byte retained and only the 4 new independent known-start cases were inserted; the frozen contract was not weakened.",
+      "covers": [
+        "collectModelObservationEvidence: complete two-Mission final records produce one observed summary with one bound DTO per required run and no unbound evidence",
+        "collector denominator: known starts dedupe by provider/run identity; repeated identical snapshots add no required run; a known run with a missing/unreadable/malformed final record and a blank final session keeps its required identity and blocks observation instead of disappearing",
+        "Root repro 1: a later unknown or conflict final record invalidates an earlier observed snapshot (no ranking prefers observed over a later unknown/conflict/missing state); duplicate final records with conflicting content fail closed",
+        "Root repro 2: the actual record/known-start session is the expected identity, so a DTO carrying its own different session is rejected and never bound",
+        "Root repro 3: an unreadable or malformed second run file (and a new safe run file unknown to the start list) remains unbound evidence with a reason and cannot drop out of the denominator",
+        "collector binding: foreign provider / conflicting Mission / conflicting session / session-vs-thread disagreement / unsafe or non-.json filename / blank runId and blank or missing identity all stay non-observed; unrelated foreign-Mission files are ignored only when not referenced by a known start; two Missions never relabel each other from a current active Mission",
+        "collector known-start conflicts (new): two concrete known starts for one provider/run that disagree on Mission (MIS_A vs MIS_B) or on session (sess_a vs sess_other) are never resolved first-wins - in either list order the summary stays non-observed, observedRunCount is 0, the pair dedupes to exactly one required run and the contradiction is retained in unboundRuns with a nonblank reason, even when the final record matches the originally first-listed start",
+        "collector known-start completion (new): a known start missing both Mission and session is completed from the same current-attempt actual record (positive, consistent duplicate starts/records add no denominator entry), while a DTO field never supplies a Mission or session the actual record lacks, and no DTO-supplied identity survives as bound evidence",
+        "collector duplicates: the same final state serialized with a different key order is one semantic duplicate, not a conflict; the same holds when the nested modelObservation key order differs too (new positive)",
+        "frozen edge (new): the same filename with two final records whose content differs must fail closed in BOTH orders - unknown-then-observed, observed-then-unknown, conflict-then-observed, observed-then-conflict and two valid records naming different models in either order all stay non-observed with the run counted exactly once",
+        "frozen edge (new): a safe extra run file whose parsed content is {} or [] or lacks a Mission, or names an expected Mission with a foreign provider, may not be dropped - it stays an unbound required record (requiredRunCount 2) with a nonblank reason and a non-observed summary; a concrete unrelated foreign-Mission file not referenced by a known start is still ignored and never counted",
+        "evaluateMissionStopReceipt: real HTTP shape {state} with release in state.workflowRecovery.resourceRelease, exact state.activeMissionId, missionPaused true, stopped loop intent, every listed resource explicitly confirmed with no pending/unconfirmed/quarantined/blocked flag, and (when a current Agent run exists) same-Mission explicit release proof; a top-level resourceRelease is not accepted",
+        "stop receipt negatives: missing/malformed/foreign/pending release, missing resources array, unconfirmed or flagless resource, blocked/quarantined resource, running intent, no current Agent proof, current Agent release barrier or foreign Agent Mission, a 202 without proof, and a mismatched requested Mission all stay unconfirmed while HTTP 202 with a proving state may confirm",
+        "stop receipt negatives (new): a confirmed Mission aggregate is not enough - a cancel_requested/pending researchAgent, an unconfirmed/barrier baseline.materializer release or a quarantined/cancel_requested benchmark release must each be rejected through the existing cancellation-contract resource barrier; paused and idle loopStatus are not explicit stopped intent and are rejected",
+        "stop receipt positive baseline (new): an idle Agent with runId:null and missionId:null over a stopped Mission with an explicitly confirmed resources[] confirms without fabricating an Agent release; the same Agent holding a run but no release proof is still rejected",
+        "stop receipt purity: Object.freeze/deep-frozen states are evaluated without mutation on both the confirmed and rejected paths, and every receipt is exercised through the exact {state} shape",
+        "ledger: a complete observed per-run proof stays comparable; a declared modelObservationSummary missing or malformed reasons and an observed summary carrying a reason are non-comparable; duplicate aliases with equal config/outcome but contradictory per-run model proof are a duplicate conflict that stays in the denominator exactly once and is never silently deduped to the first good record"
+      ]
+    }
+  ],
+  "registrationEditsForSingleWriter": [
+    "package.json: add \"test:shared-gpu-model-collector\": \"node tests/shared-gpu-model-collector-test.mjs\"",
+    "scripts/verify-local-c500-release.mjs: append 'test:shared-gpu-model-collector' to the checks array",
+    "scripts/verify-non-hardware-robustness.mjs: append 'test:shared-gpu-model-collector' to the checks array",
+    "tests/README.md: add the 'Shared GPU model collector / stop receipt (hardware-free)' section documenting tests/shared-gpu-model-collector-test.mjs and that it is fixture-only"
+  ],
+  "mustNotChange": [
+    "package.json",
+    "scripts/verify-local-c500-release.mjs",
+    "scripts/verify-non-hardware-robustness.mjs",
+    "tests/README.md",
+    "scripts/shared-gpu-acceptance.mjs",
+    "scripts/summarize-gpu-agent-runs.mjs",
+    "tests/model-observation-acceptance-test.mjs",
+    "tests/shared-gpu-acceptance-test.mjs",
+    "client-runtime/model-observation.mjs",
+    "client-runtime/cancellation-contract.mjs"
+  ],
+  "verificationCommands": [
+    "node --check tests/shared-gpu-model-collector-test.mjs",
+    "node tests/shared-gpu-model-collector-test.mjs"
+  ],
+  "boundaries": [
+    "No live provider, Agent, Runtime, GPU, filesystem collection or N=20 batch is started by this test.",
+    "The test creates no production stub: it reads the helpers off the real module namespace and reports an explicit expected-red verdict while they are absent.",
+    "The frozen contract is upstream-owned; test authors must not weaken it to match a pre-implementation tree.",
+    "A green run of this test is contract/ledger evidence only, never a hardware sample or a stability/performance conclusion."
+  ]
+}

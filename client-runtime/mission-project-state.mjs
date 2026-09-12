@@ -14,6 +14,7 @@ import { knowledgeDrafts, candidateEvaluations, failureRecords, agentProfiles, c
 import { normalizeMissionBudgetMs, createCurrentBestState, createResearchAgentState, createIterationStats, createIdleAgent } from './mission-state-shapes.mjs';
 import { createKnowledgeMaintenanceState, markCandidateAccepted, toPublishedKnowledgeAsset } from './knowledge-state.mjs';
 import { isInfrastructureTestFailure } from './operator-test-evidence.mjs';
+import { bindModelObservation } from './model-observation.mjs';
 
 // 轮次必需事实的快照版本。事实来自生产已观测状态，独立于经验库预算；缺失观测一律
 // 记 unknown/not_observed，绝不用当前（可能已前移）的预算或 Mission 声明补齐。
@@ -729,6 +730,27 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
     return project;
   }
 
+  // §model-observation：只归档与当前 run 精确绑定的 DTO（深拷贝）。同一 runId 的重复
+  // reset 保留首次有效归档，不用旧 archive 为当前 foreign/不一致身份回填；新 run 不继承。
+  const archivedModelObservationFor = (state, archivedEntry = null) => {
+    const agent = state.agent || {};
+    if (!agent.runId) return null;
+    // Identity is the current live run's own exact bytes (provider/run/mission and
+    // the real stream session). Session is never normalized, and the archived DTO's
+    // own session is never used to widen the expected identity.
+    const identity = {
+      provider: agent.runtimeKind || null,
+      runId: agent.runId,
+      missionId: agent.missionId || state.activeMissionId || null,
+      sessionId: agent.threadId ?? null,
+    };
+    const bound = bindModelObservation(agent.modelObservation, identity);
+    if (bound) return bound;
+    // 运行态观测存在但不匹配当前身份：明确拒绝，绝不回退旧 archive 回填。
+    if (agent.modelObservation) return null;
+    return bindModelObservation(archivedEntry?.modelObservation, identity);
+  };
+
   function resetMissionRunState(state, goal, { referenceFixture = false } = {}) {
     assertResourcesReleased(state);
     if (state.agent?.runId) {
@@ -788,6 +810,8 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
       // 会污染该输入。就地替换保持时序位置，新一轮仍排在最前。
       const archivedHistory = state.runHistory || [];
       const archivedIndex = archivedHistory.findIndex((round) => round?.runId === archivedEntry.runId);
+      const archivedObservation = archivedModelObservationFor(state, archivedIndex >= 0 ? archivedHistory[archivedIndex] : null);
+      if (archivedObservation) archivedEntry.modelObservation = archivedObservation;
       const sourceMissionId = archivedHistory[archivedIndex]?.roundFacts?.previous?.missionId
         || state.agent.missionId || state.activeMissionId || null;
       const sourceProjectId = state.missions?.find((item) => item.id === sourceMissionId)?.projectId || null;
@@ -857,7 +881,8 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
     state.publishedAssets = referenceFixture ? [] : structuredClone(state.publishedAssets || []);
     state.knowledgeMaintenance = createKnowledgeMaintenanceState('idle');
     state.knowledgeReferences = [];
-    state.agent = { ...(state.agent || {}), missionId: state.activeMissionId, goal: goal.trim() };
+    // 运行态不继承已归档观测；新 run 只能来自当前 stream 的新观测。
+    state.agent = { ...(state.agent || {}), missionId: state.activeMissionId, goal: goal.trim(), modelObservation: null };
     return state;
   }
 
@@ -874,6 +899,8 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
       roundId: state.iterationStats?.roundBudget?.roundId || null,
       profileId: 'profile.operator-orchestrator',
       goal: goal.trim(),
+      // A brand-new run never inherits a previous run's observation.
+      modelObservation: null,
       startedAt: new Date().toISOString(),
       durationMs: 7200,
       currentAction: null,

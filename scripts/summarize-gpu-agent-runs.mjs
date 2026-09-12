@@ -7,6 +7,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { summarizeModelObservations } from '../client-runtime/model-observation.mjs';
 import {
   GPU_ATTEMPT_SCHEMA_VERSION, GPU_SUMMARY_SCHEMA_VERSION, GPU_LEDGER_SCHEMA_VERSION,
   buildConfigFingerprint, digestJson,
@@ -149,6 +150,123 @@ const identityOf = (record, index) => record?.attempt?.attemptId
   || record?.runDir
   || `record:${index}`;
 
+// ---------------------------------------------------------------------------
+// Per-run response-model proof (docs/development/MODEL_OBSERVATION_ACCEPTANCE.md)
+// ---------------------------------------------------------------------------
+//
+// The attempt/summary retain the driver's raw per-run DTOs and required-run
+// identities at top level, outside the config hash. The ledger never trusts the
+// driver's `modelObservationSummary`: it re-runs the frozen pure summary over the
+// retained DTOs + required runs and then checks the attempt/summary/config claims
+// against that recomputation. Missing, malformed, foreign or contradictory
+// evidence stays non-comparable; it never upgrades (or downgrades) the outcome.
+const MODEL_SUMMARY_FIELDS = Object.freeze([
+  'schemaVersion', 'status', 'model', 'modelSource', 'models', 'requiredRunCount', 'observedRunCount',
+]);
+const MODEL_OBSERVED = 'observed';
+
+// Null means "the container carries no model evidence at all" (a legacy record);
+// an object with array fields means evidence was retained (possibly incomplete).
+const modelProofOf = (container) => {
+  if (!container || typeof container !== 'object' || Array.isArray(container)) return null;
+  const observations = Array.isArray(container.modelObservations) ? container.modelObservations : null;
+  const requiredRuns = Array.isArray(container.modelObservationRequiredRuns) ? container.modelObservationRequiredRuns : null;
+  const summary = container.modelObservationSummary && typeof container.modelObservationSummary === 'object'
+    && !Array.isArray(container.modelObservationSummary) ? container.modelObservationSummary : null;
+  if (!observations && !requiredRuns && !summary) return null;
+  return { observations, requiredRuns, summary };
+};
+
+const recomputeModelSummary = (proof) => {
+  if (!proof || !proof.observations || !proof.requiredRuns) return null;
+  try {
+    return summarizeModelObservations(proof.observations, { requiredRuns: proof.requiredRuns });
+  } catch {
+    return null;
+  }
+};
+
+// Field-semantic comparison of a declared summary against the recomputation.
+// `reasons` wording is diagnostic and intentionally excluded from the value
+// comparison, but the declared summary must still carry a complete, well-formed
+// shape: every required field plus a valid reasons array (empty when observed).
+const DECLARED_MODEL_SUMMARY_FIELDS = Object.freeze([...MODEL_SUMMARY_FIELDS, 'reasons']);
+const declaredModelSummaryMalformed = (declared) => {
+  if (!declared || typeof declared !== 'object' || Array.isArray(declared)) return true;
+  if (!DECLARED_MODEL_SUMMARY_FIELDS.every((field) => Object.hasOwn(declared, field))) return true;
+  if (!Array.isArray(declared.reasons)) return true;
+  if (!declared.reasons.every((reason) => typeof reason === 'string' && reason.trim().length > 0)) return true;
+  // An observed verdict with a retained reason is self-contradictory.
+  if (declared.status === MODEL_OBSERVED && declared.reasons.length > 0) return true;
+  return false;
+};
+const sameModelSummary = (declared, recomputed) => Boolean(declared && recomputed)
+  && MODEL_SUMMARY_FIELDS.every((field) => digestJson(declared[field] ?? null) === digestJson(recomputed[field] ?? null));
+
+// Config claims must be derived from the same recomputed evidence. A label that
+// the retained evidence contradicts (forged `observed`, probe/init/env source, a
+// different model or a missing schema version) is non-comparable.
+const modelConfigIssues = (config, effectiveSummary) => {
+  const issues = [];
+  const provider = config && typeof config.provider === 'object' && !Array.isArray(config.provider)
+    ? config.provider : null;
+  if (!provider) return ['model_observation_config_missing'];
+  const claimsObserved = provider.modelSource === MODEL_OBSERVED
+    || provider.modelObservationStatus === MODEL_OBSERVED;
+  if (!effectiveSummary) {
+    if (claimsObserved) issues.push('model_observation_claim_mismatch');
+    return issues;
+  }
+  if (effectiveSummary.status !== MODEL_OBSERVED) {
+    if (claimsObserved) issues.push('model_observation_claim_mismatch');
+    return issues;
+  }
+  if (provider.model !== effectiveSummary.model) issues.push('model_observation_model_mismatch');
+  if (provider.modelSource !== MODEL_OBSERVED) issues.push('model_observation_source_mismatch');
+  if (provider.modelObservationStatus !== MODEL_OBSERVED) issues.push('model_observation_status_mismatch');
+  if (provider.modelObservationVersion !== effectiveSummary.schemaVersion) issues.push('model_observation_version_mismatch');
+  return issues;
+};
+
+const modelEvidenceIssues = ({ attemptProof, summaryProof, summaryExists, config }) => {
+  const issues = [];
+  // A legacy record with no retained DTO/required-run proof is counted but never
+  // comparable; there is no back-fill from another directory or the host.
+  if (!attemptProof) issues.push('model_observation_attempt_evidence_missing');
+  if (summaryExists && !summaryProof) issues.push('model_observation_summary_evidence_missing');
+  if (!summaryExists) issues.push('model_observation_summary_missing');
+  const attemptRecomputed = recomputeModelSummary(attemptProof);
+  const summaryRecomputed = recomputeModelSummary(summaryProof);
+  if (attemptProof && !attemptRecomputed) issues.push('model_observation_attempt_evidence_incomplete');
+  if (summaryProof && !summaryRecomputed) issues.push('model_observation_summary_evidence_incomplete');
+  // The two files must retain the same per-run bindings and DTO evidence.
+  if (attemptProof && summaryProof) {
+    if (digestJson(attemptProof.requiredRuns) !== digestJson(summaryProof.requiredRuns)) {
+      issues.push('attempt_summary_model_binding_mismatch');
+    }
+    if (digestJson(attemptProof.observations) !== digestJson(summaryProof.observations)) {
+      issues.push('attempt_summary_model_evidence_mismatch');
+    }
+  }
+  if (attemptProof && declaredModelSummaryMalformed(attemptProof.summary)) {
+    issues.push('model_observation_summary_malformed');
+  }
+  if (summaryProof && declaredModelSummaryMalformed(summaryProof.summary)) {
+    issues.push('model_observation_summary_malformed');
+  }
+  if (attemptProof && !sameModelSummary(attemptProof.summary, attemptRecomputed)) {
+    issues.push('model_observation_summary_mismatch');
+  }
+  if (summaryProof && !sameModelSummary(summaryProof.summary, summaryRecomputed)) {
+    issues.push('model_observation_summary_mismatch');
+  }
+  if (attemptRecomputed && summaryRecomputed && !sameModelSummary(attemptRecomputed, summaryRecomputed)) {
+    issues.push('attempt_summary_model_mismatch');
+  }
+  issues.push(...modelConfigIssues(config, summaryRecomputed || attemptRecomputed));
+  return issues;
+};
+
 // Pure ledger. `records` are `{ runDir, attempt, summary }` objects (either may be
 // null). Every retained attempt is counted once; duplicate identities (same
 // attemptId/runRoot or runDir passed twice) are de-duplicated with a warning and
@@ -171,8 +289,19 @@ export const summarizeAcceptanceRuns = (records = []) => {
       const kept = unique.find((entry) => entry.index === seen.get(matched));
       const previousOutcome = classifyAcceptanceRecord(kept.record).outcome;
       const duplicateOutcome = classifyAcceptanceRecord(record).outcome;
+      // Same config/outcome but contradictory per-run model proof is a duplicate
+      // conflict, not a harmless alias of the first good record.
+      const proofDigest = (value) => digestJson({
+        attemptObservations: value?.attempt?.modelObservations ?? null,
+        attemptRequired: value?.attempt?.modelObservationRequiredRuns ?? null,
+        attemptSummary: value?.attempt?.modelObservationSummary ?? null,
+        summaryObservations: value?.summary?.modelObservations ?? null,
+        summaryRequired: value?.summary?.modelObservationRequiredRuns ?? null,
+        summarySummary: value?.summary?.modelObservationSummary ?? null,
+      });
       const conflict = previousOutcome !== duplicateOutcome
-        || digestJson(kept.record.attempt?.config ?? null) !== digestJson(record?.attempt?.config ?? null);
+        || digestJson(kept.record.attempt?.config ?? null) !== digestJson(record?.attempt?.config ?? null)
+        || proofDigest(kept.record) !== proofDigest(record);
       kept.duplicateConflict ||= conflict;
       duplicates.push({
         identity,
@@ -212,6 +341,17 @@ export const summarizeAcceptanceRuns = (records = []) => {
       unknownFields.push('attempt_summary_config_mismatch');
     }
 
+    // Independent per-run response-model proof: recompute the frozen summary and
+    // reject missing/foreign/malformed/contradictory evidence or a config claim
+    // the retained evidence does not support.
+    const attemptProof = modelProofOf(attempt);
+    const summaryProof = modelProofOf(summary);
+    const modelIssues = modelEvidenceIssues({
+      attemptProof, summaryProof, summaryExists: Boolean(summary), config,
+    });
+    unknownFields.push(...modelIssues);
+
+    const recomputedModel = recomputeModelSummary(summaryProof) || recomputeModelSummary(attemptProof);
     const attemptValid = Boolean(attempt) && classified.attemptSchemaValid && classified.attemptTerminal;
     const comparabilityIssues = [...new Set(unknownFields)];
     if (!attemptValid) comparabilityIssues.push(classified.attemptMissing ? 'attempt_missing' : 'attempt_not_terminal');
@@ -239,6 +379,15 @@ export const summarizeAcceptanceRuns = (records = []) => {
       attemptTerminal: classified.attemptTerminal,
       summaryMissing: classified.summaryMissing,
       attemptMissing: classified.attemptMissing,
+      // Recomputed (never declared) response-model verdict for this retained run.
+      modelObservation: recomputedModel ? {
+        status: recomputedModel.status,
+        model: recomputedModel.model,
+        modelSource: recomputedModel.modelSource,
+        requiredRunCount: recomputedModel.requiredRunCount,
+        observedRunCount: recomputedModel.observedRunCount,
+      } : null,
+      modelObservationIssues: [...new Set(modelIssues)],
       errors: Array.isArray(record?.errors) ? [...record.errors] : [],
     };
   });

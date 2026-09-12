@@ -155,6 +155,7 @@ All external outcomes must be normalized before changing Mission state.
 | `state-reference-runtime.mjs` | existing reference-fixture progression | state and elapsed clock | fixture state/log projection |
 | `accept-gate.mjs` | I/O-free acceptance rules and the single versioned evidence decision | state, runner result and diagnostic envelopes | Gate / Baseline evidence / decision |
 | `evidence-decision.mjs` | I/O-free diagnostic qualification and versioned decision helpers | diagnostic envelope, expected candidate/run binding | three diagnostic predicates, fail-closed execution classification, binding-conflict projection, stable reason codes |
+| `model-observation.mjs` | I/O-free response-model observation contract (schema, pure observe/bind/summarize); byte-exact identities | raw Claude stream metadata, required run identities | frozen DTO, deep-detached binding, comparability summary |
 | `operator-test-evidence.mjs` | in-memory queue evidence projection | state and task snapshot | updated state / decisions / events |
 | `evidence-state.mjs` | shared review/Baseline shapes | kind/status/overrides | schema-compatible records |
 | `mission-objective.mjs` | objective normalization and queries | Mission/objective | normalized policy |
@@ -204,6 +205,10 @@ All external outcomes must be normalized before changing Mission state.
   `liveHardware=true`. Backend names and `publishable=true` are not publication
   authority; missing real diagnostics pauses for external verification instead
   of driving new Agent edits or being reported as complete evidence.
+- Response-model observation is provider-reported (`assistant.message.model`),
+  bound exactly by provider/run/mission/session and never promoted from
+  init/env/usage labels or declared configuration. `unknown`/`conflict` never
+  blocks a workflow and never becomes comparable; it is not remote attestation.
 - Test evidence and workspace candidate identities match.
 - The Workspace Git Diff is the only candidate admission authority. A Provider that
   did not terminate normally yields no candidates at all, and a candidate the Agent
@@ -358,6 +363,7 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 | [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；保存同轮选择 sidecar；完整可信凭据才记录执行观察 |
 | [round-budget-contract](round-budget-contract.md) | 主 Agent、测试与同轮重试共享 15 分钟墙钟；暂停/恢复不刷新 |
 | [cancellation-contract](cancellation-contract.md) | 资源释放真相、只读 barrier 与显式推进中的确认收敛 |
+| [model-observation](model-observation.md) | 无 I/O 的响应模型观测 DTO、按原始字节精确匹配的 provider/run/mission/session 绑定与必需 run 汇总；仅 `assistant.message.model` 是响应身份，unknown/conflict 不阻 workflow 也不可比 |
 
 执行包是 Candidate 文件、离线直接/传递依赖、精确锁定环境层和独立冻结验收包的
 逻辑整体。内容层按摘要复用；不要求每轮重复上传解释器/编译器/大型库。

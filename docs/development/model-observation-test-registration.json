@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "operator-studio.test-registration/v1",
+  "generatedAt": "2026-09-13",
+  "revision": {
+    "revision": 2,
+    "date": "2026-09-13",
+    "reason": "Upstream review found the frozen matrix-A cancellation positive fixture was internally inconsistent (run record session 'sess-proj' vs DTO session 'sess-cancel'), and Root reproduced pure/projection identity escapes. This delivery corrects that fixture and pins each escape as an independent negative. No production code and no shared registration file is touched.",
+    "corrections": [
+      "Cancellation projection positive now passes the explicit record session 'sess-cancel' as projectionRunRecord's third argument and asserts the projected observation session equals the actual record session; production may not use the DTO's own session as the expected identity to make a mismatched positive pass.",
+      "Adapter resume case now asserts the run record's sessionId and threadId both persist the learned current stream session, so the old resume hint cannot survive into archive binding."
+    ],
+    "addedAcceptanceCases": [
+      "pure: session identity is exact (' s ' vs 's' must not be trim-merged) and blank runId/missionId never yield an observed response",
+      "pure: bind refuses observed DTOs carrying error reasons; conflict DTOs whose observations contain a model not listed in models; duplicate observation event indexes",
+      "pure: duplicate evidence differing only by object key order is one run and is counted exactly once",
+      "projection: a run record/DTO bound to a foreign mission never projects into the current mission",
+      "projection: a cancelled run whose DTO session disagrees with the record is refused while the release receipt stays authoritative",
+      "projection: a run record claiming provider codex-cli never projects a claude-code observation",
+      "projection: a failing readRun clears the previously projected observation instead of leaving stale evidence"
+    ],
+    "expectedBaseline": "red — the main tree has no client-runtime/model-observation.mjs and no adapter/projection/archive integration; all 27 original semantics plus these added negatives execute, and the corrected cancellation fixture no longer passes on a session mismatch."
+  },
+  "authority": "docs/development/MODEL_OBSERVATION_ACCEPTANCE.md (frozen upstream; matrix A)",
+  "registrationPolicy": "test author delivers only tests/model-observation-test.mjs plus this isolated manifest; a later single writer registers the npm script, both verification gates and tests/README.md. No shared file is edited by this delivery.",
+  "hardwareFree": true,
+  "hardwareFreeStatement": "The test never starts a real Claude CLI, Python runner, network call or GPU process. The Claude adapter is driven through an injected fake child process, and agent-runtime/archive are driven through injected clients and real pure state entry points.",
+  "tests": [
+    {
+      "id": "model-observation",
+      "file": "tests/model-observation-test.mjs",
+      "kind": "contract/integration acceptance (hardware-free)",
+      "owner": "response model observation (adapter + pure API + runtime projection + archive)",
+      "npmScript": {
+        "name": "test:model-observation",
+        "command": "node tests/model-observation-test.mjs"
+      },
+      "verificationGates": [
+        {
+          "script": "scripts/verify-local-c500-release.mjs",
+          "checksArray": "checks",
+          "addEntry": "  'test:model-observation',"
+        },
+        {
+          "script": "scripts/verify-non-hardware-robustness.mjs",
+          "checksArray": "checks",
+          "addEntry": "  'test:model-observation',"
+        }
+      ],
+      "packageJsonScriptEntry": "\"test:model-observation\": \"node tests/model-observation-test.mjs\"",
+      "readmeSection": "## Response model observation acceptance (hardware-free)",
+      "readmeDescription": "`model-observation-test.mjs` is the independent acceptance for the frozen response-model observation contract in `docs/development/MODEL_OBSERVATION_ACCEPTANCE.md` (matrix A). It dynamically imports the new pure `client-runtime/model-observation.mjs` so a missing module is reported as `MODEL_OBSERVATION_API_MISSING` rather than a loader crash, then drives the real `createClaudeClient` with an injected fake child stream (matching response observation, resume hint not observed, init-only/empty unknown, blank/synthetic unknown, mixed models conflict, foreign/missing sessions, mixed completeness where a valid response is followed by a missing/blank/synthetic model or a missing session and must not be promoted to observed, thinking-only metadata without thinking leakage, unterminated final JSON line, cancellation retention, JSON round trip), the real `createAgentRuntime({ mode: 'claude-code' })` projection (exact current run/mission/session/provider binding, metadata-only change with unchanged status/event count, run/mission/session/provider-foreign and missing bindings clear the stale value, cancellation settlement retains the observation without weakening the release receipt) and the real `createMissionProjectState(...).resetMissionRunState` archive path (bound value preserved as a detached `runHistory[].modelObservation`, live run cleared, run/mission/session/provider-foreign observation bindings refused instead of archived, new run inherits nothing). Pure bind coverage includes observation-backed conflict DTOs (one matching observation per model, distinct event indexes) and rejects conflict DTOs whose `models` have no observations or only partial/foreign-session evidence. It is hardware-free and starts no real Claude, Python or GPU process; it runs in both verification gates. It is written before the implementation and is expected to be red until `client-runtime/model-observation.mjs` exists and the adapter/projection/archive semantics are implemented; it must not be weakened to accept a partial implementation.",
+      "baseline": {
+        "expected": "red",
+        "notSyntaxError": true,
+        "reasons": [
+          "client-runtime/model-observation.mjs does not exist: dynamic import fails with ERR_MODULE_NOT_FOUND and all pure API checks (including the added revision-2 negatives) report MODEL_OBSERVATION_API_MISSING.",
+          "The Claude adapter does not persist record.modelObservation (matching/resume/thinking/conflict/foreign/synthetic/mixed-completeness/cancellation checks fail on the missing field).",
+          "claude-client.mjs drops the unterminated final JSON line: the close-flush closure captures the mutable `eventBuffer` variable and writes an empty line after it is cleared, so the final no-newline event is lost (verified with a scratch probe under .scratch-model-test/).",
+          "agent-runtime does not project state.agent.modelObservation for the current run, so both metadata-only change and stale-clearing checks fail; no run/mission/session/provider binding check is implemented, so wrongly bound observations would survive.",
+          "resetMissionRunState does not archive modelObservation into runHistory[], does not clear the live value and does not refuse run/mission/session/provider-foreign observation bindings."
+        ]
+      }
+    }
+  ],
+  "notInScope": [
+    {
+      "file": "tests/model-observation-acceptance-test.mjs",
+      "reason": "Frozen matrix B (driver/ledger) is a separate author's deliverable and must be registered by its own manifest; this manifest does not cover or register it."
+    },
+    {
+      "file": "tests/shared-gpu-acceptance-test.mjs",
+      "reason": "Frozen matrix B fixture migration is a shared-file edit and is forbidden for this delivery."
+    }
+  ],
+  "changedFiles": [
+    "tests/model-observation-test.mjs",
+    "docs/development/model-observation-test-registration.json"
+  ]
+}
