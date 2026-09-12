@@ -53,10 +53,19 @@ export const createAgentCommands = ({
       if (roundExperience?.collect) await roundExperience.collect({ state: clone, mission });
       ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
       resetMissionRunState(clone, goal, { referenceFixture });
+      // 重放（prepare 重新收到已记录 intent）必须复用 intent 里冻结的轮次事实，不能重新
+      // 读取当前可能已经前移的 facts；首次 prepare 才在 reset 归档后取当前快照。
+      const frozenRoundFacts = intent.roundFacts !== undefined ? structuredClone(intent.roundFacts) : null;
+      if (intent.roundFacts !== undefined) {
+        clone.iterationStats = { ...(clone.iterationStats || {}), roundFacts: structuredClone(intent.roundFacts) };
+      }
       const experienceContext = roundExperience
         ? await roundExperience.prepare({ state: clone, mission, roundId: clone.iterationStats.roundBudget.roundId })
         : null;
-      if (recordIntent) await recordIntent({ ...intent, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null) });
+      const roundFacts = intent.roundFacts !== undefined
+        ? frozenRoundFacts
+        : structuredClone(clone.iterationStats.roundFacts || null);
+      if (recordIntent) await recordIntent({ ...intent, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundFacts });
       ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
       let checkpoint = null;
       if (runtimeDescriptor.mode === 'reference-fixture') await runEffect(() => resetMissionWorkspace(state.activeMissionId));
@@ -72,13 +81,15 @@ export const createAgentCommands = ({
         : runtimeDescriptor.mode === 'cli-file'
           ? 'mission.run_requested'
           : `${runtimeDescriptor.mode === 'claude-code' ? 'claude' : 'codex'}.run_started`;
-      return { payload: { goal, referenceFixture, eventType, runtimeMode: runtimeDescriptor.mode, agent: clone.agent, checkpoint, runId: clone.agent.runId, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceStatus: structuredClone(clone.iterationStats.roundExperienceStatus || null), experienceCollection: structuredClone(clone.iterationStats.experienceCollection || null) }, result: { runId: clone.agent.runId } };
+      return { payload: { goal, referenceFixture, eventType, runtimeMode: runtimeDescriptor.mode, agent: clone.agent, checkpoint, runId: clone.agent.runId, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceStatus: structuredClone(clone.iterationStats.roundExperienceStatus || null), experienceCollection: structuredClone(clone.iterationStats.experienceCollection || null), roundFacts }, result: { runId: clone.agent.runId } };
     },
     apply: (state, payload) => {
       resetMissionRunState(state, payload.goal, { referenceFixture: payload.referenceFixture });
       if (payload.checkpoint) state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), payload.checkpoint].slice(-5) };
       state.agent = payload.agent;
       if (payload.roundBudget) state.iterationStats = { ...(state.iterationStats || {}), roundBudget: structuredClone(payload.roundBudget), roundExperience: structuredClone(payload.roundExperience || null), roundExperienceStatus: structuredClone(payload.roundExperienceStatus || null), experienceCollection: structuredClone(payload.experienceCollection || null) };
+      // apply 只重建准备阶段冻结的事实快照，不从 apply 时的当前状态重新推导。
+      if (payload.roundFacts !== undefined) state.iterationStats = { ...(state.iterationStats || {}), roundFacts: structuredClone(payload.roundFacts) };
       if (!state.runtimeEvents?.some((e) => e.type === payload.eventType && e.payload?.runId === payload.runId)) {
         appendRuntimeEvent(state, payload.eventType, { runId: payload.runId, goal: payload.goal }, { kind: 'adapter', mode: payload.referenceFixture ? 'reference-fixture' : payload.eventType === 'mission.run_requested' ? 'cli-file' : payload.runtimeMode });
       }

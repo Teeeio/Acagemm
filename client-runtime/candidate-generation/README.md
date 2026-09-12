@@ -51,6 +51,12 @@ semantic/correctness/benchmark contracts、raw intent 及未解决冲突/unknown
 `iterationContext`/`iterationEvidence`，Prompt 会将它们标记为不可信的历史证据，供下一轮
 定位失败 case、benchmark profile、候选 digest 和已尝试方向；它们不能覆盖冻结契约，也不能
 触发 Queue/Gate 决策。字段缺失时不生成对应段落，保持通用 Mission 的 Prompt 简洁。
+生产流程现在会实际填充 `iterationContext`：Agent Runtime 在托管模式下调用
+`selectRoundFactsForPrompt`，把归档轮次的事实快照（上一轮 candidate/digest/
+generationPath、Correctness 结果、失败分类、Gate、Decision、回滚真实性、
+currentBest 与资产状态）深拷贝进 `mission.iterationContext` 后渲染。快照来自
+`resetMissionRunState` 的生产观测，独立于经验库预算，且只在本轮 Round 与当前
+Mission 匹配时投递；它同样是不可信历史证据，不能覆盖冻结契约或触发 Queue/Gate 决策。
 生产流程中的上一轮经验优先来自应用层冻结的 `experienceContext`：
 `roundExperienceService` 按 Project、Mission、Round 和 Scope 检索并绑定人工指导、已验证
 的执行观察与版本摘要，再由 Agent Runtime 以 `experienceInstruction` 传入 Prompt。它与

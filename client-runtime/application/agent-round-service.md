@@ -18,6 +18,16 @@ Order: ensure budget → collect old Benchmark → prepare context → verify bu
 
 Managed checkpoint history remains capped at five. Reference-fixture `handled:false` still uses startAgentRun and the existing mission.run_started event; it receives the same persisted context through state. This service does not promote fixture/CPU observations or change Gate/Profile semantics.
 
+The reset step also produces the versioned archived-round facts snapshot in
+`state.iterationStats.roundFacts` (see
+[mission-project-state](../mission-project-state.md)). No new port or parameter is
+involved: this service passes `state`/`mission` and preserves a deep copy of the
+facts on the returned state's iterationStats; the Agent
+Runtime projects the snapshot into `iterationContext` only when it is bound to the
+active Mission and admitted Round. Facts are therefore available to the automatic
+round exactly like the manual command path, and a Mission switch or newer Round
+cannot deliver stale facts.
+
 ## Dependencies / Side Effects
 
 Only pure `round-budget-contract` and `experience-contract` imports. Workspace, Agent, runtime events and experience effects are injected. Persistence and initial HTTP-run command replay remain composition-root/command-journal responsibilities.

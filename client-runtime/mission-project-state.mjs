@@ -13,6 +13,228 @@ import { createSemanticSnapshot, normalizeSemanticSnapshot } from './semantic-sn
 import { knowledgeDrafts, candidateEvaluations, failureRecords, agentProfiles, capabilityRegistry } from './state-reference-data.mjs';
 import { normalizeMissionBudgetMs, createCurrentBestState, createResearchAgentState, createIterationStats, createIdleAgent } from './mission-state-shapes.mjs';
 import { createKnowledgeMaintenanceState, markCandidateAccepted, toPublishedKnowledgeAsset } from './knowledge-state.mjs';
+import { isInfrastructureTestFailure } from './operator-test-evidence.mjs';
+
+// 轮次必需事实的快照版本。事实来自生产已观测状态，独立于经验库预算；缺失观测一律
+// 记 unknown/not_observed，绝不用当前（可能已前移）的预算或 Mission 声明补齐。
+export const ROUND_FACTS_SCHEMA_VERSION = 'operator-studio.round-facts/v1';
+
+const factsText = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+const factsNumber = (value) => {
+  if (typeof value !== 'number' && !(typeof value === 'string' && value.trim())) return null;
+  return Number.isFinite(Number(value)) ? Number(value) : null;
+};
+const factsBoolean = (value) => (typeof value === 'boolean' ? value : null);
+const factsFiles = (value) => {
+  if (Array.isArray(value)) return value.map(factsText).filter(Boolean);
+  if (typeof value === 'string') return value.split(',').map((file) => file.trim().replaceAll('\\', '/')).filter(Boolean);
+  return [];
+};
+
+const roundCorrectnessFacts = (benchmark) => {
+  const measurements = Array.isArray(benchmark?.result?.benchmark) ? benchmark.result.benchmark : [];
+  const environments = [];
+  const cases = [];
+  for (const measurement of measurements) {
+    if (!measurement || typeof measurement !== 'object') continue;
+    const correctness = measurement.correctness && typeof measurement.correctness === 'object' ? measurement.correctness : null;
+    for (const item of Array.isArray(correctness?.caseResults) ? correctness.caseResults : []) {
+      if (!item || typeof item !== 'object') continue;
+      cases.push({
+        environment: factsText(measurement.environment),
+        profile: factsText(measurement.profile),
+        case: factsText(item.case),
+        dtype: factsText(item.dtype),
+        passed: factsBoolean(item.passed),
+        maxDiff: factsNumber(item.maxDiff),
+        rmse: factsNumber(item.rmse),
+        cosDiff: factsNumber(item.cosDiff),
+      });
+    }
+    environments.push({
+      environment: factsText(measurement.environment),
+      profile: factsText(measurement.profile),
+      stage: factsText(measurement.stage),
+      passed: correctness?.passed === true ? true : correctness?.passed === false ? false : null,
+      total: factsNumber(correctness?.total),
+      passedCases: factsNumber(correctness?.passedCases),
+      failedCase: factsNumber(correctness?.failedCase),
+      failedCaseName: factsText(correctness?.failedCaseName),
+      failedCaseCategory: factsText(correctness?.failedCaseCategory),
+      error: factsText(correctness?.error),
+    });
+  }
+  const firstFailure = environments.find((item) => item.passed === false) || null;
+  const totals = environments.map((item) => item.total).filter((value) => value !== null);
+  return {
+    status: firstFailure || cases.some((item) => item.passed === false) ? 'failed'
+      : environments.length && environments.every((item) => item.passed === true) ? 'passed' : 'not_observed',
+    total: totals.length ? Math.max(...totals) : null,
+    failedCase: firstFailure?.failedCase ?? null,
+    failedCaseName: firstFailure?.failedCaseName ?? null,
+    failedCaseCategory: firstFailure?.failedCaseCategory ?? null,
+    error: firstFailure?.error ?? null,
+    environments,
+    cases,
+  };
+};
+
+const findRoundFailureRecord = (state, candidateId) => {
+  const records = Array.isArray(state.failureRecords) ? state.failureRecords.filter((item) => item && typeof item === 'object') : [];
+  const queueRunId = factsText(state.benchmark?.runId);
+  return records.find((item) => candidateId && factsText(item.candidateId) === candidateId)
+    || records.find((item) => candidateId && factsText(item.sourceAttempt) === candidateId)
+    || records.find((item) => queueRunId && factsText(item.evidence) === queueRunId)
+    || null;
+};
+
+const roundFailureFacts = (state, candidateId) => {
+  const serviceError = state.benchmark?.lastServiceError;
+  if (serviceError && typeof serviceError === 'object') {
+    return {
+      classification: isInfrastructureTestFailure({ error: serviceError }) ? 'infrastructure' : 'operator',
+      code: factsText(serviceError.code),
+      message: factsText(serviceError.message),
+      source: 'benchmark.lastServiceError',
+    };
+  }
+  const record = findRoundFailureRecord(state, candidateId);
+  if (!record) return null;
+  const failure = record.failure && typeof record.failure === 'object' ? record.failure : record;
+  return {
+    classification: isInfrastructureTestFailure(failure) ? 'infrastructure' : 'operator',
+    code: factsText(failure.code),
+    message: factsText(failure.message) || factsText(record.decisionReason),
+    source: 'failureRecords',
+  };
+};
+
+const roundGateFacts = (gate) => {
+  if (!gate || typeof gate !== 'object' || Array.isArray(gate)) return null;
+  if (!Object.hasOwn(gate, 'passed') && !factsText(gate.result) && !factsText(gate.summary)) return null;
+  return {
+    passed: factsBoolean(gate.passed),
+    result: factsText(gate.result),
+    publishable: factsBoolean(gate.publishable),
+    evidenceSource: factsText(gate.evidenceSource),
+    failedRules: Array.isArray(gate.failedRules) ? gate.failedRules.map(factsText).filter(Boolean) : [],
+    passedRules: Array.isArray(gate.passedRules) ? gate.passedRules.map(factsText).filter(Boolean) : [],
+    evaluatedRules: factsNumber(gate.evaluatedRules),
+    summary: factsText(gate.summary),
+  };
+};
+
+const roundDecisionFacts = (decisionReview) => {
+  if (!decisionReview || typeof decisionReview !== 'object' || Array.isArray(decisionReview)) return null;
+  const resolution = decisionReview.resolution && typeof decisionReview.resolution === 'object' ? decisionReview.resolution : null;
+  if (!decisionReview.status && !resolution && !decisionReview.gate) return null;
+  return {
+    status: factsText(decisionReview.status),
+    recommendation: factsText(decisionReview.recommendation),
+    candidateId: factsText(decisionReview.candidateId),
+    outcome: factsText(resolution?.outcome),
+    source: factsText(resolution?.source),
+    note: factsText(resolution?.note),
+    resolvedAt: factsText(resolution?.resolvedAt) || factsText(decisionReview.resolvedAt),
+    gateEvaluatedAt: factsText(decisionReview.gateEvaluatedAt),
+  };
+};
+
+// 回滚状态只报告真实执行过的恢复。工作区未被恢复时不得声称 clean：要么明确
+// 记录 unknown（拒绝了却没有回滚记录），要么 not_performed（本轮无需回滚）。
+const roundRollbackFacts = (workflowRecovery, decisionReview, candidateId, candidateDigest) => {
+  const recovery = workflowRecovery?.lastRecovery;
+  const checkpoints = Array.isArray(workflowRecovery?.checkpoints) ? workflowRecovery.checkpoints : [];
+  const checkpoint = checkpoints.find((item) => item?.id === recovery?.checkpointId) || null;
+  const stableDigest = factsText(recovery?.stableDigest) || factsText(checkpoint?.stableDigest);
+  const conflict = (candidateId && recovery?.candidateId && candidateId !== recovery.candidateId)
+    || (candidateDigest && recovery?.candidateDigest && candidateDigest !== recovery.candidateDigest)
+    || (recovery?.stableDigest && checkpoint?.stableDigest && recovery.stableDigest !== checkpoint.stableDigest);
+  if (recovery?.type === 'round_rollback' && !conflict && factsText(recovery.checkpointId)
+    && stableDigest && recovery.workspaceClean === true && factsText(recovery.restoredAt)) {
+    return {
+      performed: true,
+      status: 'performed',
+      checkpointId: factsText(recovery.checkpointId),
+      stableDigest,
+      workspaceClean: recovery.workspaceClean === true,
+      restoredAt: factsText(recovery.restoredAt),
+      candidateId: factsText(recovery.candidateId),
+      candidateDigest: factsText(recovery.candidateDigest),
+    };
+  }
+  const rejected = decisionReview?.gate?.passed === false || decisionReview?.resolution?.outcome === 'reject';
+  return {
+    performed: false,
+    status: rejected || recovery ? 'unknown' : 'not_performed',
+    checkpointId: null,
+    stableDigest: null,
+    workspaceClean: null,
+    restoredAt: null,
+    reason: conflict ? 'Recovery record conflicts with the archived candidate or checkpoint.' : rejected
+      ? 'Round was rejected but no rollback record was observed for this run.'
+      : 'No completed rollback was observed for this run.',
+  };
+};
+
+const roundCurrentBestFacts = (state) => {
+  const best = state.currentBest;
+  if (!best || typeof best !== 'object' || Array.isArray(best)) return null;
+  const candidateId = factsText(best.candidateId);
+  const candidate = (state.candidateEvaluations || []).find((item) => item?.id === candidateId) || null;
+  const asset = candidateId ? (state.publishedAssets || []).find((item) => item?.sourceCandidate === candidateId) || null : null;
+  return {
+    candidateId,
+    version: factsText(best.version),
+    value: best.value ?? null,
+    improvement: best.improvement ?? null,
+    status: factsText(best.status),
+    candidateStatus: factsText(candidate?.status),
+    candidateClassification: factsText(candidate?.classification),
+    candidateDecision: factsText(candidate?.decision),
+    assetStatus: factsText(asset?.status),
+    assetVersion: factsText(asset?.version),
+  };
+};
+
+const roundCandidateFacts = ({ candidate, failureRecord, candidateId, candidateDigest, generationPath, degraded, degradationReason, sourceRunId }) => {
+  const id = factsText(candidateId);
+  const digest = factsText(candidateDigest);
+  const title = factsText(candidate?.title) || factsText(failureRecord?.title);
+  const direction = factsText(candidate?.change) || factsText(candidate?.hypothesis)
+    || factsText(failureRecord?.change) || factsText(failureRecord?.hypothesis);
+  const files = factsFiles(candidate?.files);
+  if (!id && !digest && !title) return null;
+  return {
+    id,
+    digest,
+    title: title || null,
+    direction: direction || null,
+    files: files.length ? files : factsFiles(failureRecord?.files),
+    generationPath: factsText(generationPath),
+    degraded: degraded === true,
+    degradationReason: factsText(degradationReason),
+    sourceRunId: factsText(sourceRunId),
+  };
+};
+
+// 供 Agent Runtime 投影用：只有当快照绑定的是当前 Mission 且是当前 Round 时才返回，
+// 否则返回 null。快照是深拷贝，后续状态变化不会回写旧事实。
+export const selectRoundFactsForPrompt = (state, mission) => {
+  const facts = state?.iterationStats?.roundFacts;
+  if (!facts || typeof facts !== 'object' || Array.isArray(facts)) return null;
+  if (facts.schemaVersion !== ROUND_FACTS_SCHEMA_VERSION) return null;
+  const missionId = factsText(mission?.id);
+  if (!missionId || factsText(facts.target?.missionId) !== missionId) return null;
+  if (factsText(facts.previous?.missionId) !== missionId) return null;
+  const currentRoundId = factsText(state?.iterationStats?.roundBudget?.roundId);
+  if (!currentRoundId || factsText(facts.target?.roundId) !== currentRoundId) return null;
+  const factsProjectId = factsText(facts.target?.projectId);
+  const missionProjectId = factsText(mission?.projectId);
+  if (factsProjectId && missionProjectId && factsProjectId !== missionProjectId) return null;
+  if (facts.previous?.projectId && missionProjectId && facts.previous.projectId !== missionProjectId) return null;
+  return structuredClone(facts);
+};
 
 export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirForMission, missionSourceDirFor } = {}) => {
   if (typeof rootDir !== 'string' || typeof workspaceDir !== 'string' || typeof workspaceDirForMission !== 'function' || typeof missionSourceDirFor !== 'function') {
@@ -488,6 +710,24 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
       const historyCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === historyCandidateId)
         || (state.candidateEvaluations || []).find((candidate) => candidate.patchDigest && candidate.patchDigest === state.benchmark?.candidate?.digest)
         || null;
+      const candidateDigest = state.benchmark?.candidate?.digest || historyCandidate?.patchDigest || null;
+      const candidateSourceRunId = historyCandidate?.sourceRunId
+        || (historyCandidateId && state.benchmark?.purpose === 'candidate' ? state.agent.runId : null);
+      const failureRecord = findRoundFailureRecord(state, historyCandidateId);
+      const candidateSummary = roundCandidateFacts({
+        candidate: historyCandidate,
+        failureRecord,
+        candidateId: historyCandidateId,
+        candidateDigest,
+        generationPath: historyCandidate?.candidateGenerationPath,
+        degraded: historyCandidate?.degraded,
+        degradationReason: historyCandidate?.degradationReason,
+        sourceRunId: candidateSourceRunId,
+      });
+      // 结构化事实只使用 run 启动时保存的 roundId。raw runHistory 的历史兼容字段
+      // 仍可回退当前预算，但明确标记来源；该回退不是原 round 身份的证据。
+      const sourceRoundId = factsText(state.agent.roundId);
+      const budgetRoundId = factsText(state.iterationStats?.roundBudget?.roundId);
       const archivedEntry = {
         runId: state.agent.runId,
         threadId: state.agent.threadId || null,
@@ -496,17 +736,20 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
         stage: state.stage,
         // 归属字段：这一轮属于哪个 Round、哪个队列请求，必须随归档一起留下。
         // 结算投影迟到时，恢复 run 的归属不能被写成首次失败的 runId。
-        roundId: state.iterationStats?.roundBudget?.roundId || null,
+        roundId: sourceRoundId || budgetRoundId || null,
+        sourceRoundId,
+        roundIdSource: sourceRoundId ? 'run' : budgetRoundId ? 'roundBudget' : 'unknown',
         queueRequestId: state.benchmark?.runId || null,
         candidateId: historyCandidateId,
-        candidateDigest: state.benchmark?.candidate?.digest || historyCandidate?.patchDigest || null,
-        candidateSourceRunId: historyCandidate?.sourceRunId
-          || (historyCandidateId && state.benchmark?.purpose === 'candidate' ? state.agent.runId : null),
+        candidateDigest,
+        candidateSourceRunId,
         candidateGenerationPath: historyCandidate?.candidateGenerationPath || null,
         degraded: historyCandidate?.degraded === true,
         degradationReason: historyCandidate?.degradationReason || null,
         // 编辑工具的失败与缺失是两件事，归档必须带着这个事实标记，否则验收报告看不出生成路径为什么降级。
         editToolStatus: historyCandidate?.editToolStatus || null,
+        promptAudit: structuredClone(state.agent.promptAudit || null),
+        candidateSummary,
         benchmark: structuredClone(state.benchmark),
         decisionReview: structuredClone(state.decisionReview),
         currentBest: structuredClone(state.currentBest),
@@ -519,10 +762,61 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
       // 会污染该输入。就地替换保持时序位置，新一轮仍排在最前。
       const archivedHistory = state.runHistory || [];
       const archivedIndex = archivedHistory.findIndex((round) => round?.runId === archivedEntry.runId);
+      const sourceMissionId = archivedHistory[archivedIndex]?.roundFacts?.previous?.missionId
+        || state.agent.missionId || state.activeMissionId || null;
+      const sourceProjectId = state.missions?.find((item) => item.id === sourceMissionId)?.projectId || null;
+      const priorFacts = [archivedHistory[archivedIndex]?.roundFacts, state.iterationStats?.roundFacts]
+        .find((facts) => facts?.schemaVersion === ROUND_FACTS_SCHEMA_VERSION
+          && facts.previous?.runId === state.agent.runId && facts.previous?.missionId === sourceMissionId);
       state.runHistory = (archivedIndex >= 0
         ? archivedHistory.map((round, index) => (index === archivedIndex ? archivedEntry : round))
         : [archivedEntry, ...archivedHistory]
       ).slice(0, 20);
+      const mission = state.missions?.find((item) => item.id === state.activeMissionId);
+      // 轮次必需事实：与经验库预算完全独立，零命中/预算满都完整保留。目标 Round 与
+      // 来源 run/round 分开记录；旧 run 缺 roundId 时只记 unknown，不拿当前预算补齐。
+      state.iterationStats = {
+        ...(state.iterationStats || {}),
+        roundFacts: {
+          schemaVersion: ROUND_FACTS_SCHEMA_VERSION,
+          recordedAt: new Date().toISOString(),
+          target: {
+            missionId: state.activeMissionId || null,
+            projectId: mission?.projectId || state.activeProjectId || null,
+            roundId: budgetRoundId,
+            roundNumber: factsNumber(state.iterationStats?.roundBudget?.roundNumber),
+          },
+          previous: {
+            missionId: sourceMissionId,
+            projectId: sourceProjectId,
+            runId: state.agent.runId,
+            roundId: sourceRoundId,
+            roundIdSource: sourceRoundId ? 'run' : 'unknown',
+            threadId: state.agent.threadId || null,
+            runtimeKind: state.agent.runtimeKind || null,
+            goal: factsText(state.agent.goal),
+            stage: factsText(state.stage),
+            completedAt: archivedEntry.completedAt,
+            candidateId: historyCandidateId || null,
+            candidateDigest: factsText(candidateDigest),
+            queueRequestId: factsText(archivedEntry.queueRequestId),
+            candidateSourceRunId: factsText(candidateSourceRunId),
+          },
+          candidate: candidateSummary,
+          correctness: roundCorrectnessFacts(state.benchmark),
+          failure: roundFailureFacts(state, historyCandidateId),
+          gate: roundGateFacts(state.decisionReview?.gate || historyCandidate?.acceptGate),
+          decision: roundDecisionFacts(state.decisionReview),
+          rollback: roundRollbackFacts(state.workflowRecovery, state.decisionReview, historyCandidateId, candidateDigest),
+          currentBest: roundCurrentBestFacts(state),
+        },
+      };
+      // reset 保留 agent.runId；重放必须复用首次冻结的来源事实。只让投递目标跟随
+      // 当前已准入 Round，历史归档中的快照保持首次写入内容且不与运行态共用引用。
+      if (priorFacts) {
+        state.iterationStats.roundFacts = { ...structuredClone(priorFacts), target: state.iterationStats.roundFacts.target };
+      }
+      archivedEntry.roundFacts = structuredClone(priorFacts || state.iterationStats.roundFacts);
     }
     state.stage = 'diagnosis';
     state.patchApplied = false;
@@ -551,6 +845,7 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
       progress: 0,
       missionId: state.agent?.missionId || 'MIS_01JH7R',
       runId,
+      roundId: state.iterationStats?.roundBudget?.roundId || null,
       profileId: 'profile.operator-orchestrator',
       goal: goal.trim(),
       startedAt: new Date().toISOString(),

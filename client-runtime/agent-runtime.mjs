@@ -29,6 +29,7 @@ import { runtimeRegistry } from './agent-runtime/registry.mjs';
 import { createAgentRuntimeEngine } from './agent-runtime/engine.mjs';
 import { isManagedWorkspaceRuntimeMode, normalizeAgentRuntimeMode } from './agent-runtime/capabilities.mjs';
 import { appendRuntimeEvent } from './runtime-events.mjs';
+import { selectRoundFactsForPrompt } from './mission-project-state.mjs';
 
 export { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
 export { appendRuntimeEvent } from './runtime-events.mjs';
@@ -625,7 +626,7 @@ export function createAgentRuntime(options = {}) {
     return { ready: true, code: 'AGENT_RUNTIME_READY', runtime: descriptor, workspace };
   };
 
-  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null }) => {
+  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null, roundId = null }) => {
     assertResourcesReleased(state);
     const activeStartAt = activeStartMissions.get(mission.id);
     if (activeStartAt && Date.now() - activeStartAt < 120_000) {
@@ -640,6 +641,9 @@ export function createAgentRuntime(options = {}) {
     startGuardTimer.unref?.();
     try {
     if (mode === 'reference-fixture') { activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer); return { handled: false }; }
+    // 新 run 显式绑定它启动时所属的 Round。归档上一轮时以 agent.roundId 还原原 round
+    // 身份，而不是读取可能已经前移的 roundBudget。
+    const activeRoundId = roundId || state.iterationStats?.roundBudget?.roundId || null;
     const experienceInstruction = experienceContext ? formatExperienceContext(experienceContext, {
       projectId: mission.projectId, missionId: mission.id, roundId: state.iterationStats?.roundBudget?.roundId,
     }) : '';
@@ -683,6 +687,7 @@ export function createAgentRuntime(options = {}) {
         progress: 5,
         missionId: mission.id,
         runId: session.id,
+        roundId: activeRoundId,
         runtimeKind: 'opencode',
         profileId: 'profile.operator-orchestrator',
         goal,
@@ -746,8 +751,13 @@ export function createAgentRuntime(options = {}) {
         ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
         workspace,
       ).then((result) => result.stdout.split('\0').map((file) => file.replaceAll('\\', '/')).filter(Boolean).sort());
+      // 已归档轮次的必需事实经既有 iterationContext 通道进入 prompt：深拷贝投影到
+      // 局部 mission 副本，用户 Mission 定义不被修改；绑定不匹配（Mission 切换、Round
+      // 已前移、旧版本快照）时 selectRoundFactsForPrompt 返回 null，不泄漏事实。
+      const roundFacts = selectRoundFactsForPrompt(state, mission);
+      const promptMission = roundFacts ? { ...mission, iterationContext: roundFacts } : mission;
       const prompt = buildCandidateGenerationPrompt({
-        mission,
+        mission: promptMission,
         goal,
         workspace,
         baseline,
@@ -765,6 +775,7 @@ export function createAgentRuntime(options = {}) {
         progress: 5,
         missionId: mission.id,
         runId,
+        roundId: activeRoundId,
         runtimeKind: mode,
         threadId: run.threadId || resumeThreadId || null,
         profileId: 'profile.operator-orchestrator',
@@ -822,6 +833,7 @@ export function createAgentRuntime(options = {}) {
       progress: 0,
       missionId: mission.id,
       runId,
+      roundId: activeRoundId,
       profileId: 'profile.operator-orchestrator',
       goal,
       startedAt: request.createdAt,

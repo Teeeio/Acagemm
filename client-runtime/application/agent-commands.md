@@ -10,6 +10,14 @@ frozen round experience before checkpoint/Agent effects and records both in the
 journal intent. Prepared payload/apply retain these values; neither recovery nor
 same-round retries can refresh the deadline or silently select newer experience
 versions. Budget is rechecked before launching the Agent.
+The same freeze applies to the archived-round facts snapshot
+(`iterationStats.roundFacts`, see
+[mission-project-state](../mission-project-state.md)): the first prepare captures
+it after reset, records it in the journal intent, and returns it in the payload;
+payload/apply and intent replay reuse the frozen snapshot instead of re-reading
+facts that may already describe a newer round. A replay therefore receives the
+same previous run/candidate/correctness/Gate/rollback/current-best facts even
+while the containing state has advanced.
 
 Only explicit runs.plan may allocate a new monotonic budget identity after a
 persisted completed budget and published/completed knowledge maintenance. This

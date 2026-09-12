@@ -15,6 +15,7 @@ export const createAgentRoundService = ({ resetMissionRunState, resetMissionWork
     ensureBudget();
     validateExperienceContext(experienceContext, { projectId: mission.projectId, missionId: mission.id, roundId: roundBudget.roundId });
     resetMissionRunState(state, goal, { referenceFixture: runtimeMode === 'reference-fixture' });
+    const roundFacts = structuredClone(state.iterationStats?.roundFacts || null);
     if (runtimeMode === 'reference-fixture') await resetMissionWorkspace(state.activeMissionId);
     if (isManagedWorkspaceRuntimeMode(runtimeMode)) {
       const checkpoint = await createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline');
@@ -27,7 +28,7 @@ export const createAgentRoundService = ({ resetMissionRunState, resetMissionWork
       appendRuntimeEvent(state, 'mission.run_started', { runId: state.agent.runId, goal }, { kind: 'adapter', mode: 'reference-fixture' });
     }
     const result = runtimeRun.state || state;
-    result.iterationStats = { ...(result.iterationStats || {}), roundBudget: state.iterationStats.roundBudget, roundExperience: experienceContext };
+    result.iterationStats = { ...(result.iterationStats || {}), roundBudget: state.iterationStats.roundBudget, roundExperience: experienceContext, roundFacts };
     return result;
   };
   return Object.freeze({ startRound });

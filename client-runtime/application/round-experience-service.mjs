@@ -1,4 +1,5 @@
 import { appendExperience, emptyExperienceStore, experienceError, validateExperienceContext } from '../experience-contract.mjs';
+import { isBackendTargetName } from '../operator-test-evidence.mjs';
 
 const requiredEvidence = ['missionId', 'candidateId', 'runId', 'patchDigest', 'packageDigest', 'environmentDigest', 'acceptanceDigest', 'hardware', 'executionMode', 'outcome'];
 const preparingRounds = new WeakMap();
@@ -8,7 +9,86 @@ const timeoutValue = (value) => {
   if (!Number.isFinite(value) || value <= 0 || value > 120000) throw new TypeError('timeoutMs must be positive, finite, and no greater than 120000');
   return value;
 };
-const defaultScope = (mission) => ({ ...((mission.operatorProfile?.operator || mission.operator) ? { operator: mission.operatorProfile?.operator || mission.operator } : {}), hardware: mission.hardware ?? [], tags: mission.tags ?? [] });
+const targetValues = (value) => {
+  const items = Array.isArray(value) ? value : value == null ? [] : [value];
+  const result = [];
+  for (const item of items) {
+    if (typeof item !== 'string') continue;
+    const normalized = item.trim().toLowerCase();
+    if (!normalized || result.includes(normalized)) continue;
+    result.push(normalized);
+    if (result.length >= 16) break;
+  }
+  return result;
+};
+const declaredValues = (value, label) => {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > 16 || value.some((item) => typeof item !== 'string' || !item.trim() || item.trim().length > 8000)) {
+    throw experienceError('EXPERIENCE_INVALID', `${label} must be a bounded array of non-empty strings`, 400);
+  }
+  return targetValues(value);
+};
+const sameValues = (left, right) => left.length === right.length && left.every((item) => right.includes(item));
+// Mission 只固定 operator/tags；hardware 与 architecture 是「本轮实际执行目标」，必须来自同 Mission
+// 的 resolvedTarget（执行结果投影），不能拿 backend 名冒充，也不能拿声明值覆盖实际值。
+const missionScope = (mission) => ({
+  ...((mission.operatorProfile?.operator || mission.operator) ? { operator: mission.operatorProfile?.operator || mission.operator } : {}),
+  tags: mission.tags ?? [],
+});
+const boundTargetFor = (state, mission) => {
+  const target = state?.iterationStats?.resolvedTarget;
+  if (!target || typeof target !== 'object' || Array.isArray(target) || target.missionId !== mission.id) return null;
+  const hardware = targetValues(target.hardware);
+  const architecture = targetValues(target.architecture);
+  if (!hardware.length || hardware.some(isBackendTargetName) || architecture.some(isBackendTargetName)) {
+    throw fail('ROUND_EXPERIENCE_TARGET_INVALID', 'The Mission-bound execution target has no valid hardware identity');
+  }
+  return { hardware, architecture };
+};
+const rejectBackend = (values, where) => {
+  const backend = values.find((item) => isBackendTargetName(item));
+  if (backend) throw fail('ROUND_EXPERIENCE_TARGET_INVALID', `Execution backend "${backend}" cannot be used as ${where}; it must not be retrieved as hardware`);
+};
+// 默认/显式 scope 都不得绕过 Mission 已绑定的执行目标：无解析目标才回退 Mission 明确 hardware
+// （backend 名必须显式报错，不能悄悄退化成正常零命中）；显式 scope 与绑定目标冲突同样拒绝。
+const queryScope = (state, mission, scope) => {
+  const base = missionScope(mission);
+  const bound = boundTargetFor(state, mission);
+  if (scope === undefined) {
+    if (bound) return { ...base, hardware: bound.hardware, ...(bound.architecture.length ? { architecture: bound.architecture } : {}) };
+    rejectBackend(targetValues(mission.hardware), 'a hardware target');
+    const declared = declaredValues(mission.hardware, 'mission.hardware');
+    rejectBackend(declared, 'a hardware target');
+    return { ...base, hardware: declared };
+  }
+  if (!scope || typeof scope !== 'object' || Array.isArray(scope)) throw fail('ROUND_EXPERIENCE_TARGET_INVALID', 'Explicit experience scope must be a plain object');
+  const merged = { ...base, ...scope };
+  rejectBackend(targetValues(merged.hardware), 'a hardware target');
+  rejectBackend(targetValues(merged.architecture), 'an architecture target');
+  const explicitHardware = declaredValues(merged.hardware, 'scope.hardware');
+  const explicitArchitecture = declaredValues(merged.architecture, 'scope.architecture');
+  if (bound) {
+    if (explicitHardware.length && !sameValues(explicitHardware, bound.hardware)) throw fail('ROUND_EXPERIENCE_TARGET_INVALID', 'Explicit scope hardware conflicts with the Mission-bound execution target');
+    if (explicitArchitecture.length && !sameValues(explicitArchitecture, bound.architecture)) throw fail('ROUND_EXPERIENCE_TARGET_INVALID', 'Explicit scope architecture conflicts with the Mission-bound execution target');
+    merged.hardware = bound.hardware;
+    if (bound.architecture.length) merged.architecture = bound.architecture;
+  }
+  return merged;
+};
+// 执行记录始终保存「实际执行目标」，绝不因查询目标而改写证据。
+const recordScope = (mission, evidence) => ({
+  ...missionScope(mission),
+  hardware: [evidence.hardware],
+  ...(evidence.architecture !== undefined ? { architecture: [evidence.architecture] } : {}),
+});
+const targetMismatch = (bound, evidence) => {
+  const issues = [];
+  if (bound.hardware.length && !bound.hardware.includes(evidence.hardware)) issues.push({ field: 'hardware', expected: bound.hardware, actual: evidence.hardware });
+  if (bound.architecture.length && !bound.architecture.includes(evidence.architecture)) {
+    issues.push({ field: 'architecture', expected: bound.architecture, actual: evidence.architecture ?? null });
+  }
+  return issues.length ? issues : null;
+};
 const canonicalEvidence = (evidence) => appendExperience(emptyExperienceStore(), {
   projectId: 'validation', title: 'Execution evidence', content: 'Validation only.', author: 'validator', evidence,
 }, { id: 'validation', now: '1970-01-01T00:00:00.000Z', source: 'execution' }).result.experience.evidence;
@@ -49,11 +129,12 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
       }), deadline]);
     } finally { timers.clearTimeout(timer); parentSignal?.removeEventListener('abort', onParentAbort); }
   };
-  const prepare = async ({ state, mission, roundId, scope = defaultScope(mission), timeoutMs: limit = timeoutMs }) => {
+  const prepare = async ({ state, mission, roundId, scope, timeoutMs: limit = timeoutMs }) => {
     const access = accessFor({ state, mission });
     if (!safeId(roundId)) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'An explicit admitted roundId is required');
     if (state.iterationStats?.roundBudget && state.iterationStats.roundBudget.roundId !== roundId) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'Experience roundId must match the admitted round budget');
-    const expected = { ...access, missionId: mission.id, roundId, scope };
+    const resolvedScope = queryScope(state, mission, scope);
+    const expected = { ...access, missionId: mission.id, roundId, scope: resolvedScope };
     const existing = state.iterationStats?.roundExperience;
     if (existing?.roundId === roundId) {
       if (existing.projectId !== access.projectId || existing.missionId !== mission.id) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'A round context cannot change owning Project or Mission');
@@ -68,7 +149,7 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
     const claim = { roundId, promise: null };
     const operation = (async () => {
       try {
-        const context = await bounded('retrieve', (signal) => experienceService.retrieve({ ...access, missionId: mission.id, roundId, scope }, { signal }), limit);
+        const context = await bounded('retrieve', (signal) => experienceService.retrieve({ ...access, missionId: mission.id, roundId, scope: resolvedScope }, { signal }), limit);
         validateExperienceContext(context, expected);
         if (state.activeMissionId !== mission.id || (state.iterationStats.roundBudget && state.iterationStats.roundBudget.roundId !== roundId)) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'Mission or round changed while experience retrieval was pending');
         state.iterationStats = { ...state.iterationStats, roundExperience: context, roundExperienceStatus: { status: 'ready', projectId: access.projectId, missionId: mission.id, roundId, contextId: context.contextId, repositoryRevision: context.repositoryRevision } };
@@ -103,14 +184,28 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
         `Mission=${evidence.missionId}; Candidate=${evidence.candidateId}; run=${evidence.runId}.`,
         proof.summary || '',
       ].filter(Boolean).join('\n');
+      // 查询目标与实际执行目标冲突时保留实际证据并留下可审计 mismatch，绝不把证据改成预期值。
+      const declaredArchitecture = targetValues(mission.architecture);
+      const declaredHardware = targetValues(mission.hardware).filter((item) => !isBackendTargetName(item));
+      const bound = boundTargetFor(state, mission) || (declaredHardware.length || declaredArchitecture.length ? { hardware: declaredHardware, architecture: declaredArchitecture } : null);
+      const mismatch = bound ? targetMismatch(bound, evidence) : null;
+      if (mismatch) {
+        state.iterationStats = {
+          ...(state.iterationStats || {}),
+          resolvedTargetMismatch: {
+            missionId: mission.id, operation: evidence.operation, runId: evidence.runId,
+            detectedAt: state.benchmark?.completedAt || new Date().toISOString(), issues: mismatch,
+          },
+        };
+      }
       const result = await experienceService.recordObservation({
         projectId: access.projectId, visibility: 'project', title: `${evidence.operation}: ${evidence.outcome}`,
         content, author: 'Operator Studio execution verifier', confidence: 'medium',
-        scope: { ...defaultScope(mission), hardware: [evidence.hardware] }, evidence: verifiedEvidence, evidenceRefs: observation.evidenceRefs ?? [],
+        scope: recordScope(mission, evidence), evidence: verifiedEvidence, evidenceRefs: observation.evidenceRefs ?? [],
       }, { signal });
       if (signal.aborted) throw signal.reason;
       if (!result?.experience || result.experience.verification?.publishable !== false) throw fail('ROUND_EXPERIENCE_EVIDENCE_CONFLICT', 'Experience repository returned an invalid or publishable observation');
-      return { status: result.created ? 'recorded' : 'existing', ...result };
+      return { status: result.created ? 'recorded' : 'existing', ...result, ...(mismatch ? { targetMismatch: { missionId: mission.id, runId: evidence.runId, issues: mismatch } } : {}) };
     }, limit, true, parentSignal);
   };
   const collect = async ({ state, mission, observations, timeoutMs: limit = timeoutMs }) => {

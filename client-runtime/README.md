@@ -49,6 +49,17 @@ Agent 运行的失败原因与资源生命周期是两条独立契约：`agent.p
 携带 `candidate.sourceRunId`，Queue 请求与 `benchmark.candidate.sourceRunId`
 沿用该来源，不能用 Round 的首次 attempt ID 代替。
 
+归档轮次的必需事实（上一轮 candidate/digest、Correctness 结果、失败分类、Gate、
+Decision、回滚真实性与 currentBest 资产状态）在 `resetMissionRunState` 归档时写入
+`iterationStats.roundFacts`，版本见
+[mission-project-state](mission-project-state.md#round-facts-snapshot)。该快照
+独立于经验库预算：零命中、预算耗尽或未检索都不能丢事实，缺失观测一律
+`unknown`/`not_observed`，绝不用当前已前移的 roundBudget 或 Mission 声明补齐。
+自动轮次（`agent-round-service` + `agent-runtime.startRun`）与手动命令
+（`agent-commands` 冻结 intent/payload/apply）通过同一 `selectRoundFactsForPrompt`
+投影进 Prompt 的 `iterationContext`；只有绑定当前 Mission 与当前 Round 才会投递，
+Mission 切换、新轮次和重放都不会拿到别轮事实。
+
 ## Inputs
 
 - HTTP commands from the TUI or Web client.

@@ -19,6 +19,98 @@ export const isInfrastructureTestFailure = (failure = {}) => {
   return /remote api unreachable|tls|ssl|socket disconnected|connection refused|connection reset|network timed? ?out|connect timed? ?out|econnreset|econnrefused|etimedout|eai_again|enotfound/.test(message);
 };
 
+// 后端/来源名不是硬件目标。真实执行目标只能来自驱动探测结果，绝不从 backend
+// 字符串、设备型号或当前宿主环境反推；纯字符串无法证明执行真的探测过目标。
+const BACKEND_TARGET_NAMES = new Set(['local-shared-gpu', 'local-c500', 'local-c550']);
+export const isBackendTargetName = (value) => typeof value === 'string' && BACKEND_TARGET_NAMES.has(value.trim().toLowerCase());
+
+const normalizeTargetValues = (value) => {
+  const items = Array.isArray(value) ? value : value == null ? [] : [value];
+  const result = [];
+  for (const item of items) {
+    if (typeof item !== 'string') continue;
+    const normalized = item.trim().toLowerCase();
+    if (!normalized || result.includes(normalized)) continue;
+    result.push(normalized);
+    if (result.length >= 16) break;
+  }
+  return result;
+};
+
+// 返回 null 表示「本轮没有可信的实际执行目标」：此时必须保留旧目标，不得清空。
+// 探测凭据是 environment.targetProbe 中真实的 deviceName/driverVersion，或归一化后的
+// environment.device + environment.driverVersion。仅硬件/架构字符串不构成执行已探测的证明，
+// 因此 shared-GPU 预检失败结果里硬编码的 hardware="nvidia-gpu" 不会覆盖历史目标。
+// CPU 的 terminal completed 结果（hardware=cpu 且 executionMode=cpu）可独立保留，不要求 GPU 探测。
+export const extractEnvironmentTarget = (environment, { status } = {}) => {
+  if (!environment || typeof environment !== 'object' || Array.isArray(environment)) return null;
+  const probe = environment.targetProbe && typeof environment.targetProbe === 'object' && !Array.isArray(environment.targetProbe) ? environment.targetProbe : {};
+  const hardware = normalizeTargetValues(environment.hardware).filter((item) => !isBackendTargetName(item));
+  if (!hardware.length) return null;
+  const architecture = normalizeTargetValues(environment.architecture).filter((item) => !isBackendTargetName(item));
+  const executionMode = typeof environment.executionMode === 'string' ? environment.executionMode.trim().toLowerCase() : null;
+  const targetText = (value) => typeof value === 'string' && value.trim() ? value.trim() : null;
+  const device = targetText(environment.device) || targetText(probe.deviceName);
+  const driverVersion = targetText(environment.driverVersion) || targetText(probe.driverVersion);
+  const probed = Boolean(device && driverVersion);
+  const cpuDeclared = status === 'completed' && executionMode === 'cpu' && hardware.length === 1 && hardware[0] === 'cpu';
+  if (!probed && !cpuDeclared) return null;
+  return {
+    hardware,
+    architecture,
+    device,
+    driverVersion,
+    backend: typeof environment.source === 'string' && environment.source.trim() ? environment.source.trim().toLowerCase() : null,
+    executionMode,
+  };
+};
+
+const projectResolvedTarget = (state, snapshot) => {
+  const activeMissionId = typeof state?.activeMissionId === 'string' && state.activeMissionId ? state.activeMissionId : null;
+  if (!activeMissionId) return;
+  // 任务与 Mission 的归属以提交载荷为准；显式属于别的 Mission 的结果绝不能污染本 Mission。
+  if (snapshot?.payload?.missionId != null && snapshot.payload.missionId !== activeMissionId) return;
+  const result = snapshot?.result;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return;
+  if (result.experienceEvidence?.missionId != null && result.experienceEvidence.missionId !== activeMissionId) return;
+  const target = extractEnvironmentTarget(result.environment, { status: snapshot.status });
+  if (!target) return;
+  const sourceRunId = [snapshot.payload?.requestId, result.experienceEvidence?.runId, snapshot.runId, state.benchmark?.runId]
+    .find((value) => typeof value === 'string' && value) || null;
+  const previous = state.iterationStats?.resolvedTarget?.missionId === activeMissionId ? state.iterationStats.resolvedTarget : null;
+  const mission = state.missions?.find((item) => item.id === activeMissionId);
+  const constraints = [
+    ['previous', previous && { hardware: normalizeTargetValues(previous.hardware), architecture: normalizeTargetValues(previous.architecture) }],
+    ['mission', { hardware: normalizeTargetValues(mission?.hardware).filter((item) => !isBackendTargetName(item)), architecture: normalizeTargetValues(mission?.architecture) }],
+  ];
+  const issues = [];
+  for (const [source, expected] of constraints) {
+    if (!expected) continue;
+    for (const field of ['hardware', 'architecture']) {
+      if (expected[field].length && (!target[field].length || target[field].some((value) => !expected[field].includes(value)))) issues.push({ source, field, expected: expected[field], actual: target[field] });
+    }
+  }
+  const mismatch = issues.length ? { missionId: activeMissionId, sourceTaskId: snapshot.taskId, runId: sourceRunId, issues, detectedAt: snapshot.completedAt || new Date().toISOString() } : null;
+  const existingMismatches = state.iterationStats?.resolvedTargetMismatches || [];
+  const seen = mismatch && existingMismatches.some((item) => item.sourceTaskId === mismatch.sourceTaskId && JSON.stringify(item.issues) === JSON.stringify(mismatch.issues));
+  state.iterationStats = {
+    ...(state.iterationStats || {}),
+    resolvedTarget: {
+      missionId: activeMissionId,
+      hardware: target.hardware,
+      ...(target.architecture.length ? { architecture: target.architecture } : {}),
+      device: target.device,
+      driverVersion: target.driverVersion,
+      backend: target.backend,
+      executionMode: target.executionMode,
+      sourceTaskId: snapshot.taskId || null,
+      sourceRunId,
+      resolvedAt: snapshot.completedAt || new Date().toISOString(),
+    },
+    ...(mismatch ? { resolvedTargetMismatch: mismatch, resolvedTargetMismatches: seen ? existingMismatches : [...existingMismatches, mismatch].slice(-10) } : {}),
+  };
+};
+
 export function applyOperatorTestSnapshot(state, snapshot) {
   if (!snapshot || snapshot.taskId !== state.benchmark?.testTaskId) return state;
   // A test result is not proof that an independently owned Agent has exited.
@@ -56,6 +148,9 @@ export function applyOperatorTestSnapshot(state, snapshot) {
     lastServiceError: snapshot.error ? structuredClone(snapshot.error) : null,
   };
   reconcileResourceRelease(state);
+  // 终态结果才投影实际执行目标；baseline 分支随后清空 benchmark 也不影响它
+  // （目标存放在 iterationStats，随 Mission 持久化/切换）。
+  if (['completed', 'failed', 'cancelled'].includes(snapshot.status)) projectResolvedTarget(state, snapshot);
   if (snapshot.payload?.semanticBinding || state.benchmark.semanticBinding) {
     state.benchmark.semanticBinding = structuredClone(snapshot.payload?.semanticBinding || state.benchmark.semanticBinding);
     if (state.benchmark.result && typeof state.benchmark.result === 'object') {

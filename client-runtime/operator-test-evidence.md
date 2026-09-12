@@ -25,7 +25,29 @@ managed-runtime evidence may create a Knowledge draft, not a published asset.
   upstream submission/admission must establish workspace identity.
 - Infrastructure failure must not become negative kernel evidence.
 - Failed/cancelled Baseline status remains truthful.
+- A matched terminal snapshot projects the actual executed target from
+  `result.environment` into `state.iterationStats.resolvedTarget`, bound to the
+  active Mission plus `sourceTaskId`/`sourceRunId` (payload `requestId` first).
+  It is a distinct dimension from the backend/source name and is retained when a
+  Baseline completion resets `benchmark`.
+- Projection requires positive proof that the target was probed: a
+  `targetProbe` carrying `deviceName`/`driverVersion`, or normalized
+  `device`+`driverVersion`; a `completed` CPU result with `hardware=cpu` and
+  `executionMode=cpu` is independently admissible. Hardware/architecture strings
+  alone are not proof, so a shared-GPU preflight/cancelled result without a probe
+  can neither fabricate nor clear an existing target (an existing `sm86` survives).
+- Payload/evidence explicitly belonging to another Mission is never projected onto
+  the active Mission, and a backend name (`local-shared-gpu`, `local-c500`, ...) is
+  never accepted as projected hardware.
 - Existing human-review requests stay blocking.
+- Before replacing the target, projection compares the actual identity with the
+  previous same-Mission target and explicit Mission constraints. Contradictions or
+  newly undeclared dimensions remain in `resolvedTargetMismatch` and a bounded
+  `resolvedTargetMismatches` history (10 entries); the actual evidence is unchanged.
+  `isBackendTargetName(value)` and `extractEnvironmentTarget(environment,{status})`
+  are public pure helpers used by round experience scope validation. Backend names
+  are `local-shared-gpu`, `local-c500`, `local-c550`; legacy device labels such as
+  `C550` are preserved as hardware declarations.
 - Simulation evidence remains preview-only and non-publishable.
 - Terminal transition handling and event deduplication retain existing behavior;
   this is not a generic idempotent event-sourcing API.
