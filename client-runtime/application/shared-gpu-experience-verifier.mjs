@@ -23,9 +23,30 @@ const normalizedEvidence = (value) => {
   result.liveHardware = result.executionMode === 'gpu';
   return result;
 };
+const plainObject = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+// Structural comparison of the whole authorized receipt, independent of key
+// order: the runner appends `architecture` after `liveHardware`, while the
+// canonical recorded evidence carries it among the declared fields. Key order
+// is not identity, but every own field - including unknown extras - must still
+// match exactly, so dropping `architecture` or flipping a value still fails.
+const sameValue = (left, right) => {
+  if (Object.is(left, right)) return true;
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  const leftArray = Array.isArray(left); const rightArray = Array.isArray(right);
+  if (leftArray !== rightArray) return false;
+  if (leftArray) return left.length === right.length && left.every((item, index) => sameValue(item, right[index]));
+  if (!plainObject(left) || !plainObject(right)) return false;
+  const leftKeys = Object.keys(left); const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key]));
+};
 const sameEvidence = (left, right) => {
   const a = normalizedEvidence(left); const b = normalizedEvidence(right);
-  return a && b && JSON.stringify(a) === JSON.stringify(b);
+  return a !== null && b !== null && sameValue(a, b);
 };
 
 /**

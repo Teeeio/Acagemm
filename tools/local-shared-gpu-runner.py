@@ -41,6 +41,31 @@ def _load_base():
     return module
 
 
+def _resolve_architecture(executable):
+    """Best-effort architecture identity, read from the driver.
+
+    Never guessed from the device name: a name->sm table would silently claim an
+    architecture the driver never confirmed. Older nvidia-smi builds do not
+    expose compute_cap, so this runs as a separate optional query and returning
+    None simply leaves the architecture undeclared.
+    """
+    try:
+        probe = subprocess.run(
+            [executable, "--query-gpu=compute_cap", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=20, check=False,
+        )
+    except Exception as error:  # noqa: BLE001 - optional probe, never fatal
+        return None, f"compute capability query failed: {error}"
+    if probe.returncode != 0 or not probe.stdout.strip():
+        return None, "nvidia-smi did not expose compute_cap; architecture left undeclared"
+    raw = probe.stdout.strip().splitlines()[0].strip()
+    digits = raw.replace(".", "", 1)
+    if not raw or not digits.isdigit() or "." not in raw:
+        return None, f"unexpected compute_cap value: {raw}"
+    major, minor = raw.split(".", 1)
+    return f"sm{major}{minor}", None
+
+
 def _probe_nvidia(torch, device):
     executable = os.environ.get("OPERATOR_GPU_NVIDIA_SMI") or shutil.which("nvidia-smi")
     if not executable:
@@ -54,7 +79,7 @@ def _probe_nvidia(torch, device):
     row = probe.stdout.strip().splitlines()[0].split(",")
     if len(row) < 2 or not row[0].strip():
         raise RuntimeError("nvidia-smi returned an invalid GPU record")
-    return {
+    result = {
         "tool": executable,
         "deviceIndex": int(device),
         "deviceName": row[0].strip(),
@@ -64,6 +89,12 @@ def _probe_nvidia(torch, device):
         "cudaVersion": getattr(torch.version, "cuda", None),
         "nvidiaSmi": probe.stdout.strip()[:4000],
     }
+    architecture, architecture_note = _resolve_architecture(executable)
+    if architecture:
+        result["architecture"] = architecture
+    else:
+        result["architectureNote"] = architecture_note
+    return result
 
 
 def _benchmark_one(module, torch, inputs, warmup, repeats):
@@ -178,6 +209,12 @@ def main():
         try:
             result = json.loads(result_path.read_text(encoding="utf-8"))
             environment = result.setdefault("environment", {})
+            # 基类 runner 已经在这里放了一份来自驱动探测的 target（dict，见 _probe_nvidia）。
+            # 这里曾经把它整份覆盖成硬编码字面量 "nvidia-gpu"，等于丢掉权威探测结果。
+            # 现在它是唯一消费者：保留原始探测，并从它派生两个相互独立的作用域维度。
+            # 厂商与架构必须分维度 —— 塞进同一个数组会让 some() 退化成跨维度的 OR。
+            probe = environment.get("hardware") if isinstance(environment.get("hardware"), dict) else {}
+            architecture = probe.get("architecture")
             environment.update({
                 "runtime": "local-shared-gpu-runner/v1",
                 "service": "local-shared-gpu-adapter",
@@ -186,7 +223,15 @@ def main():
                 "executionMode": "gpu",
                 "liveHardware": True,
                 "publishable": False,
+                "targetProbe": probe or None,
             })
+            if isinstance(architecture, str) and architecture:
+                environment["architecture"] = architecture
+                environment["device"] = probe.get("deviceName")
+                environment["driverVersion"] = probe.get("driverVersion")
+            else:
+                # 未解析出架构就不声明该维度：不猜、不填默认值。
+                environment["architectureNote"] = probe.get("architectureNote") or "architecture was not resolved"
             task_path = Path(os.environ.get("OPERATOR_LOCAL_C500_TASK_JSON", ""))
             task = json.loads(task_path.read_text(encoding="utf-8")) if task_path.is_file() else {}
             payload = task.get("payload") or {}
@@ -212,6 +257,9 @@ def main():
                     "operation": "test",
                     "liveHardware": True,
                 }
+                # 架构只在真的解析出来时才写进证据；解析不出就不声明，绝不补一个默认值。
+                if environment.get("architecture"):
+                    result["experienceEvidence"]["architecture"] = environment["architecture"]
             result["publishable"] = False
             result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         except Exception as error:

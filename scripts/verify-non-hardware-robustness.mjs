@@ -40,6 +40,8 @@ const checks = [
   'test:semantic-tui',
   'test:semantic-tui-extreme',
   'test:module-extreme-contract',
+  'test:experience-architecture',
+  'test:shared-gpu-target-probe',
   'test:runtime',
   'test:agent-runtime-candidate-admission',
   'test:round-settlement-interleaving',

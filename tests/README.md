@@ -45,6 +45,28 @@ CRUD without Runtime/queue mutation. Round-experience and agent-start-context
 verify frozen versions, journal replay and scoped prompt input. Round-budget tests
 cover the complete 15-minute clock across retries, pause and pending cancellation.
 
+## Experience architecture / driver target coverage
+
+`experience-architecture-test.mjs` drives only the public append/read/retrieve/validate
+contract in memory. It proves that `hardware` and `architecture` are independent
+cross-dimension AND constraints (an `nvidia-gpu`+`sm100` record must not satisfy an
+`nvidia-gpu`+`sm86` query), that within-dimension OR is preserved, that execution
+`scope.architecture` is stamped only from the declared `evidence.architecture` and is
+explicitly rejected with `EXPERIENCE_INVALID` when the evidence never declared it, and
+that historical canonical records without architecture validate by reference with zero
+migration and never gain the attribute. It runs in both verification gates.
+
+`shared-gpu-target-probe-test.mjs` runs a real Python child that imports the shared-GPU
+runner while replacing `subprocess`/`shutil` with explicit doubles, so no GPU, driver,
+torch install or `nvidia-smi` process is touched. It covers `_resolve_architecture` and
+`_probe_nvidia` success, unsupported, error, empty and malformed driver output — always
+leaving the architecture undeclared with a note and never inferring it from the device
+name — and drives the real `main` normalization with an injected base-runner result:
+the probe's device, driver and architecture survive into `environment`/`experienceEvidence`
+while `publishable` stays false. Temporary scripts live under the ignored
+`.operator-studio-local/` and only that directory is removed in `finally`. It runs in both
+verification gates.
+
 ## Query/advancement coverage
 
 `runtime-read-isolation-test.mjs` boots an isolated Runtime with hardware disabled.

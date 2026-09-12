@@ -24,6 +24,8 @@ const checks = [
   'test:experience-api-service',
   'test:round-experience-service',
   'test:shared-gpu-experience-verifier',
+  'test:experience-architecture',
+  'test:shared-gpu-target-probe',
   'test:generic-mission-import',
   'test:agent-start-context',
   'test:round-budget',

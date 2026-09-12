@@ -26,6 +26,19 @@ declare `isolation.kind=shared-host-gpu`, `policy.allowSharedHostGpu=true`, and
 not satisfy a formal C550/C550 publication Gate. Cancellation and terminal
 resource release still use the existing durable supervisor.
 
+The adapter derives the execution target from the driver instead of hardcoding
+it. `_probe_nvidia` queries `name,driver_version,memory.total` and separately
+runs the optional `--query-gpu=compute_cap` probe implemented by
+`_resolve_architecture`, which reports `sm86` for `compute_cap=8.6`. The
+architecture is **never inferred from the device name**: when the driver does
+not expose `compute_cap`, or returns an empty, non-numeric or non-`major.minor`
+value, the architecture stays undeclared and `architectureNote` records why.
+Normalization keeps the authoritative probe under `environment.targetProbe` and
+derives two independent scope dimensions from it: `hardware` remains the vendor
+category `nvidia-gpu` while `architecture`, `device` and `driverVersion` are
+copied when resolved. `experienceEvidence` receives `architecture` only when the
+driver confirmed one. `publishable` stays `false`.
+
 The runner requires a distinct prepared oracle file and writes a structured
 `status=failed` result (including phase, role, and error code) even when
 preflight or module loading fails before normal artifacts exist. This keeps

@@ -28,9 +28,9 @@
 
 创建必填 `projectId/title/content/author`；可选 `visibility=project|shared`（默认 project）、`confidence=low|medium|high`（默认 low）、scope、字符串数组 evidenceRefs、expiresAt。人工仅 `source=human,kind=guidance`；执行仅 `source=execution,kind=observation`。不接受调用者指定 id/version/timestamps/verification。id 与 now 为工厂端口值。
 
-scope 为 `{operator?,tags?,hardware?,dtype?,shape?}`；前三类列表值及 operator 规范为小写。匹配要求 operator 一致、所有经验 tags 存在、hardware/dtype 有交集、shape 对象字段子集一致；数组精确比较，保留重复维度。不解释 shape 范围或语言语法。
+scope 为 `{operator?,tags?,hardware?,architecture?,dtype?,shape?}`；列表值及 operator 规范为小写。匹配要求 operator 一致、所有经验 tags 存在、shape 对象字段子集一致；hardware、architecture、dtype 是**相互独立的维度，跨维度取 AND**，仅在维度内部取 OR（交集）。厂商与架构绝不合并进同一个数组，否则查询 `nvidia-gpu`+`sm86` 会假命中 `nvidia-gpu`+`sm100`。数组精确比较，保留重复维度；某维度未声明表示该维度不构成约束。不解释 shape 范围或语言语法。
 
-执行 evidence 必填 `missionId/candidateId/runId/patchDigest/packageDigest/environmentDigest/acceptanceDigest/hardware/executionMode/outcome`，可选 `operation='test'`、一致的 liveHardware。摘要为 SHA-256 十六进制，可带 `sha256:`；executionMode 为 cpu/gpu/simulation，outcome 为 passed/failed/cancelled。CPU 的 hardware 必须 cpu；执行 scope.hardware 必须只包含实际 hardware，省略时补入。
+执行 evidence 必填 `missionId/candidateId/runId/patchDigest/packageDigest/environmentDigest/acceptanceDigest/hardware/executionMode/outcome`，可选 `architecture`、`operation='test'`、一致的 liveHardware。摘要为 SHA-256 十六进制，可带 `sha256:`；executionMode 为 cpu/gpu/simulation，outcome 为 passed/failed/cancelled。CPU 的 hardware 必须 cpu；执行 scope.hardware 必须只包含实际 hardware，省略时补入。执行 scope.architecture 同样只能由该次执行的 evidence.architecture 盖章；**证据未声明 architecture 时，调用方用 scope.architecture 声明会被明确拒绝 `EXPERIENCE_INVALID`**，不得用调用方 scope 补造证据从未确认的架构。历史记录（scope 与 evidence 均无 architecture）形状不变、零迁移可读，matching 时不因当前目标架构而补造或改写。
 
 update options 必填 `{projectId,expectedVersion}`；人工可更新内容、标题、作者、scope、confidence、visibility、status、refs、expiresAt；执行仅可更新 status。status 为 active/archived/invalidated/conflicted。项目与来源不可改。
 
@@ -56,7 +56,7 @@ validate 的 expected 可提供 projectId/missionId/roundId/scope/allowedProject
 
 ## Example / Verification
 
-应用入口见 [experience-service.md](application/experience-service.md) 和 [轮次集成](application/round-experience-service.md)。运行 `node tests/experience-service-test.mjs`、`node tests/round-experience-service-test.mjs`；覆盖规则、上下文篡改/恢复和临时目录适配器，无硬件/模型。
+应用入口见 [experience-service.md](application/experience-service.md) 和 [轮次集成](application/round-experience-service.md)。运行 `node tests/experience-service-test.mjs`、`node tests/round-experience-service-test.mjs`、`node tests/experience-architecture-test.mjs`；覆盖规则、上下文篡改/恢复、architecture 跨维度 AND、执行盖章与历史零迁移，以及临时目录适配器，无硬件/模型。
 
 ## Change Checklist / Known Limitations
 

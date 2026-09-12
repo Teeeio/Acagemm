@@ -64,10 +64,14 @@ const shapeValue = (value, depth = 0, budget = { nodes: 0 }) => {
   }));
 };
 const normalizedScope = (value = {}) => {
-  plain(value, ['operator', 'tags', 'hardware', 'dtype', 'shape'], 'scope');
+  plain(value, ['operator', 'tags', 'hardware', 'architecture', 'dtype', 'shape'], 'scope');
   const lower = (item) => string(item, 'scope value').toLowerCase();
   const result = { tags: list(value.tags ?? [], 'scope.tags', 32, lower), hardware: list(value.hardware ?? [], 'scope.hardware', 16, lower), dtype: list(value.dtype ?? [], 'scope.dtype', 16, lower), shape: shapeValue(value.shape ?? {}) };
   plain(result.shape, null, 'scope.shape');
+  // architecture 与 hardware 是两个独立维度，跨维度取 AND。只在非空时带上该键：
+  // validateRecord 要求已存记录是规范形状，无条件加键会让所有历史记录失效并需要迁移。
+  const architecture = list(value.architecture ?? [], 'scope.architecture', 16, lower);
+  if (architecture.length) result.architecture = architecture;
   if (value.operator !== undefined) result.operator = lower(value.operator);
   return result;
 };
@@ -84,11 +88,13 @@ const normalizedDigest = (value, label) => {
   return result;
 };
 const normalizedEvidence = (value) => {
-  plain(value, ['missionId', 'candidateId', 'runId', 'patchDigest', 'packageDigest', 'environmentDigest', 'acceptanceDigest', 'hardware', 'executionMode', 'outcome', 'operation', 'liveHardware'], 'evidence');
+  plain(value, ['missionId', 'candidateId', 'runId', 'patchDigest', 'packageDigest', 'environmentDigest', 'acceptanceDigest', 'hardware', 'architecture', 'executionMode', 'outcome', 'operation', 'liveHardware'], 'evidence');
   const result = {};
   for (const key of ['missionId', 'candidateId', 'runId']) result[key] = identifier(value[key], `evidence.${key}`);
   for (const key of ['patchDigest', 'packageDigest', 'environmentDigest', 'acceptanceDigest']) result[key] = normalizedDigest(value[key], `evidence.${key}`);
   result.hardware = string(value.hardware, 'evidence.hardware').toLowerCase();
+  // 可选：只在证据确实带上架构时才记录，历史证据（仅 hardware）形状不变。
+  if (value.architecture !== undefined) result.architecture = string(value.architecture, 'evidence.architecture').toLowerCase();
   result.executionMode = choice(value.executionMode, ['cpu', 'gpu', 'simulation'], 'evidence.executionMode');
   result.outcome = choice(value.outcome, ['passed', 'failed', 'cancelled'], 'evidence.outcome');
   result.operation = identifier(value.operation ?? 'test', 'evidence.operation');
@@ -120,6 +126,15 @@ function makeRecord(input, { id, now, source }) {
     const { executionMode, hardware, missionId, candidateId, runId, operation } = record.evidence;
     if (record.scope.hardware.length && (record.scope.hardware.length !== 1 || record.scope.hardware[0] !== hardware)) invalid('execution scope.hardware must match evidence hardware exactly');
     record.scope.hardware = [hardware];
+    if (record.evidence.architecture !== undefined) {
+      const declaredArchitecture = record.scope.architecture ?? [];
+      if (declaredArchitecture.length && (declaredArchitecture.length !== 1 || declaredArchitecture[0] !== record.evidence.architecture)) invalid('execution scope.architecture must match evidence architecture exactly');
+      record.scope.architecture = [record.evidence.architecture];
+    } else if ((record.scope.architecture ?? []).length) {
+      // 执行来源的架构只能来自该次执行证据本身。证据未声明架构时，调用方不得在
+      // scope 里补一个值来盖章；historical 无架构（scope 与 evidence 都缺省）形状不变。
+      invalid('execution scope.architecture requires a declared evidence.architecture');
+    }
     record.verification = { status: executionMode === 'simulation' ? 'unverified' : 'observed', evidenceClass: executionMode === 'cpu' ? 'cpu-development' : executionMode === 'simulation' ? 'simulation' : 'hardware-observation', publishable: false };
     record.evidenceKey = hash({ projectId: record.projectId, missionId, candidateId, runId, operation });
   }
@@ -238,9 +253,15 @@ const subset = (expected, actual) => {
   if (expected && typeof expected === 'object') return actual && typeof actual === 'object' && !Array.isArray(actual) && Object.entries(expected).every(([key, value]) => Object.hasOwn(actual, key) && subset(value, actual[key]));
   return expected === actual;
 };
+// 维度之间是 AND，维度内部才是 OR。厂商（hardware）与架构（architecture）必须是两个维度：
+// 塞进同一个数组会让 ["nvidia-gpu","sm100"] 命中查询 ["nvidia-gpu","sm86"]。
+// 某个维度未声明 = 该维度不构成约束（历史记录与 human guidance 依赖这个语义）。
 const scopeMatches = (scope, target) => (!scope.operator || scope.operator === target.operator)
   && scope.tags.every((tag) => target.tags.includes(tag))
-  && ['hardware', 'dtype'].every((key) => !scope[key].length || scope[key].some((item) => target[key].includes(item)))
+  && ['hardware', 'architecture', 'dtype'].every((key) => {
+    const required = scope[key] ?? [];
+    return !required.length || required.some((item) => (target[key] ?? []).includes(item));
+  })
   && subset(scope.shape, target.shape);
 
 export function retrieveExperienceContext(store, query, { now }) {
