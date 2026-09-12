@@ -18,6 +18,19 @@ payload/apply and intent replay reuse the frozen snapshot instead of re-reading
 facts that may already describe a newer round. A replay therefore receives the
 same previous run/candidate/correctness/Gate/rollback/current-best facts even
 while the containing state has advanced.
+The per-round selection-audit sidecar
+(`iterationStats.roundExperienceSelection`, see
+[round-experience-service](round-experience-service.md)) is frozen with the same
+discipline. The intent's field is deep-copied onto the clone before prepare, and
+immediately after `roundExperience.prepare` the value is frozen again into one
+local variable and written back to the clone, so a real prepare cannot leave a
+context-derived selection paired with replay-frozen content. Journal intent,
+prepared payload and the value seen by the Agent Provider are all deep copies of
+that single frozen variable; an explicit `null` is preserved as `null` instead of
+being refreshed. `apply` restores the payload value after reset, `null` included;
+a missing field means an older intent/payload and keeps the compatibility
+fallback to the current prepare product. Frozen contexts, budgets and facts keep
+their existing guarantees.
 
 Only explicit runs.plan may allocate a new monotonic budget identity after a
 persisted completed budget and published/completed knowledge maintenance. This

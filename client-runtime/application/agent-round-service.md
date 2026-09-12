@@ -28,6 +28,15 @@ active Mission and admitted Round. Facts are therefore available to the automati
 round exactly like the manual command path, and a Mission switch or newer Round
 cannot deliver stale facts.
 
+The same round `roundExperience.prepare` produces the selection-audit sidecar in
+`state.iterationStats.roundExperienceSelection` (see
+[round-experience-service](round-experience-service.md)). This service
+deep-copies it immediately after prepare and returns it in the result
+`iterationStats` alongside `roundBudget`, `roundExperience` and `roundFacts`, so a
+runtime that returns a different state object cannot drop the sidecar. The
+returned object and the caller's state never share a mutable selection reference;
+the automatic path adds no second retrieval and no selection policy of its own.
+
 ## Dependencies / Side Effects
 
 Only pure `round-budget-contract` and `experience-contract` imports. Workspace, Agent, runtime events and experience effects are injected. Persistence and initial HTTP-run command replay remain composition-root/command-journal responsibilities.

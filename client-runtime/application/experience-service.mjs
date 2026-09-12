@@ -1,4 +1,4 @@
-import { appendExperience, readExperiences, retrieveExperienceContext, updateExperience } from '../experience-contract.mjs';
+import { appendExperience, readExperiences, retrieveExperienceContext, retrieveExperienceSelection, updateExperience } from '../experience-contract.mjs';
 
 export function createExperienceService({ repository, now, createId } = {}) {
   if (!repository || typeof repository.read !== 'function' || typeof repository.transact !== 'function') throw new TypeError('repository.read and repository.transact are required');
@@ -10,5 +10,6 @@ export function createExperienceService({ repository, now, createId } = {}) {
     update: async (id, patch, options) => repository.transact((draft) => updateExperience(draft, id, patch, options, { now: now() })),
     recordObservation: async (input) => repository.transact((draft) => appendExperience(draft, input, { id: createId(), now: now(), source: 'execution' })),
     retrieve: async (query) => retrieveExperienceContext(await repository.read(), query, { now: now() }),
+    retrieveWithSelection: async (query) => retrieveExperienceSelection(await repository.read(), query, { now: now() }),
   });
 }

@@ -2,6 +2,12 @@ import { createHash } from 'node:crypto';
 
 export const EXPERIENCE_SCHEMA_VERSION = 1;
 export const EXPERIENCE_LIMITS = Object.freeze({ content: 8000, title: 160, refs: 32, records: 2048, recordBytes: 32768, storeBytes: 8 * 1024 * 1024, contextItems: 20, contextBytes: 65536 });
+// 选择清单是审计旁路，不改变冻结 context 的选中集合/排序/20 项与 64 KiB 硬限。
+// 当前策略版本如实描述现状：Mission scope 匹配 + 既有 updatedAt 降序、id 升序排序，
+// 不是 Phase 3 的动态选择器。
+export const EXPERIENCE_SELECTION_SCHEMA_VERSION = 'operator-studio.experience-selection/v1';
+export const EXPERIENCE_SELECTION_POLICY_VERSION = 'operator-studio.experience-selection/v1+scope-match+updatedAt-desc-id-asc';
+const SELECTION_EXCLUSION_LIMIT = 50;
 
 export function experienceError(code, message, status = 400) {
   return Object.assign(new Error(message), { code, status });
@@ -264,7 +270,9 @@ const scopeMatches = (scope, target) => (!scope.operator || scope.operator === t
   })
   && subset(scope.shape, target.shape);
 
-export function retrieveExperienceContext(store, query, { now }) {
+// 唯一的选中逻辑：冻结 context 与审计 selection 由同一次遍历产出，绝不产生第二套
+// 选中集合/排序。retrieveExperienceContext 保持原返回契约不变。
+function selectExperience(store, query, { now }) {
   const access = normalizeAccess(query, ['projectId', 'allowedProjectIds', 'missionId', 'roundId', 'scope', 'limit', 'versions']);
   const missionId = identifier(query.missionId, 'missionId');
   const roundId = identifier(query.roundId, 'roundId');
@@ -275,18 +283,70 @@ export function retrieveExperienceContext(store, query, { now }) {
   plain(versions, null, 'versions');
   if (Object.keys(versions).length > 100) invalid('too many version pins');
   for (const [key, version] of Object.entries(versions)) { identifier(key, 'version id'); integer(version, 1, EXPERIENCE_LIMITS.records, 'pinned version'); }
-  const matches = latestRecords(store).filter((record) => accessible(record, access) && record.status === 'active' && (!record.expiresAt || record.expiresAt > asOf) && (!Object.hasOwn(versions, record.id) || versions[record.id] === record.version) && scopeMatches(record.scope, scope));
+  const heads = latestRecords(store);
+  const matches = heads.filter((record) => accessible(record, access) && record.status === 'active' && (!record.expiresAt || record.expiresAt > asOf) && (!Object.hasOwn(versions, record.id) || versions[record.id] === record.version) && scopeMatches(record.scope, scope));
   matches.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id));
   const context = { schemaVersion: EXPERIENCE_SCHEMA_VERSION, contextId: 'EXPCTX_' + '0'.repeat(64), projectId: access.projectId, missionId, roundId, asOf, repositoryRevision: store.revision, scope, scopeDigest: 'sha256:' + hash(scope), allowedProjectIds: access.allowedProjectIds, versions: {}, items: [] };
+  let selectionStopReason = null;
   for (const record of matches) {
-    if (context.items.length >= limit) break;
+    if (context.items.length >= limit) { selectionStopReason = 'limit'; break; }
     const useAs = record.source === 'human' ? 'suggestion' : ['cpu-development', 'simulation'].includes(record.verification.evidenceClass) ? 'development-record' : 'observation';
     context.items.push({ ...clone(record), useAs });
     context.versions[record.id] = record.version;
-    if (Buffer.byteLength(JSON.stringify(context)) > EXPERIENCE_LIMITS.contextBytes) { context.items.pop(); delete context.versions[record.id]; break; }
+    if (Buffer.byteLength(JSON.stringify(context)) > EXPERIENCE_LIMITS.contextBytes) { context.items.pop(); delete context.versions[record.id]; selectionStopReason = 'budget'; break; }
   }
   context.contextId = 'EXPCTX_' + hash(context);
-  return freeze(context);
+  const selectedIds = new Set(context.items.map((record) => record.id));
+  const selected = context.items.map((record) => ({
+    id: record.id, version: record.version, source: record.source, useAs: record.useAs,
+    reason: Object.hasOwn(versions, record.id) ? 'scope-match+version-pinned' : 'scope-match',
+  }));
+  const excluded = [];
+  let excludedUnauthorized = 0;
+  let excludedOmitted = 0;
+  // 元数据按 id 排序，保证同 store 下清单稳定；未授权项目只累计计数，绝不出现其 ID/版本/内容。
+  for (const record of [...heads].sort((left, right) => left.id.localeCompare(right.id) || left.version - right.version)) {
+    if (selectedIds.has(record.id)) continue;
+    if (!accessible(record, access)) { excludedUnauthorized += 1; continue; }
+    let reason;
+    if (record.status !== 'active') reason = 'inactive';
+    else if (record.expiresAt && record.expiresAt <= asOf) reason = 'expired';
+    else if (Object.hasOwn(versions, record.id) && versions[record.id] !== record.version) reason = 'version-pinned';
+    else if (!scopeMatches(record.scope, scope)) reason = 'scope';
+    else reason = selectionStopReason;
+    if (excluded.length >= SELECTION_EXCLUSION_LIMIT) { excludedOmitted += 1; continue; }
+    excluded.push({ id: record.id, version: record.version, reason });
+  }
+  const selection = {
+    schemaVersion: EXPERIENCE_SELECTION_SCHEMA_VERSION,
+    policyVersion: EXPERIENCE_SELECTION_POLICY_VERSION,
+    projectId: access.projectId,
+    missionId,
+    roundId,
+    repositoryRevision: context.repositoryRevision,
+    contextId: context.contextId,
+    scopeDigest: context.scopeDigest,
+    scope: clone(context.scope),
+    requestedLimit: limit,
+    itemLimit: EXPERIENCE_LIMITS.contextItems,
+    byteLimit: EXPERIENCE_LIMITS.contextBytes,
+    contextBytes: Buffer.byteLength(JSON.stringify(context)),
+    selected,
+    excluded,
+    excludedUnauthorized,
+    excludedOmitted,
+  };
+  return { context: freeze(context), selection: freeze(selection) };
+}
+
+export function retrieveExperienceContext(store, query, { now }) {
+  return selectExperience(store, query, { now }).context;
+}
+
+// 审计旁路：返回同一冻结 context 及本次选择的版本/来源/原因/排除原因/策略/字节。
+// 调用者不得用它替换 context 校验；两者由同一次遍历产出，因此必然一致。
+export function retrieveExperienceSelection(store, query, { now }) {
+  return selectExperience(store, query, { now });
 }
 
 export function validateExperienceContext(context, expected = {}) {

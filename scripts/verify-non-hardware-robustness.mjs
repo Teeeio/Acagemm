@@ -41,6 +41,8 @@ const checks = [
   'test:semantic-tui-extreme',
   'test:module-extreme-contract',
   'test:experience-architecture',
+  'test:round-feedback-integration',
+  'test:prompt-audit',
   'test:shared-gpu-target-probe',
   'test:runtime',
   'test:agent-runtime-candidate-admission',

@@ -8,7 +8,7 @@
 
 `createRoundExperienceService({experienceService,resolveAccess,verifyObservationEvidence,timers,timeoutMs=3000})` 返回冻结的 `{prepare,collect,record}`。
 
-- experienceService：注入公开 retrieve/recordObservation API，不默认导入 repository。
+- experienceService：注入公开 retrieve/recordObservation API，不默认导入 repository。存在可选 `retrieveWithSelection` 时一次调用取得内容和审计清单；仅缺少该端口时用原 retrieve 并派生明确标记的清单。旧 retrieve-only 注入行为不变。
 - resolveAccess({state,mission})：可信同步授权端口，返回 `{projectId,allowedProjectIds:[]}`；必须与 activeMissionId、mission.id/projectId 一致。组合根负责确认本地 Project 存在，不从正文推断权限。
 - verifyObservationEvidence({state,mission,observation,signal})：只读可信验证，返回 `{verified:true,evidence,summary?}` 或 `{verified:false,code?}`。true 必须建立真实执行回执与完整凭据绑定；不能只是转发调用者 verified 字段。
 - timers：显式 setTimeout/clearTimeout。timeoutMs 为正有限值，最大 120000 ms；方法可指定更短 deadline。
@@ -29,13 +29,15 @@ execution observations may report a mismatch, but cannot rewrite its provenance.
 
 context 只存 `state.iterationStats.roundExperience`，利用既有 Mission 投影/恢复保留；无顶层 context。来源、versions、scopeDigest、contextId 均可核查。同轮已有 context 只校验/冻结/复用，不重新查询人工更新；不同轮才取得新快照。恢复对象也必须摘要有效，不能用当前最新经验悄悄替换。进程内同一 state 对象的并发准备共享 Promise。
 
+同轮冻结的审计清单保存在 `state.iterationStats.roundExperienceSelection`（与 `roundExperience` 同 round 的 sidecar）：含选中/排除记录的 ID/version/source/reason、策略版本、repositoryRevision/contextId、`contextBytes` 与 `renderedBytes`（均按 UTF-8 `Buffer.byteLength` 实测）。内容和清单来自同一次仓库读取，严格核对 contextId/revision/scopeDigest、身份、选中记录的顺序/版本/来源；审计端口返回不一致时以 `ROUND_EXPERIENCE_SELECTION_CONFLICT` 阻止本轮准备，存储错误不吞掉。旧结构/旧 retrieve-only 注入仍可读，其清单标记 `auditSource:context-derived`、`exclusionReasonsRecorded:false`、原因 `frozen-context`，不编造排除原因。同轮恢复不重查、不刷新清单。
+
 roundExperienceStatus 记录 preparing/ready/failed；experienceCollection 记录有界的计数、ID/version/evidenceKey 或 skipped 原因。迟到检索结果不写状态，也不替换别的 Mission。读取人工 advice 不会调用任何 Agent 端口。
 
 CPU/仿真保持 development-record，所有写回观察必须 publishable=false。验证失败返回明确 skipped；摘要冲突、存储/超时错误不吞掉。batch deadline 传递到 record 和 verify 的组合 signal，截止后不再发起新写入；已经开始的存储写可能无法物理取消，超时保留 effectUnknown，后续以同证据键显式核实/幂等重试。
 
 ## Dependencies / Side Effects
 
-仅导入 experience-contract 的公开纯 API；计时、授权、验证与经验存储均由端口提供。内存变更仅 iterationStats 两个状态记录和冻结 context。无 state-store、FS/HTTP/Provider 实现、发布 Gate 或硬件依赖。
+仅导入 experience-contract 的公开纯 API；计时、授权、验证与经验存储均由端口提供。内存变更仅 iterationStats 的冻结 context、选择清单 sidecar 与两个状态记录。无 state-store、FS/HTTP/Provider 实现、发布 Gate 或硬件依赖。
 
 ## Error Contract
 

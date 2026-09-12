@@ -49,6 +49,9 @@ export const createAgentCommands = ({
       const clone = structuredClone(state);
       if (intent.roundBudget) clone.iterationStats = { ...(clone.iterationStats || {}), roundBudget: structuredClone(intent.roundBudget) };
       if (intent.roundExperience) clone.iterationStats = { ...(clone.iterationStats || {}), roundExperience: structuredClone(intent.roundExperience) };
+      // 选择清单 sidecar 与 roundExperience 同轮冻结：intent 显式含该字段（含 null）时先原样深拷贝进克隆，
+      // 字段缺失代表旧 intent，兼容地用当前 prepare 产物。
+      if (intent.roundExperienceSelection !== undefined) clone.iterationStats = { ...(clone.iterationStats || {}), roundExperienceSelection: structuredClone(intent.roundExperienceSelection) };
       ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
       if (roundExperience?.collect) await roundExperience.collect({ state: clone, mission });
       ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
@@ -62,10 +65,17 @@ export const createAgentCommands = ({
       const experienceContext = roundExperience
         ? await roundExperience.prepare({ state: clone, mission, roundId: clone.iterationStats.roundBudget.roundId })
         : null;
+      // 真实 prepare 在「已有 context + intent 显式 null 清单」时会派生 context-derived 清单并写回状态。
+      // 必须在 prepare 之后立刻按 intent 冻结为同一变量，并写回克隆，保证 provider effect 期间不再变化；
+      // intent、payload 与 provider.start 都从这一个冻结变量取深拷贝，显式 null 也还原为 null。
+      const roundExperienceSelection = intent.roundExperienceSelection !== undefined
+        ? structuredClone(intent.roundExperienceSelection)
+        : structuredClone(clone.iterationStats.roundExperienceSelection ?? null);
+      clone.iterationStats = { ...(clone.iterationStats || {}), roundExperienceSelection: structuredClone(roundExperienceSelection) };
       const roundFacts = intent.roundFacts !== undefined
         ? frozenRoundFacts
         : structuredClone(clone.iterationStats.roundFacts || null);
-      if (recordIntent) await recordIntent({ ...intent, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundFacts });
+      if (recordIntent) await recordIntent({ ...intent, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceSelection: structuredClone(roundExperienceSelection), roundFacts });
       ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
       let checkpoint = null;
       if (runtimeDescriptor.mode === 'reference-fixture') await runEffect(() => resetMissionWorkspace(state.activeMissionId));
@@ -81,13 +91,15 @@ export const createAgentCommands = ({
         : runtimeDescriptor.mode === 'cli-file'
           ? 'mission.run_requested'
           : `${runtimeDescriptor.mode === 'claude-code' ? 'claude' : 'codex'}.run_started`;
-      return { payload: { goal, referenceFixture, eventType, runtimeMode: runtimeDescriptor.mode, agent: clone.agent, checkpoint, runId: clone.agent.runId, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceStatus: structuredClone(clone.iterationStats.roundExperienceStatus || null), experienceCollection: structuredClone(clone.iterationStats.experienceCollection || null), roundFacts }, result: { runId: clone.agent.runId } };
+      return { payload: { goal, referenceFixture, eventType, runtimeMode: runtimeDescriptor.mode, agent: clone.agent, checkpoint, runId: clone.agent.runId, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceSelection: structuredClone(roundExperienceSelection), roundExperienceStatus: structuredClone(clone.iterationStats.roundExperienceStatus || null), experienceCollection: structuredClone(clone.iterationStats.experienceCollection || null), roundFacts }, result: { runId: clone.agent.runId } };
     },
     apply: (state, payload) => {
       resetMissionRunState(state, payload.goal, { referenceFixture: payload.referenceFixture });
       if (payload.checkpoint) state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), payload.checkpoint].slice(-5) };
       state.agent = payload.agent;
       if (payload.roundBudget) state.iterationStats = { ...(state.iterationStats || {}), roundBudget: structuredClone(payload.roundBudget), roundExperience: structuredClone(payload.roundExperience || null), roundExperienceStatus: structuredClone(payload.roundExperienceStatus || null), experienceCollection: structuredClone(payload.experienceCollection || null) };
+      // 选择清单必须与 payload 冻结的 context 同源还原；显式 null 也还原，缺失字段才留给旧 payload 兼容。
+      if (payload.roundExperienceSelection !== undefined) state.iterationStats = { ...(state.iterationStats || {}), roundExperienceSelection: structuredClone(payload.roundExperienceSelection) };
       // apply 只重建准备阶段冻结的事实快照，不从 apply 时的当前状态重新推导。
       if (payload.roundFacts !== undefined) state.iterationStats = { ...(state.iterationStats || {}), roundFacts: structuredClone(payload.roundFacts) };
       if (!state.runtimeEvents?.some((e) => e.type === payload.eventType && e.payload?.runId === payload.runId)) {

@@ -20,7 +20,9 @@
 | `appendExperience(store,input,{id,now,source='human'})` | 修改传入草稿；返回 `{changed,result:{experience,created}}` |
 | `updateExperience(store,id,patch,options,{now})` | 同上；追加版本，`created:false` |
 | `readExperiences(store,id,options)` | 独立副本 `{repositoryRevision,experience}` 或 `{repositoryRevision,experiences}` |
-| `retrieveExperienceContext(store,query,{now})` | 递归冻结的轮次快照 |
+| `retrieveExperienceContext(store,query,{now})` | 递归冻结的轮次快照（返回契约不变） |
+| `retrieveExperienceSelection(store,query,{now})` | `{context,selection}`：同一次遍历产出的冻结 context 与审计选择清单 |
+| `EXPERIENCE_SELECTION_SCHEMA_VERSION` / `EXPERIENCE_SELECTION_POLICY_VERSION` | 选择清单 schema 与策略版本常量 |
 | `validateExperienceContext(context,expected={})` | 校验绑定/来源/版本/摘要，原地递归冻结并返回同一对象 |
 | `formatExperienceContext(context,{projectId,missionId,roundId})` | 校验后生成有界不可信 JSON 数据提示词片段 |
 
@@ -43,6 +45,8 @@ store 保留全部平铺版本。幂等键绑定项目、Mission、Candidate、r
 所有 `verification.publishable=false`。人工为 unverified/human-guidance；CPU 为 observed/cpu-development；仿真为 unverified/simulation；GPU 仅 observed/hardware-observation，绝不代表正式验证。置信度不会提升证据等级。
 
 context 含 schemaVersion/contextId/projectId/missionId/roundId/asOf/repositoryRevision/items，以及 scope、scopeDigest、allowedProjectIds、versions（id → version）。scopeDigest 和整个 contextId 使用本模块唯一的规范 JSON/SHA-256 算法；来源、版本、授权快照及 evidence 全在摘要内。人工 useAs=suggestion，CPU/仿真为 development-record，GPU 为 observation。只选最新 active、未过期、版本匹配且适用的记录；按更新时间降序、id 排序。旧 context 不随后续写入变化。
+
+selection（`operator-studio.experience-selection/v1`）是审计旁路，与冻结 context 由**同一次遍历**产出，因此选中集合、顺序、20 项/64 KiB 硬限完全一致；它不参与 context 校验，也不能替代 context。字段：`policyVersion`（如实标注当前策略：Mission scope 匹配 + 既有 updatedAt 降序/id 升序，**不是 Phase 3 动态选择器**）、`projectId/missionId/roundId`、`repositoryRevision`、`contextId`、`scopeDigest`、`scope`、`requestedLimit/itemLimit/byteLimit`、`contextBytes`（`Buffer.byteLength` UTF-8 实测）、`selected[{id,version,source,useAs,reason}]`、`excluded[{id,version,reason}]`、`excludedUnauthorized`（计数）、`excludedOmitted`（超过 50 条上限的计数）。排除原因是实际命中的 `inactive/expired/version-pinned/scope/limit/budget`；**未授权项目的记录只计入 `excludedUnauthorized`，绝不出现其 ID、版本或内容**。
 
 validate 的 expected 可提供 projectId/missionId/roundId/scope/allowedProjectIds；检查记录的全部规范字段、版本、适用范围和冻结时授权，不允许用其他 Project/Mission/轮次的 context 替代。已有上下文缺少完整字段或摘要时明确失败，不静默重建。摘要用于一致性校验，不是签名或认证；调用者仍须提供可信权限。formatter 必须传三个身份，只输出 UNTRUSTED JSON，并声明不能覆盖 Profile、Gate、独立 oracle、预算或文件边界；其最大字节数为 context 上限加固定说明（小于 2 KiB）。
 

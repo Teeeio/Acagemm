@@ -39,7 +39,7 @@
 | `execution-package-import-service.mjs` | source import and trusted preparation through injected ports | immutable manifest and admission DTO |
 | `mission-control-service.mjs` | Agent cancellation, human feedback, and Mission stop | persisted state and control result |
 | `experience-api-service.mjs` | Project-scoped human experience CRUD | versioned guidance DTOs and conflicts |
-| `round-experience-service.mjs` | Frozen per-round experience and verified observations | context and record status through injected ports |
+| `round-experience-service.mjs` | Frozen per-round experience, selection-audit sidecar, and verified observations | frozen context, selection sidecar, and record status through injected ports |
 | `shared-gpu-experience-verifier.mjs` | Revalidate shared-GPU package receipts at the composition boundary | trusted verified observation or explicit skip |
 | `knowledge-service.mjs` | Knowledge draft editing, asset references, and retired manual publication | persisted state or governance response |
 | `runtime-query-service.mjs` | Runtime state, preflight, and active workspace queries | state/workspace query | transport-neutral query DTOs |
@@ -123,7 +123,11 @@ npm run test:smoke
 
 [experience-service.mjs](experience-service.md) provides project-scoped versioned
 human guidance, execution observations and frozen retrieval contexts through
-injected repository/clock/ID ports. Production supplies it to
+injected repository/clock/ID ports. Its public `retrieveWithSelection(query)`
+returns the frozen context plus the audited selection sidecar from one repository
+read; when only `retrieve` is supplied, round-experience-service derives an
+explicitly marked context-derived sidecar without changing the injected set.
+Production supplies it to
 [round-experience-service.mjs](round-experience-service.md) and the project-scoped
 human Experience API. Agent commands and automatic rounds persist one frozen
 context; the Provider receives it as untrusted, attributed data. Terminal

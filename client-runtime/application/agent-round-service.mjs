@@ -12,6 +12,9 @@ export const createAgentRoundService = ({ resetMissionRunState, resetMissionWork
     await roundExperience.collect({ state, mission, timeoutMs: remaining() });
     ensureBudget();
     const experienceContext = await roundExperience.prepare({ state, mission, roundId: roundBudget.roundId, timeoutMs: remaining() });
+    // 本轮 prepare 后立即深拷贝选择清单 sidecar，避免后续 reset/Agent effect 改动状态或 runtime 返回
+    // 另一个 state 对象时丢失；返回时与本轮 context 一起透传，且不与状态共享可变引用。
+    const roundExperienceSelection = structuredClone(state.iterationStats?.roundExperienceSelection ?? null);
     ensureBudget();
     validateExperienceContext(experienceContext, { projectId: mission.projectId, missionId: mission.id, roundId: roundBudget.roundId });
     resetMissionRunState(state, goal, { referenceFixture: runtimeMode === 'reference-fixture' });
@@ -28,7 +31,7 @@ export const createAgentRoundService = ({ resetMissionRunState, resetMissionWork
       appendRuntimeEvent(state, 'mission.run_started', { runId: state.agent.runId, goal }, { kind: 'adapter', mode: 'reference-fixture' });
     }
     const result = runtimeRun.state || state;
-    result.iterationStats = { ...(result.iterationStats || {}), roundBudget: state.iterationStats.roundBudget, roundExperience: experienceContext, roundFacts };
+    result.iterationStats = { ...(result.iterationStats || {}), roundBudget: state.iterationStats.roundBudget, roundExperience: experienceContext, roundExperienceSelection: structuredClone(roundExperienceSelection), roundFacts };
     return result;
   };
   return Object.freeze({ startRound });

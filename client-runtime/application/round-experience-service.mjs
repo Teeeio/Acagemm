@@ -1,4 +1,4 @@
-import { appendExperience, emptyExperienceStore, experienceError, validateExperienceContext } from '../experience-contract.mjs';
+import { appendExperience, emptyExperienceStore, experienceError, formatExperienceContext, validateExperienceContext, EXPERIENCE_LIMITS, EXPERIENCE_SELECTION_POLICY_VERSION, EXPERIENCE_SELECTION_SCHEMA_VERSION } from '../experience-contract.mjs';
 import { isBackendTargetName } from '../operator-test-evidence.mjs';
 
 const requiredEvidence = ['missionId', 'candidateId', 'runId', 'patchDigest', 'packageDigest', 'environmentDigest', 'acceptanceDigest', 'hardware', 'executionMode', 'outcome'];
@@ -93,6 +93,45 @@ const canonicalEvidence = (evidence) => appendExperience(emptyExperienceStore(),
   projectId: 'validation', title: 'Execution evidence', content: 'Validation only.', author: 'validator', evidence,
 }, { id: 'validation', now: '1970-01-01T00:00:00.000Z', source: 'execution' }).result.experience.evidence;
 
+// 选择清单 sidecar 只做审计，不参与 context 校验，也不得改变注入集合。字节一律按
+// UTF-8 实测（Buffer.byteLength），不用字符数估算。
+const utf8Bytes = (value) => Buffer.byteLength(value, 'utf8');
+const selectionEvidence = (context, { projectId, missionId, roundId }) => ({
+  schemaVersion: EXPERIENCE_SELECTION_SCHEMA_VERSION,
+  policyVersion: EXPERIENCE_SELECTION_POLICY_VERSION,
+  projectId, missionId, roundId,
+  repositoryRevision: context.repositoryRevision,
+  contextId: context.contextId,
+  scopeDigest: context.scopeDigest,
+  itemLimit: EXPERIENCE_LIMITS.contextItems,
+  byteLimit: EXPERIENCE_LIMITS.contextBytes,
+  contextBytes: utf8Bytes(JSON.stringify(context)),
+  renderedBytes: utf8Bytes(formatExperienceContext(context, { projectId, missionId, roundId })),
+});
+// 只有 retrieve 端口（旧 retrieve-only 注入）时如实标注"未记录排除原因"，绝不编造。
+const contextDerivedSelection = (context, identity) => ({
+  ...selectionEvidence(context, identity),
+  selected: context.items.map((record) => ({ id: record.id, version: record.version, source: record.source, useAs: record.useAs, reason: 'frozen-context' })),
+  excluded: [],
+  excludedUnauthorized: 0,
+  excludedOmitted: 0,
+  exclusionReasonsRecorded: false,
+  auditSource: 'context-derived',
+});
+// 内容与选择必须来自同一次读取，包含 asOf 的 contextId 必须完全一致。
+const auditSelection = (raw, context, identity) => {
+  if (raw == null) return contextDerivedSelection(context, identity);
+  const aligned = raw && raw.schemaVersion === EXPERIENCE_SELECTION_SCHEMA_VERSION
+    && raw.projectId === identity.projectId && raw.missionId === identity.missionId && raw.roundId === identity.roundId
+    && raw.contextId === context.contextId && raw.repositoryRevision === context.repositoryRevision && raw.scopeDigest === context.scopeDigest
+    && Array.isArray(raw.selected) && raw.selected.length === context.items.length
+    && raw.selected.every((item, index) => item?.id === context.items[index].id && item?.version === context.items[index].version
+      && item?.source === context.items[index].source && item?.useAs === context.items[index].useAs);
+  if (!aligned) throw fail('ROUND_EXPERIENCE_SELECTION_CONFLICT', 'Experience selection does not match its frozen context');
+  if (raw.auditSource === 'context-derived') return { ...structuredClone(raw), ...selectionEvidence(context, identity) };
+  return { ...structuredClone(raw), ...selectionEvidence(context, identity), requestedLimit: raw.requestedLimit, exclusionReasonsRecorded: true, auditSource: 'retrieve-with-selection' };
+};
+
 export const createRoundExperienceService = ({ experienceService, resolveAccess, verifyObservationEvidence, timers, timeoutMs = 3000 } = {}) => {
   if (typeof experienceService?.retrieve !== 'function' || typeof experienceService?.recordObservation !== 'function') throw new TypeError('experienceService.retrieve and recordObservation are required');
   if (typeof resolveAccess !== 'function') throw new TypeError('resolveAccess is a required trusted synchronous authority port');
@@ -135,10 +174,19 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
     if (state.iterationStats?.roundBudget && state.iterationStats.roundBudget.roundId !== roundId) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'Experience roundId must match the admitted round budget');
     const resolvedScope = queryScope(state, mission, scope);
     const expected = { ...access, missionId: mission.id, roundId, scope: resolvedScope };
+    const identity = { projectId: access.projectId, missionId: mission.id, roundId };
     const existing = state.iterationStats?.roundExperience;
     if (existing?.roundId === roundId) {
       if (existing.projectId !== access.projectId || existing.missionId !== mission.id) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'A round context cannot change owning Project or Mission');
-      return validateExperienceContext(existing, expected);
+      const frozen = validateExperienceContext(existing, expected);
+      const existingSelection = state.iterationStats?.roundExperienceSelection;
+      if (!existingSelection || existingSelection.roundId !== roundId || existingSelection.missionId !== mission.id
+        || existingSelection.projectId !== access.projectId || existingSelection.contextId !== frozen.contextId) {
+        state.iterationStats = { ...state.iterationStats, roundExperienceSelection: contextDerivedSelection(frozen, identity) };
+      } else {
+        auditSelection(existingSelection, frozen, identity);
+      }
+      return frozen;
     }
     const inflight = pending.get(state);
     if (inflight) {
@@ -149,14 +197,33 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
     const claim = { roundId, promise: null };
     const operation = (async () => {
       try {
-        const context = await bounded('retrieve', (signal) => experienceService.retrieve({ ...access, missionId: mission.id, roundId, scope: resolvedScope }, { signal }), limit);
+        const query = { ...access, missionId: mission.id, roundId, scope: resolvedScope };
+        // 一次仓库读取同时取得冻结内容和选注清单；旧 retrieve-only 注入按原端口运行。
+        const retrieved = await bounded('retrieve', async (signal) => {
+          if (typeof experienceService.retrieveWithSelection === 'function') {
+            const audited = await experienceService.retrieveWithSelection(query, { signal });
+            if (!audited?.selection) throw fail('ROUND_EXPERIENCE_SELECTION_CONFLICT', 'Audited retrieval returned no selection');
+            return { context: audited.context, rawSelection: audited.selection };
+          }
+          return { context: await experienceService.retrieve(query, { signal }), rawSelection: null };
+        }, limit);
+        const context = retrieved.context;
         validateExperienceContext(context, expected);
         if (state.activeMissionId !== mission.id || (state.iterationStats.roundBudget && state.iterationStats.roundBudget.roundId !== roundId)) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'Mission or round changed while experience retrieval was pending');
-        state.iterationStats = { ...state.iterationStats, roundExperience: context, roundExperienceStatus: { status: 'ready', projectId: access.projectId, missionId: mission.id, roundId, contextId: context.contextId, repositoryRevision: context.repositoryRevision } };
+        const selection = auditSelection(retrieved.rawSelection, context, identity);
+        state.iterationStats = {
+          ...state.iterationStats,
+          roundExperience: context,
+          roundExperienceSelection: selection,
+          roundExperienceStatus: { status: 'ready', projectId: access.projectId, missionId: mission.id, roundId, contextId: context.contextId, repositoryRevision: context.repositoryRevision },
+        };
         return context;
       } catch (error) {
         if (state.activeMissionId === mission.id && state.iterationStats?.roundExperienceStatus?.roundId === roundId) {
-          state.iterationStats = { ...(state.iterationStats || {}), roundExperienceStatus: { status: 'failed', projectId: access.projectId, missionId: mission.id, roundId, error: { code: error.code || 'ROUND_EXPERIENCE_FAILED', message: error.message } } };
+          const failedStats = { ...(state.iterationStats || {}) };
+          if (failedStats.roundExperienceSelection?.roundId === roundId) delete failedStats.roundExperienceSelection;
+          failedStats.roundExperienceStatus = { status: 'failed', projectId: access.projectId, missionId: mission.id, roundId, error: { code: error.code || 'ROUND_EXPERIENCE_FAILED', message: error.message } };
+          state.iterationStats = failedStats;
         }
         throw error;
       } finally { if (pending.get(state) === claim) pending.delete(state); }

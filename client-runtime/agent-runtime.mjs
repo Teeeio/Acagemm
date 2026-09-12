@@ -1,6 +1,6 @@
 import { lstat, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { isExecutionReleased, assertResourcesReleased, reconcileResourceRelease } from './cancellation-contract.mjs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { opencodeClient as defaultOpenCodeClient, parseOpenCodeModel } from './opencode-client.mjs';
@@ -40,6 +40,65 @@ const defaultBridgeDir = path.join(runtimeDir, 'agent-bridge');
 
 const fileExists = async (target) => {
   try { return (await stat(target)).isFile(); } catch { return false; }
+};
+
+// §14.4：provider 中立的发送前 prompt 审计。runId 必须是安全文件名；写入失败以明确
+// 错误阻止发送，不假称 provider 已收到。审计件是唯一权威来源，之后不得从 state 重建。
+const PROMPT_AUDIT_SCHEMA_VERSION = 'operator-studio.prompt-audit/v1';
+const AUDIT_REPLACE_RETRY_CODES = ['EPERM', 'EBUSY', 'EACCES'];
+const safeAuditRunId = (runId) => typeof runId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(runId) && !runId.includes('..');
+const auditFailure = (message, code, cause) => Object.assign(new Error(message), { code, status: 500, ...(cause ? { cause } : {}) });
+const missionProjectIdFor = (state, mission) => mission?.projectId || state?.missions?.find((item) => item.id === mission?.id)?.projectId || state?.activeProjectId || null;
+// 只投递绑定当前 Mission 与当前 Round 的选择清单，不泄漏别轮/别 Mission 的审计元数据。
+const promptAuditSelection = (state, { missionId, projectId, roundId, experienceContext }) => {
+  const selection = state?.iterationStats?.roundExperienceSelection;
+  if (!selection || !experienceContext || !roundId || selection.roundId !== roundId
+    || selection.missionId !== missionId || selection.projectId !== projectId
+    || selection.contextId !== experienceContext.contextId
+    || !Array.isArray(selection.selected) || selection.selected.length !== experienceContext.items.length
+    || !selection.selected.every((item, index) => item.id === experienceContext.items[index].id
+      && item.version === experienceContext.items[index].version && item.source === experienceContext.items[index].source)) return null;
+  return structuredClone(selection);
+};
+const writePromptAudit = async ({ bridgeDir, runId, prompt, missionId, projectId, roundId, runtimeMode, roundFacts, selection }) => {
+  if (!safeAuditRunId(runId)) throw auditFailure(`Prompt audit runId is not a safe file name: ${runId}`, 'PROMPT_AUDIT_RUN_ID_INVALID');
+  try {
+    const auditsDir = path.join(bridgeDir, 'prompt-audits');
+    const auditPath = path.join(auditsDir, `${runId}.json`);
+    const audit = {
+      schemaVersion: PROMPT_AUDIT_SCHEMA_VERSION,
+      deliveryStage: 'prepared-before-send',
+      prompt,
+      promptDigest: 'sha256:' + createHash('sha256').update(prompt, 'utf8').digest('hex'),
+      promptBytes: Buffer.byteLength(prompt, 'utf8'),
+      missionId: missionId ?? null,
+      projectId: projectId ?? null,
+      roundId: roundId ?? null,
+      runId,
+      runtimeMode,
+      createdAt: new Date().toISOString(),
+      roundFacts: roundFacts ?? null,
+      selection: selection ?? null,
+    };
+    await mkdir(auditsDir, { recursive: true });
+    const temporary = `${auditPath}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, `${JSON.stringify(audit, null, 2)}\n`, 'utf8');
+      // Windows 上短暂持有的句柄会让 rename 报 EPERM/EBUSY；沿用既有有界替换重试，
+      // 只有全部重试耗尽才算写入失败。
+      for (let attempt = 0; ; attempt += 1) {
+        try { await rename(temporary, auditPath); break; }
+        catch (error) {
+          if (!AUDIT_REPLACE_RETRY_CODES.includes(error.code) || attempt === 11) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+        }
+      }
+    } finally { await rm(temporary, { force: true }).catch(() => {}); }
+    return { schemaVersion: PROMPT_AUDIT_SCHEMA_VERSION, path: auditPath, digest: audit.promptDigest, bytes: audit.promptBytes };
+  } catch (error) {
+    if (error?.code === 'PROMPT_AUDIT_RUN_ID_INVALID') throw error;
+    throw auditFailure(`Prompt audit write failed before provider send: ${error.message}`, 'PROMPT_AUDIT_WRITE_FAILED', error);
+  }
 };
 
 const directoryExists = async (target) => {
@@ -672,6 +731,13 @@ export function createAgentRuntime(options = {}) {
         'Inspect the current OpenCode project in planning mode. Do not edit files in this pass.',
         'Return a concrete diagnosis, tool evidence, candidate options, risks, and the recommended next action.',
       ].join('\n');
+      // 审计的是真正交给 provider 的 text；OpenCode 分支的 prompt 内容不含轮次事实。
+      const promptAudit = await writePromptAudit({
+        bridgeDir, runId: session.id, prompt,
+        missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+        runtimeMode: 'opencode-server', roundFacts: null,
+        selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
+      });
       try {
         await runtimeEngine.invoke(mode, 'prompt', session.id, { text: prompt, agent: openCodeAgent, model: openCodeModel });
       } catch (error) {
@@ -691,6 +757,7 @@ export function createAgentRuntime(options = {}) {
         runtimeKind: 'opencode',
         profileId: 'profile.operator-orchestrator',
         goal,
+        promptAudit,
         startedAt: new Date().toISOString(),
         currentAction: null,
         toolCalls: [],
@@ -766,6 +833,14 @@ export function createAgentRuntime(options = {}) {
         experienceInstruction,
         boundaryInstruction: boundary.toolInstruction,
       });
+      // Claude/Codex 共用同一发送前 helper：先落盘审计件（此时尚未调用 provider），
+      // 写入失败直接抛出，provider start 不会发生。审计 prompt 就是 start.goal 原文。
+      const promptAudit = await writePromptAudit({
+        bridgeDir, runId, prompt,
+        missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+        runtimeMode: mode, roundFacts: roundFacts ?? null,
+        selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
+      });
       const run = await runtimeEngine.invoke(mode, 'start', { runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
       state.stage = 'diagnosis';
       state.patchApplied = false;
@@ -780,6 +855,7 @@ export function createAgentRuntime(options = {}) {
         threadId: run.threadId || resumeThreadId || null,
         profileId: 'profile.operator-orchestrator',
         goal,
+        promptAudit,
         startedAt: run.startedAt,
         budgetMs: mainAgentBudgetMs,
         eventCount: 0,
@@ -819,6 +895,14 @@ export function createAgentRuntime(options = {}) {
       status: 'requested',
       createdAt: new Date().toISOString(),
     };
+    // cli-file 实际交付给 CLI Agent 的是 request.goal；审计先于 Bridge 请求落盘，
+    // 失败即阻止请求写出。不把只存在于内存的字符串谎称为已发送。
+    const promptAudit = await writePromptAudit({
+      bridgeDir, runId, prompt: goal,
+      missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+      runtimeMode: 'cli-file', roundFacts: null,
+      selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
+    });
     const requestsDir = path.join(bridgeDir, 'requests');
     await mkdir(requestsDir, { recursive: true });
     const requestPath = path.join(requestsDir, `${runId}.json`);
@@ -836,6 +920,7 @@ export function createAgentRuntime(options = {}) {
       roundId: activeRoundId,
       profileId: 'profile.operator-orchestrator',
       goal,
+      promptAudit,
       startedAt: request.createdAt,
       currentAction: null,
       toolCalls: [{ id: `adapter-${runId}`, toolId: 'adapter.cli-file', name: 'CLI File Adapter', version: 'v0.1.0', skillId: 'skill.context-snapshot', status: 'running', summary: 'Mission 请求已写入 Bridge，等待 CLI 状态文件更新', permission: 'bridge:write' }],

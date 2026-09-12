@@ -20,6 +20,7 @@
 | `update(id,patch,options)` | options: projectId、expectedVersion | `{experience,created:false}`，追加版本 |
 | `recordObservation(input)` | 执行经验与绑定 evidence | `{experience,created}`；同证据重试 false |
 | `retrieve(query)` | projectId、missionId、roundId、scope?、limit?、versions?、allowedProjectIds? | 递归冻结 context |
+| `retrieveWithSelection(query)` | 同 retrieve | `{context,selection}`：同一遍历产出的 context 与审计选择清单 |
 
 ## Inputs
 
@@ -31,7 +32,7 @@ recordObservation 的包、环境、验收和 Candidate 摘要必须来自上游
 
 ## Outputs / Invariants
 
-read 和写返回独立可变副本；retrieve 返回不可变、带版本/来源/凭据的 context。旧 context 不受随后 update 影响；调用者应每轮取得一次并持有该对象，重启恢复时自行持久化该 context。本服务不缓存 roundId，相同轮次再次调用可能取得新 repositoryRevision。
+read 和写返回独立可变副本；retrieve 返回不可变、带版本/来源/凭据的 context。旧 context 不受随后 update 影响；调用者应每轮取得一次并持有该对象，重启恢复时自行持久化该 context。本服务不缓存 roundId，相同轮次再次调用可能取得新 repositoryRevision。retrieveWithSelection 复用同一选择逻辑并返回递归冻结的 `{context,selection}`；selection 是审计旁路（版本/来源/选择与排除原因/策略版本/快照 revision/UTF-8 字节），未授权项目只保留计数，不暴露 ID 或内容。
 
 人工始终 unverified 建议；CPU/仿真只供开发记录；GPU 观察仍 `publishable:false`。任何来源都不授予正式发布权。retrieve 只选最新有效且匹配 scope 的记录，不复活归档/冲突/失效或旧 pin 版本。外部建议正文应作为带来源的数据注入，而非可信系统指令。
 

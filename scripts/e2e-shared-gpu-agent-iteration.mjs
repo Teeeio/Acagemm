@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import path from 'node:path';
@@ -186,6 +187,8 @@ try {
     assert.ok(completed.length >= (budgetTerminalAccepted ? 1 : desiredTasks), 'Insufficient completed real Candidate tasks');
     assert.equal(writes.length, writesAtStart, 'Harness must not drive automatic iterations');
     const firstRound = (state.runHistory || []).find((round) => round.runId === firstRun);
+    const experiences = (await request(`/api/projects/${project.id}/experiences`)).experiences;
+    let continuationAudit = null;
     if (desiredTasks >= 2) {
       assert.ok(firstRound, 'first real Candidate round was not archived before the harness stopped');
       const firstOutcome = firstRound.decisionReview?.resolution?.outcome;
@@ -194,6 +197,89 @@ try {
       const rollbackEvents = (state.runtimeEvents || []).filter((event) => event.type === 'workflow.round_rolled_back');
       assert.ok(rollbackEvents.length >= 1, 'automatic next round did not record a workspace rollback');
       assert.ok(rollbackEvents.every((event) => event.payload?.workspaceClean === true), 'rollback evidence must confirm a clean workspace');
+
+      // §14.5 continuation observation point. This driver only READS the production pre-send
+      // audit artifact; it does not capture the live provider call, so nothing below claims what
+      // a provider process received or obeyed. Everything asserted is derived from the archived
+      // round facts plus an independently recomputed digest of the audited string.
+      const continuationRunId = state.agent.runId;
+      const continuationAuditPath = path.join(runRoot, 'bridge', 'prompt-audits', `${continuationRunId}.json`);
+      const audit = JSON.parse(await readFile(continuationAuditPath, 'utf8'));
+      assert.equal(audit.deliveryStage, 'prepared-before-send');
+      assert.equal(audit.runId, continuationRunId);
+      const continuationRound = new RegExp(`^${missionId}:round:(\\d+)$`).exec(audit.roundId || '');
+      assert.ok(continuationRound && Number(continuationRound[1]) >= 2, `continuation audit is not a later round of this Mission: ${audit.roundId}`);
+      assert.equal(audit.promptDigest, 'sha256:' + createHash('sha256').update(audit.prompt, 'utf8').digest('hex'));
+      assert.equal(audit.promptBytes, Buffer.byteLength(audit.prompt, 'utf8'));
+      const hex = (value) => (typeof value === 'string' ? value.toLowerCase().replace(/^sha256:/u, '') : null);
+      const expectedCandidateDigest = hex(firstRound.candidateDigest);
+      assert.ok(expectedCandidateDigest && firstRound.candidateId && firstRound.queueRequestId, 'archived round is missing its candidate/queue binding');
+      // Select the round-1 candidate's OWN execution experience by exact evidence binding. A
+      // baseline observation, a human note, or any other candidate must never satisfy this: if
+      // the bound record is absent the acceptance fails instead of falling back.
+      const boundExperiences = experiences.filter((item) => item.source === 'execution'
+        && item.evidence?.missionId === missionId
+        && item.evidence?.candidateId === firstRound.candidateId
+        && hex(item.evidence?.patchDigest) === expectedCandidateDigest
+        && item.evidence?.runId === firstRound.queueRequestId);
+      assert.equal(boundExperiences.length, 1, `round-1 candidate execution experience not uniquely bound (found ${boundExperiences.length})`);
+      const continuationExperience = boundExperiences[0];
+      const selected = (audit.selection?.selected || []).find((item) => item.id === continuationExperience.id && item.version === continuationExperience.version);
+      assert.ok(selected, 'round-2 audited selection must contain the round-1 candidate execution experience');
+      assert.equal(selected.source, 'execution');
+      const promptSection = (label) => {
+        const begin = `----- BEGIN ${label} -----\n`;
+        const end = `\n----- END ${label} -----`;
+        const start = audit.prompt.indexOf(begin);
+        const stop = audit.prompt.indexOf(end, start + begin.length);
+        assert.ok(start >= 0 && stop > start, `audited prompt is missing ${label}`);
+        return JSON.parse(audit.prompt.slice(start + begin.length, stop));
+      };
+      const promptExperience = promptSection('UNTRUSTED EXPERIENCE DATA');
+      const promptItems = promptExperience.items.filter((item) => item.id === continuationExperience.id && item.version === continuationExperience.version);
+      assert.equal(promptItems.length, 1, 'actual prompt must contain the bound experience ID and version exactly once');
+      assert.equal(promptItems[0].content, continuationExperience.content, 'actual prompt must carry the complete, unchanged experience content');
+      assert.equal(promptExperience.versions[continuationExperience.id], continuationExperience.version);
+      assert.equal(promptExperience.contextId, audit.selection.contextId);
+      const continuationFacts = audit.roundFacts;
+      assert.ok(continuationFacts && continuationFacts.schemaVersion === 'operator-studio.round-facts/v1', 'audited round facts are missing');
+      assert.deepEqual(promptSection('MISSION ITERATION CONTEXT'), continuationFacts, 'actual prompt facts must equal the audit sidecar');
+      assert.deepEqual(continuationFacts, firstRound.roundFacts, 'audited facts must equal the frozen source archive');
+      assert.equal(continuationFacts.target.missionId, audit.missionId);
+      assert.equal(continuationFacts.target.missionId, missionId);
+      assert.equal(continuationFacts.target.projectId, audit.projectId);
+      assert.equal(continuationFacts.target.projectId, project.id);
+      assert.equal(continuationFacts.target.roundId, audit.roundId);
+      assert.equal(continuationFacts.previous?.runId, firstRun);
+      assert.equal(continuationFacts.previous?.roundId, firstRound.roundId);
+      assert.equal(continuationFacts.previous?.candidateId, firstRound.candidateId);
+      assert.equal(hex(continuationFacts.previous?.candidateDigest), expectedCandidateDigest);
+      assert.equal(continuationFacts.previous?.queueRequestId, firstRound.queueRequestId);
+      assert.ok(continuationFacts.candidate, 'audited facts must retain the previous candidate summary');
+      assert.ok(continuationFacts.correctness, 'audited facts must retain previous-round correctness');
+      assert.ok(continuationFacts.gate, 'audited facts must retain the previous Accept Gate result');
+      assert.equal(continuationFacts.gate.result, firstOutcome);
+      assert.ok(continuationFacts.rollback, 'audited facts must retain the previous rollback origin');
+      assert.ok(continuationFacts.currentBest, 'audited facts must retain the currentBest asset status');
+      continuationAudit = {
+        path: continuationAuditPath, runId: continuationRunId, roundId: audit.roundId,
+        promptDigest: audit.promptDigest, promptBytes: audit.promptBytes,
+        // These are the pre-send artifact's own bindings, not a live provider receipt.
+        selectedExperience: { id: continuationExperience.id, version: continuationExperience.version, source: continuationExperience.source,
+          evidenceCandidateId: continuationExperience.evidence.candidateId, evidencePatchDigest: continuationExperience.evidence.patchDigest, evidenceRunId: continuationExperience.evidence.runId },
+        facts: { previousRunId: continuationFacts.previous?.runId, previousRoundId: continuationFacts.previous?.roundId,
+          gateResult: continuationFacts.gate?.result, rollbackPerformed: continuationFacts.rollback?.performed ?? null,
+          currentBestCandidateId: continuationFacts.currentBest?.candidateId ?? null },
+        assertions: [
+          'pre-send audit file present for the continuation run',
+          'audited prompt SHA-256 (UTF-8) recomputed independently and matched',
+          'audited prompt UTF-8 byte length recomputed independently and matched',
+          'audited prompt contains the round-1 candidate execution experience ID, version and full content',
+          'audited selection bound by missionId/candidateId/patchDigest/queueRequestId (no baseline or human fallback)',
+          'audited roundFacts retain previous run/round/candidate plus candidate, correctness, gate, rollback and currentBest facts',
+          'this observation reads the prepared-before-send artifact only; it does not observe the live provider',
+        ],
+      };
     }
     for (const task of completed) {
       assert.equal(task.resourceRelease.confirmed, true);
@@ -205,10 +291,9 @@ try {
       assert.ok(task.payload.packageDigest && task.payload.admissionId);
     }
     assert.equal(new Set(completed.map((task) => task.payload.candidate.digest)).size, completed.length);
-    const experiences = (await request(`/api/projects/${project.id}/experiences`)).experiences;
     assert.ok(experiences?.some((item) => item.source === 'execution' && item.verification.publishable === false), 'No trusted experience observation');
     summaries.push({ family, missionId, firstRun, firstRoundOutcome: firstRound?.decisionReview?.resolution?.outcome || null,
-      budgetTerminalAccepted,
+      budgetTerminalAccepted, continuationAudit,
       continuedRun: state.agent?.runId || null, rollbackCount: (state.runtimeEvents || []).filter((event) => event.type === 'workflow.round_rolled_back').length,
       completed: completed.map((task) => ({ taskId: task.taskId, candidateDigest: task.payload.candidate.digest, packageDigest: task.payload.packageDigest })), workflowWritesAfterStart: writes.length - writesAtStart, experienceCount: experiences.length });
     await request('/api/actions/stop-mission', {});

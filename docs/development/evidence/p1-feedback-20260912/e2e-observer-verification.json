@@ -1,0 +1,46 @@
+{
+  "passed": true,
+  "mode": "read-only replay of exact new E2E observation block against retained live originals",
+  "script": "F:\\设计\\快速项目\\acagemm原型\\scripts\\e2e-shared-gpu-agent-iteration.mjs",
+  "scriptSha256": "7bb7cda45eac19b6a177614a38a5e7121bd437fd1221dd7e138377757d5aca0c",
+  "liveRun": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-W4va7P",
+  "liveDriverWasUpdated": false,
+  "assertions": [
+    "originals accepted",
+    "tampered prompt content rejected despite recomputed prompt hash",
+    "tampered prompt version rejected",
+    "tampered embedded facts rejected",
+    "foreign candidate evidence rejected"
+  ],
+  "auditResult": {
+    "path": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-W4va7P\\bridge\\prompt-audits\\claude_MTY3D3AA_C95A6106.json",
+    "runId": "claude_MTY3D3AA_C95A6106",
+    "roundId": "MIS_MTY3ADFI:round:2",
+    "promptDigest": "sha256:f711c70470511a4067433733eb50fc765328d829619c0ffa486bbe15d33d2996",
+    "promptBytes": 21244,
+    "selectedExperience": {
+      "id": "exp-36daea48-bfd3-48b0-8bd7-fbb6a3a8fe0b",
+      "version": 1,
+      "source": "execution",
+      "evidenceCandidateId": "candidate-01",
+      "evidencePatchDigest": "1d1a893244cd12c61109c368cf2ffde01e30ba2886b9568adfa7ebe99f4c2f2f",
+      "evidenceRunId": "run_13F95DB70766B3CCDFE6F1FF"
+    },
+    "facts": {
+      "previousRunId": "claude_MTY3AZLZ_D6E64670",
+      "previousRoundId": "MIS_MTY3ADFI:round:1",
+      "gateResult": "reference",
+      "rollbackPerformed": true,
+      "currentBestCandidateId": null
+    },
+    "assertions": [
+      "pre-send audit file present for the continuation run",
+      "audited prompt SHA-256 (UTF-8) recomputed independently and matched",
+      "audited prompt UTF-8 byte length recomputed independently and matched",
+      "audited prompt contains the round-1 candidate execution experience ID, version and full content",
+      "audited selection bound by missionId/candidateId/patchDigest/queueRequestId (no baseline or human fallback)",
+      "audited roundFacts retain previous run/round/candidate plus candidate, correctness, gate, rollback and currentBest facts",
+      "this observation reads the prepared-before-send artifact only; it does not observe the live provider"
+    ]
+  }
+}

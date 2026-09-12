@@ -75,6 +75,8 @@ const checks = [
   'test:iteration-research-service',
   'test:round-recovery-service',
   'test:agent-round-service',
+  'test:round-feedback-integration',
+  'test:prompt-audit',
   'test:round-preflight-service',
   'test:round-artifact-guard',
   'test:baseline-source-service',

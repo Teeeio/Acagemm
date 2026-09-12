@@ -67,6 +67,45 @@ while `publishable` stays false. Temporary scripts live under the ignored
 `.operator-studio-local/` and only that directory is removed in `finally`. It runs in both
 verification gates.
 
+## Round feedback / pre-send prompt audit coverage
+
+`round-feedback-integration-test.mjs` is the independent two-round production-path
+acceptance for §14.5. It never fills `iterationContext`, `roundFacts` or
+`resolvedTarget` by hand: it seeds a real prior round through the production
+`ensureRoundBudgetStarted`/`applyOperatorTestSnapshot` boundary, then lets the real
+`agent-round-service` plus `main-round-orchestration-service` start the next round
+over a real filesystem Experience repository (wrapped only in a read-counting port
+proxy) and a real temporary workspace. The Agent provider is an injected client
+double, because the acceptance must not consume a live Agent session. The observed
+connectivity facts come from the queue projection, the real shared-GPU experience
+verifier, the production archive (`resetMissionRunState`) and the prompt actually
+authored by `createAgentRuntime`; the round-facts JSON block is parsed back out of
+that prompt. Negative cases cover wrong-task no-op, backend-as-hardware rejection,
+architecture-scope separation, evidence-identity conflict, baseline transitions,
+zero-experience rounds, the 20-item/64 KiB retention caps with their exclusion
+reasons, the operator test-failure channel, infrastructure classification with no
+operator experience recorded, archive determinism (duplicate reset, legacy rounds
+without a roundId, JSON restore) and journal capture/replay.
+
+`prompt-audit-test.mjs` proves the provider-neutral pre-send audit contract for both
+`claude-code` and `codex-cli`. The provider double reads the audit file inside its
+own `start()` call and asserts the audited string equals `start.goal`, so
+write-before-send ordering is observed rather than inferred; the tests recompute the
+SHA-256 digest and UTF-8 byte length from the captured string independently and check
+Chinese content survives serialization. A failing audit write must reject with
+`PROMPT_AUDIT_WRITE_FAILED` and must not call the provider. Version freeze,
+auditable selection exclusions (an `sm100` record excluded with reason `scope`) and a
+tampered `contextId` failing closed without committing round state are also covered.
+Both tests use their own `mkdtemp` root, point `OPERATOR_RUNTIME_DIR`/`OPERATOR_DATA_DIR`
+at it before importing production modules, and remove only that root in `finally`.
+They run in both verification gates and never touch hardware, a live Agent or the
+network.
+
+The audit is a `prepared-before-send` artifact: these tests prove what the production
+boundary prepared and handed to the provider port. They do not claim what a live
+provider process received, and the `e2e:shared-gpu-agent-iteration` driver likewise
+only reads that artifact for the continuation round.
+
 ## Query/advancement coverage
 
 `runtime-read-isolation-test.mjs` boots an isolated Runtime with hardware disabled.

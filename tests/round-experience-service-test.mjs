@@ -28,7 +28,9 @@ const setup = () => {
     },
   };
   const api = createExperienceService({ repository, now: () => '2026-09-07T12:00:00.000Z', createId: () => `experience-${++ids}` });
-  const experienceService = { ...api, retrieve: (...args) => { retrieves++; return api.retrieve(...args); } };
+  // Pin this suite to the legacy retrieve-only port: the spread of the public API
+  // must not silently expose a newer selection API to these round-service cases.
+  const experienceService = { ...api, retrieveWithSelection: undefined, retrieve: (...args) => { retrieves++; return api.retrieve(...args); } };
   const ports = {
     experienceService, timers, timeoutMs: 200,
     resolveAccess: ({ mission: owner }) => ({ projectId: owner.projectId, allowedProjectIds: [] }),

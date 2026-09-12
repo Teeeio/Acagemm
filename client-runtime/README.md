@@ -60,6 +60,21 @@ Decision、回滚真实性与 currentBest 资产状态）在 `resetMissionRunSta
 投影进 Prompt 的 `iterationContext`；只有绑定当前 Mission 与当前 Round 才会投递，
 Mission 切换、新轮次和重放都不会拿到别轮事实。
 
+Provider 中立的发送前 prompt 审计（`operator-studio.prompt-audit/v1`）在
+`agent-runtime.startRun` 调用 provider **之前**原子写入
+`<bridgeDir>/prompt-audits/<runId>.json`，写入失败以 `PROMPT_AUDIT_WRITE_FAILED`
+阻止发送，不假称 provider 已收到。Claude 与 Codex 共用同一 helper，审计的 `prompt`
+严格等于 `start.goal`；OpenCode 与 cli-file 主启动分支各自记录真正交付的
+prompt/request.goal，不记录仅存在于内存的字符串。审计件含 `promptDigest`
+（`sha256:<hex>`，UTF-8 字节）、`promptBytes`（`Buffer.byteLength`）、Mission/Project/
+Round/Run 绑定、`runtimeMode`、`createdAt`、`deliveryStage:prepared-before-send`、轮次事实快照与经验选择清单；
+`state.agent.promptAudit` 只保留 `path/digest/bytes/schemaVersion` 引用，
+`resetMissionRunState` 归档时随 `runHistory[].promptAudit` 保留，旧审计不被新状态改写。
+runId 必须是安全文件名（含路径分隔符或 `..` 时拒绝发送），rename 沿用既有有界重试
+处理 Windows EPERM/EBUSY 竞态。选择清单来自
+[round-experience-service](application/round-experience-service.md) 保存的同 round
+sidecar，审计不重建、不改写选中集合。
+
 ## Inputs
 
 - HTTP commands from the TUI or Web client.
@@ -318,8 +333,8 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 | [operator-test-tool](operator-test-tool.md) | capabilities / prepare / submit / read-only get / cancel / findByRequestId；仅调用一个队列 |
 | [experience-contract](experience-contract.md) | 版本、范围、来源、证据与非发布型开发经验规则 |
 | [experience-repository](experience-repository.md) | 私有原子存储、同进程事务、不可变历史 |
-| [experience-service](application/experience-service.md) | 注入端口的人工经验、观察记录与冻结检索上下文 |
-| [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；完整可信凭据才记录执行观察 |
+| [experience-service](application/experience-service.md) | 注入端口的人工经验、观察记录、冻结检索上下文与审计选择清单 |
+| [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；保存同轮选择 sidecar；完整可信凭据才记录执行观察 |
 | [round-budget-contract](round-budget-contract.md) | 主 Agent、测试与同轮重试共享 15 分钟墙钟；暂停/恢复不刷新 |
 | [cancellation-contract](cancellation-contract.md) | 资源释放真相、只读 barrier 与显式推进中的确认收敛 |
 

@@ -115,6 +115,8 @@
     "test:iteration-research-service": "node tests/iteration-research-service-test.mjs",
     "test:round-recovery-service": "node tests/round-recovery-service-test.mjs",
     "test:agent-round-service": "node tests/agent-round-service-test.mjs",
+    "test:round-feedback-integration": "node tests/round-feedback-integration-test.mjs",
+    "test:prompt-audit": "node tests/prompt-audit-test.mjs",
     "test:round-preflight-service": "node tests/round-preflight-service-test.mjs",
     "test:round-artifact-guard": "node tests/round-artifact-guard-test.mjs",
     "test:baseline-source-service": "node tests/baseline-source-service-test.mjs",
