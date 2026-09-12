@@ -1,0 +1,14 @@
+[
+  {
+    "test": "model-observation-test.mjs",
+    "exit": 0
+  },
+  {
+    "test": "claude-runtime-test.mjs",
+    "exit": 0
+  },
+  {
+    "test": "agent-runtime-timeout-recovery-test.mjs",
+    "exit": 0
+  }
+]

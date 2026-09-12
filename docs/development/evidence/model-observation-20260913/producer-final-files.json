@@ -1,0 +1,38 @@
+[
+  {
+    "path": "client-runtime/README.md",
+    "sha256": "2ca593436170ddc92e7de75853aea84ee471ea5d19076586fac1010dcd7b6a68"
+  },
+  {
+    "path": "client-runtime/agent-runtime.md",
+    "sha256": "f4a942d92d4f276b8659f8e0fa7946b75ff7d804e9d3952df6dabb57fe52c5af"
+  },
+  {
+    "path": "client-runtime/agent-runtime.mjs",
+    "sha256": "dbd4c7a0a2088b81ab04cabb2c4f7cc8be7b462dda8b22c999f032c8305e82ce"
+  },
+  {
+    "path": "client-runtime/claude-client.mjs",
+    "sha256": "e2bd984035e6da0b2c9fae841c929cab38840d49d438d3247b54db2b5685a4fb"
+  },
+  {
+    "path": "client-runtime/mission-project-state.md",
+    "sha256": "9a4f943146413fc562d99b6f7dce977761344f9b682e91ee07a557e0eed96eb4"
+  },
+  {
+    "path": "client-runtime/mission-project-state.mjs",
+    "sha256": "052c55a4ca02074b67c8e559fc64cdd2ec69dcf1527b6c671ea214ac8c2aa3f0"
+  },
+  {
+    "path": "client-runtime/model-observation.md",
+    "sha256": "8f581d3da6889bf12648d582b7d79bf509fe441c54a4e7b2396b73ed66a17020"
+  },
+  {
+    "path": "client-runtime/model-observation.mjs",
+    "sha256": "2625f6fb7958d6064770c9c7919ce43d272574be050e8f0e20a8e46e6c95143d"
+  },
+  {
+    "path": "docs/development/MODULE_OWNERSHIP.md",
+    "sha256": "6db6e2bb2318a464c70dbe43ade9ebaa7e2110aa6b7b55323905774753161dbf"
+  }
+]

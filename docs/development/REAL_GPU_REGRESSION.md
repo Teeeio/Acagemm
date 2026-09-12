@@ -2,18 +2,32 @@
 
 Status: procedure/contract for the real shared-GPU regression only. It does not
 contain hardware results, does not certify N=20 and does not claim publishability.
-Current state (2026-09-13): the response-model observation consumer is implemented
-in the driver/observer/ledger and the frozen hardware-free contracts pass, but **no
-new GPU / real Agent run has been made** for this batch. The newest real affine
-two-round smoke is still pending execution (`待运行`); nothing in this document or
-in the hardware-free tests is evidence that the live observation path works. The
-driver has **not observed a model value** on real hardware yet (a `declared`/env
-label cannot make a group comparable). Phase 2 hardware-free gates passed
-(release 136 / non-hardware 38, exit 0); they do not add hardware samples — see
-[`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md).
-The ordered follow-up is: first observe the model, then a same-configuration real
-two-round smoke, with family coverage and N=20 reported **separately**. Running the
-driver 20 times is not by itself an N=20 qualification.
+Current state (2026-09-13): the response-model observation implementation is
+complete and the upgraded hardware-free gates pass — **release 139 / non-hardware
+41, exit 0** (UTC 19:18:55–19:29:01, log SHA256
+`c4205aa44917708dff15aaa3d2d2996d95b9f9e5fd4a6aa83a12d7ba7a0b3c46`), with the
+producer `assistant.message.model` observation chain, the consumer final-record /
+all-requiredRuns / ledger / stop semantics, `collector 65/65` and the five
+fixture-only driver scenarios all verified. Archived originals, the machine
+manifest and the precise proof boundaries are in
+[`evidence/model-observation-20260913/README.md`](evidence/model-observation-20260913/README.md).
+The earlier Phase 2 gates (release 136 / non-hardware 38, exit 0) are **historical
+and retained** at
+[`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md);
+they are not the current numbers and add no hardware samples. **No new GPU / real
+Agent run has been made** for this batch: the live request was refused by the
+`exec_command` automatic approval review **before process creation**
+(`approval-required`, `processCreated: false`, payload/destination authorization
+pending), so the newest real affine two-round smoke is still pending execution
+(`待运行`); reduction/normalization coverage and N=20 are likewise pending.
+Nothing in this document or in the hardware-free tests is evidence that the live
+observation path works, and the rejected live execution must not be replaced by a
+local dispatch run. The driver has **not observed a model value** on real hardware
+yet (a `declared`/env label cannot make a group comparable).
+The ordered follow-up is unchanged: first observe the model, then a
+same-configuration real two-round smoke, with family coverage and N=20 reported
+**separately**. Running the driver 20 times is not by itself an N=20 qualification,
+and the strict statistics threshold below is not relaxed.
 
 Every configured operator family must have consistent attempt/summary outcomes.
 Missing summaries and failed attempts remain in the denominator. Duplicate

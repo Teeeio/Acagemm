@@ -1,0 +1,20 @@
+{
+  "fixtureOnly": true,
+  "realRuntimeGpuOrNetwork": false,
+  "stopCalls": 0,
+  "killed": true,
+  "originalFailure": {
+    "message": "/api/actions/start-benchmark: 500 {\"code\":\"ROOT_FIXTURE_BASELINE_FAILURE\"}",
+    "code": "ROOT_FIXTURE_BASELINE_FAILURE"
+  },
+  "cleanup": {
+    "missionId": "MIS_FIXTURE",
+    "confirmed": false,
+    "statusCode": null,
+    "reasons": [
+      "stop request failed: stopMissionNow is not defined"
+    ],
+    "error": "stopMissionNow is not defined"
+  },
+  "thrown": "/api/actions/start-benchmark: 500 {\"code\":\"ROOT_FIXTURE_BASELINE_FAILURE\"}\nArtifacts: C:/fixture-only/run"
+}

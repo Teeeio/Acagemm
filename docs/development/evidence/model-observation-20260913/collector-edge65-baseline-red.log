@@ -1,0 +1,25 @@
+[collector-acceptance] AssertionError (pending contract): collector: contradictory known-start Missions for one run never resolve first-wins in either order
+    two concrete Missions on one provider/run start contradict; neither may win by list order
+[collector-acceptance] AssertionError (pending contract): collector: contradictory known-start sessions for one run never resolve first-wins in either order
+    two concrete sessions on one provider/run start contradict; neither may win by list order
+[collector-acceptance] AssertionError (pending contract): collector: conflicting duplicate final records fail closed in either order
+    unknown then observed: two final records with conflicting content for one file must fail closed
+[collector-acceptance] AssertionError (pending contract): collector: an invalid extra safe run file stays unbound and required
+    a parsed empty object: an invalid extra run file must block observation
+[collector-acceptance] AssertionError (pending contract): stop receipt rejects: a cancel_requested research Agent despite a confirmed Mission aggregate
+    a cancel_requested research Agent despite a confirmed Mission aggregate must not confirm
+[collector-acceptance] AssertionError (pending contract): stop receipt rejects: a pending research Agent release
+    a pending research Agent release must not confirm
+[collector-acceptance] AssertionError (pending contract): stop receipt rejects: an unconfirmed materializer release
+    an unconfirmed materializer release must not confirm
+[collector-acceptance] AssertionError (pending contract): stop receipt rejects: a quarantined benchmark release
+    a quarantined benchmark release must not confirm
+[collector-acceptance] AssertionError (pending contract): stop receipt rejects: a cancel_requested benchmark despite a confirmed Mission aggregate
+    a cancel_requested benchmark despite a confirmed Mission aggregate must not confirm
+[collector-acceptance] AssertionError (pending contract): stop receipt rejects: a paused loop intent
+    a paused loop intent must not confirm
+[collector-acceptance] AssertionError (pending contract): stop receipt rejects: an idle loop intent
+    an idle loop intent must not confirm
+[collector-acceptance] AssertionError (pending contract): stop receipt: an idle null-run Agent with a stopped Mission and explicit empty release confirms
+    an idle Agent without a current run must not fabricate an Agent release requirement
+[shared-gpu-model-collector] 53/65 independent cases passed; 12 expected-red pending the frozen collect/stop-receipt helpers and the ledger model-proof boundaries

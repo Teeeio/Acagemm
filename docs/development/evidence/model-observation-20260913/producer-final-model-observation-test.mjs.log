@@ -1,0 +1,37 @@
+ok - pure: one matching assistant model is observed; init/usage labels stay separate
+ok - pure: zero assistant responses and init-only streams stay unknown
+ok - pure: missing/blank/synthetic response labels are never observed
+ok - pure: two concrete response models are a conflict, never a pick
+ok - pure: absent or foreign assistant sessions invalidate completeness without replacing identity
+ok - pure: session identity is exact and run/mission identity must be nonblank before a response is observed
+ok - pure: a valid response cannot mask a missing/blank model or missing session in the same stream
+ok - pure: thinking-only metadata is observed without leaking thinking content
+ok - pure: unrelated model fields and prose are ignored
+ok - pure: DTO JSON round-trip stays a valid observable DTO
+ok - pure: bind detaches a valid observation and rejects all four identity swaps
+ok - pure: bind rejects malformed and internally inconsistent DTOs but accepts unknown/conflict shapes
+ok - pure: bind refuses observed error reasons, unlisted conflict evidence and duplicate event indexes
+ok - pure: summary of an empty required set is unknown
+ok - pure: summary is observed only when every required run reports the same model
+ok - pure: foreign, non-observed, malformed and duplicate evidence fails closed
+ok - pure: duplicate evidence differing only in object key order is one run, counted once
+ok - adapter: fake-child stream persists a provider-reported response observation
+ok - adapter: a resume hint is not an observation; init-only/empty streams stay unknown
+ok - adapter: thinking-only assistant metadata is observed and private reasoning is not persisted
+ok - adapter: an unterminated final JSON line is still observed on physical close
+ok - adapter: mixed/foreign/synthetic response metadata fails closed
+ok - adapter: a valid response followed by incomplete assistant metadata stays unknown
+ok - adapter: cancellation retains the observed metadata
+ok - projection: exact current-run binding is exposed and metadata-only change flips changed=true
+ok - projection: missing, foreign or wrongly bound observations clear a stale value
+ok - projection: cancellation settlement retains observation without weakening release
+ok - projection: a record/DTO bound to a foreign mission never projects into the current mission
+ok - projection: a cancelled run whose DTO session disagrees with the record is refused, release stays authoritative
+ok - projection: a run record claiming another provider never projects a claude-code observation
+ok - projection: a failing readRun clears a previously projected observation instead of leaving stale evidence
+ok - archive: reset preserves the bound observation as a detached runHistory entry and clears the live run
+ok - archive: a foreign observation binding is rejected instead of archived
+ok - archive: a brand-new run never inherits the archived observation
+
+[model-observation] hardware-free: no real Claude CLI, Python, network or GPU process was started.
+[model-observation] 34 passed, 0 failed

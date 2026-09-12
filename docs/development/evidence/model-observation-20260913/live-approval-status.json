@@ -1,0 +1,11 @@
+{
+  "recordedBy": "Root from exec_command auto-review result",
+  "status": "approval-required",
+  "processCreated": false,
+  "realGpuAgentAttemptStarted": false,
+  "requestedCommand": "npm.cmd run e2e:shared-gpu-agent-iteration",
+  "reason": "The live Claude Code run may transmit repository contents or other sensitive context over the network to an external provider, but the user has not specifically authorized that payload and destination.",
+  "configuredFrontEndpoint": "http://127.0.0.1:15721/",
+  "upstreamDestination": "not independently confirmed",
+  "userApprovalQuestionPending": true
+}
