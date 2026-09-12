@@ -121,6 +121,11 @@ const roundGateFacts = (gate) => {
     passedRules: Array.isArray(gate.passedRules) ? gate.passedRules.map(factsText).filter(Boolean) : [],
     evaluatedRules: factsNumber(gate.evaluatedRules),
     summary: factsText(gate.summary),
+    // 同一 evidenceDecision 随冻结轮次事实投影，供下一轮 prompt 沿用同一版本；
+    // 旧无 decision 的记录保持原样，不新增字段、不补造授权。
+    ...(gate.decision && typeof gate.decision === 'object' && !Array.isArray(gate.decision)
+      ? { evidenceDecision: structuredClone(gate.decision) }
+      : {}),
   };
 };
 
@@ -561,15 +566,36 @@ export const createMissionProjectState = ({ rootDir, workspaceDir, workspaceDirF
     assertResourcesReleased(state);
     const previousLoopStatus = state.iterationStats?.loopStatus || null;
     const wasPaused = state.missionPaused === true;
-    const resumableLoop = ['stopped', 'needs_human'].includes(previousLoopStatus);
+    // external_verification 使用既有 missionPaused + loopStatus blocked 表示等待，
+    // 恢复走同一 resume 通道：解除 missionPaused 使既有 test.plan 重试同一候选可用，
+    // 但保留 blocked 编排标记阻止自动续跑，直到重试真正排队/执行；不刷新预算、
+    // 不释放候选工作区、不改写任何证据事实。
+    const externalVerificationWait = (previousLoopStatus === 'blocked' && state.iterationStats?.loopStatusReason === 'external_verification')
+      || state.decisionReview?.status === 'waiting_external_verification';
+    const resumableLoop = ['stopped', 'needs_human', 'blocked'].includes(previousLoopStatus);
     state.missionPaused = false;
     if (resumableLoop) {
-      state.iterationStats = {
-        ...(state.iterationStats || {}),
-        loopStatus: 'running',
-        loopStatusReason: null,
-        stoppedAt: null,
-      };
+      if (externalVerificationWait) {
+        const acknowledged = state.iterationStats?.externalVerificationAcknowledged;
+        state.iterationStats = {
+          ...(state.iterationStats || {}),
+          loopStatus: 'blocked',
+          loopStatusReason: 'external_verification',
+          stoppedAt: null,
+          externalVerificationAcknowledged: acknowledged || {
+            candidateId: state.appliedCandidateId || state.benchmark?.candidate?.id || null,
+            runId: state.benchmark?.runId || null,
+            acknowledgedAt: new Date().toISOString(),
+          },
+        };
+      } else {
+        state.iterationStats = {
+          ...(state.iterationStats || {}),
+          loopStatus: 'running',
+          loopStatusReason: null,
+          stoppedAt: null,
+        };
+      }
     }
     const activeMission = state.missions?.find((item) => item.id === state.activeMissionId);
     if (activeMission && (wasPaused || resumableLoop) && !['completed', 'published', 'archived'].includes(activeMission.status)) {

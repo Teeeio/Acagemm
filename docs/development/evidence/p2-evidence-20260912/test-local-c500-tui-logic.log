@@ -1,0 +1,7 @@
+
+> operator-studio-mvp@0.1.0 test:local-c500-tui-logic
+> node tests/local-c500-tui-logic-test.mjs
+
+[local-c500-tui-logic] decision-bound Evidence block shows all six items and its blocking reason
+[local-c500-tui-logic] simulation decision drives the simulation banner without a live boolean
+[local-c500-tui-logic] state policy, commands, terminal UX, and 300 randomized snapshots passed

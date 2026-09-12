@@ -1,0 +1,7 @@
+{
+  "command": "npm.cmd run verify:non-hardware-robustness",
+  "exit": 1,
+  "startedAt": "2026-09-12T12:54:04.4940277Z",
+  "completedAt": "2026-09-12T13:00:17.3336378Z",
+  "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\preflight-full-gate.log"
+}

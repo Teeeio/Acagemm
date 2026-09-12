@@ -3,9 +3,19 @@
 Operator Studio 是面向异构算子优化的本地 Agent 工作台。当前生产客户端是 TUI；后续 GUI
 将复用同一个 HTTP API、应用编排、工作区、测试队列、Gate 和经验库，不再建立第二套流程。
 
-- 当前主分支：`main`
-- 生产入口：`npm run tester:c500`
-- 目标真机：沐曦 C550（`c500`、`local-c500` 仅作为保留的程序兼容标识）
+- 交接分支：`handoff/codex-job-supervisor-p1`；P1 §14.1–§14.5 已验收，基线与原件见
+  [P1 轮次反馈闭环验收](docs/development/P1_FEEDBACK_ACCEPTANCE.md)（2026-09-12）。
+- Phase 2（`§14.6`）诊断资格 + 版本化统一决策与治理已按劳务任务集成，对应冻结契约
+  [Phase 2 证据治理验收](docs/development/P2_EVIDENCE_ACCEPTANCE.md)；**无硬件验收通过：
+  release 136 / non-hardware 38，exit 0**。此结果不构成 N=20 或真实发布。当前证据索引见
+  [Phase 2 证据归档](docs/development/evidence/p2-evidence-20260912/README.md)，实机观察/台账规则见
+  [真实共享 GPU 回归](docs/development/REAL_GPU_REGRESSION.md)；Phase 3（KernelWiki）尚未开始。
+- 兼容 TUI 入口 `npm run tester:c500` 是保留的 C500/C550 launcher：`tools/local-c500-tester/launcher.cjs`
+  无条件写入 `OPERATOR_TEST_BACKEND=local-c500`，**不能**用它选择当前共享 GPU 后端。
+- 当前共享 GPU 真实 E2E 入口（PowerShell；显式选择已验证的 Claude 路径）：
+  `$env:E2E_AGENT_RUNTIME='claude-code'; npm run e2e:shared-gpu-agent-iteration`。
+- 实际执行后端：本地共享 NVIDIA GPU（`OPERATOR_TEST_BACKEND=local-shared-gpu`，真实本地开发测量、
+  `publishable=false`）与 CPU E2E；`C500` / `C550` 是保留的兼容/历史标识，**不是当前唯一目标真机**
 
 ## 当前状态
 
@@ -16,17 +26,39 @@ Operator Studio 是面向异构算子优化的本地 Agent 工作台。当前生
 - Accept Gate 自动决定采用、保留参考、拒绝或进入人工处理。
 - 未达到目标的已结算轮次会自动回滚并开始下一轮，不需要用户逐轮点击继续。
 - 经验查询、草稿生成和经验沉淀已进入生产 workflow；仿真证据不能发布为真机经验。
-- CPU 端到端测试会真实执行轻量算子，用于验证无 C550 环境下的完整迭代闭环。
+- P1 轮次反馈闭环（`TEAM_HANDOFF.md` §14 第 1–5 项）已验收：经验回流、轮次事实冻结、
+  发送前 prompt/selection 审计和一次真实两轮生产路径。验收基线见
+  [P1 反馈闭环验收](docs/development/P1_FEEDBACK_ACCEPTANCE.md)，原件与边界见
+  [P1 证据归档](docs/development/evidence/p1-feedback-20260912/README.md)。
+- Phase 2 诊断资格与统一决策/治理已集成；**最终 release 136 / non-hardware 38 均通过**，
+  485 个代码与测试文件在运行前后 SHA256 一致。真实共享 GPU 结果保留 development 分类，
+  无绑定历史经验保持 `unknown`，治理重复执行与 JSON 恢复不重复写入。
+  预检失败和精确迁移记录、最终日志及证明范围见
+  [Phase 2 证据归档](docs/development/evidence/p2-evidence-20260912/README.md)。
+- P1 当时的最终门禁为 release `132 checks` / non-hardware `34 checks`，exit 0（归档日志
+  [final-gates.log](docs/development/evidence/p1-feedback-20260912/final-gates.log)）。
+  P1 验收对新版 E2E driver 的 observer 做了真实原件只读回放，**未**重跑整段实机；单次真实两轮
+  **不构成 N=20 稳定性**。§14 第 6 项现由 Phase 2 无硬件验收覆盖，第 7 项仍待开发；
+  第 8 项文档订正已完成。
+- CPU 端到端测试会真实执行轻量算子，用于验证无真实 GPU 环境下的完整迭代闭环。
 
-### 硬件命名约束
+### 硬件与后端命名（兼容/历史身份）
 
-- `C550` 是当前唯一的沐曦生产目标。固定 C550 Profile Mission 的 `hardware`、测试矩阵的
-  `environments`、模拟后端的 `device` 以及新生成的执行证据必须使用 `C550`。
+- 当前开发与验收后端是本地共享 NVIDIA GPU（`local-shared-gpu`）和 CPU E2E；两者都产出
+  开发证据，不能直接发布为真机证据。
+- `C550` 是保留的沐曦兼容/历史目标标识，不再声称是当前唯一目标。共享 GPU 的开发运行
+  不得回填或冒充 `C550` 证据。
+- 固定 Profile 语义（`client-runtime/fixed-operator-profiles.mjs`）仍以 `C550` 作为保留的
+  Profile/设备标识，测试矩阵 `environments` 与旧执行证据沿用该标识；这是兼容身份，不表示
+  当前开发或验收运行在 C550 真机上。
 - `tester:c500`、`local-c500`、`LOCAL_C500_*`、`OPERATOR_LOCAL_C500_*` 和
   `LOCAL_C500_*` 错误码是稳定的兼容接口，暂不重命名；其中的 `c500` 不表示任务会在
   C500 上执行。
 - C500 与 C550 是不同设备，Runner 匹配时不会视为同一后端。旧状态或历史证据中真实的
-  `C500` 标签必须原样保留，也不能用于通过 C550 发布门禁。
+  `C500` / `C550` 标签必须原样保留；某条记录能否通过当前 Gate，要按它的目标、版本与证据
+  资格逐项判定，**不**按标签一概放行或一概拒绝。
+- 当前验收没有可发布的 C550 真机证据。P1 真实 GPU 结果来自
+  `source=local-shared-gpu` / `publishable=false`；真实执行与发布资格分别判定。
 
 ## 系统边界
 
@@ -48,8 +80,9 @@ flowchart LR
   AGENT --> CODEX[Codex CLI]
   AGENT --> OPENCODE[OpenCode 实验适配器]
 
-  QUEUE --> C550[C550 本地执行适配器]
+  QUEUE --> GPU[本地共享 NVIDIA GPU Runner]
   QUEUE --> CPU[CPU E2E Runner]
+  QUEUE --> C550[C500 / C550 兼容/历史适配器]
   QUEUE --> MOCK[Mock / Reference Fixture]
 ```
 
@@ -64,7 +97,7 @@ TUI / future GUI
   -> adapters
 ```
 
-Domain 不得依赖 TUI、HTTP、Claude、Codex、C550 或文件系统实现。HTTP Route 不得复制
+Domain 不得依赖 TUI、HTTP、Claude、Codex、硬件适配器或文件系统实现。HTTP Route 不得复制
 workflow、Gate、Profile 或硬件规则。
 
 ## 生产 Workflow
@@ -99,13 +132,16 @@ benchmark profiles，不能用 Candidate 自己提供的 `reference()` 或输入
    弱候选只保留为参考，不要求每份证据都转成知识草稿。
 3. **沉淀经验**：只有来源、语义绑定、Candidate 摘要和证据等级满足治理规则的草稿才可进入
    正式经验库；需要审核的保留为草稿，重复项合并，低价值项不发布。
-4. **证据隔离**：`simulation` 和 `cpu-e2e` 只验证流程，永远不能升级为可发布的 C550
-   `liveHardware` 经验。
+4. **证据隔离**：`simulation` 只做流程仿真；`cpu-e2e` 真实执行但只用于验证闭环；共享 GPU
+   开发证据是真实的本地 correctness/benchmark 测量，可用于本机开发判定。三者都不能升级或
+   冒充为可发布的真机 `liveHardware` 经验——真实来源不自动带来发布权。
 
 ## 快速启动
 
-### C550 生产 TUI
+### 兼容 TUI（`tester:c500`，固定 C500 后端）
 
+`npm run tester:c500` 是保留的 C500/C550 兼容 launcher：`tools/local-c500-tester/launcher.cjs`
+固定写入 `OPERATOR_TEST_BACKEND=local-c500`，因此**不能**通过环境变量把它切到本地共享 GPU。
 目标机先完成所选 Agent 的登录，然后运行：
 
 ```bash
@@ -113,7 +149,7 @@ npm ci
 npm run tester:c500
 ```
 
-Linux C550 目标机推荐使用统一入口：
+Linux 目标机使用保留的 C500/C550 兼容脚本：
 
 ```bash
 bash scripts/c500-test.sh verify
@@ -131,6 +167,20 @@ npm run tester:c500
 详细部署、环境检查、端口和 TUI 操作见
 [`tools/local-c500-tester/README.md`](tools/local-c500-tester/README.md)。
 
+### 当前共享 GPU 真实 E2E（PowerShell，已验证入口）
+
+当前实际后端是本地共享 NVIDIA GPU。它的真实入口是共享 GPU E2E driver
+（`scripts/e2e-shared-gpu-agent-iteration.mjs`）。显式选择 P1 已验收的 Claude 路径：
+
+```powershell
+$env:E2E_AGENT_RUNTIME = 'claude-code'
+npm run e2e:shared-gpu-agent-iteration
+```
+
+它会启动已登录的 Claude Code 并消耗真实 Agent 会话，因此默认不进门禁。结果标记为
+`source=local-shared-gpu`、`publishable=false`：这是真实的本地 correctness/benchmark 测量，
+可用于本机开发判定，但**不能**作为真机发布证据。
+
 ### 无硬件体验
 
 完整界面与状态机仿真，不调用模型、Python 或硬件：
@@ -139,7 +189,7 @@ npm run tester:c500
 npm run tester:c500:simulation
 ```
 
-仿真结果始终是 `liveHardware=false`，不得作为 C550 验收证据。
+仿真结果始终是 `liveHardware=false`，不得作为真机发布验收证据。
 
 ### Web 开发客户端
 
@@ -181,23 +231,25 @@ Operator Studio 不保存或注入 Agent Provider 的 API key、模型地址和�
 
 | 后端 | 是否真实执行 | Evidence | 用途 |
 |---|---:|---|---|
-| C550 local runner | 是 | `liveHardware=true` | 生产 Correctness、Benchmark 和发布验收 |
+| 本地共享 NVIDIA GPU runner（`local-shared-gpu`） | 是（真实 GPU 测量） | `source=local-shared-gpu`, `publishable=false` | 当前开发用的真实 Correctness、Benchmark；本地开发可用，不可发布 |
 | CPU E2E runner | 是 | `source=cpu-e2e`, `liveHardware=false` | 开发机端到端流程验证 |
+| C500/C550 local runner | 保留兼容/历史 | 按目标/版本/证据资格逐项判定 | 兼容旧状态与历史证据，不作为当前开发后端 |
 | Hardware Mock | 否 | `liveHardware=false` | 真实 Agent + 可重复多轮工作流测试 |
 | Full Simulation | 否 | `liveHardware=false` | TUI/API/状态机快速检查 |
 | `test-service` Mock/remote adapter | 兼容路径 | 取决于适配器返回 | 旧 HTTP 测试服务契约与远端联调 |
 
 通用异步测试工具、内容寻址执行包与可信准入、版本化开发经验已建立独立模块和契约测试；
 共享 GPU MVP 已接入生产组合根，提交前会完成包组装、语法校验、准备和 admission，Runner
-只读取已准备包目录。共享主机 GPU 结果标记为开发证据，不能直接发布为真机经验。强隔离
-环境与真实 Codex 多算子验收仍属于后续扩展，当前范围和进展见
-[通用算子 Goal](docs/development/GENERIC_OPERATOR_GOAL.md)。
+只读取已准备包目录。共享主机 GPU 结果是真实的本地开发测量（nonpublishable live
+development evidence），可用于本机开发判定，但不能直接发布为真机经验。强隔离
+环境与真实 Agent 多算子验收（provider 中立，验收须按 provider 分别成立）仍属于后续扩展，
+当前范围和进展见 [通用算子 Goal](docs/development/GENERIC_OPERATOR_GOAL.md)。
 
 ## 核心模块
 
 | 目录 | 职责 |
 |---|---|
-| `tools/local-c500-tester/` | Ink TUI、Production API Client、启动器和 C550 环境预检 |
+| `tools/local-c500-tester/` | Ink TUI、Production API Client、启动器和保留的 C500/C550 兼容环境预检 |
 | `client-runtime/server/` | HTTP、SSE 和静态资源的薄适配层 |
 | `client-runtime/application/` | 与传输无关的用例编排 |
 | `client-runtime/` | Workflow、Agent、Workspace、Queue、Gate、Knowledge 和持久化边界 |
@@ -231,7 +283,7 @@ Operator Studio 不保存或注入 Agent Provider 的 API key、模型地址和�
   runtime/
 ```
 
-C550 TUI 默认写入：
+保留的 C500/C550 兼容 TUI 默认写入：
 
 ```text
 .local-c500-production/
@@ -271,11 +323,12 @@ npm run verify:linux-compatibility
 ```
 
 该命令覆盖原生 Python 路径解析、tar/ZIP 执行包导入以及 POSIX 进程组在 leader
-提前退出后的 descendant 回收；它不把 Linux 通过外推为 C550 真机发布证据。
+提前退出后的 descendant 回收；它不把 Linux 通过外推为真机发布证据。
 
-真实 Agent E2E 默认使用已登录的 Claude Code；通过
-`E2E_AGENT_RUNTIME=codex-cli` 可选择 Codex。该测试会消耗真实 Agent 会话，因此不加入日常
-验证套件。
+真实 Agent E2E 会消耗真实 Agent 会话，因此不加入日常验证套件：`e2e:cpu-agent-iteration`
+默认使用已登录的 Claude Code（`E2E_AGENT_RUNTIME=codex-cli` 可切到 Codex）；共享 GPU driver
+`e2e:shared-gpu-agent-iteration` 走已验证的 Claude 路径时显式设置
+`E2E_AGENT_RUNTIME=claude-code`（见「当前共享 GPU 真实 E2E」）。
 
 ## 开发文档
 
@@ -285,7 +338,7 @@ npm run verify:linux-compatibility
 - [Client Runtime 模块契约](client-runtime/README.md)
 - [Application 编排模块契约](client-runtime/application/README.md)
 - [Server 传输模块契约](client-runtime/server/README.md)
-- [C550 TUI 模块契约](tools/local-c500-tester/README.md)
+- [TUI 模块契约（C500/C550 兼容入口）](tools/local-c500-tester/README.md)
 - [测试模块契约](tests/README.md)
 - [当前模块与 Workflow 可视化](docs/development/operator-studio-module-workflow.html)
 - [15 分钟团队讲稿](docs/development/operator-studio-team-briefing-15min.md)

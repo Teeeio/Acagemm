@@ -11,6 +11,7 @@ import { detectMuxiDevice } from '../../client-runtime/muxi-device.mjs';
 import { inspectRuntimeCapabilities, productionWorkflowCapabilities } from '../../client-runtime/agent-runtime/registry.mjs';
 import { normalizeAgentRuntimeMode } from '../../client-runtime/agent-runtime/capabilities.mjs';
 import { normalizeGenericMissionSpecification } from './mission-spec.mjs';
+import { selectEvidenceDecision } from './workflow-summary.mjs';
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const testerHome = path.resolve(process.env.LOCAL_C500_TESTER_HOME || path.join(rootDir, '.local-c500-production'));
@@ -589,6 +590,35 @@ export const importMissionSpecification = async (input) => {
   return { missionId, state: started?.state || created.state, runId: started?.runId || null, project, started: Boolean(started), imported: true };
 };
 
+// Read-only projection of the versioned decision the domain already computed.
+// This client never produces a decision, never mutates state and never derives
+// publication from flat booleans; missing decisions stay null.
+export const projectProductionEvidence = (state = {}, mission = null) => {
+  const benchmark = state.benchmark || mission?.benchmark || {};
+  const review = state.decisionReview || mission?.decisionReview || {};
+  const benchmarkCandidate = benchmark.candidate || {};
+  const benchmarkCandidateId = benchmarkCandidate.id || state.appliedCandidateId || null;
+  const appliedCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === benchmarkCandidateId) || {};
+  const currentIdentity = {
+    candidateId: benchmarkCandidateId,
+    candidateDigest: benchmarkCandidate.digest || appliedCandidate.patchDigest || null,
+    runId: benchmark.runId || null,
+  };
+  const best = state.currentBest || mission?.currentBest || {};
+  const bestIdentity = {
+    candidateId: best.candidateId || null,
+    candidateDigest: best.candidateDigest || best.digest || null,
+    runId: best.evidenceRunId || best.runId || null,
+  };
+  // Only a decision bound to this benchmark candidate/run, or to this
+  // currentBest candidate, is projected; missing identities never default to a
+  // match, so another candidate/run cannot be presented as the current one.
+  const evidenceDecision = selectEvidenceDecision(currentIdentity, benchmark.evidenceDecision, review.gate?.decision);
+  const currentBestEvidenceDecision = selectEvidenceDecision(bestIdentity, best.evidenceDecision, best.acceptGate?.decision)
+    || (bestIdentity.candidateId ? selectEvidenceDecision(bestIdentity, evidenceDecision) : null);
+  return { evidenceDecision, currentBestEvidenceDecision };
+};
+
 export const loadProductionState = async () => {
   await ensureProductionRuntime();
   const [{ state }, healthState, { tasks }] = await Promise.all([
@@ -597,7 +627,7 @@ export const loadProductionState = async () => {
     api.get('/api/operator-tests'),
   ]);
   const mission = state.missions?.find((item) => item.id === state.activeMissionId) || null;
-  return { state, mission, health: healthState, tasks: tasks || [] };
+  return { state, mission, health: healthState, tasks: tasks || [], evidence: projectProductionEvidence(state, mission) };
 };
 
 export const pauseMission = () => api.patch('/api/state', { missionPaused: true });

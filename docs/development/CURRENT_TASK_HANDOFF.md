@@ -2,7 +2,28 @@
 
 > 交接版本：2026-09-10（Asia/Shanghai）  
 > 交接对象：下一位开发者、代码审查者或负责恢复 Goal 的 Agent  
-> 当前状态：P0 已提交到 main；P1 的 Windows Job Object/观测改动已作为 WIP 推送到专用交接分支，但尚未合并 main、尚未完成本轮总门禁。
+> 交接时状态（已由下方当前状态入口取代）：P0 已提交到 main；Job supervisor P1 的 Windows Job Object/观测改动已作为 WIP 推送到专用交接分支，但尚未合并 main、尚未完成本轮总门禁。
+
+> **当前状态入口（2026-09-12）**：本文档主体是 2026-09-10/09-11 的 Job supervisor 交接，属历史记录，
+> 保留原时间与边界。当前已验收基线是轮次反馈 P1（`TEAM_HANDOFF.md` §14 第 1–5 项），验收见
+> [`P1_FEEDBACK_ACCEPTANCE.md`](P1_FEEDBACK_ACCEPTANCE.md)，原件与边界见
+> [`evidence/p1-feedback-20260912/README.md`](evidence/p1-feedback-20260912/README.md)。
+> 交接分支仍是 `handoff/codex-job-supervisor-p1`（本批 3 个本地提交 `fc251a8` / `dd95938` /
+> `6a5ae54`）。实际执行后端是本地共享 NVIDIA GPU
+> （`local-shared-gpu`，开发证据、`publishable=false`）与 CPU E2E；Claude Code 是 TUI 默认
+> Agent Runtime，Codex CLI 走显式路径，**两个 provider 的验收彼此独立**。新版 E2E driver 只对
+> 真实原件做 observer 只读回放，未重跑整段实机；单次真实两轮不构成 N=20 稳定性，
+> 当时 §14 第 6–7 项（Phase 2/3）未完成；其最新状态见下一段。第 8 项文档订正已完成。下文 S3、§10.1 等处的
+> "Codex" 应按 provider-neutral 的真实 Agent 路径阅读。
+>
+> **Phase 2 当前入口（2026-09-12 追加）**：诊断资格 + 版本化统一决策与治理（§14 第 6 项）
+> 已按劳务任务集成，对应冻结契约 [`P2_EVIDENCE_ACCEPTANCE.md`](P2_EVIDENCE_ACCEPTANCE.md)，
+> 当前证据索引与边界见
+> [`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md)，
+> 实机观察/台账规则见 [`REAL_GPU_REGRESSION.md`](REAL_GPU_REGRESSION.md)。**Phase 2 无硬件验收通过：
+> release 136 / non-hardware 38，exit 0**；485 个代码与测试文件运行前后哈希一致。
+> 没有新实机运行，也不构成 N=20 或真实发布；§14 第 7 项（KernelWiki，Phase 3）**尚未开始**。上文关于 Job
+> supervisor 的主体内容与 P1 结论保持历史原样。
 
 本文件不是历史设计草稿，而是接手当前工作树后可以直接执行的操作清单。若本文件与代码冲突，以代码中的测试、模块合同和最近一次已确认的持久化状态为准；若本文件与用户的新指令冲突，以用户新指令为准。
 
@@ -18,7 +39,7 @@ P0（失败分类、恢复归属、有限终态）已经在 9b80437 完成并推
 2. 让聚焦测试和完整门禁在干净环境下通过；
 3. 解决审查发现的竞态或兼容性问题；
 4. 提交、推送并更新验证记录；
-5. 再回到 Linux 兼容、真实 Codex 对照和通用算子长期能力。
+5. 再回到 Linux 兼容、真实 Agent 对照（provider-neutral，按 provider 独立验收）和通用算子长期能力。
 
 ## 1.1 本轮收口结果（2026-09-10 完成）
 
@@ -224,7 +245,7 @@ exit 0，日志 `%TEMP%\round3-e2e-claude.log`）的关键字段：
 修复前同样的验收：run root 含 `~` 时得到 `candidateGenerationPath: "patch_fallback"`；
 而 `editToolStatus` 因实现只认 `apply_patch` 而**恒为 `absent`**——两个标记现在都如实反映实际路径。
 
-仍**没有** C550 liveHardware 证据：`source=cpu-e2e`、`liveHardware=false`，不能用于发布证明。
+仍**没有**真机 liveHardware 证据：`source=cpu-e2e`、`liveHardware=false`，不能用于发布证明。
 
 本机 Claude 会话累计消耗：3 轮探针 + 2 次真实 E2E ≈ $0.88。
 
@@ -249,7 +270,9 @@ exit 0，日志 `%TEMP%\round3-e2e-claude.log`）的关键字段：
 - Agent 只能写 active Mission Workspace；真实 Workspace Diff 是候选事实来源。
 - 候选证据、Queue 请求、benchmark 结果必须绑定同一候选 digest；simulation 证据永远不能发布为 live-hardware 证据。
 - 测试保持串行，终态必须原子持久化；丢失响应时查询/重发同一稳定请求，不创建第二个权威测试任务。
-- 真实 Codex 对照优先使用 gpt-5.5 或 gpt-5.6-sol；不要把 gpt-6 作为默认稳定性实验模型。
+- 真实 Agent 对照是 **provider-neutral** 的：Claude Code 是默认路径，Codex CLI 走显式路径；
+  两个 provider 的验收彼此独立。Codex 侧模型对照优先使用 gpt-5.5 或 gpt-5.6-sol；不要把
+  gpt-6 作为默认稳定性实验模型。
 
 ## 3. 必读入口和依赖边界
 
@@ -267,7 +290,7 @@ exit 0，日志 `%TEMP%\round3-e2e-claude.log`）的关键字段：
 
     TUI -> HTTP API -> application orchestration -> domain rules -> ports -> adapters
 
-不要让 domain 依赖 TUI、HTTP、Codex、Claude、C550 或文件系统实现；不要在 HTTP route 中复制 workflow/Gate/hardware 规则；生产行为必须继续走 TUI -> Production API -> Client Runtime，不要创建第二套 workflow。
+不要让 domain 依赖 TUI、HTTP、Codex、Claude、硬件适配器或文件系统实现；不要在 HTTP route 中复制 workflow/Gate/hardware 规则；生产行为必须继续走 TUI -> Production API -> Client Runtime，不要创建第二套 workflow。
 
 ## 4. Git、远端和工作树事实
 
@@ -549,9 +572,9 @@ WIP 已经推送到专用分支。测试和审查完成后，只显式暂存新�
 
 ## 10. 已知限制与风险（不要误报为已解决）
 
-### 10.1 真实 Codex/provider 仍未被此 fixture 证明
+### 10.1 真实 provider 仍未被此 fixture 证明（provider-neutral）
 
-Job tests 使用确定性本地进程和注入 supervisor；它们证明的是本地收容、流采集和状态转换，不证明模型服务容量、TLS 信任链、服务端排队或 Code Mode host 的行为。真实 Codex 需要在预检通过后用同一 CLI/模型/认证/配置做单独探针。
+Job tests 使用确定性本地进程和注入 supervisor；它们证明的是本地收容、流采集和状态转换，不证明模型服务容量、TLS 信任链、服务端排队或 Code Mode host 的行为。真实 provider 需要在预检通过后用同一 CLI/模型/认证/配置做单独探针；Claude Code 路径已由 P1 轮次反馈验收的真实两轮覆盖，Codex 等其余 provider 仍待各自独立探针，两者不能互相代替。
 
 尤其不能把：
 
@@ -559,10 +582,10 @@ Job tests 使用确定性本地进程和注入 supervisor；它们证明的是�
 - turn.started 后无 turn.completed 归因成模型静默；
 - 浏览器能联网归因成 Codex provider 路径正常；
 - 20 次本地 fixture 成功归因成生产稳定率。
-- 单次真实 Claude E2E 通过归因成 Provider 稳定率或 C550 可发布证据。§1.3 那次验收证明的是
+- 单次真实 Claude E2E 通过归因成 Provider 稳定率或真机可发布证据。§1.3 那次验收证明的是
   「默认 Provider 下工作区真实写入 → 工作区 Diff 准入 → CPU 正确性/基准 → Gate → 自动续轮」这条路径走通，
   且 `editToolStatus` 如实反映结构化编辑工具确实成功；它**不**证明模型容量、限流、成本或长期稳定性，
-  `source=cpu-e2e` / `liveHardware=false` 也不构成 C550 证据。
+  `source=cpu-e2e` / `liveHardware=false` 也不构成真机发布证据。
 
 ### 10.2 Windows 兼容边界
 
@@ -624,9 +647,13 @@ Job tests 使用确定性本地进程和注入 supervisor；它们证明的是�
 
 把 provider 请求、stdout 原始流、JSONL parser、adapter、Runtime 持久化五层的最后活动时间和计数分开记录。不要只记录一个“最后活动时间”，否则无法区分服务端无响应、CLI 不吐 stdout、解析器阻塞和状态投影落后。
 
-### S3：完成真实 Codex 最小探针
+### S3：完成真实 Agent 最小探针（provider-neutral；默认 Claude Code，Codex 显式）
 
 在同一生产路径下记录 CLI binary digest、模型请求标识、sandbox、认证模式、provider、网络/证书指纹、thread/turn/request ID。只返回 OK 的只读任务先跑通，再进入候选生成。证书问题不得通过关闭校验规避。
+
+> 当前口径（2026-09-12）：Claude Code + 本地共享 GPU 的最小真实路径已由 P1 轮次反馈验收
+> （§14.1–5）覆盖；本项剩余的 Codex 等 provider 仍需各自独立探针。**不得**用 "Codex 未验"
+> 否定已验收的 Claude 路径，也不得用 Claude 通过代替 Codex 验收。
 
 ### S4：更新机器可读验证摘要
 
@@ -690,7 +717,7 @@ Linux 继续采用 process group/等价 supervisor，但把通用接口抽象为
 
 可以直接转发以下内容：
 
-> 请拉取 https://github.com/Teeeio/Acagemm.git 的 handoff/codex-job-supervisor-p1 分支，阅读 docs/development/CURRENT_TASK_HANDOFF.md、docs/development/ARCHITECTURE.md 和 client-runtime/README.md。main 已包含 P0 提交 9b80437；交接分支从该提交分出，并包含 WIP 提交 c63b132（Windows Job Object、实时 JSONL、release proof 及 handoff）。先检查工作树，不要删除或提交未跟踪的动画 HTML；先跑 node tests/codex-runtime-test.mjs、node tests/windows-job-object-test.mjs、node tests/codex-cancellation-test.mjs，再跑两个 release gate。只有在确认释放证据、候选 sourceRunId 和 Queue 幂等都没有回归后，才合并到 main。真实 Codex/provider 稳定性仍需单独探针验证，不能用本地 fixture 代替。
+> 请拉取 https://github.com/Teeeio/Acagemm.git 的 handoff/codex-job-supervisor-p1 分支，阅读 docs/development/CURRENT_TASK_HANDOFF.md、docs/development/ARCHITECTURE.md 和 client-runtime/README.md。main 已包含 P0 提交 9b80437；交接分支从该提交分出，并包含 WIP 提交 c63b132（Windows Job Object、实时 JSONL、release proof 及 handoff）。先检查工作树，不要删除或提交未跟踪的动画 HTML；先跑 node tests/codex-runtime-test.mjs、node tests/windows-job-object-test.mjs、node tests/codex-cancellation-test.mjs，再跑两个 release gate。只有在确认释放证据、候选 sourceRunId 和 Queue 幂等都没有回归后，才合并到 main。真实 provider 稳定性仍需按 provider 分别用单独探针验证（Claude Code 路径已由 P1 轮次反馈验收的真实两轮覆盖，Codex 等仍待验），不能用本地 fixture 代替。
 
 ## 16. 完成定义
 

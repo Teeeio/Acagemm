@@ -153,7 +153,8 @@ All external outcomes must be normalized before changing Mission state.
 | `state-reference-data.mjs` | legacy fixture defaults and metadata | none | shared reference records |
 | `state-initialization.mjs` | seed/product state factories | injected Mission domain factory | initial snapshots (no storage) |
 | `state-reference-runtime.mjs` | existing reference-fixture progression | state and elapsed clock | fixture state/log projection |
-| `accept-gate.mjs` | I/O-free acceptance rules | state and runner evidence | Gate / Baseline evidence |
+| `accept-gate.mjs` | I/O-free acceptance rules and the single versioned evidence decision | state, runner result and diagnostic envelopes | Gate / Baseline evidence / decision |
+| `evidence-decision.mjs` | I/O-free diagnostic qualification and versioned decision helpers | diagnostic envelope, expected candidate/run binding | three diagnostic predicates, fail-closed execution classification, binding-conflict projection, stable reason codes |
 | `operator-test-evidence.mjs` | in-memory queue evidence projection | state and task snapshot | updated state / decisions / events |
 | `evidence-state.mjs` | shared review/Baseline shapes | kind/status/overrides | schema-compatible records |
 | `mission-objective.mjs` | objective normalization and queries | Mission/objective | normalized policy |
@@ -183,6 +184,26 @@ All external outcomes must be normalized before changing Mission state.
 - State transitions preserve active Mission projection consistency.
 - Runtime API, SSE projection, and auto tick state access share the State Repository exclusive queue.
 - No simulation result is publishable.
+- Accept Gate evidence decisions are versioned
+  (`operator-studio.evidence-decision/v1`). Flat `passed`/`publishable`/
+  `evidenceSource`/`liveHardware`/`result` fields are projections of one
+  decision; consumers do not reclassify truth from a boolean or infer
+  publication from `liveHardware`.
+- Diagnostic qualification is three independent predicates
+  (`schemaValid`/`available`/`evidenceEligible`). Only an explicit `completed`
+  status and an explicit non-mock `source`/`metricsSource`/`provenance` prove a
+  real collection (a top-level tool name or artifact path is not a source);
+  mock/simulated provenance wins over a contradictory status; tracer content
+  requires well-formed kernel-categorised events; profiler provenance is never
+  guessed from value equality. Required real evidence must be bound to the
+  current candidate/run and a contradictory benchmark/applied candidate binding
+  blocks.
+- Publication requires a passed adoption, live execution, no explicit
+  development/shared-host restriction and two eligible bound real diagnostics.
+  Explicit simulation/mock/fixture/scripted and CPU signals outrank
+  `liveHardware=true`. Backend names and `publishable=true` are not publication
+  authority; missing real diagnostics pauses for external verification instead
+  of driving new Agent edits or being reported as complete evidence.
 - Test evidence and workspace candidate identities match.
 - The Workspace Git Diff is the only candidate admission authority. A Provider that
   did not terminate normally yields no candidates at all, and a candidate the Agent

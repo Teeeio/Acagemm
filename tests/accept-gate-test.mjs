@@ -35,7 +35,14 @@ const createState = ({ goal = '将 C500 latency p50 控制在 45 us 以下', cor
   missions: [{ id: 'MIS_GATE', title: 'Gate Operator', goal, metric: 'latency p50', hardware: ['C500', 'CUDA'], baseline }],
   stage: 'validation',
   agent: { runtimeKind: 'codex-cli', status: 'executing', messages: [], currentAction: null },
-  benchmark: { status: 'running', testTaskId: 'task-gate', runId: 'run-gate', matrix: { correctnessCases: 24 } },
+  benchmark: {
+    status: 'running',
+    testTaskId: 'task-gate',
+    remoteTaskId: 'backend-task-gate',
+    runId: 'run-gate',
+    candidate: { id: 'candidate-real', digest: 'sha256:test', sourceRunId: 'source-run-gate' },
+    matrix: { correctnessCases: 24 },
+  },
   decisionReview: { status: 'idle', policy: { id: 'policy.test' } },
   candidateEvaluations: [{ id: 'candidate-real', title: 'Real Candidate', version: 'agent.1', files: 'kernel.cu', patchDigest: 'sha256:test', hypothesis: 'reduce launch overhead', change: 'cache launch plan' }],
   failureRecords: [],
@@ -64,7 +71,12 @@ const passingGate = evaluateAcceptGate(passingState, result());
 assert.equal(passingGate.passed, true);
 assert.equal(passingGate.result, 'eligible');
 assert.equal(passingGate.publishable, false);
-assert.equal(passingGate.evidenceSource, 'mock');
+// P2_EVIDENCE_ACCEPTANCE.md: the legacy flat `evidenceSource` is a projection of
+// the same decision's execution classification, not an independent publication
+// authority. Assert it against that decision instead of the removed `'mock'`
+// literal; the nonpublishability itself is asserted separately above.
+assert.equal(passingGate.evidenceSource, passingGate.decision.execution.kind);
+assert.equal(passingGate.decision.execution.kind, 'simulation');
 assert.ok(passingGate.skippedRules.includes('cross_platform.regression'));
 applyOperatorTestSnapshot(passingState, { taskId: 'task-gate', status: 'completed', progress: 100, completedAt: new Date().toISOString(), result: result() });
 assert.equal(passingState.decisionReview.recommendation, 'adopt');
@@ -89,10 +101,100 @@ runKnowledgeMaintenance(staleMockState);
 assert.equal(staleMockState.publishedAssets[0].status, 'simulation');
 assert.equal(staleMockState.knowledgeDrafts[0].evidenceLevel, '模拟证据');
 
+// Legacy migration (P2_EVIDENCE_ACCEPTANCE.md): a `liveHardware` boolean is not
+// publication authority, and "looks like operator-trace/v1 + operator-profile/v1"
+// is not real diagnostic qualification. These test doubles carry no
+// status/source/content/binding, so the full real branch must fail and the
+// result must stay nonpublishable. The old `passed=true`/`publishable=true`
+// assertions were the defect this contract closes.
 const liveState = createState();
 const liveGate = evaluateAcceptGate(liveState, result({ liveHardware: true }));
-assert.equal(liveGate.passed, true);
-assert.equal(liveGate.publishable, true);
+assert.equal(liveGate.passed, false, 'format-only diagnostics cannot satisfy the required full real diagnostic branch');
+assert.equal(liveGate.publishable, false, 'a liveHardware boolean alone never authorizes publication');
+assert.ok(liveGate.failedRules.includes('evidence.complete'));
+assert.equal(liveGate.decision?.diagnostics?.tracer?.evidenceEligible, false);
+assert.notEqual(liveGate.decision?.publication?.status, 'allowed');
+
+// Dedicated qualified real positive: real completed tool provenance, content
+// that satisfies the kernel-measurement rules, and an exact candidate/run
+// binding. This is a controlled contract test double, not proof of a live
+// publication run.
+const qualifiedBinding = {
+  missionId: 'MIS_GATE',
+  candidateId: 'candidate-real',
+  candidateDigest: 'sha256:test',
+  runId: 'run-gate',
+  taskId: 'backend-task-gate',
+  sourceRunId: 'source-run-gate',
+  semanticDigest: null,
+};
+const qualifiedRealResult = ({ value = 41.8 } = {}) => ({
+  ...result({ value, liveHardware: true }),
+  environment: {
+    runtime: 'local-c500-runner/v1',
+    service: 'local-c500-adapter',
+    source: 'local-c500',
+    liveHardware: true,
+    publishable: true,
+    candidateDigest: 'sha256:test',
+    runId: 'run-gate',
+    sourceRunId: 'source-run-gate',
+    taskId: 'backend-task-gate',
+  },
+  tracer: {
+    format: 'operator-trace/v1',
+    status: 'completed',
+    source: 'mctracer',
+    simulated: false,
+    binding: qualifiedBinding,
+    artifacts: ['artifacts/mctracer/stdout.txt'],
+    events: [{ category: 'kernel', name: 'paged_decode_kernel', startUs: 0, durationUs: 12.5 }],
+  },
+  profiler: {
+    format: 'operator-profile/v1',
+    status: 'completed',
+    source: 'mcProfiler',
+    simulated: false,
+    binding: qualifiedBinding,
+    artifacts: ['artifacts/mcProfiler/stdout.txt'],
+    metrics: { kernelDurationUs: 12.5, occupancy: 0.62, bandwidth: 412.5 },
+  },
+});
+const qualifiedState = createState();
+const qualifiedGate = evaluateAcceptGate(qualifiedState, qualifiedRealResult());
+assert.equal(qualifiedGate.passed, true, 'fully qualified real diagnostics satisfy the full real branch');
+assert.equal(qualifiedGate.publishable, true, 'qualified unrestricted real evidence may pass the domain publication policy');
+assert.equal(qualifiedGate.decision?.publication?.status, 'allowed');
+// The production snapshot must carry its own backend identity and the queue
+// request id. Omitting remoteTaskId/payload.requestId would leave the expected
+// task binding null, so the fixture would "pass" without ever checking the
+// sourceRunId / queue runId / remoteTaskId distinction.
+applyOperatorTestSnapshot(qualifiedState, {
+  taskId: 'task-gate',
+  remoteTaskId: 'backend-task-gate',
+  payload: { requestId: 'run-gate', runId: 'run-gate' },
+  status: 'completed',
+  progress: 100,
+  completedAt: new Date().toISOString(),
+  result: qualifiedRealResult(),
+});
+assert.equal(qualifiedState.benchmark.remoteTaskId, 'backend-task-gate');
+assert.equal(qualifiedState.benchmark.requestId, 'run-gate');
+const qualifiedDecision = qualifiedState.benchmark.evidenceDecision;
+assert.ok(qualifiedDecision, 'the production apply path stores the exact decision on benchmark.evidenceDecision');
+assert.equal(qualifiedDecision.binding.runId, 'run-gate', 'queue runId is retained as its own identity');
+assert.equal(qualifiedDecision.binding.taskId, 'backend-task-gate', 'remoteTaskId is retained as its own identity');
+assert.equal(qualifiedDecision.binding.sourceRunId, 'source-run-gate', 'sourceRunId is retained as its own identity');
+assert.notEqual(qualifiedDecision.binding.runId, qualifiedDecision.binding.taskId);
+assert.notEqual(qualifiedDecision.binding.runId, qualifiedDecision.binding.sourceRunId);
+runAutomaticAdoption(qualifiedState);
+runKnowledgeMaintenance(qualifiedState);
+assert.equal(qualifiedState.currentBest.verified, true);
+// Consumer projection uses the same decision's execution.source; the flat Gate
+// evidenceSource is not consulted and no legacy string grants publication.
+assert.equal(qualifiedState.currentBest.evidenceSource, qualifiedDecision.execution.source);
+assert.equal(qualifiedState.currentBest.evidenceSource, 'local-c500');
+assert.equal(qualifiedState.publishedAssets[0].status, 'published');
 
 const sharedGpuState = createState();
 const sharedGpuGate = evaluateAcceptGate(sharedGpuState, {
@@ -113,24 +215,23 @@ const incompleteLocalC500Gate = evaluateAcceptGate(incompleteLocalC500State, {
   profiler: { format: 'operator-profile/v1', status: 'missing', metrics: {} },
   environment: { runtime: 'local-c500-runner/v1', service: 'local-c500-adapter', liveHardware: true },
 });
-assert.equal(incompleteLocalC500Gate.passed, true);
-assert.equal(incompleteLocalC500Gate.publishable, true);
+assert.equal(incompleteLocalC500Gate.passed, true, 'local benchmark-core development may adopt with unavailable optional diagnostics');
+// Legacy migration: missing/mock diagnostics used to be projected to
+// publishable=true through the liveHardware boolean. The frozen contract says
+// missing status never proves availability and publication requires both
+// qualified real diagnostics, so this result stays nonpublishable.
+assert.equal(incompleteLocalC500Gate.publishable, false);
 assert.equal(incompleteLocalC500Gate.result, 'eligible');
 assert.ok(!incompleteLocalC500Gate.failedRules.includes('evidence.complete'));
 assert.equal(incompleteLocalC500Gate.rules.find((rule) => rule.id === 'diagnostics.mctracer')?.passed, false);
 assert.equal(incompleteLocalC500Gate.rules.find((rule) => rule.id === 'diagnostics.mcprofiler')?.passed, false);
-assert.match(incompleteLocalC500Gate.summary, /不阻塞采用/);
-
-applyOperatorTestSnapshot(liveState, { taskId: 'task-gate', status: 'completed', progress: 100, completedAt: new Date().toISOString(), result: result({ liveHardware: true }) });
-runAutomaticAdoption(liveState);
-runKnowledgeMaintenance(liveState);
-assert.equal(liveState.currentBest.verified, true);
-assert.equal(liveState.publishedAssets[0].status, 'published');
+assert.equal(incompleteLocalC500Gate.decision?.diagnostics?.tracer?.available, false);
+assert.notEqual(incompleteLocalC500Gate.decision?.publication?.status, 'allowed', 'unavailable diagnostics must block publication');
 
 const maximizeState = createState({ goal: '目标不设上限，加速比越高越好' });
 maximizeState.objective = { mode: 'maximize', metric: 'latency p50', direction: 'minimize', completionPolicy: 'budget_or_plateau' };
 maximizeState.missions[0].objective = maximizeState.objective;
-applyOperatorTestSnapshot(maximizeState, { taskId: 'task-gate', status: 'completed', progress: 100, completedAt: new Date().toISOString(), result: result({ value: 39.5, liveHardware: true }) });
+applyOperatorTestSnapshot(maximizeState, { taskId: 'task-gate', status: 'completed', progress: 100, completedAt: new Date().toISOString(), result: qualifiedRealResult({ value: 39.5 }) });
 assert.equal(maximizeState.decisionReview.recommendation, 'adopt');
 runAutomaticAdoption(maximizeState);
 assert.equal(maximizeState.stage, 'evidence', 'maximize mission 采用后不应进入发布终态');
@@ -208,7 +309,13 @@ assert.equal(noTargetInitialGate.result, 'eligible');
 
 const suitePolicy = { acceptFirstCorrectCandidate: true, requireStrictImprovement: true, requireAllProfilesNoRegression: true };
 const suiteResult = (profiles, values) => ({
-  ...result({ liveHardware: true }),
+  ...result(),
+  // P2_EVIDENCE_ACCEPTANCE.md: fixed-matrix KEEP/DISCARD is exercised on the
+  // documented local benchmark-core live path, where the real diagnostics stay
+  // optional. The dedicated qualified-real positive above owns the full
+  // status/source/binding/events/metrics publication branch. A bare
+  // liveHardware=true plus format-only envelopes is no longer live evidence.
+  environment: { runtime: 'local-c500-runner/v1', service: 'local-c500-adapter', source: 'local-c500', liveHardware: true },
   benchmark: profiles.map((profile, index) => ({ environment: 'C500', profile, value: values[index], unit: 'us', correctness: { passed: true, total: 24 } })),
 });
 const createSuiteState = (profiles, bestValues = null) => {
@@ -320,4 +427,99 @@ assert.equal(runnerTimeoutState.failureRecords[0].failure.code, 'REMOTE_TEST_FAI
 assert.equal(runnerTimeoutState.candidateEvaluations[0].classification, 'rejected');
 assert.ok(runnerTimeoutState.runtimeEvents.some((event) => event.type === 'operator_test.failed'));
 
-console.log('[accept-gate] provenance, target, eligible, reference, and hard-failure dispositions passed');
+// P2_EVIDENCE_ACCEPTANCE.md 5: an identical terminal snapshot is a governance
+// no-op, including after a JSON round-trip restore. Idempotency is keyed on the
+// full canonical snapshot content, never on a coincident completedAt.
+const sameCompletedAt = '2026-09-12T00:00:00.000Z';
+const productionSnapshot = (overrides = {}) => ({
+  taskId: 'task-gate',
+  remoteTaskId: 'backend-task-gate',
+  payload: { requestId: 'run-gate', runId: 'run-gate' },
+  status: 'completed',
+  progress: 100,
+  completedAt: sameCompletedAt,
+  result: result(),
+  ...overrides,
+});
+const replayState = createState();
+applyOperatorTestSnapshot(replayState, productionSnapshot());
+const afterFirstApply = {
+  runtimeEvents: replayState.runtimeEvents.length,
+  auditEvents: replayState.auditEvents.length,
+  knowledgeDrafts: replayState.knowledgeDrafts.length,
+  classification: replayState.candidateEvaluations[0]?.classification,
+  recommendation: replayState.decisionReview.recommendation,
+  snapshotFingerprint: replayState.benchmark.snapshotFingerprint,
+};
+assert.ok(afterFirstApply.runtimeEvents > 0, 'the first projection is processed');
+applyOperatorTestSnapshot(replayState, productionSnapshot());
+assert.equal(replayState.runtimeEvents.length, afterFirstApply.runtimeEvents, 'same-object replay adds no events');
+assert.equal(replayState.auditEvents.length, afterFirstApply.auditEvents, 'same-object replay adds no audit entries');
+assert.equal(replayState.knowledgeDrafts.length, afterFirstApply.knowledgeDrafts, 'same-object replay adds no draft version');
+assert.equal(replayState.candidateEvaluations[0]?.classification, afterFirstApply.classification);
+assert.equal(replayState.decisionReview.recommendation, afterFirstApply.recommendation);
+const restoredState = JSON.parse(JSON.stringify(replayState));
+applyOperatorTestSnapshot(restoredState, JSON.parse(JSON.stringify(productionSnapshot())));
+assert.equal(restoredState.benchmark.snapshotFingerprint, afterFirstApply.snapshotFingerprint);
+assert.equal(restoredState.runtimeEvents.length, afterFirstApply.runtimeEvents, 'JSON-restore replay adds no events');
+assert.equal(restoredState.auditEvents.length, afterFirstApply.auditEvents, 'JSON-restore replay adds no audit entries');
+assert.equal(restoredState.knowledgeDrafts.length, afterFirstApply.knowledgeDrafts, 'JSON-restore replay adds no draft version');
+assert.equal(restoredState.benchmark.completedAt, sameCompletedAt);
+
+// Same task, same completedAt, same result: only the resource-release
+// confirmation changes. That is a different fact and must be processed.
+const releaseChangeState = createState();
+applyOperatorTestSnapshot(releaseChangeState, productionSnapshot({ resourceRelease: { confirmed: true, status: 'confirmed' } }));
+assert.equal(releaseChangeState.benchmark.status, 'complete');
+assert.equal(releaseChangeState.benchmark.resourceRelease.confirmed, true);
+applyOperatorTestSnapshot(releaseChangeState, productionSnapshot({
+  resourceRelease: {
+    confirmed: false, status: 'unconfirmed',
+    reason: 'release not confirmed yet', nextAction: 'keep observing the owning backend',
+  },
+}));
+assert.equal(releaseChangeState.benchmark.completedAt, sameCompletedAt);
+assert.equal(releaseChangeState.benchmark.status, 'running', 'an unconfirmed release must not stay a terminal snapshot');
+assert.equal(releaseChangeState.benchmark.resourceRelease.confirmed, false);
+applyOperatorTestSnapshot(releaseChangeState, productionSnapshot({ resourceRelease: { confirmed: true, status: 'confirmed' } }));
+assert.equal(releaseChangeState.benchmark.status, 'complete', 'a later release confirmation is processed again');
+assert.equal(releaseChangeState.benchmark.resourceRelease.confirmed, true);
+
+// Same task, same completedAt, same release: a result/diagnostic change is a
+// different observation and must be re-evaluated, not swallowed by the equal
+// timestamp.
+const diagnosticChangeState = createState();
+applyOperatorTestSnapshot(diagnosticChangeState, productionSnapshot());
+assert.notEqual(diagnosticChangeState.benchmark.evidenceDecision.publication.status, 'allowed', 'simulation result is not publication authority');
+applyOperatorTestSnapshot(diagnosticChangeState, productionSnapshot({ result: qualifiedRealResult() }));
+assert.equal(diagnosticChangeState.benchmark.completedAt, sameCompletedAt);
+assert.equal(diagnosticChangeState.benchmark.result.tracer.status, 'completed', 'the changed diagnostic envelope is projected');
+assert.equal(diagnosticChangeState.benchmark.evidenceDecision.diagnostics.tracer.evidenceEligible, true);
+assert.equal(diagnosticChangeState.benchmark.evidenceDecision.publication.status, 'allowed', 'the re-evaluated decision reflects the upgraded diagnostics');
+
+// Required real diagnostics missing pauses for external verification without
+// removing the candidate or driving a new Agent; a correct retry of the same
+// candidate/run does not spawn a new Agent either.
+const waitingState = createState();
+applyOperatorTestSnapshot(waitingState, productionSnapshot({ result: result({ liveHardware: true }) }));
+assert.equal(waitingState.benchmark.status, 'complete');
+assert.equal(waitingState.decisionReview.status, 'waiting_external_verification');
+assert.equal(waitingState.missionPaused, true);
+assert.equal(waitingState.iterationStats.loopStatus, 'blocked');
+assert.equal(waitingState.iterationStats.loopStatusReason, 'external_verification');
+assert.equal(waitingState.agent.currentAction.id, 'action.external-verification');
+assert.equal(waitingState.agent.runtimeKind, 'codex-cli');
+assert.equal(waitingState.candidateEvaluations.length, 1, 'the waiting candidate is preserved');
+assert.equal(waitingState.candidateEvaluations[0].id, 'candidate-real');
+assert.equal(waitingState.failureRecords.length, 0, 'waiting for diagnostics is not a candidate failure');
+applyOperatorTestSnapshot(waitingState, productionSnapshot({ result: qualifiedRealResult() }));
+assert.equal(waitingState.missionPaused, false, 'a qualified retry clears the external-verification pause');
+assert.equal(waitingState.iterationStats.loopStatus, 'running');
+assert.equal(waitingState.iterationStats.loopStatusReason, null);
+assert.equal(waitingState.decisionReview.status, 'auto_ready');
+assert.equal(waitingState.agent.runtimeKind, 'codex-cli', 'the retry reuses the same Agent runtime, it does not spawn a new Agent');
+assert.equal(waitingState.agent.currentAction.id, 'action.adoption-decision');
+assert.equal(waitingState.candidateEvaluations.length, 1, 'the retry does not generate a new candidate');
+assert.equal(waitingState.candidateEvaluations[0].id, 'candidate-real');
+
+console.log('[accept-gate] provenance, target, eligible, reference, hard-failure, snapshot-replay and diagnostic-wait dispositions passed');

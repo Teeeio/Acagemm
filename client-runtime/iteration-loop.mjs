@@ -252,6 +252,51 @@ const LOOP_GUARD_TEXT = {
   max_research: '研究员已多次升级仍未产生被采纳候选，停止研究员升级但主循环继续',
   candidate_generation_failed: '当前轮次的候选生成连续失败，已停止自动重试，请检查 Agent 后端或调整指令后恢复',
   correctness_failed: '固定精度测试在允许的修复轮次内仍未通过',
+  external_verification: '当前候选缺少必需的真实诊断证据，保留候选与工作区等待外部验证；恢复后重试同一候选。',
+};
+
+// 决策中的等待状态是唯一真相，不能从 live 布尔或 publishable 反推。判定按当前
+// mission/candidate/run 身份限定，绝不读取 currentBest 或其他 run 的旧等待决策；
+// 同一候选重试已排队/执行中时旧等待不得重新触发。
+const EXTERNAL_VERIFICATION_REASON = 'external_verification';
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const retestInFlight = (state = {}) => ['queued', 'running'].includes(String(state?.benchmark?.status || '').toLowerCase());
+
+const decisionMatchesCurrentRun = (state, decision) => {
+  if (!isPlainObject(decision) || !isPlainObject(decision.binding)) return false;
+  const binding = decision.binding;
+  const candidateId = state?.appliedCandidateId || state?.benchmark?.candidate?.id || null;
+  const runId = state?.benchmark?.runId || null;
+  let matched = false;
+  if (candidateId) { if (binding.candidateId !== candidateId) return false; matched = true; }
+  if (runId) { if (binding.runId !== runId) return false; matched = true; }
+  return matched;
+};
+
+const externalVerificationAcknowledged = (state, candidateId, runId) => {
+  const acknowledged = state?.iterationStats?.externalVerificationAcknowledged;
+  if (!isPlainObject(acknowledged)) return false;
+  if (!acknowledged.candidateId && !acknowledged.runId) return false;
+  if (candidateId && acknowledged.candidateId && acknowledged.candidateId !== candidateId) return false;
+  if (runId && acknowledged.runId && acknowledged.runId !== runId) return false;
+  return true;
+};
+
+export const isExternalVerificationPending = (state = {}) => {
+  if (retestInFlight(state)) return false;
+  const benchmark = state?.benchmark || {};
+  const candidateId = state?.appliedCandidateId || benchmark.candidate?.id || null;
+  const runId = benchmark.runId || null;
+  if (externalVerificationAcknowledged(state, candidateId, runId)) return false;
+  const decisions = [benchmark.evidenceDecision, state?.decisionReview?.gate?.decision, state?.decisionReview?.evidenceDecision];
+  if (decisions.some((item) => decisionMatchesCurrentRun(state, item) && item?.adoption?.status === 'waiting_external_verification')) return true;
+  const review = state?.decisionReview;
+  if (review?.status === 'waiting_external_verification' && candidateId && review.candidateId === candidateId) {
+    const gateDecision = review?.gate?.decision;
+    return !isPlainObject(gateDecision) || decisionMatchesCurrentRun(state, gateDecision);
+  }
+  return false;
 };
 
 const activeMissionBudgetMs = (state = {}) => {
@@ -328,6 +373,17 @@ export const detectLoopGuard = (state, { nowMs = Date.now() } = {}) => {
   if (roundBudget.expired) return 'round_budget';
   const stats = state?.iterationStats || {};
   const mission = (state?.missions || []).find((item) => item.id === state?.activeMissionId) || {};
+  // 外部验证等待是一等阻塞状态：优先于轮次/候选自动续跑，绝不因为本地可选诊断或
+  // 预算而启动新 Agent 去“补工具”。恢复走既有 resume + 重试同一候选；重试已排队/
+  // 执行中时旧等待不再触发。
+  if (isExternalVerificationPending(state)) return EXTERNAL_VERIFICATION_REASON;
+  if (stats.loopStatus === 'blocked') {
+    if (stats.loopStatusReason === EXTERNAL_VERIFICATION_REASON) {
+      if (!retestInFlight(state)) return EXTERNAL_VERIFICATION_REASON;
+    } else {
+      return stats.loopStatusReason || 'blocked';
+    }
+  }
   const phasedPolicy = phasedIterationPolicy(mission);
   if (phasedPolicy) {
     const maxGenerationAttempts = Math.max(1, Number(phasedPolicy.maxGenerationAttempts || 1));
@@ -465,6 +521,47 @@ export async function advanceIteration(state, deps = {}) {
   };
   if (guardReason) {
     const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
+    if (guardReason === EXTERNAL_VERIFICATION_REASON) {
+      const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId || null;
+      const runId = state.benchmark?.runId || null;
+      // 已处于（或 resume 后已确认的）等待编排状态：重复 tick 只保持阻塞，
+      // 不重复暂停、不产生新事件/时间戳。resume 已解除 missionPaused 等待重试。
+      if (state.iterationStats?.loopStatus === 'blocked'
+        && state.iterationStats?.loopStatusReason === EXTERNAL_VERIFICATION_REASON) {
+        return { state, action: EXTERNAL_VERIFICATION_REASON, changed: false };
+      }
+      // 保留候选、工作区与当前 Agent 身份，只进入可恢复等待；不生成新候选、不改代码。
+      state.missionPaused = true;
+      state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'blocked', loopStatusReason: EXTERNAL_VERIFICATION_REASON };
+      state.agent = {
+        ...(state.agent || {}),
+        status: 'awaiting_action',
+        phase: '等待外部诊断验证',
+        currentAction: state.agent?.currentAction || {
+          id: 'action.external-verification',
+          type: 'test.plan',
+          title: '恢复后重试同一候选',
+          reason: LOOP_GUARD_TEXT.external_verification,
+          expectedOutput: '真实 mcTracer / mcProfiler 证据 · Accept Gate 重评',
+          risk: 'low',
+          approvalRequired: false,
+        },
+      };
+      if (mission && !['completed', 'published', 'archived'].includes(mission.status)) mission.status = 'blocked';
+      // 事件幂等按 mission/candidate/run 身份，而不是同类型全局永久抑制。
+      const alreadyEvented = (state.runtimeEvents || []).some((event) => event.type === 'loop.external_verification_pending'
+        && (event.payload?.candidateId || null) === candidateId
+        && (event.payload?.runId || null) === runId);
+      if (!alreadyEvented) {
+        addAuditEvent(state, '等待外部诊断验证', LOOP_GUARD_TEXT.external_verification, 'warning', 'Clock');
+        appendRuntimeEvent(state, 'loop.external_verification_pending', {
+          reason: EXTERNAL_VERIFICATION_REASON,
+          candidateId,
+          runId,
+        }, { kind: 'policy', mode: 'client' });
+      }
+      return { state, action: EXTERNAL_VERIFICATION_REASON, changed: true };
+    }
     if (guardReason === 'round_budget') {
       const expired = expireRoundBudget(state, { nowMs });
       state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: guardReason };

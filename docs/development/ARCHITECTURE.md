@@ -8,10 +8,22 @@ Ink TUI
   -> Client Runtime HTTP API
   -> Mission and iteration orchestration
   -> Agent Runtime / Workspace / Operator Test Queue
-  -> C550 runner and evidence
+  -> local shared NVIDIA GPU runner (real local measurement, nonpublishable
+     live development evidence) or CPU E2E runner
   -> Accept Gate
   -> adoption or rollback
 ```
+
+The current development and acceptance execution backend is the local shared NVIDIA GPU
+(`OPERATOR_TEST_BACKEND=local-shared-gpu`, implemented by `tools/local-shared-gpu-runner.py`)
+or the hardware-free CPU E2E runner. Shared-GPU runs perform real correctness and benchmark
+measurement on the local development host, so they are usable for local development
+measurement; they are **nonpublishable live development evidence** (`publishable=false`).
+A real source does not grant publication authority. `C500` / `C550` local runners remain
+retained compatibility/historical adapters; their state and evidence keep their original
+target and version identity, and whether a given record passes a current Gate is judged from
+that target/version/evidence qualification rather than from the label alone. They are not the
+current development backend and must not be inferred from the shared-GPU path.
 
 The removed standalone local CLI workflow is not a supported architecture. New command-line interfaces must call the production HTTP API instead of implementing Mission, Candidate, Gate, or iteration rules again.
 
@@ -36,7 +48,7 @@ The removed standalone local CLI workflow is not a supported architecture. New c
 | `client-runtime/state-workspace.mjs` | layout, fixture and checkpoint adapter | Gate rules, state-store imports |
 | `client-runtime/state-snapshot-storage.mjs` | raw snapshot I/O and injected storage bootstrap | schema/version policy, workflow decisions |
 | `client-runtime/operator-test-queue.mjs` | serialized task lifecycle and queue persistence | Mission policy and UI |
-| `client-runtime/local-c500-service-client.mjs` | C550 task execution adapter and artifacts | Mission iteration decisions |
+| `client-runtime/local-c500-service-client.mjs` | retained C500/C550 compatibility task-execution adapter and artifacts; the shared-GPU runner reuses this queue port | Mission iteration decisions |
 | `client-runtime/platform-runtime.mjs` | platform-neutral executable/path and shell-argument resolution for local adapters | workflow policy, queue ownership, hardware decisions |
 | `tools/local-shared-gpu-runner.py` | opt-in shared-host NVIDIA execution adapter and GPU timing | Mission policy, queue ownership, publication decisions |
 | `client-runtime/workspace-manager.mjs` | isolated workspace, Diff, checkpoint and restore | Gate decisions |

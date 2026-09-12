@@ -1,0 +1,1471 @@
+
+> operator-studio-mvp@0.1.0 verify:non-hardware-robustness
+> node scripts/verify-non-hardware-robustness.mjs
+
+[non-hardware-check] runtime v22.23.2; physical hardware execution is disabled
+
+[non-hardware-check] verify:local-c500-release
+
+> operator-studio-mvp@0.1.0 verify:local-c500-release
+> node scripts/verify-local-c500-release.mjs
+
+[release-check] runtime v22.23.2
+
+[release-check] test:execution-package-contract
+
+> operator-studio-mvp@0.1.0 test:execution-package-contract
+> node tests/execution-package-contract-test.mjs
+
+[execution-package-contract] 35 language-neutral, path, binding and admission checks passed
+
+[release-check] test:execution-package-store
+
+> operator-studio-mvp@0.1.0 test:execution-package-store
+> node tests/execution-package-store-test.mjs
+
+[execution-package-store] 47 content/admission/backend/timeout checks passed (contract doubles; no OS isolation claim)
+
+[release-check] test:execution-package-import
+
+> operator-studio-mvp@0.1.0 test:execution-package-import
+> node tests/execution-package-import-test.mjs
+
+[execution-package-import] directory/archive import, dependency closure and unsafe-link checks passed
+
+[release-check] test:execution-package-import-service
+
+> operator-studio-mvp@0.1.0 test:execution-package-import-service
+> node tests/execution-package-import-service-test.mjs
+
+[execution-package-import-service] binding, import and admission orchestration passed
+
+[release-check] test:execution-package-routes
+
+> operator-studio-mvp@0.1.0 test:execution-package-routes
+> node tests/execution-package-routes-test.mjs
+
+[execution-package-routes] import route mapping passed
+
+[release-check] test:shared-gpu-runtime
+
+> operator-studio-mvp@0.1.0 test:shared-gpu-runtime
+> node tests/shared-gpu-runtime-test.mjs
+
+[shared-gpu-runtime] probe, policy, parser and failure-boundary checks passed
+
+[release-check] test:platform-runtime
+
+> operator-studio-mvp@0.1.0 test:platform-runtime
+> node tests/platform-runtime-test.mjs
+
+[platform-runtime] cross-platform Python resolution and shell quoting passed
+
+[release-check] test:shared-gpu-package-adapter
+
+> operator-studio-mvp@0.1.0 test:shared-gpu-package-adapter
+> node tests/local-shared-gpu-package-adapter-test.mjs
+
+[shared-gpu-package-adapter] package-only materialization and admission verification passed
+
+[release-check] test:experience-service
+
+> operator-studio-mvp@0.1.0 test:experience-service
+> node tests/experience-service-test.mjs
+
+PASS dependencies and absolute storage root are explicit
+PASS empty reads do not create storage and human advice stays unverified
+PASS versions are append-only and an old round context does not change
+PASS scope, expiry, lifecycle, and project authorization filter retrieval
+PASS structured shape arrays retain repeated dimensions and require exact array matches
+PASS execution observations bind all credentials and never authorize GPU publication
+PASS same evidence is idempotent across instances and changed evidence conflicts
+PASS process-wide transactions serialize independent repository instances
+PASS strict input whitelist, bounded values, unsafe keys, and paths are rejected
+PASS corruption is explicit and never silently replaced by an empty store
+PASS failed atomic replacement preserves prior bytes and cleans temporary files
+PASS repository transactions cannot rewrite history or commit asynchronous/no-op mutations
+PASS storage root junctions cannot redirect writes outside the injected root
+PASS context limits do not return partial claims or mutate persisted records
+Experience service: 14 contract checks passed.
+
+[release-check] test:experience-api-service
+
+> operator-studio-mvp@0.1.0 test:experience-api-service
+> node tests/experience-api-service-test.mjs
+
+[experience-api-service] local project scope, human-only writes, history, conflicts and route mapping passed
+
+[release-check] test:round-experience-service
+
+> operator-studio-mvp@0.1.0 test:round-experience-service
+> node tests/round-experience-service-test.mjs
+
+PASS all effect and authority ports are explicit
+PASS one round freezes source/version/scope; updates are visible only in the next round
+PASS restored contexts are validated and frozen without re-querying or crossing projects
+PASS domain prompt formatter checks identities, digest and source limitations once
+PASS concurrent same-round retrieval is deduplicated and ordinary advice reads start no Agent
+PASS retrieval errors/timeouts are explicit and late results cannot mutate the round
+PASS legacy evidence is explicitly skipped and cannot self-claim verification
+PASS only matching verified complete evidence is written, idempotently and never publishable
+PASS observation collection is bounded and storage uncertainty is not silently ignored
+PASS batch cancellation reaches a slow second verifier and prevents a late repository write
+Round experience service: 10 checks passed.
+
+[release-check] test:shared-gpu-experience-verifier
+
+> operator-studio-mvp@0.1.0 test:shared-gpu-experience-verifier
+> node tests/shared-gpu-experience-verifier-test.mjs
+
+[shared-gpu-experience-verifier] admission, artifact, candidate and worker-flag checks passed
+[shared-gpu-experience-verifier] real runner key order and fail-closed architecture checks passed
+
+[release-check] test:experience-architecture
+
+> operator-studio-mvp@0.1.0 test:experience-architecture
+> node tests/experience-architecture-test.mjs
+
+TAP version 13
+# Subtest: cross-dimension AND rejects an nvidia-gpu+sm100 record for an nvidia-gpu+sm86 query
+ok 1 - cross-dimension AND rejects an nvidia-gpu+sm100 record for an nvidia-gpu+sm86 query
+  ---
+  duration_ms: 6.9286
+  type: 'test'
+  ...
+# Subtest: within-dimension OR is preserved for architecture and hardware
+ok 2 - within-dimension OR is preserved for architecture and hardware
+  ---
+  duration_ms: 10.3118
+  type: 'test'
+  ...
+# Subtest: an undeclared architecture dimension does not constrain historical records
+ok 3 - an undeclared architecture dimension does not constrain historical records
+  ---
+  duration_ms: 0.7653
+  type: 'test'
+  ...
+# Subtest: execution architecture is stamped only from the declared evidence
+ok 4 - execution architecture is stamped only from the declared evidence
+  ---
+  duration_ms: 1.1757
+  type: 'test'
+  ...
+# Subtest: an execution caller cannot stamp an architecture the evidence never declared
+ok 5 - an execution caller cannot stamp an architecture the evidence never declared
+  ---
+  duration_ms: 1.0789
+  type: 'test'
+  ...
+# Subtest: historical canonical stores without architecture validate with zero migration and stay readable
+ok 6 - historical canonical stores without architecture validate with zero migration and stay readable
+  ---
+  duration_ms: 1.515
+  type: 'test'
+  ...
+# Subtest: frozen historical snapshots never gain an architecture attribute
+ok 7 - frozen historical snapshots never gain an architecture attribute
+  ---
+  duration_ms: 0.7528
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 36.303
+
+[release-check] test:shared-gpu-target-probe
+
+> operator-studio-mvp@0.1.0 test:shared-gpu-target-probe
+> node tests/shared-gpu-target-probe-test.mjs
+
+[shared-gpu-target-probe] 15 hardware-free driver-probe checks passed
+
+[release-check] test:generic-mission-import
+
+> operator-studio-mvp@0.1.0 test:generic-mission-import
+> node tests/generic-mission-import-test.mjs
+
+generic mission import contract passed
+
+[release-check] test:agent-start-context
+
+> operator-studio-mvp@0.1.0 test:agent-start-context
+> node tests/agent-start-context-test.mjs
+
+[agent-start-context] first/manual-settled runs freeze distinct contexts; replay/retry cannot refresh deadlines or counters
+
+[release-check] test:round-budget
+
+> operator-studio-mvp@0.1.0 test:round-budget
+> node tests/round-budget-test.mjs
+
+[round-budget] exact deadline, stable same-round clock, pause/restart compatibility and real-release barriers passed
+
+[release-check] test:codex-cancellation
+
+> operator-studio-mvp@0.1.0 test:codex-cancellation
+> node tests/codex-cancellation-test.mjs
+
+[codex-cancellation] force escalation, true exit, orphan isolation, read-only recovery and real process-tree cleanup passed
+
+[release-check] test:agent-cancellation-liveness
+
+> operator-studio-mvp@0.1.0 test:agent-cancellation-liveness
+> node tests/agent-cancellation-liveness-test.mjs
+
+[agent-cancellation-liveness] pending exit blocks artifacts; Mission stop covers all resources and exposes failures
+[agent-cancellation-liveness] reusable release is bounded, late-state isolated and barrier-safe
+
+[release-check] test:generic-runtime-safety
+
+> operator-studio-mvp@0.1.0 test:generic-runtime-safety
+> node tests/generic-runtime-safety-test.mjs
+
+[generic-runtime-safety] CPU identity/oracle, no false live evidence, resource barriers and pre-dispatch budget shutdown passed
+
+[release-check] test:test-service-client
+
+> operator-studio-mvp@0.1.0 test:test-service-client
+> node tests/test-service-client-test.mjs
+
+PASS legacy methods retain endpoints, JSON bodies, and encoded identifiers
+PASS malformed JSON and non-object envelopes have stable errors
+PASS a true AbortController bounds both headers and the response body
+PASS caller cancellation composes with deadlines, including pre-aborted signals
+PASS timed-out POST is never implicitly retried
+PASS HTTP redirects cannot implicitly resend a POST
+PASS injected fetch receives a separate live signal and no retry on transport failure
+PASS invalid timeouts fail before making a request
+Test service client: 8 checks passed.
+
+[release-check] test:http-request-liveness
+
+> operator-studio-mvp@0.1.0 test:http-request-liveness
+> node tests/http-request-liveness-test.mjs
+
+PASS same request shares one parsing Promise, including resolved/error cache
+PASS empty bodies, JSON compatibility, and byte limits are retained
+PASS never-ending and continuously slow in-memory bodies time out and are destroyed
+PASS premature body close returns a stable terminal error
+PASS default body deadline is finite and remains five seconds
+PASS 408 response is delivered before closing a never-ending HTTP connection
+PASS oversized incomplete bodies also respond and close, and unrelated requests stay live
+HTTP request liveness: 7 checks passed.
+
+[release-check] test:queue-liveness
+
+> operator-studio-mvp@0.1.0 test:queue-liveness
+> node tests/queue-liveness-test.mjs
+
+TAP version 13
+# Subtest: queue liveness and resource ownership
+    # Subtest: waiting tasks also have a total deadline without any worker start
+    ok 1 - waiting tasks also have a total deadline without any worker start
+      ---
+      duration_ms: 84.4153
+      type: 'test'
+      ...
+    # Subtest: partial or foreign not-started proofs never authorize a retry
+    ok 2 - partial or foreign not-started proofs never authorize a retry
+      ---
+      duration_ms: 108.621
+      type: 'test'
+      ...
+    # Subtest: allowStart=false neither claims waiting work nor invokes a worker-starting advance
+    ok 3 - allowStart=false neither claims waiting work nor invokes a worker-starting advance
+      ---
+      duration_ms: 42.7977
+      type: 'test'
+      ...
+    # Subtest: dispatch freezes content before await and does not hold locks while submit hangs
+    ok 4 - dispatch freezes content before await and does not hold locks while submit hangs
+      ---
+      duration_ms: 108.7224
+      type: 'test'
+      ...
+    # Subtest: hung get cannot prevent confirmed cancellation or admit the next task early
+    ok 5 - hung get cannot prevent confirmed cancellation or admit the next task early
+      ---
+      duration_ms: 151.4503
+      type: 'test'
+      ...
+    # Subtest: terminal status without explicit release is quarantined
+    ok 6 - terminal status without explicit release is quarantined
+      ---
+      duration_ms: 39.6115
+      type: 'test'
+      ...
+    # Subtest: lost submit response reconciles frozen request identity without another submit
+    ok 7 - lost submit response reconciles frozen request identity without another submit
+      ---
+      duration_ms: 47.853
+      type: 'test'
+      ...
+    # Subtest: a late accepted response is retained and cancelled once
+    ok 8 - a late accepted response is retained and cancelled once
+      ---
+      duration_ms: 142.694
+      type: 'test'
+      ...
+    # Subtest: task deadline cancels independently of a stalled get
+    ok 9 - task deadline cancels independently of a stalled get
+      ---
+      duration_ms: 127.0914
+      type: 'test'
+      ...
+    # Subtest: two queue instances share one durable submission claim
+    ok 10 - two queue instances share one durable submission claim
+      ---
+      duration_ms: 26.6523
+      type: 'test'
+      ...
+    1..10
+ok 1 - queue liveness and resource ownership
+  ---
+  duration_ms: 1269.7948
+  type: 'test'
+  ...
+1..1
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1275.8651
+
+[release-check] test:local-c500-recovery
+
+> operator-studio-mvp@0.1.0 test:local-c500-recovery
+> node tests/local-c500-recovery-test.mjs
+
+TAP version 13
+# Subtest: local durable execution ownership
+    # Subtest: submit is content-bound and idempotent before and after adapter restart
+    ok 1 - submit is content-bound and idempotent before and after adapter restart
+      ---
+      duration_ms: 1616.731
+      type: 'test'
+      ...
+    # Subtest: result written before process exit is not terminal evidence
+    ok 2 - result written before process exit is not terminal evidence
+      ---
+      duration_ms: 1620.0133
+      type: 'test'
+      ...
+    # Subtest: actual parent process restart cannot spawn a claimed task twice
+    ok 3 - actual parent process restart cannot spawn a claimed task twice
+      ---
+      duration_ms: 1981.3759
+      type: 'test'
+      ...
+    # Subtest: lost submit response is recovered across queue recreation and executes once
+    ok 4 - lost submit response is recovered across queue recreation and executes once
+      ---
+      duration_ms: 1341.4923
+      type: 'test'
+      ...
+    # Subtest: unknown orphan is quarantined and cannot relaunch, even with result bytes
+    ok 5 - unknown orphan is quarantined and cannot relaunch, even with result bytes
+      ---
+      duration_ms: 144.6207
+      type: 'test'
+      ...
+    # Subtest: cancel kills and confirms a real descendant tree before terminal status
+    ok 6 - cancel kills and confirms a real descendant tree before terminal status
+      ---
+      duration_ms: 2018.6643
+      type: 'test'
+      ...
+    # Subtest: POSIX process-group cleanup reaps descendants after leader exit
+    ok 7 - POSIX process-group cleanup reaps descendants after leader exit # SKIP
+      ---
+      duration_ms: 0.1457
+      type: 'test'
+      ...
+    # Subtest: supervisor enforces total deadline independently of Runtime polling
+    ok 8 - supervisor enforces total deadline independently of Runtime polling
+      ---
+      duration_ms: 1398.3206
+      type: 'test'
+      ...
+    # Subtest: structured CPU correctness errors retain category, phase and role
+    ok 9 - structured CPU correctness errors retain category, phase and role
+      ---
+      duration_ms: 1429.393
+      type: 'test'
+      ...
+    # Subtest: cancel racing completion has one irreversible atomic terminal record
+    ok 10 - cancel racing completion has one irreversible atomic terminal record
+      ---
+      duration_ms: 1883.4756
+      type: 'test'
+      ...
+    1..10
+ok 1 - local durable execution ownership
+  ---
+  duration_ms: 13865.7864
+  type: 'test'
+  ...
+1..1
+# tests 11
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 13871.3174
+
+[release-check] test:windows-job-object
+
+> operator-studio-mvp@0.1.0 test:windows-job-object
+> node tests/windows-job-object-test.mjs
+
+TAP version 13
+# Subtest: job object helper manages and terminates a child process tree
+ok 1 - job object helper manages and terminates a child process tree
+  ---
+  duration_ms: 1533.3758
+  type: 'test'
+  ...
+# Subtest: job object termination releases descendants and helper failures fail closed
+ok 2 - job object termination releases descendants and helper failures fail closed
+  ---
+  duration_ms: 3409.5747
+  type: 'test'
+  ...
+# Subtest: job object supervisor bridges stdin and tails JSONL before the receipt
+ok 3 - job object supervisor bridges stdin and tails JSONL before the receipt
+  ---
+  duration_ms: 1192.7951
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6141.4903
+
+[release-check] test:generic-iteration-fault-injection
+
+> operator-studio-mvp@0.1.0 test:generic-iteration-fault-injection
+> node tests/generic-iteration-fault-injection-test.mjs
+
+[generic-iteration-fault-injection] package timeout, lost submit, runner failure, cancellation quarantine, and command replay passed
+
+[release-check] test:cli-command
+
+> operator-studio-mvp@0.1.0 test:cli-command
+> node tests/cli-command-test.mjs
+
+[cli-command] Windows npm shims and direct commands resolve to executable invocations
+
+[release-check] test:workflow-kernel
+
+> operator-studio-mvp@0.1.0 test:workflow-kernel
+> node tests/workflow-kernel-test.mjs
+
+[workflow-kernel] outcomes, invariants, effects, and idempotent reconciliation passed
+
+[release-check] test:candidate-generation
+
+> operator-studio-mvp@0.1.0 test:candidate-generation
+> node tests/candidate-generation-test.mjs
+
+[candidate-generation] prompt, diff admission, language contract, repeat guard, and generation-path classification passed
+
+[release-check] test:agent-runtime-candidate-admission
+
+> operator-studio-mvp@0.1.0 test:agent-runtime-candidate-admission
+> node tests/agent-runtime-candidate-admission-test.mjs
+
+[agent-runtime-candidate-admission] fail-open guard, empty-candidate root causes and degraded generation paths passed
+
+[release-check] test:round-settlement-interleaving
+
+> operator-studio-mvp@0.1.0 test:round-settlement-interleaving
+> node tests/round-settlement-interleaving-test.mjs
+
+[round-settlement-interleaving] run-history dedupe, recovery attribution, idempotent queue replay and settled-round barriers passed
+
+[release-check] test:candidate-generation-eval-report
+
+> operator-studio-mvp@0.1.0 test:candidate-generation-eval-report
+> node tests/candidate-generation-eval-report-test.mjs
+
+[candidate-generation-eval-report] timing, token uncertainty, correctness gating, and profile speedup passed
+
+[release-check] test:module-boundary
+
+> operator-studio-mvp@0.1.0 test:module-boundary
+> node tests/module-boundary-test.mjs
+
+[module-boundary] production path, dependency direction, and local contracts passed
+
+[release-check] test:state-domain-boundary
+
+> operator-studio-mvp@0.1.0 test:state-domain-boundary
+> node --experimental-vm-modules tests/state-domain-boundary-test.mjs
+
+(node:74192) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+[state-domain-boundary] 32 domain nodes, 76 application closure nodes, explicit ports, pure factories, and compatibility passed
+
+[release-check] test:state-storage-adapters
+
+> operator-studio-mvp@0.1.0 test:state-storage-adapters
+> node tests/state-storage-adapters-test.mjs
+
+[state-storage-adapters] atomic writes, exact retries, read isolation, initialization ports, and checkpoint recovery passed
+
+[release-check] test:mission-project-state
+
+> operator-studio-mvp@0.1.0 test:mission-project-state
+> node tests/mission-project-state-test.mjs
+
+TAP version 13
+# Subtest: Mission creation exposes clean defaults and registers its Project in memory
+ok 1 - Mission creation exposes clean defaults and registers its Project in memory
+  ---
+  duration_ms: 25.3893
+  type: 'test'
+  ...
+# Subtest: Mission creation inherits the selected Project paths and honors input defaults
+ok 2 - Mission creation inherits the selected Project paths and honors input defaults
+  ---
+  duration_ms: 2.779
+  type: 'test'
+  ...
+# Subtest: Mission switching preserves each runtime projection and isolates mutable evidence
+ok 3 - Mission switching preserves each runtime projection and isolates mutable evidence
+  ---
+  duration_ms: 8.9717
+  type: 'test'
+  ...
+# Subtest: fixed Profile, objective, retry budgets, and frozen semantics survive Mission switches
+ok 4 - fixed Profile, objective, retry budgets, and frozen semantics survive Mission switches
+  ---
+  duration_ms: 8.8464
+  type: 'test'
+  ...
+# Subtest: Mission budget aliases, precedence, fractional values, and unlimited defaults remain compatible
+ok 5 - Mission budget aliases, precedence, fractional values, and unlimited defaults remain compatible
+  ---
+  duration_ms: 0.3967
+  type: 'test'
+  ...
+# Subtest: candidate selection restores its pending action without overwriting the Mission goal
+ok 6 - candidate selection restores its pending action without overwriting the Mission goal
+  ---
+  duration_ms: 2.9822
+  type: 'test'
+  ...
+# Subtest: active Mission status preserves running, approval, failure, and completion precedence
+ok 7 - active Mission status preserves running, approval, failure, and completion precedence
+  ---
+  duration_ms: 13.4473
+  type: 'test'
+  ...
+# Subtest: resume restarts stopped and human-review loops once while preserving work and consumed budgets
+ok 8 - resume restarts stopped and human-review loops once while preserving work and consumed budgets
+  ---
+  duration_ms: 4.4792
+  type: 'test'
+  ...
+# Subtest: resume preserves non-resumable loop outcomes and terminal Mission statuses
+ok 9 - resume preserves non-resumable loop outcomes and terminal Mission statuses
+  ---
+  duration_ms: 5.9223
+  type: 'test'
+  ...
+# Subtest: Project create and update normalize metadata without changing its linked Mission
+ok 10 - Project create and update normalize metadata without changing its linked Mission
+  ---
+  duration_ms: 2.1446
+  type: 'test'
+  ...
+# Subtest: invalid selections and Project conflicts retain 400, 404, and 409 status contracts
+ok 11 - invalid selections and Project conflicts retain 400, 404, and 409 status contracts
+  ---
+  duration_ms: 2.5431
+  type: 'test'
+  ...
+# Subtest: Project selection prefers running, then unfinished, then completed linked Missions
+ok 12 - Project selection prefers running, then unfinished, then completed linked Missions
+  ---
+  duration_ms: 2.2142
+  type: 'test'
+  ...
+# Subtest: selecting an empty Project retains the active Mission and records the switch
+ok 13 - selecting an empty Project retains the active Mission and records the switch
+  ---
+  duration_ms: 2.046
+  type: 'test'
+  ...
+# Subtest: deleting an unlinked Project selects an active fallback, then an archive, then null
+ok 14 - deleting an unlinked Project selects an active fallback, then an archive, then null
+  ---
+  duration_ms: 0.421
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 97.7267
+
+[release-check] test:knowledge-state
+
+> operator-studio-mvp@0.1.0 test:knowledge-state
+> node tests/knowledge-state-test.mjs
+
+[knowledge-state] decision-driven adoption, source isolation, draft eligibility, maximize, idempotence, and bounded event contracts passed
+
+[release-check] test:workflow-error
+
+> operator-studio-mvp@0.1.0 test:workflow-error
+> node tests/workflow-error-test.mjs
+
+[workflow-error] unified classification, retry policy, status normalization, serialization and recovery actions passed
+
+[release-check] test:state-corruption-recovery
+
+> operator-studio-mvp@0.1.0 test:state-corruption-recovery
+> node tests/state-corruption-recovery-test.mjs
+
+[state-corruption-recovery] corrupt snapshots are preserved and recovered as explicit needs_human state
+
+[release-check] test:state-repository
+
+> operator-studio-mvp@0.1.0 test:state-repository
+> node tests/state-repository-test.mjs
+
+[state-repository] serialization, version conflicts, recovery, and snapshot isolation passed
+
+[release-check] test:command-recovery
+
+> operator-studio-mvp@0.1.0 test:command-recovery
+> node tests/command-recovery-test.mjs
+
+[command-recovery] write failures, restart recovery, unknown effects, frozen Benchmark identity and read-only queue lookup passed
+
+[release-check] test:workflow-commands
+
+> operator-studio-mvp@0.1.0 test:workflow-commands
+> node tests/workflow-commands-test.mjs
+
+[workflow-commands] Candidate admission, effect boundaries, Agent launch, review transitions and budget guards passed
+
+[release-check] test:server-routes
+
+> operator-studio-mvp@0.1.0 test:server-routes
+> node tests/server-routes-test.mjs
+
+[server-routes] HTTP envelope, body guards, system routes, and filesystem routes passed
+
+[release-check] test:projects-service
+
+> operator-studio-mvp@0.1.0 test:projects-service
+> node tests/projects-service-test.mjs
+
+[projects-service] Project use cases, migration commands, injected ports, and route mapping passed
+
+[release-check] test:missions-service
+
+> operator-studio-mvp@0.1.0 test:missions-service
+> node tests/missions-service-test.mjs
+
+[missions-service] Mission list/create contracts, validation, workspace initialization, and route mapping passed
+
+[release-check] test:mission-query-service
+
+> operator-studio-mvp@0.1.0 test:mission-query-service
+> node tests/mission-query-service-test.mjs
+
+[mission-query-service] Mission selection, event cursor queries, and SSE route delegation passed
+
+[release-check] test:semantic-service
+
+> operator-studio-mvp@0.1.0 test:semantic-service
+> node tests/semantic-service-test.mjs
+
+[semantic-service] semantic freeze projection, event/audit effects, errors, and route mapping passed
+
+[release-check] test:research-service
+
+> operator-studio-mvp@0.1.0 test:research-service
+> node tests/research-service-test.mjs
+
+[research-service] research start/cancel commands, mismatch guards, and route mapping passed
+
+[release-check] test:run-service
+
+> operator-studio-mvp@0.1.0 test:run-service
+> node tests/run-service-test.mjs
+
+[run-service] route/service integration passed: fixed synchronous rejection, frozen arming, actual Autopilot/AgentRound with injected effects, and ordinary starts
+
+[release-check] test:review-action-service
+
+> operator-studio-mvp@0.1.0 test:review-action-service
+> node tests/review-action-service-test.mjs
+
+[review-action-service] resume and decision-review action contracts passed
+
+[release-check] test:decision-service
+
+> operator-studio-mvp@0.1.0 test:decision-service
+> node tests/decision-service-test.mjs
+
+[decision-service] adoption, rejection, reversal, idempotency, and route contracts passed
+
+[release-check] test:candidate-validation-service
+
+> operator-studio-mvp@0.1.0 test:candidate-validation-service
+> node tests/candidate-validation-service-test.mjs
+
+[candidate-validation-service] patch, benchmark, rollback, validation, and route contracts passed
+
+[release-check] test:baseline-service
+
+> operator-studio-mvp@0.1.0 test:baseline-service
+> node tests/baseline-service-test.mjs
+
+[baseline-service] materialization orchestration, guards, command, and route contracts passed
+
+[release-check] test:operator-test-service
+
+> operator-studio-mvp@0.1.0 test:operator-test-service
+> node tests/operator-test-service-test.mjs
+
+[operator-test-service] queue projection and HTTP route contracts passed
+
+[release-check] test:mission-control-service
+
+> operator-studio-mvp@0.1.0 test:mission-control-service
+> node tests/mission-control-service-test.mjs
+
+[mission-control-service] cancellation, feedback, stop, and route contracts passed
+
+[release-check] test:knowledge-service
+
+> operator-studio-mvp@0.1.0 test:knowledge-service
+> node tests/knowledge-service-test.mjs
+
+[knowledge-service] draft, immutability, reference, retirement, and route contracts passed
+
+[release-check] test:runtime-query-service
+
+> operator-studio-mvp@0.1.0 test:runtime-query-service
+> node tests/runtime-query-service-test.mjs
+
+[runtime-query-service] preflight, state, workspace, simulation, and route contracts passed
+
+[release-check] test:runtime-state-service
+
+> operator-studio-mvp@0.1.0 test:runtime-state-service
+> node tests/runtime-state-service-test.mjs
+
+[runtime-state-service] matrix, budget, pause/resume, and route contracts passed
+
+[release-check] test:reset-service
+
+> operator-studio-mvp@0.1.0 test:reset-service
+> node tests/reset-service-test.mjs
+
+[reset-service] guard ordering, reset result, rejection, and route contracts passed
+
+[release-check] test:source-service
+
+> operator-studio-mvp@0.1.0 test:source-service
+> node tests/source-service-test.mjs
+
+[source-service] registration, counting, and missing-root contracts passed
+
+[release-check] test:iteration-research-service
+
+> operator-studio-mvp@0.1.0 test:iteration-research-service
+> node tests/iteration-research-service-test.mjs
+
+[iteration-research-service] managed start, cancellation, and unmanaged no-op contracts passed
+
+[release-check] test:round-recovery-service
+
+> operator-studio-mvp@0.1.0 test:round-recovery-service
+> node tests/round-recovery-service-test.mjs
+
+[round-recovery-service] restore guard and unmanaged no-op contracts passed
+
+[release-check] test:agent-round-service
+
+> operator-studio-mvp@0.1.0 test:agent-round-service
+> node tests/agent-round-service-test.mjs
+
+[agent-round-service] budget start, frozen experience, failure barriers, managed and fixture launch contracts passed
+
+[release-check] test:round-feedback-integration
+
+> operator-studio-mvp@0.1.0 test:round-feedback-integration
+> node tests/round-feedback-integration-test.mjs
+
+{
+  "ok": true,
+  "results": [
+    {
+      "case": "two-round-connectivity",
+      "provider": "claude-code",
+      "experience": {
+        "id": "exp_connectivity_1",
+        "version": 1
+      },
+      "factsBinding": {
+        "previousRunId": "agent_round_1",
+        "previousRoundId": "MIS_MTYE1WFC:round:1",
+        "candidateId": "candidate-r1",
+        "candidateDigest": "sha256:cd1c94712f55bf460afe61abdaf88ad3d5857f8a1e21555ab20052960ef26827"
+      },
+      "audit": {
+        "path": "C:\\Users\\棉被暖~3\\AppData\\Local\\Temp\\operator-round-feedback-R5hNME\\bridges\\connectivity\\prompt-audits\\claude_MTYE1WHC_A23F3EC9.json",
+        "digest": "sha256:6a3d6150a8030163db6f0879a906009d5532dc3a0dd946a1bce2c167cf26cd19",
+        "bytes": 19092,
+        "selectionContextId": "EXPCTX_43783a1fc6ee8c21fc7fcc22f7e2465d7aaffcea3a7d900cc440ebb27ace763a"
+      }
+    },
+    {
+      "case": "two-round-connectivity",
+      "provider": "codex-cli",
+      "experience": {
+        "id": "exp_codex_3",
+        "version": 1
+      },
+      "audit": {
+        "digest": "sha256:ca6036ba544e51d9144d9441fbad10f595b15abfb8ff4613e2e8afe8137b2c5a"
+      }
+    },
+    {
+      "case": "backend-as-hardware-fails-explicitly",
+      "code": "ROUND_EXPERIENCE_TARGET_INVALID"
+    },
+    {
+      "case": "architecture-dimension-separated",
+      "excludedReason": "scope",
+      "mismatchIssues": 1
+    },
+    {
+      "case": "task-and-mission-isolation",
+      "codes": [
+        "no-op-snapshot",
+        "ROUND_EXPERIENCE_EVIDENCE_CONFLICT"
+      ]
+    },
+    {
+      "case": "baseline-clears-benchmark-keeps-target",
+      "target": [
+        "nvidia-gpu"
+      ]
+    },
+    {
+      "case": "zero-experience-facts-complete",
+      "items": 0,
+      "gate": "reference"
+    },
+    {
+      "case": "item-cap",
+      "items": 20,
+      "maxItems": 20,
+      "excludedByLimit": 2
+    },
+    {
+      "case": "byte-budget-facts-complete",
+      "items": 7,
+      "contextBytes": 60342,
+      "maxItems": 20,
+      "maxBytes": 65536
+    },
+    {
+      "case": "operator-failure-channel",
+      "classification": "operator",
+      "code": "OPERATOR_TEST_FAILED"
+    },
+    {
+      "case": "infrastructure-failure-classification",
+      "classification": "infrastructure",
+      "recorded": 0
+    },
+    {
+      "case": "archive-determinism",
+      "duplicateRunEntries": 1,
+      "legacyRoundIdSource": "unknown"
+    },
+    {
+      "case": "manual-capture-replay",
+      "roundId": "MIS_MTYE1ZKN:round:2",
+      "replayIdentical": true,
+      "experienceId": "exp_manual-replay_42"
+    }
+  ]
+}
+
+[release-check] test:prompt-audit
+
+> operator-studio-mvp@0.1.0 test:prompt-audit
+> node tests/prompt-audit-test.mjs
+
+[prompt-audit] provider-neutral pre-send audit, UTF-8/SHA-256, fail-closed write, version freeze, selection exclusions and contextId mismatch contracts passed
+
+[release-check] test:round-preflight-service
+
+> operator-studio-mvp@0.1.0 test:round-preflight-service
+> node tests/round-preflight-service-test.mjs
+
+[round-preflight-service] settlement, preflight, and blocked contracts passed
+
+[release-check] test:round-artifact-guard
+
+> operator-studio-mvp@0.1.0 test:round-artifact-guard
+> node tests/round-artifact-guard-test.mjs
+
+[round-artifact-guard] strict artifact contract passed
+
+[release-check] test:baseline-source-service
+
+> operator-studio-mvp@0.1.0 test:baseline-source-service
+> node tests/baseline-source-service-test.mjs
+
+[baseline-source-service] source selection contract passed
+
+[release-check] test:materializer-policy-service
+
+> operator-studio-mvp@0.1.0 test:materializer-policy-service
+> node tests/materializer-policy-service-test.mjs
+
+[materializer-policy-service] state policy contracts passed
+
+[release-check] test:baseline-failure-projection
+
+> operator-studio-mvp@0.1.0 test:baseline-failure-projection
+> node tests/baseline-failure-projection-test.mjs
+
+[baseline-failure-projection] idempotent projection contract passed
+
+[release-check] test:benchmark-projection-service
+
+> operator-studio-mvp@0.1.0 test:benchmark-projection-service
+> node tests/benchmark-projection-service-test.mjs
+
+[benchmark-projection-service] queue projection and visible terminal experience failures passed
+
+[release-check] test:repository-adoption-service
+
+> operator-studio-mvp@0.1.0 test:repository-adoption-service
+> node tests/repository-adoption-service-test.mjs
+
+[repository-adoption-service] eligibility and adoption contract passed
+
+[release-check] test:autopilot-candidate-service
+
+> operator-studio-mvp@0.1.0 test:autopilot-candidate-service
+> node tests/autopilot-candidate-service-test.mjs
+
+[autopilot-candidate-service] priority selection contract passed
+
+[release-check] test:autopilot-context-service
+
+> operator-studio-mvp@0.1.0 test:autopilot-context-service
+> node tests/autopilot-context-service-test.mjs
+
+[autopilot-context-service] auto-tick context contract passed
+
+[release-check] test:autopilot-candidate-action-service
+
+> operator-studio-mvp@0.1.0 test:autopilot-candidate-action-service
+> node tests/autopilot-candidate-action-service-test.mjs
+
+[autopilot-candidate-action-service] patch and recovery contracts passed
+
+[release-check] test:autopilot-validation-service
+
+> operator-studio-mvp@0.1.0 test:autopilot-validation-service
+> node tests/autopilot-validation-service-test.mjs
+
+[autopilot-validation-service] candidate benchmark contract passed
+
+[release-check] test:autopilot-service
+
+> operator-studio-mvp@0.1.0 test:autopilot-service
+> node tests/autopilot-service-test.mjs
+
+[autopilot-service] application boundary contract passed
+
+[release-check] test:autopilot-fixed-profile-service
+
+> operator-studio-mvp@0.1.0 test:autopilot-fixed-profile-service
+> node tests/autopilot-fixed-profile-service-test.mjs
+
+[autopilot-fixed-profile-service] fixed profile advance contract passed
+
+[release-check] test:autopilot-strict-source-service
+
+> operator-studio-mvp@0.1.0 test:autopilot-strict-source-service
+> node tests/autopilot-strict-source-service-test.mjs
+
+[autopilot-strict-source-service] strict source research contract passed
+
+[release-check] test:autopilot-candidate-baseline-service
+
+> operator-studio-mvp@0.1.0 test:autopilot-candidate-baseline-service
+> node tests/autopilot-candidate-baseline-service-test.mjs
+
+[autopilot-candidate-baseline-service] baseline research contract passed
+
+[release-check] test:baseline-benchmark-service
+
+> operator-studio-mvp@0.1.0 test:baseline-benchmark-service
+> node tests/baseline-benchmark-service-test.mjs
+
+[baseline-benchmark-service] command contract passed
+
+[release-check] test:baseline-materializer-command-service
+
+> operator-studio-mvp@0.1.0 test:baseline-materializer-command-service
+> node tests/baseline-materializer-command-service-test.mjs
+
+[baseline-materializer-command-service] command contract passed
+
+[release-check] test:baseline-source-inspection-service
+
+> operator-studio-mvp@0.1.0 test:baseline-source-inspection-service
+> node tests/baseline-source-inspection-service-test.mjs
+
+[baseline-source-inspection-service] invalid source contract passed
+
+[release-check] test:baseline-materializer-recovery-service
+
+> operator-studio-mvp@0.1.0 test:baseline-materializer-recovery-service
+> node tests/baseline-materializer-recovery-service-test.mjs
+
+[baseline-materializer-recovery-service] redirect and recovery contract passed
+
+[release-check] test:iteration-service
+
+> operator-studio-mvp@0.1.0 test:iteration-service
+> node tests/iteration-service-test.mjs
+
+[iteration-service] public dependency contract passed
+
+[release-check] test:runtime-projection-service
+
+> operator-studio-mvp@0.1.0 test:runtime-projection-service
+> node tests/runtime-projection-service-test.mjs
+
+[runtime-projection-service] ordering and projection contract passed
+
+[release-check] test:runtime-advance-service
+
+> operator-studio-mvp@0.1.0 test:runtime-advance-service
+> node tests/runtime-advance-service-test.mjs
+
+[runtime-advance-service] ordered progression contract passed
+
+[release-check] test:baseline-orchestration-service
+
+> operator-studio-mvp@0.1.0 test:baseline-orchestration-service
+> node tests/baseline-orchestration-service-test.mjs
+
+[baseline-orchestration-service] branch progression contracts passed
+
+[release-check] test:runtime-state-pipeline-service
+
+> operator-studio-mvp@0.1.0 test:runtime-state-pipeline-service
+> node tests/runtime-state-pipeline-service-test.mjs
+
+[runtime-state-pipeline-service] ordered advancement and queue contention contract passed
+
+[release-check] test:runtime-lifecycle-service
+
+> operator-studio-mvp@0.1.0 test:runtime-lifecycle-service
+> node tests/runtime-lifecycle-service-test.mjs
+
+[runtime-lifecycle] isolated reads, explicit advancement, serialization and owner guard passed
+
+[release-check] test:runtime-maintenance-service
+
+> operator-studio-mvp@0.1.0 test:runtime-maintenance-service
+> node tests/runtime-maintenance-service-test.mjs
+
+[runtime-maintenance] extracted policy and fixture isolation passed
+
+[release-check] test:runtime-read-isolation
+
+> operator-studio-mvp@0.1.0 test:runtime-read-isolation
+> node tests/runtime-read-isolation-test.mjs
+
+[runtime-read-isolation] GET/SSE/queue inspection, journal safety and autonomous tick passed
+
+[release-check] test:main-round-orchestration-service
+
+> operator-studio-mvp@0.1.0 test:main-round-orchestration-service
+> node tests/main-round-orchestration-service-test.mjs
+
+[main-round-orchestration-service] launch and blocked contracts passed
+
+[release-check] test:queue-stop-race
+
+> operator-studio-mvp@0.1.0 test:queue-stop-race
+> node tests/queue-stop-race-test.mjs
+
+[queue-stop-race] unknown timeout retains its slot; confirmed cancellation has one terminal outcome
+
+[release-check] test:operator-test-resilience
+
+> operator-studio-mvp@0.1.0 test:operator-test-resilience
+> node tests/operator-test-resilience-test.mjs
+
+[operator-test-resilience] idempotency and bounded outcome-class retries passed
+
+[release-check] test:intent
+
+> operator-studio-mvp@0.1.0 test:intent
+> node tests/mission-intent-test.mjs
+
+[intent] mission input gate passed
+
+[release-check] test:research
+
+> operator-studio-mvp@0.1.0 test:research
+> node tests/research-test.mjs
+
+[research] researcher sub-agent run lifecycle passed
+
+[release-check] test:baseline-materializer-agent
+
+> operator-studio-mvp@0.1.0 test:baseline-materializer-agent
+> node tests/baseline-materializer-agent-test.mjs
+
+[baseline-materializer-agent] lifecycle passed
+
+[release-check] test:agent-runtime-registry
+
+> operator-studio-mvp@0.1.0 test:agent-runtime-registry
+> node tests/agent-runtime-registry-test.mjs
+
+[agent-runtime-registry] declarative definitions, capabilities and operation dispatch passed
+
+[release-check] test:agent-runtime-timeout-recovery
+
+> operator-studio-mvp@0.1.0 test:agent-runtime-timeout-recovery
+> node tests/agent-runtime-timeout-recovery-test.mjs
+
+[agent-runtime-timeout-recovery] timeout-triggered cancellation converges to a retryable terminal projection
+
+[release-check] test:agent-runtime-hardware-mock-e2e-contract
+
+> operator-studio-mvp@0.1.0 test:agent-runtime-hardware-mock-e2e-contract
+> node tests/agent-runtime-hardware-mock-e2e-contract-test.mjs
+
+[agent-runtime-hardware-mock-e2e-contract] completion, repair, evidence and exact-token guards passed
+
+[release-check] test:claude
+
+> operator-studio-mvp@0.1.0 test:claude
+> node tests/claude-runtime-test.mjs
+
+[claude-runtime] CLI lifecycle and normalized event contract passed
+
+[release-check] test:claude-workflow
+
+> operator-studio-mvp@0.1.0 test:claude-workflow
+> node tests/claude-workflow-compat-test.mjs
+
+[claude-workflow-compat] research, materializer, and candidate diff loop passed
+
+[release-check] test:loop
+
+> operator-studio-mvp@0.1.0 test:loop
+> node tests/loop-test.mjs
+
+[loop] researcher iteration loop policy passed
+
+[release-check] test:gate
+
+> operator-studio-mvp@0.1.0 test:gate
+> node tests/accept-gate-test.mjs
+
+[accept-gate] provenance, target, eligible, reference, hard-failure, snapshot-replay and diagnostic-wait dispositions passed
+
+[release-check] test:evidence-decision
+
+> operator-studio-mvp@0.1.0 test:evidence-decision
+> node tests/evidence-decision-test.mjs
+
+[evidence-decision] diagnostic predicates, four provenance groups, all completeEvidence branches, and publication authorization passed
+
+[release-check] test:evidence-governance-integration
+
+> operator-studio-mvp@0.1.0 test:evidence-governance-integration
+> node tests/evidence-governance-integration-test.mjs
+
+[evidence-governance] shared-GPU development yields a development asset with 0 autoPublished
+[evidence-governance] simulation yields a simulation asset with 0 autoPublished
+[evidence-governance] controlled real double with eligible diagnostics is the only published path
+[evidence-governance] maintenance is idempotent across repeat/restore and reprocesses changed inputs once
+[evidence-governance] legacy Level 3 without a decision stays unknown and unpublishable
+[evidence-governance] a misbound draft is never promoted by its Level 3 label
+[evidence-governance] missing required diagnostics wait recoverably with candidate/budget/barrier retained and 0 ports
+[evidence-governance-integration] decision projection, governance idempotence, and external wait contracts passed
+
+[release-check] test:diagnostic-runner
+
+> operator-studio-mvp@0.1.0 test:diagnostic-runner
+> node tests/diagnostic-runner-test.mjs
+
+[diagnostic-runner] 24 hardware-free runner fact-production checks passed
+
+[release-check] test:workspace
+
+> operator-studio-mvp@0.1.0 test:workspace
+> node tests/workspace-manager-test.mjs
+
+[workspace] managed snapshot, authoritative diff, and project-local isolation contracts passed
+
+[release-check] test:queue
+
+> operator-studio-mvp@0.1.0 test:queue
+> node tests/operator-test-queue-test.mjs
+
+[operator-test-queue] submit, serial processing, persistence, and cancellation passed
+
+[release-check] test:strict-zero-source
+
+> operator-studio-mvp@0.1.0 test:strict-zero-source
+> node tests/strict-zero-source-test.mjs
+
+[strict-zero-source] strict authority, semantic fallback, and relative gate passed
+
+[release-check] test:local-c500-production-backend
+
+> operator-studio-mvp@0.1.0 test:local-c500-production-backend
+> node tests/local-c500-production-backend-test.mjs
+
+local-c500 production backend test passed
+
+[release-check] test:local-c500-runtime-guard
+
+> operator-studio-mvp@0.1.0 test:local-c500-runtime-guard
+> node tests/local-c500-runtime-guard-test.mjs
+
+[local-c500-runtime-guard] duplicate runtime exits without PID overwrite
+
+[release-check] test:local-c500-existing-runtime
+
+> operator-studio-mvp@0.1.0 test:local-c500-existing-runtime
+> node tests/local-c500-existing-runtime-test.mjs
+
+[local-c500-existing-runtime] cancel, reuse, and replace ownership paths passed
+
+[release-check] test:local-c500-service-async
+
+> operator-studio-mvp@0.1.0 test:local-c500-service-async
+> node tests/local-c500-service-async-test.mjs
+
+[local-c500-service-async] atomic task state, single runner start, progress and completion passed
+
+[release-check] test:local-c500-launch-mode
+
+> operator-studio-mvp@0.1.0 test:local-c500-launch-mode
+> node tests/local-c500-launch-mode-test.mjs
+
+[local-c500-launch-mode] real hardware default and explicit simulation passed
+
+[release-check] test:local-c500-environment-entry
+
+> operator-studio-mvp@0.1.0 test:local-c500-environment-entry
+> node tests/local-c500-environment-entry-test.mjs
+
+[local-c500-environment-entry] relocatable bootstrap and scoped runtime replacement passed
+
+[release-check] test:muxi-device
+
+> operator-studio-mvp@0.1.0 test:muxi-device
+> node tests/muxi-device-test.mjs
+
+[muxi-device] C550 detection and production preflight passed
+
+[release-check] test:fixed-operator-profile
+
+> operator-studio-mvp@0.1.0 test:fixed-operator-profile
+> node tests/fixed-operator-profile-test.mjs
+
+[fixed-operator-profile] generated Python metadata is syntax-valid
+
+[release-check] test:local-c500-state-migration
+
+> operator-studio-mvp@0.1.0 test:local-c500-state-migration
+> node tests/local-c500-state-migration-test.mjs
+
+[local-c500-state-migration] legacy source blocker recovery passed
+
+[release-check] test:source-mirror-policy
+
+> operator-studio-mvp@0.1.0 test:source-mirror-policy
+> node tests/source-mirror-policy-test.mjs
+
+[source-mirror-policy] canonical identity, pinned transport, and registry verification passed
+
+[release-check] test:operator-language
+
+> operator-studio-mvp@0.1.0 test:operator-language
+> node tests/operator-language-test.mjs
+
+[operator-language] adapter selection and candidate admission passed
+
+[release-check] test:test-spec
+
+> operator-studio-mvp@0.1.0 test:test-spec
+> node tests/test-spec-test.mjs && python tests/local-c500-runner-contract-test.py
+
+[test-spec] generated matrix and executable contract passed
+[local-c500-runner-contract] generated correctness and benchmark profiles passed
+
+[release-check] test:token-usage
+
+> operator-studio-mvp@0.1.0 test:token-usage
+> node tests/token-usage-test.mjs
+
+[token-usage] provider semantics, failure accounting, idempotence, coverage and exact TUI projection passed
+
+[release-check] test:bundled-node-package
+
+> operator-studio-mvp@0.1.0 test:bundled-node-package
+> node tests/bundled-node-package-test.mjs
+
+[bundled-node-package] official archive, checksum, installer, and wrapper passed
+
+[release-check] test:local-c500-mock-sequence
+
+> operator-studio-mvp@0.1.0 test:local-c500-mock-sequence
+> node tests/local-c500-mock-sequence-test.mjs
+
+[local-c500-mock-sequence] persistent 100/92/84/75 sequence passed
+
+[release-check] test:local-c500-simulation
+
+> operator-studio-mvp@0.1.0 test:local-c500-simulation
+> node tests/local-c500-simulation-mode-test.mjs
+
+[local-c500-simulation] reference Agent and production launch mode are isolated from model/hardware probes
+
+[release-check] test:local-c500-simulation-artifact
+
+> operator-studio-mvp@0.1.0 test:local-c500-simulation-artifact
+> node tests/local-c500-simulation-artifact-test.mjs
+
+[local-c500-simulation-artifact] generated bridge satisfies scripted operator identity contract
+
+[release-check] test:local-c500-production-tui
+
+> operator-studio-mvp@0.1.0 test:local-c500-production-tui
+> node tests/local-c500-production-tui-test.mjs
+
+local-c500 production TUI architecture test passed
+
+[release-check] test:local-c500-tui-logic
+
+> operator-studio-mvp@0.1.0 test:local-c500-tui-logic
+> node tests/local-c500-tui-logic-test.mjs
+
+[local-c500-tui-logic] decision-bound Evidence block shows all six items and its blocking reason
+[local-c500-tui-logic] simulation decision drives the simulation banner without a live boolean
+[local-c500-tui-logic] state policy, commands, terminal UX, and 300 randomized snapshots passed
+
+[release-check] test:local-c500-tui-spinner
+
+> operator-studio-mvp@0.1.0 test:local-c500-tui-spinner
+> node tests/local-c500-tui-spinner-test.mjs
+
+[local-c500-tui-spinner] observed 5 rotating frames and static pause state
+
+[release-check] test:local-c500-tui-viewport
+
+> operator-studio-mvp@0.1.0 test:local-c500-tui-viewport
+> node tests/local-c500-tui-viewport-test.mjs
+
+[local-c500-tui-viewport] bounded renders and retry candidates produce no terminal warnings
+
+[release-check] test:local-c500-tui-refresh
+
+> operator-studio-mvp@0.1.0 test:local-c500-tui-refresh
+> node tests/local-c500-tui-refresh-test.mjs
+
+[local-c500-tui-refresh] no-op refresh suppression and response ordering passed
+
+[release-check] test:local-c500-terminal-screen
+
+> operator-studio-mvp@0.1.0 test:local-c500-terminal-screen
+> node tests/local-c500-terminal-screen-test.mjs
+
+[local-c500-terminal-screen] alternate screen lifecycle passed
+
+[release-check] build
+
+> operator-studio-mvp@0.1.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 1582 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.45 kB │ gzip:   0.30 kB
+dist/assets/index-BIrJ56PY.css  178.14 kB │ gzip:  30.14 kB
+dist/assets/index-CJL7ghsq.js   357.70 kB │ gzip: 113.43 kB
+✓ built in 4.30s
+
+[release-check] PASS: 135 checks completed
+
+[non-hardware-check] test:test-service
+
+> operator-studio-mvp@0.1.0 test:test-service
+> node test-service/contract-test.mjs
+
+test-service contract: PASS
+
+[non-hardware-check] e2e:cpu-iteration
+
+> operator-studio-mvp@0.1.0 e2e:cpu-iteration
+> node scripts/e2e-cpu-iteration.mjs
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+false !== true
+
+    at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/acagemm%E5%8E%9F%E5%9E%8B/scripts/e2e-cpu-iteration.mjs:203:10 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.2
+[non-hardware-check] FAILED: e2e:cpu-iteration

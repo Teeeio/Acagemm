@@ -1,0 +1,101 @@
+
+> operator-studio-mvp@0.1.0 test:round-feedback-integration
+> node tests/round-feedback-integration-test.mjs
+
+{
+  "ok": true,
+  "results": [
+    {
+      "case": "two-round-connectivity",
+      "provider": "claude-code",
+      "experience": {
+        "id": "exp_connectivity_1",
+        "version": 1
+      },
+      "factsBinding": {
+        "previousRunId": "agent_round_1",
+        "previousRoundId": "MIS_MTYDV8EU:round:1",
+        "candidateId": "candidate-r1",
+        "candidateDigest": "sha256:cd1c94712f55bf460afe61abdaf88ad3d5857f8a1e21555ab20052960ef26827"
+      },
+      "audit": {
+        "path": "C:\\Users\\棉被暖~3\\AppData\\Local\\Temp\\operator-round-feedback-1D4Ohh\\bridges\\connectivity\\prompt-audits\\claude_MTYDV8GQ_E40C6DAF.json",
+        "digest": "sha256:d82eed08623a50afa6402d838bf492dfb38e0676820bd41986d320e46a406c34",
+        "bytes": 19092,
+        "selectionContextId": "EXPCTX_d272dde1525c9a83c7205a77ccf9aad5f6e685d12fb68a3de746caf20324a9b2"
+      }
+    },
+    {
+      "case": "two-round-connectivity",
+      "provider": "codex-cli",
+      "experience": {
+        "id": "exp_codex_3",
+        "version": 1
+      },
+      "audit": {
+        "digest": "sha256:b1f845c09416f138f900be6b3abc0d005ff8723deb5bd642182615820d33b19a"
+      }
+    },
+    {
+      "case": "backend-as-hardware-fails-explicitly",
+      "code": "ROUND_EXPERIENCE_TARGET_INVALID"
+    },
+    {
+      "case": "architecture-dimension-separated",
+      "excludedReason": "scope",
+      "mismatchIssues": 1
+    },
+    {
+      "case": "task-and-mission-isolation",
+      "codes": [
+        "no-op-snapshot",
+        "ROUND_EXPERIENCE_EVIDENCE_CONFLICT"
+      ]
+    },
+    {
+      "case": "baseline-clears-benchmark-keeps-target",
+      "target": [
+        "nvidia-gpu"
+      ]
+    },
+    {
+      "case": "zero-experience-facts-complete",
+      "items": 0,
+      "gate": "reference"
+    },
+    {
+      "case": "item-cap",
+      "items": 20,
+      "maxItems": 20,
+      "excludedByLimit": 2
+    },
+    {
+      "case": "byte-budget-facts-complete",
+      "items": 7,
+      "contextBytes": 60342,
+      "maxItems": 20,
+      "maxBytes": 65536
+    },
+    {
+      "case": "operator-failure-channel",
+      "classification": "operator",
+      "code": "OPERATOR_TEST_FAILED"
+    },
+    {
+      "case": "infrastructure-failure-classification",
+      "classification": "infrastructure",
+      "recorded": 0
+    },
+    {
+      "case": "archive-determinism",
+      "duplicateRunEntries": 1,
+      "legacyRoundIdSource": "unknown"
+    },
+    {
+      "case": "manual-capture-replay",
+      "roundId": "MIS_MTYDVBVD:round:2",
+      "replayIdentical": true,
+      "experienceId": "exp_manual-replay_42"
+    }
+  ]
+}

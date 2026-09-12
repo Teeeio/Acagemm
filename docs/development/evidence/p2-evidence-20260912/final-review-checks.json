@@ -1,0 +1,17 @@
+[
+  {
+    "check": "test:shared-gpu-acceptance",
+    "exit": 0,
+    "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\test-shared-gpu-acceptance-final-review.log"
+  },
+  {
+    "check": "test:smoke",
+    "exit": 0,
+    "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\test-smoke-final-review.log"
+  },
+  {
+    "check": "e2e:cpu-iteration",
+    "exit": 0,
+    "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\e2e-cpu-iteration-final-review.log"
+  }
+]

@@ -83,8 +83,23 @@ export function collectWorkflowInvariantViolations(state = {}) {
   const benchmark = state.benchmark || {};
   const baseline = state.baseline || {};
   const gate = state.decisionReview?.gate || null;
-  const gateLiveHardware = gate?.liveHardware === true || gate?.evidenceSource === 'live';
-  const currentBestLiveHardware = state.currentBest?.liveHardware === true || state.currentBest?.evidenceSource === 'live';
+  // 生产唯一决策真相存于 benchmark.evidenceDecision；有统一决策时一律以它的真实
+  // 字段为准，flat passed/publishable 只作为无决策旧记录的兼容投影。
+  const gateDecision = state.benchmark?.evidenceDecision || gate?.decision || null;
+  const bestDecision = state.currentBest?.evidenceDecision || null;
+  // 有统一决策时只认真实字段：publishable / verified 必须与 publication allowed 一致；
+  // 旧无决策记录保留原布尔保护（simulation 伪发布仍被拦截），不新增授权。
+  const gatePublicationAllowed = gateDecision?.publication?.status === 'allowed';
+  const gateDecisionLive = gateDecision?.execution?.kind === 'live';
+  const gateLegacyLiveHardware = gate?.liveHardware === true || gate?.evidenceSource === 'live';
+  const gatePublishViolation = gate?.publishable === true
+    && (gateDecision ? !(gatePublicationAllowed && gateDecisionLive) : !gateLegacyLiveHardware);
+  const gateDecisionAdoptionAllowed = gateDecision?.adoption?.status === 'allowed';
+  const gateDecisionMismatch = Boolean(gateDecision) && typeof gate?.passed === 'boolean' && gate.passed !== gateDecisionAdoptionAllowed;
+  const bestPublicationAllowed = bestDecision?.publication?.status === 'allowed';
+  const bestLegacyLiveHardware = state.currentBest?.liveHardware === true || state.currentBest?.evidenceSource === 'live';
+  const bestPublishViolation = state.currentBest?.verified === true
+    && (bestDecision ? !bestPublicationAllowed : !bestLegacyLiveHardware);
   const terminal = state.stage === 'published' && state.knowledgeMaintenance?.status === 'completed';
 
   if (benchmark.status === 'running' && (!benchmark.runId || !benchmark.testTaskId)) {
@@ -99,9 +114,11 @@ export function collectWorkflowInvariantViolations(state = {}) {
   if (benchmark.purpose === 'candidate' && benchmark.candidate?.id && state.appliedCandidateId && benchmark.candidate.id !== state.appliedCandidateId) {
     push('WORKFLOW_CANDIDATE_EVIDENCE_MISMATCH', 'Benchmark candidate must match the applied candidate.');
   }
-  if ((gate?.publishable === true && !gateLiveHardware)
-    || (state.currentBest?.verified === true && !currentBestLiveHardware)) {
+  if (gatePublishViolation || bestPublishViolation) {
     push('WORKFLOW_SIMULATION_PUBLISH_FORBIDDEN', 'Simulation evidence cannot be marked publishable or verified.');
+  }
+  if (gateDecisionMismatch) {
+    push('WORKFLOW_DECISION_GATE_MISMATCH', 'Gate passed flag must project the unified decision adoption status.');
   }
   if (terminal && deriveWorkflowEffect({ ...state, missionPaused: false, iterationStats: { ...(state.iterationStats || {}), loopStatus: 'running' } })) {
     push('WORKFLOW_TERMINAL_EFFECT_ACTIVE', 'A completed Mission cannot retain an active effect.');

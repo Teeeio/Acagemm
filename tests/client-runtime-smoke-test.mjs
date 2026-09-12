@@ -290,8 +290,82 @@ try {
   assert.equal(adopted.state.publishedAssets.length, 3);
   assert.equal(adopted.state.publishedAssets[0].version, 'v1.3');
   assert.deepEqual(adopted.state.publishedAssets.map((asset) => asset.version), ['v1.3', 'v1.0', 'v2.4']);
-  assert.ok(adopted.state.knowledgeMaintenance.changes.every((change) => change.outcome === 'simulation_only'));
-  assert.ok(adopted.state.publishedAssets.every((asset) => asset.status === 'simulation' && asset.evidenceLevel === '模拟证据'));
+  // 版本化决策契约下的精确映射。维护的三个 draft 都是历史经验库记录：它们没有
+  // evidenceBinding，也没有自己的 evidenceDecision，因此不得继承当前候选的生产决策，
+  // 精确保持 unknown/未知证据且不可发布；旧断言的 simulation_only 只是把当前 run 的
+  // 证据回填给了无绑定记录，新契约禁止这种回填。
+  const productionDecision = adopted.state.benchmark.evidenceDecision;
+  const currentCandidate = adopted.state.candidateEvaluations.find((candidate) => candidate.id === 'candidate-02');
+  assert.equal(adopted.state.currentBest.candidateId, 'candidate-02');
+  assert.ok(productionDecision, 'benchmark must retain the production evidence decision');
+  assert.equal(productionDecision.schemaVersion, 'operator-studio.evidence-decision/v1');
+  assert.equal(productionDecision.binding.candidateId, 'candidate-02');
+  assert.equal(productionDecision.binding.candidateDigest, currentCandidate.patchDigest);
+  assert.equal(productionDecision.binding.runId, adopted.state.benchmark.runId);
+  assert.equal(productionDecision.binding.missionId, missionId);
+  // 有决策者绑定同一生产值：benchmark / candidate.acceptGate / decisionReview / currentBest
+  // 必须是同一个决策对象，不能各自漂移。
+  assert.deepEqual(currentCandidate.acceptGate.decision, productionDecision);
+  assert.deepEqual(adopted.state.decisionReview.gate.decision, productionDecision);
+  assert.deepEqual(adopted.state.decisionReview.evidenceDecision, productionDecision);
+  assert.deepEqual(adopted.state.currentBest.evidenceDecision, productionDecision);
+  // 当前 run 的执行分类是 fail-closed 的 unknown（runtime client-managed-runtime），
+  // tracer/profiler 是显式模拟记录（status mocked / source mock / simulated true）。
+  // 生产决策按 simulation 处理这些诊断：不可用、不合格、理由是 diagnostic.simulated，
+  // 并且发布被 execution_not_live 阻塞——绝不把它们升级为真实证据。
+  assert.equal(productionDecision.execution.kind, 'unknown');
+  assert.equal(productionDecision.execution.liveHardware, false);
+  assert.equal(productionDecision.execution.source, 'client-managed-runtime');
+  assert.equal(productionDecision.adoption.status, 'allowed');
+  assert.equal(productionDecision.publication.status, 'blocked');
+  assert.deepEqual(productionDecision.publication.reasons, ['publication.execution_not_live']);
+  assert.equal(adopted.state.benchmark.result.tracer.status, 'mocked');
+  assert.equal(adopted.state.benchmark.result.tracer.source, 'mock');
+  assert.equal(adopted.state.benchmark.result.tracer.simulated, true);
+  assert.equal(adopted.state.benchmark.result.profiler.status, 'mocked');
+  assert.equal(adopted.state.benchmark.result.profiler.source, 'mock');
+  assert.equal(adopted.state.benchmark.result.profiler.simulated, true);
+  for (const kind of ['tracer', 'profiler']) {
+    const diagnostic = productionDecision.diagnostics[kind];
+    assert.equal(diagnostic.schemaValid, true, `${kind} envelope shape is retained`);
+    assert.equal(diagnostic.available, false, `${kind} simulated collection is not available`);
+    assert.equal(diagnostic.evidenceEligible, false, `${kind} simulated record is not eligible`);
+    assert.deepEqual(diagnostic.reasons, ['diagnostic.simulated']);
+  }
+  // 每个 draft 的身份/版本/动作/outcome 与资产状态逐一精确对应，不允许笼统地
+  // “simulation 或 unknown 都行”。
+  const expectedKnowledge = [
+    { id: 'exp.async-plan-cache', action: 'update', targetId: 'exp.fixed-overhead', version: 'v1.3' },
+    { id: 'exp.c550-plan-cache-boundary', action: 'create', targetId: 'exp.c550-plan-cache-boundary', version: 'v1.0' },
+    { id: 'exp.cross-platform-adoption-gate', action: 'update', targetId: 'policy.cross-platform-adoption-gate', version: 'v2.4' },
+  ];
+  assert.deepEqual(adopted.state.knowledgeDrafts.map((draft) => draft.id), expectedKnowledge.map((item) => item.id));
+  assert.deepEqual(adopted.state.publishedAssets.map((asset) => asset.id), expectedKnowledge.map((item) => item.id));
+  for (const expected of expectedKnowledge) {
+    const draft = adopted.state.knowledgeDrafts.find((item) => item.id === expected.id);
+    const asset = adopted.state.publishedAssets.find((item) => item.id === expected.id);
+    const change = adopted.state.knowledgeMaintenance.changes.find((item) => item.draftId === expected.id);
+    assert.ok(draft && asset && change, `${expected.id} must be maintained exactly once`);
+    assert.equal(change.action, expected.action);
+    assert.equal(change.targetId, expected.targetId);
+    assert.equal(change.nextVersion, expected.version);
+    assert.equal(asset.version, expected.version);
+    // 无绑定历史记录不得编造决策，也不得获得可回填身份的显式绑定。
+    assert.equal(draft.evidenceDecision, null);
+    assert.equal(asset.evidenceDecision, null);
+    assert.equal(draft.evidenceBinding, undefined);
+    assert.equal(draft.evidenceLevel, '未知证据');
+    assert.equal(draft.publishable, false);
+    assert.equal(asset.status, 'unknown');
+    assert.equal(asset.evidenceLevel, '未知证据');
+    assert.equal(asset.publication, 'blocked');
+    assert.equal(asset.publishable, false);
+    assert.equal(draft.status, 'unknown');
+    assert.equal(change.outcome, 'review_required');
+  }
+  assert.ok(adopted.state.knowledgeMaintenance.changes.every((change) => change.outcome === 'review_required'));
+  assert.ok(adopted.state.knowledgeDrafts.every((draft) => draft.publishable === false));
+  assert.ok(adopted.state.publishedAssets.every((asset) => asset.publishable === false && asset.evidenceDecision === null));
   assert.equal(adopted.state.knowledgeMaintenance.changes.filter((change) => change.action === 'update').length, 2);
   assert.equal(adopted.state.knowledgeMaintenance.changes.filter((change) => change.action === 'create').length, 1);
   assert.match(adopted.state.publishedAssets[0].procedure, /shape bucket/);

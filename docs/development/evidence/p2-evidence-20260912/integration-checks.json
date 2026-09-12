@@ -1,0 +1,27 @@
+[
+  {
+    "check": "test:evidence-governance-integration",
+    "exit": 0,
+    "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\test-evidence-governance-integration.log"
+  },
+  {
+    "check": "test:knowledge-state",
+    "exit": 0,
+    "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\test-knowledge-state.log"
+  },
+  {
+    "check": "test:workflow-summary",
+    "exit": 0,
+    "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\test-workflow-summary.log"
+  },
+  {
+    "check": "test:local-c500-tui-logic",
+    "exit": 0,
+    "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\test-local-c500-tui-logic.log"
+  },
+  {
+    "check": "test:round-feedback-integration",
+    "exit": 0,
+    "log": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p2-20260912\\test-round-feedback-integration.log"
+  }
+]

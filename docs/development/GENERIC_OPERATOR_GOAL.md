@@ -1,5 +1,33 @@
 # Generic Operator Iteration Goal
 
+> **Current status entry (2026-09-12)**: the 2026-09-07 / 2026-09-09 checkpoints below are
+> historical records; their dates and boundaries are preserved. The currently accepted baseline
+> is the P1 round-feedback loop (`TEAM_HANDOFF.md` §14 items 1–5): experience feedback,
+> frozen round facts, pre-send prompt/selection audit, and one real two-round run. Acceptance:
+> [`P1_FEEDBACK_ACCEPTANCE.md`](P1_FEEDBACK_ACCEPTANCE.md); originals:
+> [`evidence/p1-feedback-20260912/README.md`](evidence/p1-feedback-20260912/README.md).
+> That real run used **Claude Code + a local shared NVIDIA GPU** (`local-shared-gpu`, `sm86`,
+> `publishable=false`); the upstream final gates reported release 132 / non-hardware 34, exit 0.
+> The dated 2026-09-07 Consensus/checkpoint and the earlier "real Codex" acceptance records
+> below keep their original Codex-specific wording and dates. Future real Agent E2E work is
+> provider-neutral; historical results remain scoped to the provider actually used.
+> One provider's run does not prove another. The T7 work-package title and the
+> `CURRENT_TASK_HANDOFF.md` S3 current-action title are corrected to provider-neutral because
+> they are still-open actions, not historical results. P1 validation of the updated E2E driver
+> used a read-only observer replay; it did not re-run the whole driver live. A single two-round run is
+> **not** an N=20 stability result.
+>
+> **Phase 2 current entry (2026-09-12, appended)**: the diagnostic qualification and versioned
+> single-decision/governance work (`TEAM_HANDOFF.md` §14 item 6) is integrated per the frozen
+> contract [`P2_EVIDENCE_ACCEPTANCE.md`](P2_EVIDENCE_ACCEPTANCE.md); the current evidence index and
+> boundaries are in
+> [`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md), and the
+> real-run observation/ledger rules are in [`REAL_GPU_REGRESSION.md`](REAL_GPU_REGRESSION.md).
+> **Phase 2 hardware-free acceptance passed:** release 136 and non-hardware 38 checks, exit 0;
+> all 485 recorded source/test files retained their pre-run hashes. There was no new live run,
+> N=20 result or publication claim. **Phase 3 (KernelWiki importer + deterministic selector, §14 item 7) has not
+> started.** The historical 2026-09-07/09-09 checkpoints above keep their original wording.
+
 ## Consensus (2026-09-07, resumed after explicit user confirmation)
 
 - Deliver a real Codex + local test iteration path for non-preset operators;
@@ -52,7 +80,7 @@
 | T4 | Non-preset Mission API/TUI and automatic iteration | at least three operator families; no per-operator workflow branches; source/operator/hardware preserved |
 | T5 | Bounded I/O, preparation, queue/round budgets, cancellation and recovery | stalled backend still permits query/stop; duplicate submission, restart, uncertain cancellation and corrupt results |
 | T6 | Experience repository, services and round integration | versions, project scope, human guidance, evidence idempotency, cross-Mission retrieval and provenance |
-| T7 | Real Codex E2E, regressions and contracts | actual patches/CPU results; adoption, rollback, continued rounds and budget terminal outcomes; full gates |
+| T7 | Real Agent E2E (provider-neutral; acceptance per provider), regressions and contracts | actual patches/CPU or shared-GPU results; adoption, rollback, continued rounds and budget terminal outcomes; full gates |
 
 ## Execution roles and file ownership
 
@@ -228,6 +256,11 @@ explicit `needs_human`/quarantine state rather than a fake completion. Do not
 substitute contract doubles, the CPU fixture, or a fabricated candidate for
 this gate.
 
+> Current reading (2026-09-12): this is a historical Codex-path boundary, not a
+> requirement that acceptance be Codex-only. The accepted real two-round run used
+> Claude Code + local shared GPU (see the status entry above); the Codex path still
+> needs its own independent verification, and neither proves the other.
+
 ## Final regression evidence (2026-09-07, UTC+8)
 
 The final command returned exit code 0 after the fixed manual-admission repair.
@@ -267,6 +300,11 @@ acceptance -> integrated fault injection. Shared-GPU
 trusted experience receipts, generic import, package validation, queue terminal
 states and cancellation barriers are wired; do not substitute contract doubles
 or the legacy CPU fixture for the remaining acceptance conditions.
+
+> Historical sequence (2026-09-07). The provider-neutral path has since produced an
+> accepted real two-round run under Claude Code + local shared GPU; see the status
+> entry at the top. This does not close the Codex-specific reduction/normalization
+> gap, and it does not constitute N=20 stability or Phase 2/3 completion.
 
 ## P0/P1 completion checkpoint (2026-09-09, UTC+8)
 

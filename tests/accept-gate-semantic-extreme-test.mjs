@@ -56,6 +56,13 @@ const state = {
 const accepted = evaluateAcceptGate(state, result);
 assert.equal(accepted.passed, true);
 assert.ok(accepted.passedRules.includes('semantic.snapshot_binding'));
+// P2_EVIDENCE_ACCEPTANCE.md: a frozen semantic binding makes the comparison
+// trustworthy, it is not publication authority. This result is format-only
+// with an explicit liveHardware boolean and no diagnostic status/source
+// content, so it may drive development but must stay nonpublishable.
+assert.equal(accepted.decision.execution.source, 'local-c500-adapter');
+assert.equal(accepted.publishable, false);
+assert.notEqual(accepted.decision.publication.status, 'allowed');
 
 const missing = evaluateAcceptGate({ ...state, benchmark: { ...state.benchmark, semanticBinding: null } }, { ...result, semanticBinding: null });
 assert.equal(missing.passed, false);

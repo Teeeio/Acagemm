@@ -1,0 +1,6 @@
+
+> operator-studio-mvp@0.1.0 test:shared-gpu-acceptance
+> node tests/shared-gpu-acceptance-test.mjs
+
+[shared-gpu-acceptance] archived P1 audit replayed read-only
+[shared-gpu-acceptance] continuation audit, safe budget terminal, family outcome, config fingerprint and run ledger contracts passed without GPU or Agent

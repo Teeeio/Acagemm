@@ -1,4 +1,5 @@
 import { loadProductionState, rootDir, testerHome } from './production-api.mjs';
+import { selectEvidenceDecision } from './workflow-summary.mjs';
 import { formatExactTokenCount } from '../../client-runtime/token-usage.mjs';
 import { normalizeOperatorLanguage } from '../../client-runtime/operator-language.mjs';
 
@@ -20,6 +21,77 @@ export const loadTuiState = async () => {
 
 const value = (input, fallback = '--') => input == null || input === '' ? fallback : input;
 const eventLabel = (event) => `${event.createdAt || event.time || '--'} ${event.type || event.title || 'event'}`;
+
+const EXECUTION_KIND_LABELS = Object.freeze({ live: 'live', simulation: 'simulation', cpu: 'cpu', unknown: 'unknown' });
+
+// Read-only view of the versioned evidence decision. Publication/adoption are
+// never inferred from `publishable` or `liveHardware`; a missing decision stays
+// unknown. `legacyKind` only reads explicit provenance strings for historical
+// reports that predate the decision contract.
+const legacyExecutionKind = (environments = []) => {
+  const sources = environments
+    .filter(Boolean)
+    .map((environment) => String(environment.source || environment.executionMode || '').toLowerCase())
+    .filter(Boolean);
+  if (sources.some((source) => source.includes('simulat') || source.includes('mock') || source.includes('fixture'))) return 'simulation';
+  if (sources.some((source) => source.includes('cpu-e2e') || source === 'cpu' || source.includes('-cpu'))) return 'cpu';
+  const declared = sources.filter((source) => !['unknown', 'unavailable', 'none', 'null', 'n/a', 'na', 'undefined'].includes(source));
+  return declared.length ? 'live' : null;
+};
+
+const evidenceProjection = ({ state = {}, mission = null, benchmark = {}, best = {}, tasks = [] }) => {
+  const review = state.decisionReview || mission?.decisionReview || {};
+  const benchmarkCandidate = benchmark.candidate || {};
+  const benchmarkCandidateId = benchmarkCandidate.id || state.appliedCandidateId || null;
+  const candidateEvaluations = Array.isArray(state.candidateEvaluations) ? state.candidateEvaluations : [];
+  const appliedCandidate = candidateEvaluations.find((candidate) => candidate.id === benchmarkCandidateId) || {};
+  const currentIdentity = {
+    candidateId: benchmarkCandidateId,
+    candidateDigest: benchmarkCandidate.digest || appliedCandidate.patchDigest || null,
+    runId: benchmark.runId || null,
+  };
+  const bestIdentity = {
+    candidateId: best.candidateId || null,
+    candidateDigest: best.candidateDigest || best.digest || null,
+    runId: best.evidenceRunId || best.runId || null,
+  };
+  // Only a decision bound to this benchmark candidate/run, or to this
+  // currentBest candidate, is projected; nothing is defaulted across
+  // candidates and a missing decision stays unknown.
+  const current = selectEvidenceDecision(
+    currentIdentity,
+    benchmark.evidenceDecision,
+    review.gate?.decision,
+    appliedCandidate.acceptGate?.decision,
+  );
+  const bestDecision = selectEvidenceDecision(bestIdentity, best.evidenceDecision, best.acceptGate?.decision)
+    || (bestIdentity.candidateId ? selectEvidenceDecision(bestIdentity, current) : null);
+  return {
+    current,
+    best: bestDecision,
+    legacyKind: legacyExecutionKind([benchmark.result?.environment, ...tasks.map((task) => task?.result?.environment)]),
+  };
+};
+
+const publicationNote = (publication = {}) => publication.status === 'allowed'
+  ? '可发布'
+  : publication.status === 'waiting_external_verification'
+    ? '待外部验证'
+    : '不可发布';
+
+const executionEvidenceText = (evidence = {}) => {
+  const decision = evidence.current || evidence.best || null;
+  if (decision) {
+    const parts = [EXECUTION_KIND_LABELS[decision.execution.kind] || decision.execution.kind];
+    if (decision.execution.source) parts.push(`source ${decision.execution.source}`);
+    if (decision.publication.status !== 'allowed') parts.push(publicationNote(decision.publication));
+    return parts.join(' · ');
+  }
+  if (evidence.legacyKind) return evidence.legacyKind;
+  return 'unknown（无版本化决策）';
+};
+
+const statusWithReasons = (status = 'unknown', reasons = []) => `${status}${reasons.length ? ` · ${reasons.join(', ')}` : ''}`;
 
 const hardTerminalStatuses = new Set(['completed', 'published', 'archived', 'failed', 'cancelled']);
 const completedTaskStatuses = new Set(['completed', 'failed', 'cancelled']);
@@ -160,11 +232,31 @@ export const deriveWorkflowTopology = ({ state = {}, mission = null, tasks = [] 
       || null;
     const rolledBack = rollbackIds.has(id);
     const adopted = adoptedId === id;
+    const candidateDecision = selectEvidenceDecision(
+      { candidateId: candidate.id || null, candidateDigest: candidate.digest || null, runId: task.payload?.requestId || null },
+      gate?.decision,
+      candidate.acceptGate?.decision,
+    );
     let gateStatus = 'pending';
     let disposition = task.status === 'running' ? 'testing' : task.status || 'pending';
     if (rolledBack) {
       gateStatus = 'rejected';
       disposition = 'rollback complete';
+    } else if (candidateDecision) {
+      // Versioned decision wins over the flat Gate booleans.
+      if (candidateDecision.adoption.status === 'allowed') {
+        gateStatus = 'passed';
+        disposition = 'adopted';
+      } else if (candidateDecision.adoption.status === 'reference') {
+        gateStatus = 'rejected';
+        disposition = 'reference';
+      } else if (candidateDecision.adoption.status === 'waiting_external_verification') {
+        gateStatus = 'pending';
+        disposition = 'waiting external verification';
+      } else {
+        gateStatus = 'rejected';
+        disposition = 'blocked';
+      }
     } else if (adopted) {
       gateStatus = 'passed';
       disposition = 'adopted';
@@ -348,8 +440,10 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
   const activeTasks = tasks.filter((task) => !completedTaskStatuses.has(task.status)).length;
   const queue = queueEntries(tasks);
   const currentActivity = latestAgentActivity(state.agent || {});
-  const simulation = benchmark.result?.environment?.source === 'simulation'
-    || tasks.some((task) => task.result?.environment?.source === 'simulation');
+  const evidence = evidenceProjection({ state, mission: active, benchmark, best, tasks });
+  const activeDecision = evidence.current || evidence.best || null;
+  const executionKind = activeDecision?.execution.kind || evidence.legacyKind || 'unknown';
+  const simulation = executionKind === 'simulation';
 
   let statusLabel = missionStatus;
   if (needsHuman) statusLabel = 'needs_human';
@@ -361,7 +455,7 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
   let banner = 'READY / publish a Mission to begin';
   if (needsHuman) banner = `ACTION REQUIRED / ${iteration.loopStatusReason || 'human input required'}${failureCode ? ` · ${failureCode}` : ''}`;
   else if (paused) banner = `PAUSED / ${iteration.loopStatusReason || 'operator pause'}`;
-  else if (terminal) banner = `${missionStatus === 'failed' || loopStatus === 'failed' ? 'FAILED' : 'COMPLETED'}${simulation ? ' / simulation only' : ''}`;
+  else if (terminal) banner = `${missionStatus === 'failed' || loopStatus === 'failed' ? 'FAILED' : 'COMPLETED'}${executionKind === 'simulation' ? ' / simulation only' : executionKind === 'cpu' ? ' / cpu only' : ''}`;
   else if (benchmark.status === 'running') banner = `TESTING / ${benchmark.progress ?? 0}%`;
   else if (['running', 'executing', 'awaiting_action'].includes(state.agent?.status)) banner = `AGENT / ${state.agent?.phase || 'working'}`;
   else if (hasMission) banner = `ACTIVE / ${state.stage || active.stage || missionStatus}`;
@@ -387,7 +481,7 @@ export const deriveTuiViewModel = ({ state = {}, mission = null, tasks = [] } = 
     '[Q] Quit',
   ].filter(Boolean);
 
-  return { actions, activeTasks, banner, currentActivity, displayedRounds, failure: failure ? { code: failureCode || 'TASK_FAILED', message: failureMessage || '任务执行失败' } : null, hasMission, hotkeys, needsHuman, paused, queue, simulation, statusLabel, terminal };
+  return { actions, activeTasks, banner, currentActivity, displayedRounds, evidence: { ...evidence, executionKind, source: evidence.current ? 'benchmark.evidenceDecision' : evidence.best ? 'currentBest.evidenceDecision' : evidence.legacyKind ? 'legacy-explicit-source' : 'none' }, failure: failure ? { code: failureCode || 'TASK_FAILED', message: failureMessage || '任务执行失败' } : null, hasMission, hotkeys, needsHuman, paused, queue, simulation, statusLabel, terminal };
 };
 
 export const resolveDashboardCommand = ({ input = '', key = {}, viewModel, busy = false } = {}) => {
@@ -416,6 +510,8 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
   const tokenCoverage = tokenUsage.coverage || '0/0 runs exact';
   const implementation = normalizeOperatorLanguage(active.implementation);
   const semantic = deriveSemanticAlignment({ state, mission: active });
+  const displayDecision = view.evidence?.current || view.evidence?.best || null;
+  const bestDecision = view.evidence?.best || null;
   return [
     'C550 Production Workflow Tester',
     `  backend     ${health.testBackend?.kind || '--'}${health.testBackend?.mock ? ' (simulation)' : ''}`,
@@ -443,16 +539,26 @@ export const renderDashboardSnapshot = ({ state = {}, mission = null, health = {
     'Evidence',
     `  baseline    ${state.baseline?.status || '--'} / ${state.baseline?.kind || '--'}`,
     `  benchmark   ${benchmark.status || '--'}${benchmark.progress != null ? ` ${benchmark.progress}%` : ''}`,
+    `  decision    ${displayDecision ? `${displayDecision.schemaVersion}${displayDecision.policyVersion ? ` · ${displayDecision.policyVersion}` : ''} · ${view.evidence.source}` : 'unknown · 无版本化决策'}`,
+    `  execution   ${executionEvidenceText(view.evidence)}`,
+    // Compatibility projection for pre-decision records only; it is never used
+    // when a versioned decision exists and never authorizes publication.
+    ...(displayDecision ? [] : [`  live C550   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`]),
+    `  correctness ${displayDecision ? (displayDecision.correctness.passed ? 'passed' : 'failed') : 'unknown（无版本化决策）'}`,
+    `  bench valid ${displayDecision ? (displayDecision.benchmark.valid ? 'valid' : 'invalid') : 'unknown（无版本化决策）'}`,
+    `  adoption    ${displayDecision ? statusWithReasons(displayDecision.adoption.status, displayDecision.adoption.reasons) : 'unknown（无版本化决策）'}`,
+    `  publication ${displayDecision ? statusWithReasons(displayDecision.publication.status, displayDecision.publication.reasons) : 'unknown · 不可发布（无版本化决策）'}`,
     ...(view.failure ? [`  error       ${view.failure.code}: ${view.failure.message}`] : []),
     `  task        ${benchmark.testTaskId || '--'}`,
     `  queue       ${view.activeTasks} active / ${tasks.length} total`,
     ...view.queue.map((entry) => `  queue item  ${entry.line}`),
-    `  live C550   ${benchmark.result?.environment?.liveHardware === true ? 'yes' : benchmark.result?.environment?.source === 'simulation' ? 'simulation' : '--'}`,
     '',
     'Current Best',
     `  candidate   ${best.candidateId || '--'}`,
     `  value       ${value(best.value)}`,
     `  improvement ${value(best.improvement)}`,
+    `  adoption    ${bestDecision ? statusWithReasons(bestDecision.adoption.status, bestDecision.adoption.reasons) : 'unknown（无版本化决策）'}`,
+    `  publication ${bestDecision ? statusWithReasons(bestDecision.publication.status, bestDecision.publication.reasons) : 'unknown · 不可发布（无版本化决策）'}`,
     '',
     'Events',
     ...(events.length ? events.map((event) => `  ${eventLabel(event)}`) : ['  --']),

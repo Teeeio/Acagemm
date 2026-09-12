@@ -181,8 +181,8 @@ try {
     };
     state.appliedCandidateId = candidateId;
     state.candidateEvaluations = [
-      { id: candidateId, title: `${candidateId} vectorized load`, change: 'merge boundary copies into one vectorized load', files: ['run.py'], patchDigest: patchDigestRaw, candidateGenerationPath: 'structured_edit', degraded: false },
-      { id: priorCandidateId, title: 'prior adopted best', change: 'prior direction', files: ['run.py'], patchDigest: sha256Hex(`${scenario.name}:prior`), status: 'active', classification: 'eligible', decision: 'adopted' },
+      { id: candidateId, title: `${candidateId} vectorized load`, change: 'merge boundary copies into one vectorized load', files: ['run.py'], patchDigest: `sha256:${patchDigestRaw}`, candidateGenerationPath: 'structured_edit', degraded: false },
+      { id: priorCandidateId, title: 'prior adopted best', change: 'prior direction', files: ['run.py'], patchDigest: `sha256:${sha256Hex(`${scenario.name}:prior`)}`, status: 'active', classification: 'eligible', decision: 'adopted' },
     ];
     state.currentBest = { candidateId: priorCandidateId, version: 'cnd.00', value: currentBestValue, improvement: '−20.0%', status: 'active', measurements: [{ profile: 'primary', value: currentBestValue }] };
     state.publishedAssets = [{ id: `asset.${priorCandidateId}`, sourceCandidate: priorCandidateId, status: 'validated', version: 'v1.0' }];
@@ -281,6 +281,12 @@ try {
   {
     const scenario = await createScenario({ name: 'connectivity' });
     const seed = seedRoundOne({ scenario });
+    // The production projection stores exactly one versioned decision; the
+    // candidate gate and the benchmark must share that same value.
+    const seededDecision = structuredClone(scenario.state.benchmark.evidenceDecision);
+    assert.ok(seededDecision, 'the production projection must store a versioned evidence decision');
+    assert.equal(seededDecision.schemaVersion, 'operator-studio.evidence-decision/v1');
+    assert.deepEqual(scenario.state.candidateEvaluations[0].acceptGate.decision, seededDecision, 'candidate gate must carry the same decision value');
 
     // The execution target came from the real snapshot projection, not from mission.hardware.
     assert.deepEqual(scenario.state.iterationStats.resolvedTarget.hardware, ['nvidia-gpu']);
@@ -337,6 +343,15 @@ try {
     assert.equal(facts.gate.failedRules.includes('performance.target'), true);
     assert.ok(facts.gate.summary.includes('未达到性能目标'));
     assert.equal(facts.decision.outcome, 'reference');
+    // The versioned decision is frozen verbatim into the round facts and travels
+    // to the next round through the real prompt. Nothing is re-derived from a
+    // legacy boolean and no field is hand-filled by this test.
+    assert.ok(facts.gate.evidenceDecision, 'the archived gate must carry the projected decision');
+    assert.deepEqual(facts.gate.evidenceDecision, seededDecision, 'archived decision must be the same value the production projection stored');
+    assert.equal(facts.gate.evidenceDecision.execution.kind, 'live');
+    assert.deepEqual(facts.gate.evidenceDecision.publication.reasons, ['publication.restricted_environment']);
+    assert.ok(roundTwo.prompt.includes('operator-studio.evidence-decision/v1'), 'the next-round prompt must carry the decision schema version');
+    assert.ok(roundTwo.prompt.includes('publication.restricted_environment'), 'the next-round prompt must carry the publication blocking reason');
     assert.equal(facts.rollback.performed, true);
     assert.equal(facts.rollback.status, 'performed');
     assert.equal(facts.rollback.checkpointId, 'cp-round-1');
@@ -692,6 +707,10 @@ try {
     legacy.projectState.resetMissionRunState(legacy.state, 'legacy goal');
     assert.equal(legacy.state.iterationStats.roundFacts.previous.roundId, null);
     assert.equal(legacy.state.iterationStats.roundFacts.previous.roundIdSource, 'unknown');
+    // A legacy round that never produced a versioned decision must not gain a
+    // fabricated gate/decision in its archived facts.
+    assert.equal(legacy.state.iterationStats.roundFacts.gate, null, 'legacy round facts must not invent an evidence decision');
+    assert.equal(legacy.state.runHistory[0].roundFacts.gate, null);
     // The raw legacy field may fall back to the live budget, but it is explicitly marked as such
     // and sourceRoundId stays null, so it is never mistaken for the original round identity.
     assert.equal(legacy.state.runHistory[0].sourceRoundId, null);

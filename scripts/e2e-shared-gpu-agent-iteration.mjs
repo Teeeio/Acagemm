@@ -1,31 +1,67 @@
 import assert from 'node:assert/strict';
 import { spawn, execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { resolvePythonExecutable } from '../client-runtime/platform-runtime.mjs';
+import { EXPERIENCE_SELECTION_POLICY_VERSION } from '../client-runtime/experience-contract.mjs';
+import {
+  GPU_ATTEMPT_SCHEMA_VERSION, GPU_SUMMARY_SCHEMA_VERSION, ROUND_FACTS_SCHEMA_VERSION,
+  budgetTerminalEvidence, buildConfigFingerprint, combineAttemptOutcome, digestJson,
+  evaluateFamilyOutcome, hexDigest, verifyContinuationAudit,
+} from './shared-gpu-acceptance.mjs';
 
 // Acceptance driver only: setup commands, then read-only observation of the
 // production autopilot. No candidate injection, fake provider, Gate override,
 // second scheduler or direct Runtime state mutation.
+//
+// Default provider is claude-code so the GPU harness matches the main acceptance
+// wording (TEAM_HANDOFF §3.3/§10.3); codex-cli is an explicit override.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exec = promisify(execFile);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const mode = process.env.E2E_AGENT_RUNTIME || 'codex-cli';
-// Keep live operator-generation acceptance on the cost-conscious GPT-5.6 Sol
-// tier by default; callers can override with GPT-5.5 or another approved model.
+const mode = process.env.E2E_AGENT_RUNTIME || 'claude-code';
+// Codex-only model tier; ignored by other providers so the recorded config never
+// claims a model the provider does not use.
 const codexModel = process.env.OPERATOR_CODEX_MODEL || 'gpt-5.6-sol';
+// The model is not exposed by the Runtime descriptor, so an env/configured
+// value stays "declared" (non-comparable) and an absent one stays "unknown".
+const declaredModelValue = String(process.env.E2E_AGENT_MODEL || '').trim();
+const declaredModel = declaredModelValue || (mode === 'codex-cli' ? codexModel : 'unknown');
+const declaredModelSource = declaredModelValue
+  ? 'declared'
+  : (mode === 'codex-cli' ? 'configured-default' : 'unknown');
 const limit = Number(process.env.E2E_GPU_TIMEOUT_MS || 12 * 60_000);
 const families = (process.env.E2E_GPU_FAMILIES || 'affine,reduction,normalization').split(',');
 const desiredTasks = Number(process.env.E2E_GPU_CANDIDATE_TASKS || 2);
 assert.ok(Number.isFinite(limit) && limit >= 30_000 && limit <= 30 * 60_000);
 assert.ok(Number.isInteger(desiredTasks) && desiredTasks >= 1 && desiredTasks <= 3);
+const mainAgentBudgetMs = Number(process.env.OPERATOR_MAIN_AGENT_BUDGET_MS || 180_000);
+const logicalCleanupMs = Number(process.env.OPERATOR_CODEX_LOGICAL_CLEANUP_MS || 60_000);
+
+const matrix = {
+  environments: ['local-shared-gpu'], stages: ['Correctness', 'Full Benchmark'], correctnessCases: 4, warmup: 3, repeats: 10,
+  testSpec: { schemaVersion: 'operator-studio.test-spec/v1',
+    correctness: { requestedCases: 4, requiredCategories: ['minimal', 'representative', 'boundary', 'ragged'], atol: 1e-5, rtol: 1e-5, requireNamedCases: true },
+    benchmark: { requiredProfiles: ['primary', 'small'], primaryProfile: 'primary', warmup: 3, repeats: 10 } },
+};
+const expressions = {
+  affine: "torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)",
+  reduction: "(inputs['x'] * inputs['y']).sum(dim=-1)",
+  normalization: "inputs['x'] * torch.rsqrt((inputs['x'] * inputs['x']).mean(dim=-1, keepdim=True) + 1e-5)",
+};
+const sourceFor = (family) => `import torch\n\ndef inputs_for(rows, cols):\n    x = torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return ${expressions[family]}\n\ndef run(inputs):\n    # Initial implementation deliberately does one redundant device copy.\n    value = ${expressions[family]}\n    return value.clone()\n`;
+
 const parent = path.join(root, '.tmp-real-agent');
 await mkdir(parent, { recursive: true });
 const runRoot = await mkdtemp(path.join(parent, 'shared-gpu-'));
+const attemptPath = path.join(runRoot, 'attempt.json');
+const summaryPath = path.join(runRoot, 'summary.json');
+const promptAuditDir = path.join(runRoot, 'bridge', 'prompt-audits');
+const runtimeLogPath = path.join(runRoot, 'runtime.log');
 console.log('[gpu-agent-e2e] retained artifacts: ' + runRoot);
 const reservePort = () => new Promise((resolve, reject) => {
   const server = createServer(); server.on('error', reject);
@@ -34,15 +70,144 @@ const reservePort = () => new Promise((resolve, reject) => {
 const port = await reservePort();
 const base = `http://127.0.0.1:${port}`;
 let exit = null;
+let runtimeSpawned = false;
+let child = null;
 const logs = [];
 const writes = [];
-const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
+const summaries = [];
+const familyTargets = [];
+
+// --- code/config provenance (read-only) -----------------------------------
+const gitText = async (args) => {
+  try { const { stdout } = await exec('git', args, { cwd: root, windowsHide: true }); return String(stdout).trim(); }
+  catch { return null; }
+};
+// Observable provider CLI version. An env/self-reported value is only
+// "declared" — it never proves what ran and never makes a group N-comparable. If
+// it cannot be probed, record "unknown" — never guess.
+const probeCliVersion = async (runtime) => {
+  const explicit = String(process.env.E2E_AGENT_CLI_VERSION || '').trim();
+  if (explicit) return { version: explicit, source: 'declared' };
+  const bin = runtime === 'codex-cli' ? (process.env.OPERATOR_CODEX_BIN || 'codex')
+    : runtime === 'claude-code' ? (process.env.OPERATOR_CLAUDE_BIN || 'claude') : null;
+  if (!bin) return { version: 'unknown', source: 'unknown' };
+  try {
+    const { stdout } = await exec(bin, ['--version'], { cwd: root, windowsHide: true, timeout: 5_000, shell: process.platform === 'win32' });
+    const version = String(stdout).split(/\r?\n/u).map((line) => line.trim()).filter(Boolean)[0] || '';
+    return version ? { version, source: 'probe' } : { version: 'unknown', source: 'unknown' };
+  } catch {
+    return { version: 'unknown', source: 'unknown' };
+  }
+};
+// Actual content digest of the source tree that participates in the run
+// (driver/observer, Runtime, round services, Gate, experience contract). This is
+// what makes an uncommitted edit change the fingerprint, not just the commit id.
+const SOURCE_DIGEST_FILES = [
+  'scripts/e2e-shared-gpu-agent-iteration.mjs',
+  'scripts/shared-gpu-acceptance.mjs',
+  'scripts/summarize-gpu-agent-runs.mjs',
+  'client-runtime/agent-runtime.mjs',
+  'client-runtime/mission-project-state.mjs',
+  'client-runtime/application/agent-round-service.mjs',
+  'client-runtime/application/round-experience-service.mjs',
+  'client-runtime/experience-contract.mjs',
+  'client-runtime/application/benchmark-command.mjs',
+];
+const collectCodeManifest = async () => {
+  const commit = await gitText(['rev-parse', 'HEAD']);
+  const porcelain = await gitText(['status', '--porcelain']);
+  const dirtyFiles = porcelain ? porcelain.split(/\r?\n/u).filter(Boolean) : [];
+  const sourceDigests = [];
+  const indexed = await gitText(['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--',
+    'client-runtime', 'tools', 'scripts', 'package.json', 'package-lock.json']);
+  const sources = [...new Set([...SOURCE_DIGEST_FILES, ...(indexed ? indexed.split('\0').filter(Boolean) : [])])].sort();
+  for (const relative of sources) {
+    try {
+      const bytes = await readFile(path.join(root, relative));
+      sourceDigests.push({ path: relative, sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` });
+    } catch {
+      sourceDigests.push({ path: relative, sha256: null });
+    }
+  }
+  return {
+    commit,
+    dirty: porcelain === null ? null : dirtyFiles.length > 0,
+    dirtyFileCount: porcelain === null ? null : dirtyFiles.length,
+    contentDigest: indexed !== null && sourceDigests.every((entry) => entry.sha256) ? digestJson(sourceDigests) : null,
+    sourceDigests,
+  };
+};
+
+const cliVersion = await probeCliVersion(mode);
+const codeManifest = await collectCodeManifest();
+const config = {
+  driver: { schemaVersion: GPU_ATTEMPT_SCHEMA_VERSION, script: 'scripts/e2e-shared-gpu-agent-iteration.mjs' },
+  provider: {
+    runtime: mode,
+    cliVersion: cliVersion.version,
+    cliVersionSource: cliVersion.source,
+    model: declaredModel,
+    modelSource: declaredModelSource,
+  },
+  backend: { kind: 'local-shared-gpu', executionMode: 'gpu', publishable: false },
+  // Requested target; the terminal attempt replaces these with the target the
+  // real runner actually reported (resolvedTarget from production evidence).
+  // Per-run identifiers such as sourceRunId stay OUT of config (observability
+  // only, in attempt.observedTargets) so they can never enter the fingerprint.
+  hardware: ['nvidia-gpu'],
+  architecture: [],
+  device: null,
+  driverVersion: null,
+  families: [...families],
+  candidateTasks: desiredTasks,
+  matrix: structuredClone(matrix),
+  promptPolicy: {
+    experienceSelectionPolicyVersion: EXPERIENCE_SELECTION_POLICY_VERSION,
+    roundFactsSchemaVersion: ROUND_FACTS_SCHEMA_VERSION,
+  },
+  budgets: { missionBudgetMs: limit, mainAgentBudgetMs, logicalCleanupMs, taskTimeoutSeconds: 120 },
+  code: codeManifest,
+};
+const baseAttempt = {
+  schemaVersion: GPU_ATTEMPT_SCHEMA_VERSION,
+  attemptId: path.basename(runRoot),
+  runRoot,
+  phase: 'running',
+  status: 'running',
+  startedAt: new Date().toISOString(),
+  endedAt: null,
+  outcome: null,
+  fullSuccess: null,
+  runtime: mode,
+  provider: config.provider,
+  backend: config.backend,
+  config,
+  families: [...families],
+  candidateTasks: desiredTasks,
+  code: codeManifest,
+  observedTargets: [],
+  completedFamilies: [],
+  unfinishedFamilies: [...families],
+  familyOutcomes: [],
+  failure: null,
+  cleanup: { runtimeSpawned: false, runtimeExit: null, artifactsRetained: true, artifactsRoot: runRoot },
+  evidence: { runRoot, attemptPath, summaryPath, promptAuditDir, runtimeLog: runtimeLogPath },
+};
+// Write "running" BEFORE the Runtime starts so a killed/interrupted attempt is
+// still visible in the ledger instead of vanishing.
+await writeFile(attemptPath, JSON.stringify(baseAttempt, null, 2));
+
+let missionId;
+let failure;
+let terminalOutcome = 'failure';
+try {
+child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
   cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...process.env, API_PORT: String(port), SERVE_WEB: 'false', OPERATOR_RUNTIME_MODE: mode,
     OPERATOR_CODEX_MODEL: codexModel,
     OPERATOR_AUTO_TICK: '1', OPERATOR_AUTO_TICK_INTERVAL_MS: '5000',
-    OPERATOR_CODEX_LOGICAL_CLEANUP_MS: process.env.OPERATOR_CODEX_LOGICAL_CLEANUP_MS || '60000',
-    OPERATOR_MAIN_AGENT_BUDGET_MS: '180000', OPERATOR_TEST_BACKEND: 'local-shared-gpu',
+    OPERATOR_CODEX_LOGICAL_CLEANUP_MS: String(logicalCleanupMs),
+    OPERATOR_MAIN_AGENT_BUDGET_MS: String(mainAgentBudgetMs), OPERATOR_TEST_BACKEND: 'local-shared-gpu',
     OPERATOR_GPU_PYTHON: resolvePythonExecutable({ rootDir: root }),
     OPERATOR_LOCAL_CPU: '0', OPERATOR_LOCAL_C500_MOCK: '0', OPERATOR_LOCAL_C500_SIMULATION: '0',
     OPERATOR_LOCAL_C500_COMMAND: '', OPERATOR_LOCAL_C500_TIMEOUT_SECONDS: '120',
@@ -51,6 +216,7 @@ const child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
     OPERATOR_BRIDGE_DIR: path.join(runRoot, 'bridge'),
   },
 });
+runtimeSpawned = true;
 child.stdout.on('data', (value) => logs.push(String(value)));
 child.stderr.on('data', (value) => logs.push(String(value)));
 child.on('error', (error) => { exit = { error: error.message }; });
@@ -64,22 +230,46 @@ const request = async (pathname, body) => {
   if (!response.ok) throw Object.assign(new Error(`${pathname}: ${response.status} ${JSON.stringify(value)}`), { code: value.code });
   return value;
 };
-const matrix = {
-  environments: ['local-shared-gpu'], stages: ['Correctness', 'Full Benchmark'], correctnessCases: 4, warmup: 3, repeats: 10,
-  testSpec: { schemaVersion: 'operator-studio.test-spec/v1',
-    correctness: { requestedCases: 4, requiredCategories: ['minimal', 'representative', 'boundary', 'ragged'], atol: 1e-5, rtol: 1e-5, requireNamedCases: true },
-    benchmark: { requiredProfiles: ['primary', 'small'], primaryProfile: 'primary', warmup: 3, repeats: 10 } },
+
+// --- read-only observation helpers ----------------------------------------
+const candidateDigestOf = (task) => hexDigest(task?.payload?.candidate?.digest || task?.result?.environment?.candidateDigest);
+const candidateSourceRunIdOf = (task) => task?.payload?.candidate?.sourceRunId
+  || task?.payload?.candidateSourceRunId || null;
+const queueRequestIdOf = (task) => task?.payload?.requestId || null;
+const orderCompleted = (completedTasks) => [...completedTasks].sort((a, b) => {
+  const at = Date.parse(a?.completedAt || '') || 0;
+  const bt = Date.parse(b?.completedAt || '') || 0;
+  return at - bt || String(a?.taskId || a?.id || '').localeCompare(String(b?.taskId || b?.id || ''));
+});
+// The verified candidate's own archive, bound by candidate digest AND the durable
+// queue request id. Never by "the run this harness happened to start first".
+const archivedRoundsForTask = (state, task) => {
+  const digest = candidateDigestOf(task);
+  const queueRequestId = queueRequestIdOf(task);
+  if (!digest || !queueRequestId) return [];
+  return (state?.runHistory || []).filter((round) => hexDigest(round?.candidateDigest) === digest
+    && round?.queueRequestId === queueRequestId);
 };
-const expressions = {
-  affine: "torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)",
-  reduction: "(inputs['x'] * inputs['y']).sum(dim=-1)",
-  normalization: "inputs['x'] * torch.rsqrt((inputs['x'] * inputs['x']).mean(dim=-1, keepdim=True) + 1e-5)",
+// Select the retained pre-send audit for exactly the frozen target round. Never
+// the newest file and never state.agent.runId (which may be a third round or a
+// same-round recovery attempt).
+const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) => {
+  let names = [];
+  try { names = await readdir(auditDir); } catch { return { audit: null, path: null, matched: [] }; }
+  const matched = [];
+  for (const name of names.filter((item) => item.endsWith('.json')).sort()) {
+    const full = path.join(auditDir, name);
+    let parsed;
+    try { parsed = JSON.parse(await readFile(full, 'utf8')); } catch { continue; }
+    if (parsed?.missionId !== missionId || parsed?.roundId !== roundId || parsed?.deliveryStage !== 'prepared-before-send') continue;
+    matched.push({ path: full, runId: parsed.runId || null, createdAt: parsed.createdAt || null, audit: parsed });
+  }
+  const candidates = matched.filter((item) => item.runId && item.runId !== sourceRunId)
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
+      || String(a.runId).localeCompare(String(b.runId)));
+  return { audit: candidates[0]?.audit || null, path: candidates[0]?.path || null, matched };
 };
-const sourceFor = (family) => `import torch\n\ndef inputs_for(rows, cols):\n    x = torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return ${expressions[family]}\n\ndef run(inputs):\n    # Initial implementation deliberately does one redundant device copy.\n    value = ${expressions[family]}\n    return value.clone()\n`;
-const summaries = [];
-let missionId;
-let failure;
-try {
+
   let health;
   for (let attempt = 0; attempt < 120; attempt++) {
     try { health = await request('/api/health'); break; } catch { if (exit) break; await sleep(250); }
@@ -88,6 +278,14 @@ try {
   assert.equal(health.runtime.mode, mode);
   assert.equal(health.runtime.connected, true, JSON.stringify(health.runtime));
   assert.equal(health.testBackend.kind, 'local-shared-gpu');
+  // The live Runtime descriptor is a real observation of the provider CLI
+  // version; it outranks an env declaration or a bare --version probe.
+  const descriptorVersion = typeof health.runtime?.version === 'string' && health.runtime.version.trim()
+    ? health.runtime.version.trim() : null;
+  if (descriptorVersion) {
+    config.provider.cliVersion = descriptorVersion;
+    config.provider.cliVersionSource = 'runtime-descriptor';
+  }
   for (const family of families) {
     assert.ok(Object.hasOwn(expressions, family), 'Unknown family: ' + family);
     const source = sourceFor(family).replace(
@@ -114,6 +312,9 @@ try {
       await sleep(500);
     }
     assert.equal(state.baseline?.status, 'complete', 'Baseline stalled: ' + JSON.stringify(state.benchmark));
+    // Record the target the real runner actually probed, not a declaration.
+    const observedTarget = state.iterationStats?.resolvedTarget || null;
+    if (observedTarget) familyTargets.push({ family, ...structuredClone(observedTarget) });
     console.log(`[gpu-agent-e2e] ${family}: GPU baseline complete`);
     // Auto-tick may start the Agent immediately after baseline completion. Make
     // this acceptance driver idempotent: reuse that run instead of turning a
@@ -141,6 +342,8 @@ try {
     let tasks = [];
     let progress = '';
     let budgetTerminalAccepted = false;
+    let acceptedBudgetEvidence = null;
+    let loopBroke = false;
     while (Date.now() < deadline) {
       state = (await request('/api/state')).state;
       tasks = (await request('/api/operator-tests')).tasks.filter((task) => task.payload?.missionId === missionId);
@@ -148,25 +351,32 @@ try {
       const next = JSON.stringify({ family, stage: state.stage, agent: state.agent?.status, runId: state.agent?.runId, test: state.benchmark?.status, round: state.iterationStats?.round, completed: completed.length, experience: state.iterationStats?.experienceCollection, failure: state.workflowFailure?.code });
       if (next !== progress) { console.log('[gpu-agent-e2e] ' + next); progress = next; }
       await writeFile(path.join(runRoot, family + '-state.json'), JSON.stringify({ state, tasks }, null, 2));
-      // Do not stop at the first completed task: the P0 acceptance must prove
-      // that a rejected/reference Candidate is archived and the production
-      // loop automatically resumes a fresh Agent round.  We still keep the
-      // requested candidate count configurable for GPU cost control, but a
-      // multi-round run is mandatory whenever the default (two tasks) is used.
-      const firstRoundArchived = (state.runHistory || []).some((round) => round.runId === firstRun);
-      const continuedRound = state.agent?.runId && state.agent.runId !== firstRun;
-      const enoughRounds = desiredTasks < 2 || (firstRoundArchived && continuedRound);
-      if (completed.length >= desiredTasks && state.iterationStats?.experienceCollection?.recorded > 0 && enoughRounds) break;
-      // A second Agent round may legitimately exhaust its bounded provider
-      // budget before producing another Candidate. Accept that explicit,
-      // resource-safe terminal only after the first round was archived and the
-      // automatic rollback/continuation evidence is present; never wait for the
-      // outer deadline or treat needs_human as a successful Candidate.
-      const safeBudgetTerminal = desiredTasks >= 2 && state.agent?.status === 'needs_human'
-        && firstRoundArchived && continuedRound && completed.length >= 1
+      // Do not stop at the first completed task: the P2 acceptance must prove that
+      // a rejected/reference Candidate is archived and the production loop
+      // automatically resumes a fresh Agent round. A multi-round run is mandatory
+      // whenever the default (two tasks) is used.
+      const firstVerifiedTask = orderCompleted(completed)[0] || null;
+      const firstMatches = firstVerifiedTask ? archivedRoundsForTask(state, firstVerifiedTask) : [];
+      const firstSourceRound = firstMatches.length === 1 ? firstMatches[0] : null;
+      const firstProducingRunId = firstVerifiedTask
+        ? (candidateSourceRunIdOf(firstVerifiedTask) || firstSourceRound?.runId || null) : null;
+      const continuedRound = Boolean(state.agent?.runId && firstProducingRunId && state.agent.runId !== firstProducingRunId);
+      const enoughRounds = desiredTasks < 2 || (Boolean(firstSourceRound) && continuedRound);
+      if (completed.length >= desiredTasks && state.iterationStats?.experienceCollection?.recorded > 0 && enoughRounds) { loopBroke = true; break; }
+      // A bounded provider/round budget may legitimately stop the loop before a
+      // second Candidate. Only accept that terminal with a recorded budget reason
+      // AND confirmed resource release; needs_human alone is never enough.
+      const budget = budgetTerminalEvidence(state, { missionId, runId: state.agent?.runId ?? null });
+      const safeBudgetTerminal = desiredTasks >= 2 && budget.safe && Boolean(firstSourceRound) && continuedRound
+        && completed.length >= 1
         && ((state.iterationStats?.experienceCollection?.recorded || 0)
           + (state.iterationStats?.experienceCollection?.existing || 0) > 0);
-      if (safeBudgetTerminal) { budgetTerminalAccepted = true; break; }
+      if (safeBudgetTerminal) {
+        budgetTerminalAccepted = true;
+        acceptedBudgetEvidence = budget;
+        loopBroke = true;
+        break;
+      }
       if (['needs_human', 'failed', 'budget_exhausted'].includes(state.iterationStats?.loopStatus)) {
         // A command effect may have committed its state just after this
         // read-only projection. Give the production auto-tick a bounded
@@ -178,108 +388,73 @@ try {
           await sleep(1000);
           continue;
         }
-        throw new Error('Iteration stopped: ' + JSON.stringify(state.iterationStats));
+        throw new Error('Iteration stopped: ' + JSON.stringify({
+          iterationStats: state.iterationStats,
+          workflowFailure: state.workflowFailure,
+          budgetEvidence: budget,
+        }));
       }
       commandRecoveryStartedAt = null;
       if (exit) throw new Error('Runtime exited: ' + JSON.stringify(exit));
       await sleep(1000);
     }
+    if (!loopBroke && Date.now() >= deadline) {
+      throw Object.assign(new Error(`GPU acceptance timed out for ${family} before the two-round path completed`), { code: 'E2E_TIMEOUT' });
+    }
     assert.ok(completed.length >= (budgetTerminalAccepted ? 1 : desiredTasks), 'Insufficient completed real Candidate tasks');
     assert.equal(writes.length, writesAtStart, 'Harness must not drive automatic iterations');
-    const firstRound = (state.runHistory || []).find((round) => round.runId === firstRun);
     const experiences = (await request(`/api/projects/${project.id}/experiences`)).experiences;
+    let sourceRound = null;
+    let candidateSourceRunId = null;
+    let rollbackEvents = [];
     let continuationAudit = null;
     if (desiredTasks >= 2) {
-      assert.ok(firstRound, 'first real Candidate round was not archived before the harness stopped');
-      const firstOutcome = firstRound.decisionReview?.resolution?.outcome;
-      assert.ok(['reference', 'reject'].includes(firstOutcome), `first Candidate unexpectedly resolved as ${firstOutcome}`);
-      assert.ok(state.agent?.runId && state.agent.runId !== firstRun, 'unmet target did not automatically start the next Agent round');
-      const rollbackEvents = (state.runtimeEvents || []).filter((event) => event.type === 'workflow.round_rolled_back');
+      const ordered = orderCompleted(completed);
+      const verifiedTask = ordered[0];
+      assert.ok(verifiedTask, 'no completed real Candidate task to bind the continuation audit to');
+      const verifiedDigest = candidateDigestOf(verifiedTask);
+      const verifiedQueueRequestId = queueRequestIdOf(verifiedTask);
+      assert.ok(verifiedDigest && verifiedQueueRequestId, 'first verified candidate is missing its candidate digest / queue request id');
+      const matches = archivedRoundsForTask(state, verifiedTask);
+      assert.equal(matches.length, 1, `first verified candidate must match exactly one archived round (found ${matches.length})`);
+      sourceRound = matches[0];
+      assert.ok(sourceRound.roundId, 'verified candidate archive has no roundId');
+      candidateSourceRunId = candidateSourceRunIdOf(verifiedTask)
+        || sourceRound.candidateSourceRunId || sourceRound.roundFacts?.previous?.candidateSourceRunId || sourceRound.runId;
+      // Same-round recovery: attribute the evidence to the candidate's persisted
+      // sourceRunId, never to the fixed first Agent run of the harness.
+      const archivedSourceRunId = sourceRound.candidateSourceRunId
+        || sourceRound.roundFacts?.previous?.candidateSourceRunId || null;
+      if (archivedSourceRunId && candidateSourceRunId) {
+        assert.equal(archivedSourceRunId, candidateSourceRunId,
+          'archived candidate source run must equal the persisted candidate.sourceRunId (recovery attempts are not re-attributed)');
+      }
+      const firstOutcome = sourceRound.decisionReview?.resolution?.outcome;
+      assert.ok(['reference', 'reject'].includes(firstOutcome), `verified Candidate unexpectedly resolved as ${firstOutcome}`);
+      assert.ok(state.agent?.runId && state.agent.runId !== candidateSourceRunId, 'unmet target did not automatically start the next Agent round');
+      rollbackEvents = (state.runtimeEvents || []).filter((event) => event.type === 'workflow.round_rolled_back');
       assert.ok(rollbackEvents.length >= 1, 'automatic next round did not record a workspace rollback');
       assert.ok(rollbackEvents.every((event) => event.payload?.workspaceClean === true), 'rollback evidence must confirm a clean workspace');
 
-      // §14.5 continuation observation point. This driver only READS the production pre-send
-      // audit artifact; it does not capture the live provider call, so nothing below claims what
-      // a provider process received or obeyed. Everything asserted is derived from the archived
-      // round facts plus an independently recomputed digest of the audited string.
-      const continuationRunId = state.agent.runId;
-      const continuationAuditPath = path.join(runRoot, 'bridge', 'prompt-audits', `${continuationRunId}.json`);
-      const audit = JSON.parse(await readFile(continuationAuditPath, 'utf8'));
-      assert.equal(audit.deliveryStage, 'prepared-before-send');
-      assert.equal(audit.runId, continuationRunId);
-      const continuationRound = new RegExp(`^${missionId}:round:(\\d+)$`).exec(audit.roundId || '');
-      assert.ok(continuationRound && Number(continuationRound[1]) >= 2, `continuation audit is not a later round of this Mission: ${audit.roundId}`);
-      assert.equal(audit.promptDigest, 'sha256:' + createHash('sha256').update(audit.prompt, 'utf8').digest('hex'));
-      assert.equal(audit.promptBytes, Buffer.byteLength(audit.prompt, 'utf8'));
-      const hex = (value) => (typeof value === 'string' ? value.toLowerCase().replace(/^sha256:/u, '') : null);
-      const expectedCandidateDigest = hex(firstRound.candidateDigest);
-      assert.ok(expectedCandidateDigest && firstRound.candidateId && firstRound.queueRequestId, 'archived round is missing its candidate/queue binding');
-      // Select the round-1 candidate's OWN execution experience by exact evidence binding. A
-      // baseline observation, a human note, or any other candidate must never satisfy this: if
-      // the bound record is absent the acceptance fails instead of falling back.
-      const boundExperiences = experiences.filter((item) => item.source === 'execution'
-        && item.evidence?.missionId === missionId
-        && item.evidence?.candidateId === firstRound.candidateId
-        && hex(item.evidence?.patchDigest) === expectedCandidateDigest
-        && item.evidence?.runId === firstRound.queueRequestId);
-      assert.equal(boundExperiences.length, 1, `round-1 candidate execution experience not uniquely bound (found ${boundExperiences.length})`);
-      const continuationExperience = boundExperiences[0];
-      const selected = (audit.selection?.selected || []).find((item) => item.id === continuationExperience.id && item.version === continuationExperience.version);
-      assert.ok(selected, 'round-2 audited selection must contain the round-1 candidate execution experience');
-      assert.equal(selected.source, 'execution');
-      const promptSection = (label) => {
-        const begin = `----- BEGIN ${label} -----\n`;
-        const end = `\n----- END ${label} -----`;
-        const start = audit.prompt.indexOf(begin);
-        const stop = audit.prompt.indexOf(end, start + begin.length);
-        assert.ok(start >= 0 && stop > start, `audited prompt is missing ${label}`);
-        return JSON.parse(audit.prompt.slice(start + begin.length, stop));
-      };
-      const promptExperience = promptSection('UNTRUSTED EXPERIENCE DATA');
-      const promptItems = promptExperience.items.filter((item) => item.id === continuationExperience.id && item.version === continuationExperience.version);
-      assert.equal(promptItems.length, 1, 'actual prompt must contain the bound experience ID and version exactly once');
-      assert.equal(promptItems[0].content, continuationExperience.content, 'actual prompt must carry the complete, unchanged experience content');
-      assert.equal(promptExperience.versions[continuationExperience.id], continuationExperience.version);
-      assert.equal(promptExperience.contextId, audit.selection.contextId);
-      const continuationFacts = audit.roundFacts;
-      assert.ok(continuationFacts && continuationFacts.schemaVersion === 'operator-studio.round-facts/v1', 'audited round facts are missing');
-      assert.deepEqual(promptSection('MISSION ITERATION CONTEXT'), continuationFacts, 'actual prompt facts must equal the audit sidecar');
-      assert.deepEqual(continuationFacts, firstRound.roundFacts, 'audited facts must equal the frozen source archive');
-      assert.equal(continuationFacts.target.missionId, audit.missionId);
-      assert.equal(continuationFacts.target.missionId, missionId);
-      assert.equal(continuationFacts.target.projectId, audit.projectId);
-      assert.equal(continuationFacts.target.projectId, project.id);
-      assert.equal(continuationFacts.target.roundId, audit.roundId);
-      assert.equal(continuationFacts.previous?.runId, firstRun);
-      assert.equal(continuationFacts.previous?.roundId, firstRound.roundId);
-      assert.equal(continuationFacts.previous?.candidateId, firstRound.candidateId);
-      assert.equal(hex(continuationFacts.previous?.candidateDigest), expectedCandidateDigest);
-      assert.equal(continuationFacts.previous?.queueRequestId, firstRound.queueRequestId);
-      assert.ok(continuationFacts.candidate, 'audited facts must retain the previous candidate summary');
-      assert.ok(continuationFacts.correctness, 'audited facts must retain previous-round correctness');
-      assert.ok(continuationFacts.gate, 'audited facts must retain the previous Accept Gate result');
-      assert.equal(continuationFacts.gate.result, firstOutcome);
-      assert.ok(continuationFacts.rollback, 'audited facts must retain the previous rollback origin');
-      assert.ok(continuationFacts.currentBest, 'audited facts must retain the currentBest asset status');
-      continuationAudit = {
-        path: continuationAuditPath, runId: continuationRunId, roundId: audit.roundId,
-        promptDigest: audit.promptDigest, promptBytes: audit.promptBytes,
-        // These are the pre-send artifact's own bindings, not a live provider receipt.
-        selectedExperience: { id: continuationExperience.id, version: continuationExperience.version, source: continuationExperience.source,
-          evidenceCandidateId: continuationExperience.evidence.candidateId, evidencePatchDigest: continuationExperience.evidence.patchDigest, evidenceRunId: continuationExperience.evidence.runId },
-        facts: { previousRunId: continuationFacts.previous?.runId, previousRoundId: continuationFacts.previous?.roundId,
-          gateResult: continuationFacts.gate?.result, rollbackPerformed: continuationFacts.rollback?.performed ?? null,
-          currentBestCandidateId: continuationFacts.currentBest?.candidateId ?? null },
-        assertions: [
-          'pre-send audit file present for the continuation run',
-          'audited prompt SHA-256 (UTF-8) recomputed independently and matched',
-          'audited prompt UTF-8 byte length recomputed independently and matched',
-          'audited prompt contains the round-1 candidate execution experience ID, version and full content',
-          'audited selection bound by missionId/candidateId/patchDigest/queueRequestId (no baseline or human fallback)',
-          'audited roundFacts retain previous run/round/candidate plus candidate, correctness, gate, rollback and currentBest facts',
-          'this observation reads the prepared-before-send artifact only; it does not observe the live provider',
-        ],
-      };
+      // §14.5 continuation observation point, hardened for P2: the audit must be
+      // the actual pre-send artifact of the round FROZEN in the verified
+      // candidate's own archive target (sourceRound.roundFacts.target.roundId),
+      // never the newest retained audit or the current state.agent.runId.
+      const targetRoundId = sourceRound.roundFacts?.target?.roundId;
+      assert.ok(targetRoundId, 'verified candidate archive has no frozen target roundId');
+      const auditScan = await findRetainedAudit({ auditDir: promptAuditDir, missionId, roundId: targetRoundId, sourceRunId: sourceRound.runId });
+      if (auditScan.audit) {
+        continuationAudit = {
+          path: auditScan.path,
+          matchedAuditsForTargetRound: auditScan.matched.map((item) => item.runId),
+          selectedBy: 'sourceRound.roundFacts.target.roundId',
+          ...verifyContinuationAudit({ audit: auditScan.audit, sourceRound, experiences, missionId, projectId: project.id }),
+        };
+      } else {
+        // A budget-safe terminal may stop before the continuation audit exists;
+        // full two-round success can never pass without it.
+        assert.ok(budgetTerminalAccepted, `no retained pre-send audit for the actual continuation round ${targetRoundId}`);
+      }
     }
     for (const task of completed) {
       assert.equal(task.resourceRelease.confirmed, true);
@@ -292,20 +467,118 @@ try {
     }
     assert.equal(new Set(completed.map((task) => task.payload.candidate.digest)).size, completed.length);
     assert.ok(experiences?.some((item) => item.source === 'execution' && item.verification.publishable === false), 'No trusted experience observation');
-    summaries.push({ family, missionId, firstRun, firstRoundOutcome: firstRound?.decisionReview?.resolution?.outcome || null,
-      budgetTerminalAccepted, continuationAudit,
-      continuedRun: state.agent?.runId || null, rollbackCount: (state.runtimeEvents || []).filter((event) => event.type === 'workflow.round_rolled_back').length,
-      completed: completed.map((task) => ({ taskId: task.taskId, candidateDigest: task.payload.candidate.digest, packageDigest: task.payload.packageDigest })), workflowWritesAfterStart: writes.length - writesAtStart, experienceCount: experiences.length });
+    const familyOutcome = evaluateFamilyOutcome({
+      desiredTasks, completedTasks: completed,
+      // Only the evidence object from budgetTerminalEvidence() may mark a safe
+      // terminal; a bare flag can never be promoted to budget_terminal.
+      budgetTerminal: acceptedBudgetEvidence,
+      continuationAudit, rollbackEvents,
+    });
+    const budgetEvidence = acceptedBudgetEvidence;
+    summaries.push({
+      family, missionId, firstRun, sourceRunId: candidateSourceRunId, sourceRoundId: sourceRound?.roundId || null,
+      sourceRoundTargetRoundId: sourceRound?.roundFacts?.target?.roundId || null,
+      firstRoundOutcome: sourceRound?.decisionReview?.resolution?.outcome || null,
+      outcome: familyOutcome.outcome, fullSuccess: familyOutcome.fullSuccess, outcomeReasons: familyOutcome.reasons,
+      budgetTerminalAccepted, budgetTerminalEvidence: budgetEvidence,
+      continuationAudit, continuedRun: state.agent?.runId || null, rollbackCount: rollbackEvents.length,
+      completed: completed.map((task) => ({ taskId: task.taskId, candidateDigest: task.payload.candidate.digest,
+        candidateSourceRunId: candidateSourceRunIdOf(task), queueRequestId: queueRequestIdOf(task), packageDigest: task.payload.packageDigest })),
+      workflowWritesAfterStart: writes.length - writesAtStart, experienceCount: experiences.length,
+      observedTarget: observedTarget ? { hardware: observedTarget.hardware || [], architecture: observedTarget.architecture || [],
+        device: observedTarget.device || null, driverVersion: observedTarget.driverVersion || null, backend: observedTarget.backend || null } : null,
+    });
+    assert.notEqual(familyOutcome.outcome, 'failure', `GPU family acceptance failed: ${familyOutcome.reasons.join(', ')}`);
     await request('/api/actions/stop-mission', {});
     missionId = null;
   }
-} catch (error) { failure = { message: error.message, stack: error.stack }; }
+} catch (error) { failure = { message: error.message, code: error.code || null, stack: error.stack }; }
 finally {
   // Preserve the entire disposable acceptance project and receipts for audit.
-  if (!exit) child.kill();
-  await Promise.race([new Promise((resolve) => child.once('exit', resolve)), sleep(3000)]);
-  await writeFile(path.join(runRoot, 'runtime.log'), logs.join(''));
-  await writeFile(path.join(runRoot, 'summary.json'), JSON.stringify({ status: failure ? 'failed' : 'passed', runtime: mode, summaries, failure, writes }, null, 2));
+  if (!exit && runtimeSpawned) child.kill();
+  if (runtimeSpawned) await Promise.race([new Promise((resolve) => child.once('exit', resolve)), sleep(3000)]);
+  const observedHardware = [...new Set(familyTargets.flatMap((target) => Array.isArray(target.hardware) ? target.hardware : []).filter(Boolean))].sort();
+  const observedArchitecture = [...new Set(familyTargets.flatMap((target) => Array.isArray(target.architecture) ? target.architecture : []).filter(Boolean))].sort();
+  // Only the target the real runner reported enters the stable config; if it was
+  // never observed the field stays empty (= unknown, never a declared fallback).
+  const observedDevice = familyTargets.find((target) => target.device)?.device || null;
+  const observedDriverVersion = familyTargets.find((target) => target.driverVersion)?.driverVersion || null;
+  const finalConfig = {
+    ...config,
+    hardware: observedHardware,
+    architecture: observedArchitecture,
+    device: observedDevice,
+    driverVersion: observedDriverVersion,
+    observedTarget: {
+      hardware: observedHardware, architecture: observedArchitecture,
+      device: observedDevice, driverVersion: observedDriverVersion,
+    },
+  };
+  const fingerprint = buildConfigFingerprint(finalConfig, { code: codeManifest });
+  const timedOut = failure?.code === 'E2E_TIMEOUT';
+  const outcome = combineAttemptOutcome({ failure, timedOut, familyOutcomes: summaries.map((item) => item.outcome) });
+  terminalOutcome = outcome;
+  const fullSuccess = outcome === 'full_success' && !failure;
+  const completedFamilies = summaries.filter((item) => item.fullSuccess).map((item) => item.family);
+  const unfinishedFamilies = families.filter((family) => !completedFamilies.includes(family));
+  const evidence = { runRoot, attemptPath, summaryPath, promptAuditDir, runtimeLog: runtimeLogPath,
+    stateFiles: families.map((family) => path.join(runRoot, family + '-state.json')) };
+  const terminalAttempt = {
+    ...baseAttempt,
+    phase: 'terminal',
+    status: 'terminal',
+    endedAt: new Date().toISOString(),
+    outcome,
+    fullSuccess,
+    runtime: mode,
+    config: finalConfig,
+    configFingerprint: fingerprint.fingerprint,
+    fingerprintUnknownFields: fingerprint.unknownFields,
+    comparable: fingerprint.comparable,
+    // Per-family observation detail (includes the per-run sourceRunId). Kept for
+    // audit only; it is deliberately excluded from the config fingerprint.
+    observedTargets: familyTargets.map((target) => ({
+      family: target.family || null,
+      hardware: target.hardware || [], architecture: target.architecture || [],
+      device: target.device || null, driverVersion: target.driverVersion || null,
+      backend: target.backend || null, sourceRunId: target.sourceRunId || null,
+    })),
+    completedFamilies,
+    unfinishedFamilies,
+    familyOutcomes: summaries.map((item) => ({
+      family: item.family, outcome: item.outcome, fullSuccess: item.fullSuccess, reasons: item.outcomeReasons,
+      missionId: item.missionId, firstRun: item.firstRun, sourceRunId: item.sourceRunId,
+      sourceRoundId: item.sourceRoundId, continuedRun: item.continuedRun,
+      budgetTerminalAccepted: item.budgetTerminalAccepted, completedCandidates: item.completed.length,
+    })),
+    failure: failure ? { message: failure.message, code: failure.code || null } : null,
+    cleanup: { runtimeSpawned, runtimeExit: exit, artifactsRetained: true, artifactsRoot: runRoot },
+    evidence,
+  };
+  await writeFile(runtimeLogPath, logs.join(''));
+  await writeFile(attemptPath, JSON.stringify(terminalAttempt, null, 2));
+  await writeFile(summaryPath, JSON.stringify({
+    schemaVersion: GPU_SUMMARY_SCHEMA_VERSION,
+    status: outcome === 'full_success' ? 'passed' : outcome === 'budget_terminal' ? 'budget_terminal' : 'failed',
+    outcome,
+    fullSuccess,
+    runtime: mode,
+    config: finalConfig,
+    configFingerprint: fingerprint.fingerprint,
+    fingerprintUnknownFields: fingerprint.unknownFields,
+    comparable: fingerprint.comparable,
+    provider: finalConfig.provider,
+    families: [...families],
+    completedFamilies,
+    unfinishedFamilies,
+    code: codeManifest,
+    attemptPath,
+    summaryPath,
+    evidence,
+    summaries,
+    failure,
+    writes,
+  }, null, 2));
 }
 if (failure) throw new Error(failure.message + '\nArtifacts: ' + runRoot);
-console.log(JSON.stringify({ status: 'passed', runRoot, summaries }, null, 2));
+console.log(JSON.stringify({ status: terminalOutcome, fullSuccess: terminalOutcome === 'full_success', runRoot, summaries }, null, 2));

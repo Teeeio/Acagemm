@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "operator-studio.evidence-archive/v1",
+  "generatedAt": "2026-09-12T13:25:59.7095363Z",
+  "files": [
+    {
+      "path": "consumer-review-probe.json",
+      "bytes": 1511,
+      "sha256": "4a7acaed6fce60e2d95a6b625f0684288ba9c2c76902941899e70fda42f04cf1",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/consumer-review-probe.json",
+      "copyVerified": true
+    },
+    {
+      "path": "e2e-cpu-iteration-final-review.log",
+      "bytes": 1553,
+      "sha256": "ba293c33aded33a068636963f7f467dae1fe3baf950c95c2290ba088dc683a9a",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/e2e-cpu-iteration-final-review.log",
+      "copyVerified": true
+    },
+    {
+      "path": "final-full-gate.json",
+      "bytes": 247,
+      "sha256": "14003dbac10129f6b31130ae90a4ce45bf52c33d301ea6b09705dc3748622a99",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/final-full-gate.json",
+      "copyVerified": true
+    },
+    {
+      "path": "final-full-gate.log",
+      "bytes": 77400,
+      "sha256": "8845f0d918cca59734f0858d13b3a1f88e9916d267c93f54e7cacbbebc29c3ab",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/final-full-gate.log",
+      "copyVerified": true
+    },
+    {
+      "path": "final-review-checks.json",
+      "bytes": 576,
+      "sha256": "3bda4b2a6d160ba10334ac7367137bff2dabec61b24ace0226f9334c6aed3edc",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/final-review-checks.json",
+      "copyVerified": true
+    },
+    {
+      "path": "final-source-manifest.json",
+      "bytes": 77052,
+      "sha256": "55a807bb8600da2402bfeeaffccea8e84ade27dce2164b6c1eb2d15a6f331e41",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/final-source-manifest.json",
+      "copyVerified": true
+    },
+    {
+      "path": "gate-review-probe.json",
+      "bytes": 2181,
+      "sha256": "0662c4204f1b7879a59af692681370b9a02cbf529c75ccd4acf346363fa1cd5f",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/gate-review-probe.json",
+      "copyVerified": true
+    },
+    {
+      "path": "harness-review-probe.json",
+      "bytes": 2176,
+      "sha256": "84238072913e5b78223ad32ef5d6ba8123a189c895dcd11933ee1db8b6ffac0f",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/harness-review-probe.json",
+      "copyVerified": true
+    },
+    {
+      "path": "integration-checks.json",
+      "bytes": 981,
+      "sha256": "4a8923a9f705053dba6ef478b8e625129384124271e2263ec407403af964e3c0",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/integration-checks.json",
+      "copyVerified": true
+    },
+    {
+      "path": "preflight-full-gate.json",
+      "bytes": 292,
+      "sha256": "4603902a8a87e7b99d037409cb1fff475a898678788959ec2b1ee638bc7577a1",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/preflight-full-gate.json",
+      "copyVerified": true
+    },
+    {
+      "path": "preflight-full-gate.log",
+      "bytes": 51656,
+      "sha256": "4f43bcca564f9f6b3bcfe0c5f88cebf5f1de6f67e57a45be0c3db64bb555e832",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/preflight-full-gate.log",
+      "copyVerified": true
+    },
+    {
+      "path": "smoke-before-gate.log",
+      "bytes": 737,
+      "sha256": "d15149d3ffde94b5656925a9cfdae3c51f9c197e7479c17d449560b30af88da7",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/smoke-before-gate.log",
+      "copyVerified": true
+    },
+    {
+      "path": "test-evidence-governance-integration.log",
+      "bytes": 909,
+      "sha256": "e2df5a08acdd117ca6f7fe2d16453c1a7cfae6c7c8ac9bba16dcf0fb1004b299",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/test-evidence-governance-integration.log",
+      "copyVerified": true
+    },
+    {
+      "path": "test-knowledge-state.log",
+      "bytes": 233,
+      "sha256": "503e667608de995ce2d07b56cb04fc8a6c7d4ba3ef47d6954b649178cf2d54dd",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/test-knowledge-state.log",
+      "copyVerified": true
+    },
+    {
+      "path": "test-local-c500-tui-logic.log",
+      "bytes": 394,
+      "sha256": "fa0766f6c8186314932b140b379586aed52aa59ff590896651ab28d4a931b5fb",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/test-local-c500-tui-logic.log",
+      "copyVerified": true
+    },
+    {
+      "path": "test-round-feedback-integration.log",
+      "bytes": 2797,
+      "sha256": "90a2ed9cb49021d21737fda9719f0b630550bdf25bceaf732690fdf477fe86ee",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/test-round-feedback-integration.log",
+      "copyVerified": true
+    },
+    {
+      "path": "test-shared-gpu-acceptance-final-review.log",
+      "bytes": 322,
+      "sha256": "6c393757b43a571c2ac9b085443a8c54f6a2ec8535d14582a3d79c13b492d033",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/test-shared-gpu-acceptance-final-review.log",
+      "copyVerified": true
+    },
+    {
+      "path": "test-smoke-final-review.log",
+      "bytes": 126,
+      "sha256": "244b4fa69ce5bc5855049a24931f857c20aeb7848baa32114ae61240ac1c92ea",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/test-smoke-final-review.log",
+      "copyVerified": true
+    },
+    {
+      "path": "test-workflow-summary.log",
+      "bytes": 369,
+      "sha256": "6b76905ae107cc210e0d33ba773cd2395139ae34d5a62769202df3b6c9c69e4d",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/p2-20260912/test-workflow-summary.log",
+      "copyVerified": true
+    },
+    {
+      "path": "verification.json",
+      "bytes": 775,
+      "sha256": "d89864a94f77ed4e97eaad68b720f29494a11efb0fe757b6b8558c1c991a54f8",
+      "kind": "upstream-derived-verification",
+      "source": "computed from final-full-gate.log and final-source-manifest.json",
+      "copyVerified": null
+    }
+  ],
+  "scope": "Phase2 hardware-free acceptance; no new hardware/provider sample"
+}

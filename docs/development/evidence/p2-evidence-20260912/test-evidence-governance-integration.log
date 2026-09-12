@@ -1,0 +1,12 @@
+
+> operator-studio-mvp@0.1.0 test:evidence-governance-integration
+> node tests/evidence-governance-integration-test.mjs
+
+[evidence-governance] shared-GPU development yields a development asset with 0 autoPublished
+[evidence-governance] simulation yields a simulation asset with 0 autoPublished
+[evidence-governance] controlled real double with eligible diagnostics is the only published path
+[evidence-governance] maintenance is idempotent across repeat/restore and reprocesses changed inputs once
+[evidence-governance] legacy Level 3 without a decision stays unknown and unpublishable
+[evidence-governance] a misbound draft is never promoted by its Level 3 label
+[evidence-governance] missing required diagnostics wait recoverably with candidate/budget/barrier retained and 0 ports
+[evidence-governance-integration] decision projection, governance idempotence, and external wait contracts passed

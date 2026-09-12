@@ -1,0 +1,7 @@
+
+> operator-studio-mvp@0.1.0 test:workflow-summary
+> node tests/workflow-summary-test.mjs
+
+[workflow-summary] simulation decision renders adoption/publication and blocking reasons
+[workflow-summary] shared-GPU development decision stays nonpublishable with its reason
+[workflow-summary] legacy record without decision stays explicitly unknown and nonpublishable

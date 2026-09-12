@@ -301,60 +301,247 @@ def _render(template, values):
     return command
 
 
-def _analysis_tool(name, env_name, default_template, values, artifact_dir):
-    executable = shutil.which(name)
-    template = os.environ.get(env_name, default_template)
+DIAGNOSTICS_MODE_ENV = "OPERATOR_DIAGNOSTICS_MODE"
+DIAGNOSTICS_MODES = ("unavailable", "mock")
+DIAGNOSTIC_FORMATS = {"tracer": "operator-trace/v1", "profiler": "operator-profile/v1"}
+
+
+def _diagnostics_mode():
+    """Resolve the diagnostic collection mode.
+
+    Priority: an explicit ``mock`` value never executes a real tool; the default
+    ``unavailable`` still performs a real invocation whenever a command is
+    configured or the tool is on PATH, and only falls back to ``unavailable``
+    when neither exists. Any other value is a configuration error, not a silent
+    downgrade.
+    """
+    raw = os.environ.get(DIAGNOSTICS_MODE_ENV)
+    if raw is None or not str(raw).strip():
+        return "unavailable"
+    mode = str(raw).strip().lower()
+    if mode not in DIAGNOSTICS_MODES:
+        raise RuntimeError(f"{DIAGNOSTICS_MODE_ENV} must be one of {'|'.join(DIAGNOSTICS_MODES)}; got {raw!r}")
+    return mode
+
+
+def _analysis_tool(name, env_name, default_template, values, artifact_dir, mode=None):
+    """Collect one optional diagnostic, returning a raw collection record.
+
+    ``status`` is one of ``completed`` / ``failed`` (a real tool process ran),
+    ``unavailable`` (no tool/command exists) or ``mocked`` (simulation only).
+    ``source`` records where the record came from: ``tool`` / ``unavailable`` /
+    ``mock``. Raw stdout, stderr and artifacts stay on disk and their paths are
+    kept here for a future real parser; nothing in this record is projected as
+    real trace events or profiler metrics by itself.
+    """
+    if mode is None:
+        mode = _diagnostics_mode()
+    else:
+        # An explicit mode is validated exactly like the environment value; an
+        # illegal optional mode is a configuration error, never silently treated
+        # as a real invocation.
+        mode = str(mode).strip().lower()
+        if mode not in DIAGNOSTICS_MODES:
+            raise RuntimeError(f"diagnostic mode must be one of {'|'.join(DIAGNOSTICS_MODES)}; got {mode!r}")
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    if not executable and env_name not in os.environ:
+    if mode == "mock":
+        marker_path = artifact_dir / "simulated.json"
+        marker = {
+            "schemaVersion": "operator-studio.diagnostic-simulation/v1",
+            "tool": name,
+            "status": "mocked",
+            "source": "mock",
+            "simulated": True,
+            "reason": f"{name} diagnostics were requested in {DIAGNOSTICS_MODE_ENV}=mock; no real collection was executed.",
+        }
+        marker_path.write_text(json.dumps(marker, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return {
+            "status": "mocked",
+            "source": "mock",
+            "simulated": True,
+            "real": False,
+            "tool": name,
+            "attempted": False,
+            "artifactDir": str(artifact_dir),
+            "simulatedMarker": str(marker_path),
+            "error": None,
+        }
+    executable = shutil.which(name)
+    configured = env_name in os.environ
+    stdout_path = artifact_dir / "stdout.txt"
+    stderr_path = artifact_dir / "stderr.txt"
+    if not executable and not configured:
         error = f"{name} is unavailable; optional diagnostic collection was skipped"
-        (artifact_dir / "stderr.txt").write_text(error + "\n", encoding="utf-8")
-        (artifact_dir / "stdout.txt").write_text("", encoding="utf-8")
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text(error + "\n", encoding="utf-8")
         return {
             "status": "unavailable",
+            "source": "unavailable",
+            "simulated": False,
+            "real": False,
             "tool": name,
             "attempted": True,
             "artifactDir": str(artifact_dir),
+            "stdoutPath": str(stdout_path),
+            "stderrPath": str(stderr_path),
             "error": error,
         }
+    template = os.environ.get(env_name, default_template)
     command = _render(template, {**values, "artifactDir": artifact_dir, "tool": executable or name})
     started = time.perf_counter()
     try:
         process = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=300, check=False)
     except Exception as error:
         detail = f"{name} invocation failed: {error}"
-        (artifact_dir / "stderr.txt").write_text(detail + "\n", encoding="utf-8")
-        (artifact_dir / "stdout.txt").write_text("", encoding="utf-8")
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text(detail + "\n", encoding="utf-8")
         return {
             "status": "failed",
+            "source": "tool",
+            "simulated": False,
+            "real": False,
             "tool": name,
             "attempted": True,
             "command": command,
             "artifactDir": str(artifact_dir),
+            "stdoutPath": str(stdout_path),
+            "stderrPath": str(stderr_path),
             "durationMs": round((time.perf_counter() - started) * 1000, 3),
             "error": detail,
         }
-    (artifact_dir / "stdout.txt").write_text(process.stdout or "", encoding="utf-8")
-    (artifact_dir / "stderr.txt").write_text(process.stderr or "", encoding="utf-8")
-    if process.returncode != 0:
-        detail = f"{name} failed with exit code {process.returncode}: {(process.stderr or process.stdout).strip()}"
-        return {
-            "status": "failed",
-            "tool": name,
-            "attempted": True,
-            "command": command,
-            "artifactDir": str(artifact_dir),
-            "durationMs": round((time.perf_counter() - started) * 1000, 3),
-            "exitCode": process.returncode,
-            "error": detail,
-        }
-    return {
-        "status": "completed",
+    stdout_path.write_text(process.stdout or "", encoding="utf-8")
+    stderr_path.write_text(process.stderr or "", encoding="utf-8")
+    base = {
+        "source": "tool",
+        "simulated": False,
+        "real": True,
         "tool": name,
         "attempted": True,
         "command": command,
         "artifactDir": str(artifact_dir),
+        "stdoutPath": str(stdout_path),
+        "stderrPath": str(stderr_path),
+        "stdoutBytes": len((process.stdout or "").encode("utf-8")),
+        "stderrBytes": len((process.stderr or "").encode("utf-8")),
         "durationMs": round((time.perf_counter() - started) * 1000, 3),
     }
+    if process.returncode != 0:
+        detail = f"{name} failed with exit code {process.returncode}: {(process.stderr or process.stdout).strip()}"
+        return {**base, "status": "failed", "exitCode": process.returncode, "error": detail}
+    return {**base, "status": "completed"}
+
+
+def _diagnostics_binding(task):
+    """Read diagnostic provenance from the task's real fields only.
+
+    ``runId`` is the benchmark-command ``requestId`` carried on
+    ``task.payload``; it is the queue run identity and is deliberately distinct
+    from the backend ``taskId``. A backend task id is never substituted for a
+    run id. Missing fields stay ``None``. Nothing is filled from the current
+    time, the benchmark result or a guessed default: an unbound diagnostic must
+    be visibly unbound downstream.
+    """
+    task = task if isinstance(task, dict) else {}
+    payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
+    candidate = task.get("candidate") if isinstance(task.get("candidate"), dict) else payload.get("candidate")
+    if not isinstance(candidate, dict):
+        candidate = {}
+    snapshot = task.get("semanticSnapshot") if isinstance(task.get("semanticSnapshot"), dict) else {}
+    semantic_binding = task.get("semanticBinding") if isinstance(task.get("semanticBinding"), dict) else payload.get("semanticBinding")
+    if not isinstance(semantic_binding, dict):
+        semantic_binding = {}
+
+    def declared(value):
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    return {
+        "candidateDigest": declared(candidate.get("digest")),
+        "runId": declared(payload.get("requestId")),
+        "taskId": declared(task.get("taskId")),
+        "sourceRunId": declared(candidate.get("sourceRunId")),
+        "semanticDigest": declared(snapshot.get("digest")) or declared(semantic_binding.get("semanticDigest")),
+    }
+
+
+def _diagnostic_result(kind, collection, binding):
+    """Pure projection from a raw collection record to the wired result shape.
+
+    A successful tool exit only proves the collection command ran. Until a real
+    parser exists, ``events``/``metrics`` stay empty and benchmark p50/p95 never
+    leak into diagnostics. Mock and unavailable records never become
+    ``completed``.
+
+    Mock provenance wins over a contradictory status: an explicit
+    ``source=mock`` or ``simulated=true`` is normalized to
+    ``status=mocked`` / ``source=mock`` / ``simulated=true`` regardless of the
+    incoming status. A record that claims ``completed``/``failed`` without any
+    ``source`` cannot prove a real collection, so its source is conservatively
+    reported as ``unknown`` instead of being promoted to ``tool``.
+    """
+    if kind not in DIAGNOSTIC_FORMATS:
+        raise ValueError(f"unknown diagnostic kind: {kind!r}")
+    collection = collection if isinstance(collection, dict) else {}
+    binding = binding if isinstance(binding, dict) else {}
+    status = str(collection.get("status") or "unavailable")
+    declared_source = str(collection["source"]) if collection.get("source") else None
+    mock_provenance = declared_source == "mock" or collection.get("simulated") is True or status == "mocked"
+    if mock_provenance:
+        # Mock/simulated provenance always wins over a contradictory status.
+        status = "mocked"
+        source = "mock"
+        simulated = True
+    else:
+        simulated = False
+        if declared_source:
+            source = declared_source
+        elif status == "unavailable":
+            source = "unavailable"
+        else:
+            # Missing source cannot prove a real collection; never promote a
+            # bare completed/failed status to ``tool``.
+            source = "unknown"
+    diagnostics = []
+    if collection.get("error"):
+        diagnostics.append(str(collection["error"]))
+    if mock_provenance:
+        diagnostics.append("Mock or simulated provenance: no real diagnostic collection was executed; this result cannot satisfy a real-evidence rule.")
+    elif status == "unavailable":
+        diagnostics.append("The diagnostic tool is unavailable; no diagnostic content was collected.")
+    elif source == "unknown":
+        diagnostics.append("The collection record carries no source; missing provenance cannot prove a real diagnostic collection, so events/metrics stay empty.")
+    elif status == "completed":
+        diagnostics.append("The tool exited successfully, which only proves the collection command ran; no real events or metrics have been parsed from its output yet.")
+    elif status == "failed":
+        diagnostics.append("The tool process failed; no real diagnostic content was collected.")
+    artifacts = {
+        key: collection.get(key)
+        for key in ("tool", "attempted", "command", "artifactDir", "stdoutPath", "stderrPath", "stdoutBytes",
+                    "stderrBytes", "exitCode", "durationMs", "real", "simulated", "simulatedMarker")
+        if collection.get(key) is not None
+    }
+    if "simulated" in artifacts or simulated:
+        # Keep the retained raw record consistent with the normalized verdict.
+        artifacts["simulated"] = simulated
+    result = {
+        "format": DIAGNOSTIC_FORMATS[kind],
+        "status": status,
+        "source": source,
+        "simulated": simulated,
+        "binding": {
+            "candidateDigest": binding.get("candidateDigest"),
+            "runId": binding.get("runId"),
+            "taskId": binding.get("taskId"),
+            "sourceRunId": binding.get("sourceRunId"),
+            "semanticDigest": binding.get("semanticDigest"),
+        },
+        "diagnostics": diagnostics,
+        "artifacts": artifacts,
+    }
+    if kind == "tracer":
+        result["events"] = []
+    else:
+        result["metrics"] = {}
+    return result
 
 
 def _trace_target(run_py):
@@ -376,7 +563,9 @@ def _run(args):
     run_py = Path(args.run_py or os.environ["OPERATOR_LOCAL_C500_RUN_PY"]).resolve()
     result_json = Path(args.result_json or os.environ["OPERATOR_LOCAL_C500_RESULT_JSON"]).resolve()
     task_dir = Path(os.environ.get("OPERATOR_LOCAL_C500_TASK_DIR", result_json.parent)).resolve()
+    diagnostics_mode = _diagnostics_mode()
     task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    diagnostics_binding = _diagnostics_binding(task)
     module = _load_operator(run_py)
     oracle_path = os.environ.get("OPERATOR_LOCAL_C500_ORACLE_RUN_PY")
     oracle_module = _load_operator(Path(oracle_path).resolve()) if oracle_path else module
@@ -420,7 +609,6 @@ def _run(args):
     _write_runner_status(task_dir, 60, "benchmark", f"Running {len(benchmark_profiles)} fixed benchmark profiles.")
     benchmark_results = _benchmark_inputs(module, torch, benchmark_profiles, warmup, repeats, oracle_module)
     _write_runner_status(task_dir, 90, "benchmark_complete", f"Completed {len(benchmark_profiles)} benchmark profiles.")
-    primary_benchmark = benchmark_results[0]
 
     runner = Path(__file__).resolve()
     python = Path(sys.executable).resolve()
@@ -435,6 +623,7 @@ def _run(args):
         '"{tool}" --output "{artifactDir}" {python} {runner} --stage trace-target --run-py {runPy}',
         values,
         task_dir / "analysis" / "mctracer",
+        mode=diagnostics_mode,
     )
     profile = _analysis_tool(
         "mcProfiler",
@@ -442,8 +631,11 @@ def _run(args):
         '"{tool}" --output "{artifactDir}" {python} {runner} --stage trace-target --run-py {runPy}',
         values,
         task_dir / "analysis" / "mcProfiler",
+        mode=diagnostics_mode,
     )
-    _write_runner_status(task_dir, 95, "optional_diagnostics", "Optional mcTracer/mcProfiler collection completed or was skipped.")
+    tracer_result = _diagnostic_result("tracer", trace, diagnostics_binding)
+    profiler_result = _diagnostic_result("profiler", profile, diagnostics_binding)
+    _write_runner_status(task_dir, 95, "optional_diagnostics", f"Optional diagnostics handled (mode={diagnostics_mode}).")
     environment_name = str((matrix.get("environments") or ["C550"])[0])
     result = {
         "benchmark": [{
@@ -459,26 +651,8 @@ def _run(args):
             "speedup": benchmark.get("speedup"),
             "correctness": correctness,
         } for benchmark in benchmark_results],
-        "tracer": {
-            "format": "operator-trace/v1",
-            "status": trace["status"],
-            "events": [{"name": "mctracer", "category": "tool", "artifactDir": trace["artifactDir"], "durationMs": trace.get("durationMs")}]
-            if trace["status"] == "completed" else [],
-            "diagnostics": [trace["error"]] if trace.get("error") else [],
-            "artifacts": trace,
-        },
-        "profiler": {
-            "format": "operator-profile/v1",
-            "status": profile["status"],
-            "metrics": {
-                "latencyP50Us": primary_benchmark["p50Us"],
-                "latencyP95Us": primary_benchmark["p95Us"],
-                "toolDurationMs": profile.get("durationMs"),
-                "artifactDir": profile["artifactDir"],
-            },
-            "diagnostics": [profile["error"]] if profile.get("error") else [],
-            "artifacts": profile,
-        },
+        "tracer": tracer_result,
+        "profiler": profiler_result,
         "environment": {
             "requested": task.get("hardware") or matrix.get("environments") or ["C550"],
             "runtime": "local-c500-runner/v1",
@@ -488,7 +662,8 @@ def _run(args):
             "hardware": hardware,
             "candidateDigest": (task.get("candidate") or {}).get("digest"),
             "runPySource": task.get("runPySource"),
-            "optionalDiagnostics": {"mctracer": trace["status"], "mcProfiler": profile["status"]},
+            "diagnosticsMode": diagnostics_mode,
+            "optionalDiagnostics": {"mctracer": tracer_result["status"], "mcProfiler": profiler_result["status"]},
         },
     }
     result_json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

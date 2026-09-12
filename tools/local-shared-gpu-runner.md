@@ -39,6 +39,17 @@ category `nvidia-gpu` while `architecture`, `device` and `driverVersion` are
 copied when resolved. `experienceEvidence` receives `architecture` only when the
 driver confirmed one. `publishable` stays `false`.
 
+Optional diagnostics reuse the base runner's collection path and follow
+`tools/local-c500-runner.md`. `OPERATOR_DIAGNOSTICS_MODE` defaults to
+`unavailable`: a real mcTracer/mcProfiler command or binary is still invoked
+when present, a missing tool is reported as `unavailable`, and explicit `mock`
+mode only ever emits `status=mocked` / `source=mock` / `simulated=true` without
+executing anything. The projected binding carries the queue run identity from
+`task.payload.requestId` (never the backend `taskId`) and leaves unknown
+observations `null`; a record without a source is conservatively `unknown` and
+mock/simulated provenance always wins over a contradictory `completed` status.
+Diagnostics are never derived from benchmark timings.
+
 The runner requires a distinct prepared oracle file and writes a structured
 `status=failed` result (including phase, role, and error code) even when
 preflight or module loading fails before normal artifacts exist. This keeps

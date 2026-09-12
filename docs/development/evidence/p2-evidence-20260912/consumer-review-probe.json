@@ -1,0 +1,69 @@
+{
+  "result": {
+    "checks": 15,
+    "passed": 15,
+    "failures": []
+  },
+  "checks": [
+    {
+      "name": "production emits development decision",
+      "passed": true
+    },
+    {
+      "name": "canonical decision identical at all projections",
+      "passed": true
+    },
+    {
+      "name": "identical snapshot byte no-op",
+      "passed": true
+    },
+    {
+      "name": "adoption preserves Gate and decision",
+      "passed": true
+    },
+    {
+      "name": "real sharedGPU knowledge is development",
+      "passed": true
+    },
+    {
+      "name": "repeated governance and JSONrestore byte no-op",
+      "passed": true
+    },
+    {
+      "name": "changed draft version processed once",
+      "passed": true
+    },
+    {
+      "name": "foreign decision does not replace draft provenance",
+      "passed": true
+    },
+    {
+      "name": "partial and future decision cannot authorize",
+      "passed": true
+    },
+    {
+      "name": "UI requires complete binding and recognizes stored best",
+      "passed": true
+    },
+    {
+      "name": "same timestamp changed release is processed",
+      "passed": true
+    },
+    {
+      "name": "valid unknown retains unknown provenance",
+      "passed": true
+    },
+    {
+      "name": "live flag mismatch is rejected in both directions",
+      "passed": true
+    },
+    {
+      "name": "unbound publication grant is rejected",
+      "passed": true
+    },
+    {
+      "name": "own draft identity selects only matching decision",
+      "passed": true
+    }
+  ]
+}

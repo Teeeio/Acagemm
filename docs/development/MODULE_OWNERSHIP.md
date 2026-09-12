@@ -165,7 +165,8 @@ TUI / GUI
 | [`state-reference-data.mjs`](../../client-runtime/state-reference-data.md) | Reference Data | 保留旧默认记录与展示元数据 | 真机证据、运行时权限 |
 | [`state-initialization.mjs`](../../client-runtime/state-initialization.md) | Domain / Initial State | 通过注入 Mission 工厂构造 seed/product snapshot | 存储初始化、迁移执行 |
 | [`state-reference-runtime.mjs`](../../client-runtime/state-reference-runtime.md) | Reference State Projection | 现有 fixture 进度、日志和内存事件 | 真机/Agent 执行 |
-| [`accept-gate.mjs`](../../client-runtime/accept-gate.md) | Domain / Gate | 接受规则与 Baseline 证据构造 | 测试执行、持久化、采用 |
+| [`accept-gate.mjs`](../../client-runtime/accept-gate.md) | Domain / Gate | 接受规则、Baseline 证据构造与单一版本化证据决策 | 测试执行、持久化、采用 |
+| [`evidence-decision.mjs`](../../client-runtime/evidence-decision.md) | Domain / Evidence | 诊断三判定（仅 completed+显式真实来源+绑定内核内容）、失败关闭执行分类、候选/运行绑定与冲突投影、发布限制 | I/O、存储、Provider、队列、硬件执行 |
 | [`operator-test-evidence.mjs`](../../client-runtime/operator-test-evidence.md) | Domain / Evidence | 队列快照、候选处置和事件的内存投影 | 文件系统、队列执行 |
 | [`evidence-state.mjs`](../../client-runtime/evidence-state.md) | Shared State Contract | Review/Baseline 状态工厂 | 验收授权、I/O |
 | [`mission-objective.mjs`](../../client-runtime/mission-objective.md) | Domain / Objective | 目标模式推断与规范化 | 迭代执行、持久化 |

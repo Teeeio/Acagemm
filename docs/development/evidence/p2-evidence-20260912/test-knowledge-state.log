@@ -1,0 +1,5 @@
+
+> operator-studio-mvp@0.1.0 test:knowledge-state
+> node tests/knowledge-state-test.mjs
+
+[knowledge-state] decision-driven adoption, source isolation, draft eligibility, maximize, idempotence, and bounded event contracts passed

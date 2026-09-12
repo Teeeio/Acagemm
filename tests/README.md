@@ -149,10 +149,154 @@ constructor failure when domain transition ports are missing.
 `mission-project-state-test.mjs` exercises the compatibility API entirely in
 memory: Mission/Project lifecycle, 26 projected-field isolation checks, selection
 priority, error statuses, budget and fixed Profile/semantic preservation.
-`knowledge-state-test.mjs` covers adoption guards, live/simulation/CPU provenance,
-draft eligibility, maximize continuation, repeat governance and event limits.
+`knowledge-state-test.mjs` covers adoption guards, decision-driven draft/asset
+classification, provenance isolation, maximize continuation, repeat governance
+and event limits. Its decisions come from the production `evaluateAcceptGate`
+single-point computation; legacy drafts without a decision stay `unknown`.
 These two tests also run in the release gate; neither initializes storage nor
 executes an Agent or hardware.
+
+`evidence-governance-integration-test.mjs` is the end-to-end Phase 2 integration
+acceptance. It drives the production projection
+`applyOperatorTestSnapshot` to produce a real versioned DTO, then runs
+`runAutomaticAdoption` and `runKnowledgeMaintenance` and asserts that the
+benchmark, candidate Gate, review Gate, `currentBest`, knowledge draft and
+published asset all carry the *same* decision value. A shared-GPU development
+run (real execution, restricted environment) must classify as `development`
+(never `simulation`), keep `autoPublished` at 0 and yield a `development_only`
+change; an explicit simulation yields a `simulation` asset; only a controlled
+real double with eligible bound diagnostics may reach `published`. Maintenance
+must be a deep-equal no-op on repeat and after a JSON restore, must re-process a
+changed draft version/binding exactly once, must not re-run from derived
+timestamps, and a legacy or misbound Level 3 draft must stay `unknown` and
+nonpublishable. When required real diagnostics are unavailable the projection
+must enter a recoverable external-verification wait: the candidate, budget and
+resource-release barrier are retained, no new Agent is started, and iteration
+ports stay at 0. Positive sources are controlled contract doubles, not real
+hardware.
+
+## Phase 2 diagnostic / decision coverage
+
+`evidence-decision-test.mjs` is the independent acceptance for the frozen matrix
+in `docs/development/P2_EVIDENCE_ACCEPTANCE.md` (upstream-owned; this test must
+not edit it). It drives the public
+`evaluateDiagnosticEvidence(kind, evidence, expectedBinding)` for `tracer` and
+`profiler` across the four provenance groups (unavailable / mocked / qualified
+real / format-valid but wrong binding), covering missing status or source, a
+raw status of `ok` that is not a completed collection, unknown-source provenance
+despite a present tool artifact, empty or arbitrary content,
+string/boolean/array/NaN/Infinity/negative metric values, benchmark-only
+metrics, raw artifact paths, exact candidate/run/source/semantic binding and
+inputs that must stay unmutated. A qualified kernel trace requires an explicit
+`category: 'kernel'` event with finite nonnegative `startUs` and positive
+`durationUs`; a missing category, `runtime`/`tool`/unknown categories, a
+tool-only trace and a kernel mixture containing one invalid event all fail.
+The `schemaValid` (format), `available` (real completion) and `evidenceEligible`
+(qualification) predicates are asserted separately — an envelope with unknown
+keys instead of an `events` collection is not schema-valid. Numeric equality
+with a benchmark latency never proves forgery: a real tool collection whose
+`kernelDurationUs`/kernel duration coincides with the benchmark stays eligible,
+while a metric explicitly sourced from benchmark is rejected. Invalid
+`achievedOccupancy`/`dramBandwidthGbps` aliases fail like their documented
+counterparts.
+
+It then drives `evaluateAcceptGate` over every `completeEvidence` branch (local
+benchmark-core development, non-local full real, explicit simulation/CPU), final
+publication authorization, malformed benchmark values (including
+boolean/array/object/null), a mock environment source with `liveHardware=true`,
+simulated artifacts under a completed status, legacy results without a decision,
+and frozen semantic binding. Missing real diagnostic capability fails
+`evidence.complete` and leaves adoption `waiting_external_verification` (never a
+candidate hard error); wrong-binding/malformed evidence blocks adoption and
+publication explicitly; local development adoption may proceed with publication
+pending. It asserts the versioned `decision` DTO and that flat `publishable` is
+its projection, not a re-derivation from `liveHardware`. Qualified real fixtures
+are contract test doubles, never proof of a live publication run.
+
+`diagnostic-runner-test.mjs` spawns one isolated Python child (`-I -B`,
+bytecode disabled) that imports the real `tools/local-c500-runner.py` and
+replaces `subprocess`, `shutil` and every torch port with doubles, so no GPU,
+driver, torch install, mx-smi, mctracer or mcProfiler process is touched. It
+drives the runner's `_analysis_tool` through real command completion, nonzero
+exit, exploding invocation, default `unavailable` fallback (which must not
+spawn), an explicitly configured command missing from `PATH`, and explicit
+`OPERATOR_DIAGNOSTICS_MODE=mock` (status `mocked`, source `mock`, simulated
+true, no spawn). It then drives `_diagnostic_result(kind, collection, binding)`
+with a raw collection: there is no tool-output parser in this phase, so a tool
+process that exits 0 while its stdout self-declares `parsed` kernel events or
+profiler metrics still yields empty content and the original artifact is
+retained. Benchmark latency is never promoted to profiler metrics or trace
+events, a raw `ok` status is never upgraded to `completed`, an unavailable
+status wins over contradictory content, tool-only events never become kernel
+measurements, a missing/unknown source is never promoted, and bindings are
+retained exactly and never fabricated. `_diagnostics_binding(requestId)` is
+driven for the frozen five fields
+(`candidateDigest/runId/taskId/sourceRunId/semanticDigest`): unknown values stay
+explicit null, no extra `missionId`/`candidateId` is required or invented, and
+`runId` is the queue `requestId`, never the backend taskId. Temporary files live
+under the ignored `.operator-studio-local/` and only the test's own directory is
+removed in `finally`.
+
+Legacy migration: `accept-gate-test.mjs` no longer treats a `liveHardware`
+boolean as publication authority or a format-only trace/profile shape as real
+diagnostic qualification. Those cases now assert explicit failure and
+nonpublishability; the published-path coverage uses a dedicated qualified real
+positive with explicit `category: 'kernel'` content plus real
+status/source/binding. The performance, correctness, baseline and fixed-matrix
+assertions are unchanged. `workflow-summary-test.mjs` and
+`local-c500-tui-logic-test.mjs` were migrated the same way: their reports render
+the six decision items (decision / execution / correctness / benchmark /
+adoption / publication) and the blocking reasons from a decision produced by
+`evaluateAcceptGate`, so a legacy flat `publishable: true` is never read as
+publication authority, and a real-but-nonpublishable result is no longer
+flattened into "simulation only".
+
+`evidence-decision-test.mjs`, `evidence-governance-integration-test.mjs` and the
+migrated summary/TUI tests register in `package.json` and in BOTH verification
+gates. Qualified real fixtures are controlled contract doubles, never proof of a
+live publication run; they must not be weakened to match a pre-integration tree.
+
+## Shared-GPU observer and run-ledger acceptance (hardware-free)
+
+`shared-gpu-acceptance-test.mjs` is the isolated acceptance for the pure
+observation/statistics contracts in `scripts/shared-gpu-acceptance.mjs` and the
+read-only ledger in `scripts/summarize-gpu-agent-runs.mjs`. It imports the public
+`verifyContinuationAudit`, `budgetTerminalEvidence`, `evaluateFamilyOutcome`,
+`combineAttemptOutcome`, `isRealGpuCompletedCandidate`, `buildConfigFingerprint`,
+`summarizeAcceptanceRuns`, `classifyAcceptanceRecord` and `readRunRecord` and
+never starts a Runtime, Agent, provider, GPU test or N=20 batch.
+
+It retains every P1 continuation-audit assertion with synthetic objects: the
+audit must be the pre-send artifact for the round frozen in
+`sourceRound.roundFacts.target.roundId` (a third round or a same-round recovery
+run fails), the prompt SHA-256 and UTF-8 byte length are recomputed, the
+candidate/queue/`candidateSourceRunId` binding is exact, the bound execution
+experience is unique and present in the prompt with its complete content, and
+prompt facts are deep-equal to the frozen archive. It also replays the tracked
+archived P1 originals read-only, with tampered digest/content negatives; the
+check is skipped when those files are absent, so no gate depends on them.
+
+Budget coverage proves a missing/unconfirmed/pending/quarantined/blocked or
+foreign-bound release is never safe, a current non-budget reason or bare
+`needs_human` is a failure even with a historical budget event, and only a
+current Mission/Agent release with a bounded-budget reason can reach
+`budget_terminal` (never `full_success`). Family coverage requires two distinct
+real shared-GPU completed candidates with purpose/requestId/source/mode/live/
+digest binding, a verified audit and a clean automatic rollback, with no reason
+hidden. Ledger coverage proves contradictory/missing/running/invalid records
+fail, duplicates cannot accumulate toward an N, every missing summary/timeout/
+failure stays in the denominator, provider/CLI/model/matrix/budget/code
+differences never merge, per-run identifiers never split a group, nested or
+declared-provenance fields keep a group non-comparable, a later fingerprint
+mismatch cannot ride on a known first record, and 20 controlled same-config
+records establish statistical eligibility only — never stability or a hardware
+sample. The ledger CLI is exercised read-only against a temporary local run
+directory removed in `finally`.
+
+This test continues the cancelled `task_8825a5839e92468184c69d5d7166ac47`
+(which produced no artifacts); it verifies the already-integrated production
+contracts and makes no new production change and no N=20 or publishability
+claim. It runs in both verification gates.
 
 ## Naming
 

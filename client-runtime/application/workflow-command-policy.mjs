@@ -1,4 +1,15 @@
 import { assertResourcesReleased } from '../cancellation-contract.mjs';
+import { validateEvidenceDecision } from '../knowledge-state.mjs';
+
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+// 决策只在其显式绑定身份与当前候选/运行一致时可用，绝不把别的候选/运行的决策
+// 复制到 currentBest 或 review。
+const decisionMatchesIdentity = (decision, candidateId, candidateDigest, runId) => {
+  if (!validateEvidenceDecision(decision).valid || !candidateId || !candidateDigest || !runId) return false;
+  const binding = decision.binding;
+  return binding.candidateId === candidateId && binding.candidateDigest === candidateDigest && binding.runId === runId;
+};
 
 export const createWorkflowCommandPolicy = ({ addAuditEvent, agentRuntime, appendRuntimeEvent, createCurrentBestState, createDecisionReviewState, isManagedWorkspaceRuntimeMode, markCandidateAccepted, normalizeMissionBudgetMs, now = () => new Date() }) => {
   const guardMutation = (state) => {
@@ -88,19 +99,46 @@ export const createWorkflowCommandPolicy = ({ addAuditEvent, agentRuntime, appen
   const adoptCandidateState = (state, note, source = 'policy') => {
     const candidateId = state.appliedCandidateId || state.decisionReview?.candidateId;
     const candidate = (state.candidateEvaluations || []).find((item) => item.id === candidateId);
+    const review = state.decisionReview || {};
+    const reviewMatchesCandidate = !review.candidateId || review.candidateId === candidateId;
+    const gate = (reviewMatchesCandidate && review.gate) || candidate?.acceptGate || null;
+    const runId = state.benchmark?.runId || null;
+    const rawDecision = isPlainObject(gate?.decision) ? gate.decision : null;
+    // 旧 Gate 与新的 benchmark 决策错配时，宁可不带决策也不复制其他候选/运行的决策。
+    const decision = rawDecision && decisionMatchesIdentity(rawDecision, candidateId, candidate?.patchDigest, runId) ? rawDecision : null;
+    const decisionClone = decision ? structuredClone(decision) : null;
     const resolvedAt = markCandidateAccepted(state, note, source);
     state.stage = 'curation';
+    // 人工采用不改写原 Gate 结论，只记录采用处置；review 保留同一 Gate/decision 事实。
+    const reviewGate = gate;
     state.decisionReview = {
-      ...(state.decisionReview || createDecisionReviewState('resolved')),
+      ...(review || createDecisionReviewState('resolved')),
       status: 'resolved',
       recommendation: 'adopt',
       requiresApproval: false,
+      gate: reviewGate,
+      evidenceDecision: decisionClone,
       resolution: { outcome: 'adopt', source, note, resolvedAt },
       resolvedAt,
     };
     const primaryMeasurement = state.benchmark?.result?.benchmark?.[0];
+    const publicationAllowed = decisionClone?.publication?.status === 'allowed';
     state.currentBest = candidateId
-      ? { candidateId, version: candidate?.version || 'agent.1', value: primaryMeasurement ? `${primaryMeasurement.value} ${primaryMeasurement.unit}` : '--', improvement: candidate?.delta || 'new', status: 'active', evidenceSource: candidate?.acceptGate?.evidenceSource || 'unknown', verified: candidate?.acceptGate?.publishable === true }
+      ? {
+          candidateId,
+          candidateDigest: candidate?.patchDigest || null,
+          evidenceRunId: state.benchmark?.runId || null,
+          version: candidate?.version || 'agent.1',
+          value: primaryMeasurement ? `${primaryMeasurement.value} ${primaryMeasurement.unit}` : '--',
+          improvement: candidate?.delta || 'new',
+          status: 'active',
+          evidenceSource: decisionClone?.execution?.source || gate?.evidenceSource || 'unknown',
+          // 真实硬件与可发布是两个维度：verified 只由 decision.publication 决定；
+          // 旧无决策记录不可发布授权。
+          verified: publicationAllowed,
+          liveHardware: decisionClone ? decisionClone.execution?.liveHardware === true : false,
+          evidenceDecision: decisionClone,
+        }
       : createCurrentBestState('candidate-02');
     state.workflowRecovery = {
       ...(state.workflowRecovery || {}),

@@ -39,6 +39,16 @@ structured clones (Baseline uses its shape factory), then audits. Goal/frozen
 semantics remain Mission metadata. `normalizeMissionState` fills domain/legacy
 defaults only; schema and finite version/sequence checks remain in `state-store`.
 
+`resumeMissionState` treats `stopped`, `needs_human` and `blocked` as resumable
+loop statuses, so a `blocked` external-verification wait can be resumed. Resume
+does not refresh the round budget or bypass the resource-release barrier. For an
+`external_verification` wait it clears `missionPaused` so the existing `test.plan`
+retry of the same candidate is admissible, records
+`iterationStats.externalVerificationAcknowledged` for that candidate/run and
+deliberately keeps `loopStatus = 'blocked'` / reason `external_verification` so no
+automatic round starts before the retest is actually queued. Neither path changes
+fixed budgets, evidence facts, candidate workspace or release rules.
+
 Creation/start mutate memory, not workspaces or real Agents. Start defaults to a
 fixture reset. Clock/UUID metadata is generated; Mission timestamp IDs may collide.
 There is no I/O or execution.
@@ -74,7 +84,11 @@ degraded markers/source run), `correctness` (per-environment and per-case result
 status `passed`/`failed`/`not_observed`), `failure` (classified through
 `isInfrastructureTestFailure` as `infrastructure` or `operator`, or `null` when no
 failure was observed), `gate`, `decision`, `rollback` and `currentBest` (including
-candidate/asset status). Rollback never claims a clean workspace: it is
+candidate/asset status). When the archived Gate carries a unified decision object,
+`gate.evidenceDecision` is a deep clone of the same decision the production path
+projected; legacy records without a decision are left unchanged. The next prompt
+consumes it through the existing round-facts channel only — no second process and
+no persistent I/O. Rollback never claims a clean workspace: it is
 `performed` only for an observed `round_rollback` recovery with matching candidate
 binding, confirmed cleanliness and restore timestamp (reading `stableDigest`
 from `lastRecovery` or the checkpoint with its exact `checkpointId`), otherwise

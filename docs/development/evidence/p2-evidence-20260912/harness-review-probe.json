@@ -1,0 +1,109 @@
+{
+  "result": {
+    "checks": 25,
+    "passed": 25,
+    "failures": []
+  },
+  "checks": [
+    {
+      "name": "P1 original exact continuation audit read-only replay",
+      "passed": true
+    },
+    {
+      "name": "reject third round",
+      "passed": true
+    },
+    {
+      "name": "reject prompt tamper",
+      "passed": true
+    },
+    {
+      "name": "reject byte count",
+      "passed": true
+    },
+    {
+      "name": "reject digest",
+      "passed": true
+    },
+    {
+      "name": "reject facts",
+      "passed": true
+    },
+    {
+      "name": "current bound budget with release proof",
+      "passed": true
+    },
+    {
+      "name": "terminal status without release rejected",
+      "passed": true
+    },
+    {
+      "name": "foreign release rejected",
+      "passed": true
+    },
+    {
+      "name": "stale budget cannot mask current failure",
+      "passed": true
+    },
+    {
+      "name": "unbound budget event cannot authorize terminal",
+      "passed": true
+    },
+    {
+      "name": "invalid budget is failure",
+      "passed": true
+    },
+    {
+      "name": "controlled 20-record grouping positive (no live claim)",
+      "passed": true
+    },
+    {
+      "name": "failure wins conflict",
+      "passed": true
+    },
+    {
+      "name": "missing summary retained in denominator",
+      "passed": true
+    },
+    {
+      "name": "family claim required",
+      "passed": true
+    },
+    {
+      "name": "summary family failure cannot hide",
+      "passed": true
+    },
+    {
+      "name": "duplicates do not count toward N20",
+      "passed": true
+    },
+    {
+      "name": "duplicate conflict preserved as failure",
+      "passed": true
+    },
+    {
+      "name": "same path different IDs not counted twice",
+      "passed": true
+    },
+    {
+      "name": "run IDs not stable configuration",
+      "passed": true
+    },
+    {
+      "name": "code changes separate groups",
+      "passed": true
+    },
+    {
+      "name": "declared model not comparable",
+      "passed": true
+    },
+    {
+      "name": "nested unknown not comparable",
+      "passed": true
+    },
+    {
+      "name": "later mismatch blocks entire group",
+      "passed": true
+    }
+  ]
+}

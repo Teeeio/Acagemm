@@ -1,0 +1,5 @@
+
+> operator-studio-mvp@0.1.0 test:smoke
+> node tests/client-runtime-smoke-test.mjs
+
+[smoke] full mission workflow passed

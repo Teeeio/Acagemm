@@ -1,5 +1,9 @@
 # Operator Test Evidence Projection Contract
 
+Canonical full snapshot content identifies an exact terminal replay. Equal
+completion timestamps alone do not suppress changed results or release evidence.
+Candidate projections retain `evidenceRunId` for identity-scoped presentation.
+
 ## Purpose
 
 Project a queue snapshot into an already-loaded Runtime state. Gate evaluation
@@ -51,6 +55,39 @@ managed-runtime evidence may create a Knowledge draft, not a published asset.
 - Simulation evidence remains preview-only and non-publishable.
 - Terminal transition handling and event deduplication retain existing behavior;
   this is not a generic idempotent event-sourcing API.
+
+### Unified evidence decision projection
+
+Gate evaluation still belongs to [Accept Gate](accept-gate.md), but production now
+projects the one resulting decision as the single truth:
+
+- The snapshot's explicit `remoteTaskId` is saved to `benchmark.remoteTaskId` for
+  backend-task binding. The queue `testTaskId` is never written there. When a
+  snapshot omits `remoteTaskId`, the previously recorded ID is retained only for
+  the same request (matching `payload.requestId`, or `payload.runId` when request
+  IDs are absent); a new request never inherits the previous run's backend ID.
+- `gate.decision` is deep-cloned into `benchmark.evidenceDecision`, and
+  `candidate.acceptGate.decision` plus `decisionReview.gate.decision` keep the same
+  value. Consumers never re-derive a decision from `passed`/`publishable`.
+- `ensureEvidenceKnowledgeDraft` classifies the draft only through
+  `classifyEvidenceDecision`; the draft carries the decision clone, explicit
+  `evidenceBinding` (candidateId/digest/runId), evidence level, publication state
+  and non-publishable contraindications.
+- A replayed terminal snapshot with the same canonical full content is a byte no-op:
+  no new audit/runtime event, timestamp, candidate disposition or asset version.
+- When `decision.adoption.status === 'waiting_external_verification'`, projection
+  keeps the candidate and workspace, sets `decisionReview.status` to the resumable
+  wait, records a `test.plan` resume action, sets `missionPaused = true` and
+  `iterationStats.loopStatus = 'blocked'` with reason `external_verification`, and
+  emits `accept_gate.waiting_external_verification` once per candidate/run.
+  Re-entering the same wait is a no-op. No Agent is started to fetch missing
+  diagnostics and no draft is created. Once a resumed retry produces a
+  non-waiting decision, the stale blocked marker and resume acknowledgement are
+  cleared without rewriting any evidence fact. Recovery reuses existing
+  resume + retry of the same candidate with unchanged budget/release rules.
+- `runAutomaticAdoption` keeps the Gate in review and copies the same decision into
+  `currentBest.evidenceDecision`; real hardware and publication remain separate
+  dimensions. A decision with `adoption.status !== 'allowed'` is not adopted.
 
 ## Dependencies and effects
 
