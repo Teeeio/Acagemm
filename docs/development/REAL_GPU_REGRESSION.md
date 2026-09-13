@@ -1,33 +1,68 @@
 # Real shared-GPU Agent regression and sample ledger
 
-Status: procedure/contract for the real shared-GPU regression only. It does not
-contain hardware results, does not certify N=20 and does not claim publishability.
-Current state (2026-09-13): the response-model observation implementation is
-complete and the upgraded hardware-free gates pass — **release 139 / non-hardware
-41, exit 0** (UTC 19:18:55–19:29:01, log SHA256
-`c4205aa44917708dff15aaa3d2d2996d95b9f9e5fd4a6aa83a12d7ba7a0b3c46`), with the
+Status: procedure/contract for the real shared-GPU regression plus the current
+retained live-run status. This document embeds no hardware result of its own — the
+originals are archived byte-exact and linked below — and it still does not certify
+N=20 and does not claim publishability.
+
+Current state (2026-09-13, after the user's explicit recovery authorization): the
+response-model observation implementation is complete and the upgraded hardware-free
+gates pass — **release 139 / non-hardware 41, exit 0** (UTC 19:18:55–19:29:01, log
+SHA256 `c4205aa44917708dff15aaa3d2d2996d95b9f9e5fd4a6aa83a12d7ba7a0b3c46`), with the
 producer `assistant.message.model` observation chain, the consumer final-record /
 all-requiredRuns / ledger / stop semantics, `collector 65/65` and the five
-fixture-only driver scenarios all verified. Archived originals, the machine
-manifest and the precise proof boundaries are in
+fixture-only driver scenarios all verified. Archived originals for those gates, the
+machine manifest and the precise proof boundaries are in
 [`evidence/model-observation-20260913/README.md`](evidence/model-observation-20260913/README.md).
 The earlier Phase 2 gates (release 136 / non-hardware 38, exit 0) are **historical
 and retained** at
 [`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md);
-they are not the current numbers and add no hardware samples. **No new GPU / real
-Agent run has been made** for this batch: the live request was refused by the
-`exec_command` automatic approval review **before process creation**
-(`approval-required`, `processCreated: false`, payload/destination authorization
-pending), so the newest real affine two-round smoke is still pending execution
-(`待运行`); reduction/normalization coverage and N=20 are likewise pending.
-Nothing in this document or in the hardware-free tests is evidence that the live
-observation path works, and the rejected live execution must not be replaced by a
-local dispatch run. The driver has **not observed a model value** on real hardware
-yet (a `declared`/env label cannot make a group comparable).
-The ordered follow-up is unchanged: first observe the model, then a
-same-configuration real two-round smoke, with family coverage and N=20 reported
-**separately**. Running the driver 20 times is not by itself an N=20 qualification,
-and the strict statistics threshold below is not relaxed.
+they are not the current numbers.
+
+The real live path has since actually been executed under that authorization, and the
+21 machine originals, the per-file manifest and the final reports are archived in
+[`evidence/live-regression-20260913/README.md`](evidence/live-regression-20260913/README.md):
+
+- affine: **20 unique real invocations, 20 `full_success`**, but only **19 share one
+  comparable fingerprint** (`sha256:d09574cc…c8bc15`). The 2nd invocation was
+  `full_success` yet is **non-comparable**, because its single cancelled run emitted
+  only `init` and its response model stayed genuinely `unknown`
+  (`sha256:18d788cf…dad1d4f`). Strict **N=20 is not passed**, and there was **no
+  replacement and no 21st sample**;
+- reduction/normalization coverage ran once as `full_success` under a separate
+  fingerprint and is reported as **coverage only** — it is never pooled into affine
+  N20;
+- the frozen offline reader independently re-verified **21/21** originals
+  (`ok=true`, `reasons` 0, `gaps` 0, `strictN20Eligible=false`), with **44 distinct
+  successful candidate digests**;
+- model observation: affine **51 required / 50 observed** (the single unknown is that
+  cancelled init-only run), coverage **4/4 observed**, **55 calls** in total — of which
+  **54 observed, all provider-reported as `deepseek-v4-flash`, and 1 genuinely
+  `unknown`** (never inferred from any init/env/usage label). `Claude Code` is the
+  CLI/runtime, **not** the responding model; init/usage/env labels never establish
+  comparability;
+- frozen code `887c98bc3d115380a769e09d4a96c8a9e34626de`, 313 participating source
+  hashes finally all matched, `dirtyFileCount=2` are the user's pre-existing untracked
+  files, and the frozen matrix and budgets were unchanged;
+- every stop and resource release is confirmed and `publishable=false`. All seven
+  failed affine candidates are **retained** — six real correctness-case-1 failures
+  that were mis-structured as `not_run` with lost experience evidence, plus one
+  `addcmul` tensor2 float type error — and the automatic recovery of the successful
+  runs does not erase them.
+
+The earlier `exec_command` automatic approval refusal (`approval-required`,
+`processCreated: false`) is **historical**: it happened before process creation and
+has been superseded by the user's explicit recovery authorization. The former
+statements that the newest real affine two-round smoke was still `pending`, that
+coverage/N=20 were pending, and that the driver had **never observed a model value**
+on real hardware are therefore **no longer current and must not be repeated**. A
+`declared`/env label still cannot make a group comparable.
+The ordered follow-up is unchanged in principle: first fix the failed-result
+structured persistence and the identity-bound experience feedback, then check the
+no-response cancellation/termination observation path (a no-response run must never
+have its model back-filled), then freeze a new revision and run a **new** N=20 batch.
+Running the driver 20 times is not by itself an N=20 qualification, and the strict
+statistics threshold below is not relaxed.
 
 Every configured operator family must have consistent attempt/summary outcomes.
 Missing summaries and failed attempts remain in the denominator. Duplicate
@@ -282,8 +317,13 @@ node scripts/summarize-gpu-agent-runs.mjs <retainedRunDir>
 
 These prove observer/ledger classification only. Running the real driver, the
 GPU, or a real Agent session is a separate, independently scheduled activity; it
-is never part of a hardware-free check. The newest real affine two-round smoke and
-any model observation on real hardware are **pending**, not passed.
+is never part of a hardware-free check. The newest real affine two-round smoke, the
+reduction/normalization coverage and the model observation on real hardware have now
+been executed and archived at
+[`evidence/live-regression-20260913/README.md`](evidence/live-regression-20260913/README.md);
+this section remains the hardware-free verification of the tooling only. The live
+batch is `20/20 full_success` but only `19` comparable, so strict N=20 is still
+**not passed**.
 
 ## Explicit non-claims
 
@@ -292,8 +332,9 @@ any model observation on real hardware are **pending**, not passed.
   conclusion; the strict N=20 release rule is a separate frozen engineering gate.
 - No provider-equivalence claim: running one provider does not verify another.
 - The model observation is provider-reported metadata, not independent
-  attestation of the remote service; the live path has not been re-run for this
-  batch.
+  attestation of the remote service. The live path **was** re-run for this batch
+  (see `evidence/live-regression-20260913/README.md`), but the label remains
+  provider-reported and non-comparable runs are never back-filled.
 - `prepared-before-send` audits prove what production prepared, not that a live
   provider received or obeyed it.
 - A `budget_terminal` attempt and a covered multi-family smoke do not certify

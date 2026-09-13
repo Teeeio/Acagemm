@@ -1,0 +1,4 @@
+# Archived evidence must stay byte-exact: never apply EOL/text conversion.
+*.json -text
+*.log -text
+*.zip binary

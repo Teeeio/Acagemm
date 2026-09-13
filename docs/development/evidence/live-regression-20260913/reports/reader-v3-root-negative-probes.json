@@ -1,0 +1,75 @@
+[
+  {
+    "fixtureOnly": true,
+    "case": "metadata-only",
+    "exitCode": 0,
+    "result": {
+      "ok": true,
+      "exitCode": 0,
+      "runCount": 1,
+      "fullSuccessRuns": 1,
+      "verifiedRuns": 1,
+      "strictN20Eligible": false
+    },
+    "reasons": [],
+    "gaps": []
+  },
+  {
+    "fixtureOnly": true,
+    "case": "stop-final-conflict",
+    "exitCode": 1,
+    "result": {
+      "ok": false,
+      "exitCode": 1,
+      "runCount": 1,
+      "fullSuccessRuns": 1,
+      "verifiedRuns": 0,
+      "strictN20Eligible": false
+    },
+    "reasons": [
+      "model run claude_MTZ4A4F8_4BFFB3AD: conflicting concrete sessions observed for this run in the retained states",
+      "attempt.modelObservationSummary disagrees with the independent recomputation from the current runRoot records",
+      "summary.modelObservationSummary disagrees with the independent recomputation from the current runRoot records"
+    ],
+    "gaps": []
+  },
+  {
+    "fixtureOnly": true,
+    "case": "extra-undeclared-run",
+    "exitCode": 1,
+    "result": {
+      "ok": false,
+      "exitCode": 1,
+      "runCount": 1,
+      "fullSuccessRuns": 1,
+      "verifiedRuns": 0,
+      "strictN20Eligible": false
+    },
+    "reasons": [
+      "attempt.modelObservationSummary disagrees with the independent recomputation from the current runRoot records",
+      "summary.modelObservationSummary disagrees with the independent recomputation from the current runRoot records"
+    ],
+    "gaps": [
+      "run record claude_fixture_extra.json belongs to this attempt but is absent from the declared required runs",
+      "independent enumeration found run identities the summary never declared: claude-code|MIS_MTZ47TOE|claude_fixture_extra|1e9cdf1c-5dc7-4e3e-b3c1-c95d2a17ae93"
+    ]
+  },
+  {
+    "fixtureOnly": true,
+    "case": "missing-directory",
+    "exitCode": 1,
+    "result": {
+      "ok": false,
+      "exitCode": 1,
+      "runCount": 1,
+      "fullSuccessRuns": 0,
+      "verifiedRuns": 0,
+      "strictN20Eligible": false
+    },
+    "reasons": [],
+    "gaps": [
+      "attempt.json is missing",
+      "summary.json is missing"
+    ]
+  }
+]

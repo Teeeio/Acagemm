@@ -1,0 +1,26 @@
+{
+  "recordType": "root-observed-defect",
+  "observedAt": "2026-09-13T02:01:02.5969489Z",
+  "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-X69hIj",
+  "n20Index": 8,
+  "queueTaskId": "queue_8D305E7D9CDB4178",
+  "requestId": "run_268C5A7205A9396FFC5D5DBC",
+  "runnerTask": "local_c500_9E107F6327FE7BEA995BA897BF2F5F8F",
+  "actualRawFailure": "correctness failed on case 1; max absolute difference 0.125; tolerance 1e-05",
+  "structuredCode": "SHARED_GPU_RUNNER_FAILED",
+  "structuredCorrectnessStatus": "not_run",
+  "structuredExecutedCases": 0,
+  "resourceReleaseConfirmed": true,
+  "productionRecovered": true,
+  "terminalInvocationOutcome": "full_success",
+  "completedCandidates": 2,
+  "failedCandidateTasks": 1,
+  "cause": [
+    "tools/local-c500-runner.py:202 returns detailed failed correctness",
+    "tools/local-c500-runner.py:606 raises RuntimeError before result record",
+    "tools/local-c500-runner.py:686 catches and returns 1 without result",
+    "tools/local-shared-gpu-runner.py:269 fallback classifies generic backend failure / not_run"
+  ],
+  "consequence": "failed correctness facts and execution experience binding are lost; experience collection skips EXPERIENCE_BINDING_MISSING",
+  "disposition": "Preserve originals; no production changes during frozen batch. Follow-up fix must serialize failed correctness with identities and error phase before return; keep oracle/matrix/tolerance unchanged."
+}
