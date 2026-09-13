@@ -144,6 +144,18 @@ def _load_package_operator(run_py: Path, *, package_root=None, oracle=False):
     return module
 
 
+def _execution_package(payload):
+    """The admitted package binding, read verbatim from the task payload only."""
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        key: payload.get(key)
+        for key in ("packageDigest", "admissionId", "preparedArtifactDigest", "environmentDigest",
+                    "acceptanceDigest", "workspaceId", "target", "build", "adapter")
+        if payload.get(key) is not None
+    }
+
+
 def _failure_result(task_dir: Path, result_path: Path, error, *, candidate=None, oracle=None):
     """Persist a structured terminal failure when the reused runner fails preflight."""
     task = {}
@@ -151,12 +163,20 @@ def _failure_result(task_dir: Path, result_path: Path, error, *, candidate=None,
         task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     except Exception:
         pass
+    if not isinstance(task, dict):
+        task = {}
     payload = task.get("payload") if isinstance(task.get("payload"), dict) else task
+    if not isinstance(payload, dict):
+        payload = {}
+    matrix = task.get("matrix") if isinstance(task.get("matrix"), dict) else {}
+    try:
+        requested_total = max(0, int(matrix.get("correctnessCases") or 0))
+    except (TypeError, ValueError):
+        requested_total = 0
     environment = {
-        "requested": task.get("hardware") or (task.get("matrix") or {}).get("environments") or ["local-shared-gpu"],
+        "requested": task.get("hardware") or matrix.get("environments") or ["local-shared-gpu"],
         "runtime": "local-shared-gpu-runner/v1", "service": "local-shared-gpu-adapter",
-        "source": "local-shared-gpu", "hardware": "nvidia-gpu", "executionMode": "gpu",
-        "liveHardware": True, "publishable": False,
+        "source": "local-shared-gpu", "publishable": False,
     }
     if candidate:
         environment["candidateRunPy"] = str(candidate)
@@ -166,16 +186,151 @@ def _failure_result(task_dir: Path, result_path: Path, error, *, candidate=None,
         "code": "SHARED_GPU_RUNNER_FAILED", "message": str(error), "phase": "runner",
         "role": "backend", "retryable": False, "details": {},
     }
+    correctness = {
+        "status": "not_run", "passed": None, "total": requested_total,
+        "executedCases": 0, "passedCases": 0, "failedCase": None,
+        "failedCaseName": None, "failedCaseCategory": None,
+        "caseResults": [], "error": None, "failure": None,
+    }
     result = {
         "schemaVersion": "operator-studio.shared-gpu-result/v1", "status": "failed",
-        "error": record, "correctness": {"status": "not_run", "passed": None, "total": 0,
-                                            "executedCases": 0, "passedCases": 0, "caseResults": [],
-                                            "error": record.get("message"), "failure": record},
+        "error": record, "correctness": correctness,
         "benchmark": [], "environment": environment, "publishable": False,
     }
+    package = _execution_package(payload)
+    if package:
+        result["executionPackage"] = package
+        environment["executionPackage"] = package
     if result_path and not result_path.is_dir():
         _write_json(result_path, result)
     return 1
+
+
+CANDIDATE_FAILURE_CODES = ("OPERATOR_CORRECTNESS_MISMATCH", "OPERATOR_CANDIDATE_EXCEPTION")
+
+
+def _experience_evidence(result, payload, package, environment, has_probe):
+    """Keep the passed path compatible; only a real failed candidate correctness is learnable."""
+    if not package:
+        return None
+    candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    if result.get("status") == "failed":
+        if not has_probe:
+            # Preflight/probe/backend failures must never become GPU evidence.
+            return None
+        correctness = result.get("correctness") if isinstance(result.get("correctness"), dict) else {}
+        if correctness.get("status") != "failed" or correctness.get("passed") is not False:
+            return None
+        if result.get("benchmark") != []:
+            return None
+        failure = correctness.get("failure") if isinstance(correctness.get("failure"), dict) else result.get("error")
+        if not isinstance(failure, dict):
+            return None
+        if failure.get("phase") != "correctness" or failure.get("role") != "candidate":
+            return None
+        if failure.get("code") not in CANDIDATE_FAILURE_CODES:
+            return None
+        cases = correctness.get("caseResults")
+        if not isinstance(cases, list):
+            return None
+        try:
+            total = int(correctness.get("total"))
+            executed = int(correctness.get("executedCases"))
+            passed_cases = int(correctness.get("passedCases"))
+            failed_case = int(correctness.get("failedCase"))
+        except (TypeError, ValueError):
+            return None
+        if total < 1 or executed < 1 or executed > total:
+            return None
+        if passed_cases != executed - 1 or failed_case != executed or len(cases) != executed:
+            return None
+        evidence = {
+            "missionId": payload.get("missionId"),
+            "candidateId": candidate.get("id"),
+            "runId": payload.get("requestId"),
+            "patchDigest": candidate.get("digest"),
+            "packageDigest": package.get("packageDigest"),
+            "environmentDigest": package.get("environmentDigest"),
+            "acceptanceDigest": package.get("acceptanceDigest"),
+            "hardware": "nvidia-gpu",
+            "executionMode": "gpu",
+            "outcome": "failed",
+            "operation": "test",
+            "liveHardware": True,
+        }
+        if isinstance(environment.get("architecture"), str) and environment["architecture"]:
+            evidence["architecture"] = environment["architecture"]
+        return evidence
+    evidence = {
+        "missionId": payload.get("missionId"),
+        "candidateId": candidate.get("id"),
+        "runId": payload.get("requestId"),
+        "patchDigest": candidate.get("digest"),
+        "packageDigest": package.get("packageDigest"),
+        "environmentDigest": package.get("environmentDigest"),
+        "acceptanceDigest": package.get("acceptanceDigest"),
+        "hardware": "nvidia-gpu",
+        "executionMode": "gpu",
+        "outcome": "passed",
+        "operation": "test",
+        "liveHardware": True,
+    }
+    if isinstance(environment.get("architecture"), str) and environment["architecture"]:
+        evidence["architecture"] = environment["architecture"]
+    return evidence
+
+
+def _normalize_result(result, task):
+    """Normalize the reused runner record without ever erasing a real typed failure."""
+    result["schemaVersion"] = "operator-studio.shared-gpu-result/v1"
+    environment = result.get("environment")
+    if not isinstance(environment, dict):
+        environment = {}
+        result["environment"] = environment
+    raw_probe = environment.get("hardware")
+    probe = raw_probe if isinstance(raw_probe, dict) else {}
+    has_probe = bool(probe.get("deviceName") and probe.get("driverVersion"))
+    architecture = probe.get("architecture") if has_probe else None
+    environment.update({
+        "runtime": "local-shared-gpu-runner/v1",
+        "service": "local-shared-gpu-adapter",
+        "source": "local-shared-gpu",
+    })
+    if has_probe:
+        environment.update({
+            "hardware": "nvidia-gpu",
+            "executionMode": "gpu",
+            "liveHardware": True,
+            "targetProbe": probe,
+        })
+        if isinstance(architecture, str) and architecture:
+            environment["architecture"] = architecture
+            environment["device"] = probe.get("deviceName")
+            environment["driverVersion"] = probe.get("driverVersion")
+        else:
+            # 未解析出架构就不声明该维度：不猜、不填默认值。
+            environment["architectureNote"] = probe.get("architectureNote") or "architecture was not resolved"
+    else:
+        # No verified driver probe: never promote a failure into live GPU hardware.
+        environment["liveHardware"] = False
+        environment["targetProbe"] = None
+        environment.setdefault("architectureNote", "architecture was not resolved")
+    environment["publishable"] = False
+    result["publishable"] = False
+
+    payload = task.get("payload") if isinstance(task.get("payload"), dict) else task
+    if not isinstance(payload, dict):
+        payload = {}
+    package = _execution_package(payload)
+    if package:
+        result["executionPackage"] = package
+        environment["executionPackage"] = package
+    evidence = _experience_evidence(result, payload, package, environment, has_probe)
+    if evidence is None:
+        result.pop("experienceEvidence", None)
+    else:
+        result["experienceEvidence"] = evidence
+    return result
 
 
 def main():
@@ -203,71 +358,29 @@ def main():
         oracle.relative_to(task_dir)
     except ValueError:
         return _failure_result(task_dir, result_path, {"code": "SHARED_GPU_PATH_INVALID", "message": "Runner inputs must reside inside the prepared package directory.", "phase": "preflight", "role": "contract", "retryable": False, "details": {}}, candidate=candidate, oracle=oracle)
+    # The adapter owns this directory: drop any stale terminal record first so a
+    # previous success can never mask a preflight or execution failure.
+    try:
+        if result_path.is_file():
+            result_path.unlink()
+    except OSError:
+        pass
     runner._load_operator = lambda file: _load_package_operator(file, package_root=task_dir, oracle=(Path(file).resolve() == oracle))
     status = runner.main()
-    if result_path.is_file():
-        try:
-            result = json.loads(result_path.read_text(encoding="utf-8"))
-            environment = result.setdefault("environment", {})
-            # 基类 runner 已经在这里放了一份来自驱动探测的 target（dict，见 _probe_nvidia）。
-            # 这里曾经把它整份覆盖成硬编码字面量 "nvidia-gpu"，等于丢掉权威探测结果。
-            # 现在它是唯一消费者：保留原始探测，并从它派生两个相互独立的作用域维度。
-            # 厂商与架构必须分维度 —— 塞进同一个数组会让 some() 退化成跨维度的 OR。
-            probe = environment.get("hardware") if isinstance(environment.get("hardware"), dict) else {}
-            architecture = probe.get("architecture")
-            environment.update({
-                "runtime": "local-shared-gpu-runner/v1",
-                "service": "local-shared-gpu-adapter",
-                "source": "local-shared-gpu",
-                "hardware": "nvidia-gpu",
-                "executionMode": "gpu",
-                "liveHardware": True,
-                "publishable": False,
-                "targetProbe": probe or None,
-            })
-            if isinstance(architecture, str) and architecture:
-                environment["architecture"] = architecture
-                environment["device"] = probe.get("deviceName")
-                environment["driverVersion"] = probe.get("driverVersion")
-            else:
-                # 未解析出架构就不声明该维度：不猜、不填默认值。
-                environment["architectureNote"] = probe.get("architectureNote") or "architecture was not resolved"
-            task_path = Path(os.environ.get("OPERATOR_LOCAL_C500_TASK_JSON", ""))
-            task = json.loads(task_path.read_text(encoding="utf-8")) if task_path.is_file() else {}
-            payload = task.get("payload") or {}
-            package = {
-                key: payload.get(key)
-                for key in ("packageDigest", "admissionId", "preparedArtifactDigest", "environmentDigest", "acceptanceDigest", "workspaceId", "target", "build", "adapter")
-                if payload.get(key) is not None
-            }
-            if package:
-                result["executionPackage"] = package
-                environment["executionPackage"] = package
-                result["experienceEvidence"] = {
-                    "missionId": payload.get("missionId"),
-                    "candidateId": (payload.get("candidate") or {}).get("id"),
-                    "runId": payload.get("requestId"),
-                    "patchDigest": (payload.get("candidate") or {}).get("digest"),
-                    "packageDigest": package.get("packageDigest"),
-                    "environmentDigest": package.get("environmentDigest"),
-                    "acceptanceDigest": package.get("acceptanceDigest"),
-                    "hardware": "nvidia-gpu",
-                    "executionMode": "gpu",
-                    "outcome": "passed" if result.get("status", "completed") == "completed" else "failed",
-                    "operation": "test",
-                    "liveHardware": True,
-                }
-                # 架构只在真的解析出来时才写进证据；解析不出就不声明，绝不补一个默认值。
-                if environment.get("architecture"):
-                    result["experienceEvidence"]["architecture"] = environment["architecture"]
-            result["publishable"] = False
-            result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        except Exception as error:
-            print(f"shared GPU result normalization failed: {error}", file=sys.stderr)
-            return 1
-    else:
+    if not result_path.is_file():
         # Base runner catches failures and returns 1 without a result file.
         return _failure_result(task_dir, result_path, {"code": "SHARED_GPU_RUNNER_FAILED", "message": "Shared-GPU runner terminated without a result record.", "phase": "runner", "role": "backend", "retryable": False, "details": {"exitCode": status}}, candidate=candidate, oracle=oracle)
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        task_path = Path(os.environ.get("OPERATOR_LOCAL_C500_TASK_JSON", ""))
+        if not task_path.is_file():
+            task_path = task_dir / "task.json"
+        task = json.loads(task_path.read_text(encoding="utf-8")) if task_path.is_file() else {}
+        _normalize_result(result, task if isinstance(task, dict) else {})
+        _write_json(result_path, result)
+    except Exception as error:
+        print(f"shared GPU result normalization failed: {error}", file=sys.stderr)
+        return 1
     return status
 
 

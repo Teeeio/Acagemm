@@ -106,6 +106,78 @@ boundary prepared and handed to the provider port. They do not claim what a live
 provider process received, and the `e2e:shared-gpu-agent-iteration` driver likewise
 only reads that artifact for the continuation round.
 
+## Failed execution result producer (hardware-free)
+
+`shared-gpu-failure-result-test.py` is the independent hardware-free acceptance for
+the frozen producer half of `docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md`.
+It drives the real `main()` of `tools/local-c500-runner.py` and of
+`tools/local-shared-gpu-runner.py` with real temporary candidate/oracle module files,
+while only the hardware boundaries are doubles: an explicit in-process torch/CUDA
+tensor double, module-level `subprocess`/`shutil` probe doubles (the same technique as
+`shared-gpu-target-probe-test.mjs`) and a Triton-free base benchmark timer. The probe
+values are annotated hardware doubles that feed the runners' real parsers; they are
+not a GPU sample or a driver observation.
+
+Its atomic-failure coverage is the point of the test: every base failure branch (first
+and later numeric mismatch, candidate exception, oracle exception, benchmark failure
+after correctness passed) must persist a structured `result.json` with the retained
+correctness, `benchmark=[]` and a typed first error carrying the real error text, and
+the terminal `correctness.json`/`result.json` must reach their real final paths only
+through a temporary file plus `os.replace` in the same directory. Any direct
+`write_text`/`open('w')` of a final path fails the case, so an atomic replace followed
+by a plain overwrite cannot pass; a planted stale successful result is likewise
+overwritten by the failed record rather than reused, and shared normalization must
+preserve the typed failure instead of replacing it with generic `not_run`. A green
+result is producer contract evidence only, never a hardware sample or stability claim.
+This file was the original red baseline on the pre-integration snapshot; after the
+frozen producer contract landed the independent Root hardware-free run passed 13/13 and
+it runs in both verification gates. The task ids, the locked file hash and the
+platform artifact digest are recorded in
+[`docs/development/evidence/failure-feedback-20260913/README.md`](../docs/development/evidence/failure-feedback-20260913/README.md).
+
+## Failed execution feedback / next-round fact injection (hardware-free)
+
+`failed-execution-feedback-test.mjs` is the independent acceptance for the Node
+consumer half of the same frozen document. What is real: the production failed-round
+pipeline — `createBenchmarkProjectionService` → `applyOperatorTestSnapshot` →
+`roundExperience.collect` → a real filesystem Experience repository →
+`resetMissionRunState` archive → `agent-round-service` plus `agentRuntime` next-round
+prompt and pre-send audit. What is a port double: the queue snapshot source, package
+admission, `readTask`, the prepared-artifact adapter and the Agent provider client, so
+no Claude/Codex process, GPU, network call or N=20 batch is started.
+
+The consumer-side next-prompt coverage is the point of the test: the failed
+correctness case/code/error and the exact recorded experience id/version/content must
+reach the next-round provider prompt and the pre-send audit (`roundFacts` deep-equal,
+selection lists the execution-sourced record), a replayed identical observation must
+be idempotent, a rejected observation must not grow the real Experience repository,
+and `roundCorrectnessFacts` must take the top-level `result.correctness` as authority
+so stale successful benchmark rows cannot turn the round into passed and `not_run`
+stays `not_observed`. Fixtures, projections and queue receipts are contract/port
+doubles and `roundFacts`/`iterationContext`/experiences are read back from production
+code rather than hand-authored, so a green result is fixture-only, non-live
+contract/integration evidence — never a hardware sample, stability or publishability
+claim. This file was the original red baseline on the pre-integration snapshot; after
+the production consumer path landed the independent Root hardware-free full-chain run
+passed all six sections and it runs in both verification gates. Task id, file hash and
+the platform artifact digest are recorded in
+[`docs/development/evidence/failure-feedback-20260913/README.md`](../docs/development/evidence/failure-feedback-20260913/README.md).
+
+## Failed execution boundary regression (hardware-free)
+
+`failed-execution-boundary-test.mjs` freezes the failed-execution acceptance
+boundaries Root reproduced on the pre-integration snapshot: a control fully bound
+failed-candidate observation plus each targeted boundary as one mutation whose
+projected/queue/observation copies stay in sync. It drives the real
+`createSharedGpuExperienceVerifier` and the real
+`createMissionProjectState`/`resetMissionRunState` archive entry, never imports the
+frozen `failed-execution-feedback-test.mjs`, starts no GPU/model/provider/network
+call and removes its own temporary root in `finally`. Every case runs in one pass;
+a red control positive reports each dependent boundary as `blocked` (never green)
+so an unrelated pre-integration rejection is not counted as a targeted rejection.
+It is contract/integration evidence only and must not be weakened to match a
+pre-integration tree. It runs in both verification gates.
+
 ## Query/advancement coverage
 
 `runtime-read-isolation-test.mjs` boots an isolated Runtime with hardware disabled.

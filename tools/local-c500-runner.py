@@ -148,6 +148,183 @@ def _save_reference_cache(torch, cache_file, expected):
         temporary.unlink(missing_ok=True)
 
 
+def _typed_error(code, message, phase, role, details=None):
+    """Frozen neutral typed failure shared by every terminal correctness outcome."""
+    return {
+        "code": str(code),
+        "message": str(message),
+        "phase": str(phase),
+        "role": str(role),
+        "retryable": False,
+        "details": dict(details or {}),
+    }
+
+
+def _not_run_correctness(total):
+    """A real terminal with no attempted case: never a fabricated failed case."""
+    return {
+        "status": "not_run",
+        "passed": None,
+        "total": int(total or 0),
+        "executedCases": 0,
+        "passedCases": 0,
+        "failedCase": None,
+        "failedCaseName": None,
+        "failedCaseCategory": None,
+        "caseResults": [],
+        "failure": None,
+        "error": None,
+    }
+
+
+def _write_json_atomic(path, value):
+    """Temporary file + os.replace in the destination directory (never a direct write)."""
+    path = Path(path)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _execution_package(task):
+    """The admitted package binding, read verbatim from the task payload only."""
+    payload = task.get("payload") if isinstance(task.get("payload"), dict) else task
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        key: payload.get(key)
+        for key in ("packageDigest", "admissionId", "preparedArtifactDigest", "environmentDigest",
+                    "acceptanceDigest", "workspaceId", "target", "build", "adapter")
+        if payload.get(key) is not None
+    }
+
+
+def _candidate_of(task):
+    candidate = task.get("candidate") if isinstance(task, dict) else None
+    if not isinstance(candidate, dict):
+        payload = task.get("payload") if isinstance(task, dict) and isinstance(task.get("payload"), dict) else {}
+        candidate = payload.get("candidate")
+    return candidate if isinstance(candidate, dict) else {}
+
+
+def _environment_record(task, matrix, hardware=None, diagnostics_mode=None, tracer_status=None, profiler_status=None):
+    """Environment provenance. A missing probe is never replaced by a current-host default."""
+    task = task if isinstance(task, dict) else {}
+    matrix = matrix if isinstance(matrix, dict) else {}
+    environment = {
+        "requested": task.get("hardware") or matrix.get("environments") or ["C550"],
+        "runtime": "local-c500-runner/v1",
+        "service": "local-c500-adapter",
+        "source": "local-c500",
+        "liveHardware": bool(isinstance(hardware, dict) and hardware),
+        "hardware": hardware,
+        "candidateDigest": _candidate_of(task).get("digest"),
+        "runPySource": task.get("runPySource"),
+    }
+    if diagnostics_mode is not None:
+        environment["diagnosticsMode"] = diagnostics_mode
+    if tracer_status is not None or profiler_status is not None:
+        environment["optionalDiagnostics"] = {"mctracer": tracer_status, "mcProfiler": profiler_status}
+    return environment
+
+
+def _failed_result(task, error, correctness, environment):
+    """A failed execution never keeps a benchmark row and stays non-publishable."""
+    result = {
+        "status": "failed",
+        "error": error,
+        "correctness": correctness,
+        "benchmark": [],
+        "environment": environment,
+        "publishable": False,
+    }
+    package = _execution_package(task)
+    if package:
+        result["executionPackage"] = package
+        environment["executionPackage"] = package
+    return result
+
+
+def _case_dtype(torch, inputs):
+    tensor_type = getattr(torch, "Tensor", ())
+    floating = [value for value in inputs.values() if tensor_type and isinstance(value, tensor_type) and value.is_floating_point()]
+    return str(getattr(floating[0], "dtype", "unknown")).replace("torch.", "") if floating else "unknown"
+
+
+def _failed_correctness(*, total, index, name, category, code, role, message, dtype_name, metrics, details, cache_stats, started):
+    """Preserve the attempted prefix and attach the same typed first failure everywhere."""
+    typed = _typed_error(code, message, "correctness", role, {"case": name, "caseIndex": index + 1, "category": category})
+    case_entry = {
+        "case": name,
+        "dtype": dtype_name,
+        "maxDiff": metrics.get("maxDiff") if metrics else None,
+        "rmse": metrics.get("rmse") if metrics else None,
+        "cosDiff": metrics.get("cosDiff") if metrics else None,
+        "passed": False,
+        "error": message,
+        "failure": typed,
+    }
+    return {
+        "status": "failed",
+        "passed": False,
+        "total": total,
+        "executedCases": index + 1,
+        "passedCases": index,
+        "failedCase": index + 1,
+        "failedCaseName": name,
+        "failedCaseCategory": category,
+        "error": message,
+        "failure": typed,
+        "caseResults": details + [case_entry],
+        "referenceCache": cache_stats,
+        "durationMs": round((time.perf_counter() - started) * 1000, 3),
+    }
+
+
+def _case_metrics(torch, actual, expected):
+    """Real computed numeric diagnostics, or None when they cannot be computed.
+
+    Each diagnostic is committed as soon as it is really computed: a later
+    diagnostic raising keeps the values already observed and reports its real
+    error instead of flattening the whole measurement back to null. A metric
+    that was never computed stays absent (null downstream), never a fabricated
+    0. A pair of tensors that really is empty legitimately differs by an empty
+    amount, so that single case keeps actual 0 values. A non-tensor candidate
+    output or a shape/type error keeps null; a fabricated 0 would claim a
+    comparison that never happened.
+
+    Returns ``(metrics, error)``: ``metrics`` holds only the diagnostics that
+    were really computed and ``error`` is the first diagnostic failure or None.
+    """
+    tensor_type = getattr(torch, "Tensor", ())
+    if not tensor_type or not isinstance(actual, tensor_type) or not isinstance(expected, tensor_type):
+        return None, None
+    actual_float, expected_float = actual.float(), expected.float()
+    delta = actual_float - expected_float
+    if not int(delta.numel()):
+        return {"maxDiff": 0.0, "rmse": 0.0, "cosDiff": 0.0}, None
+
+    def cosine_diff():
+        cosine = torch.nn.functional.cosine_similarity(actual_float.flatten(), expected_float.flatten(), dim=0)
+        return float(1.0 - cosine.abs().item())
+
+    metrics = {}
+    error = None
+    for key, observe in (
+        ("maxDiff", lambda: float(delta.abs().max().item())),
+        ("rmse", lambda: float(torch.sqrt(torch.mean(delta.square())).item())),
+        ("cosDiff", cosine_diff),
+    ):
+        try:
+            metrics[key] = observe()
+        except Exception as failure:  # noqa: BLE001 - the diagnostic failed, not the runner
+            if error is None:
+                error = failure
+    return metrics, error
+
+
 def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_module=None, reference_cache=None):
     started = time.perf_counter()
     oracle = oracle_module or module
@@ -156,67 +333,109 @@ def _run_correctness(module, torch, cases, atol, rtol, test_spec=None, oracle_mo
     cache_stats = {"schemaVersion": "operator-studio.correctness-reference-cache/v1", "enabled": bool(reference_cache), "hits": 0, "misses": 0}
     dtype_tolerance = ((test_spec or {}).get("correctness") or {}).get("dtypeTolerance") or {}
     cos_limit = float(((test_spec or {}).get("correctness") or {}).get("requireCosDiffBelow") or 1e-5)
+    tensor_type = getattr(torch, "Tensor", ())
     for index, case in enumerate(generated_cases):
-        inputs = case.get("inputs") if "inputs" in case else case["make_inputs"]()
+        name = str(case["name"])
+        category = str(case["category"])
+        dtype_name = "unknown"
+        # Oracle-owned input generation (including a throwing make_inputs) and dtype
+        # resolution keep the selected index/prefix and an accurate role=oracle.
+        try:
+            inputs = case.get("inputs") if "inputs" in case else case["make_inputs"]()
+            if not isinstance(inputs, dict):
+                raise TypeError(f"correctness case {index + 1} inputs must be a mapping, got {type(inputs).__name__}")
+            dtype_name = _case_dtype(torch, inputs)
+        except Exception as error:
+            return _failed_correctness(
+                total=cases, index=index, name=name, category=category,
+                code="OPERATOR_ORACLE_EXCEPTION", role="oracle", message=str(error),
+                dtype_name=dtype_name, metrics=None, details=details, cache_stats=cache_stats, started=started)
         expected = None
         cache_file = None
         if reference_cache:
-            cache_key = _reference_cache_key(case, inputs, torch, reference_cache)
-            cache_file = Path(reference_cache["root"]) / cache_key[:2] / f"{cache_key}.pt"
-            tensor_type = getattr(torch, "Tensor", ())
-            input_tensor = next((value for value in inputs.values() if tensor_type and isinstance(value, tensor_type)), None)
-            device = input_tensor.device if input_tensor is not None else None
-            if cache_file.exists() and device is not None:
-                expected = _load_reference_cache(torch, cache_file, device)
-            if expected is not None:
-                cache_stats["hits"] += 1
-            else:
-                cache_stats["misses"] += 1
+            # The reference cache is backend infrastructure: a cache failure keeps
+            # the passed prefix and role=backend, never role=oracle.
+            try:
+                cache_key = _reference_cache_key(case, inputs, torch, reference_cache)
+                cache_file = Path(reference_cache["root"]) / cache_key[:2] / f"{cache_key}.pt"
+                input_tensor = next((value for value in inputs.values() if tensor_type and isinstance(value, tensor_type)), None)
+                device = input_tensor.device if input_tensor is not None else None
+                if cache_file.exists() and device is not None:
+                    expected = _load_reference_cache(torch, cache_file, device)
+                if expected is not None:
+                    cache_stats["hits"] += 1
+                else:
+                    cache_stats["misses"] += 1
+            except Exception as error:
+                return _failed_correctness(
+                    total=cases, index=index, name=name, category=category,
+                    code="OPERATOR_REFERENCE_CACHE_FAILURE", role="backend", message=str(error),
+                    dtype_name=dtype_name, metrics=None, details=details, cache_stats=cache_stats, started=started)
         if expected is None:
-            expected = oracle.reference(inputs)
+            # An oracle reference throw keeps the attempted case and role=oracle,
+            # but is never learnable as an operator failure.
+            try:
+                expected = oracle.reference(inputs)
+            except Exception as error:
+                return _failed_correctness(
+                    total=cases, index=index, name=name, category=category,
+                    code="OPERATOR_ORACLE_EXCEPTION", role="oracle", message=str(error),
+                    dtype_name=dtype_name, metrics=None, details=details, cache_stats=cache_stats, started=started)
             if cache_file is not None:
-                _save_reference_cache(torch, cache_file, expected)
-        actual = module.run(inputs)
-        _sync(torch)
-        tensor_type = getattr(torch, "Tensor", ())
-        floating_inputs = [value for value in inputs.values() if tensor_type and isinstance(value, tensor_type) and value.is_floating_point()]
-        dtype_name = str((floating_inputs[0].dtype if floating_inputs else getattr(actual, "dtype", "unknown"))).replace("torch.", "")
-        tolerance = dtype_tolerance.get(dtype_name) or {}
-        case_atol, case_rtol = float(tolerance.get("atol", atol)), float(tolerance.get("rtol", rtol))
-        if tensor_type and isinstance(actual, tensor_type) and isinstance(expected, tensor_type):
-            actual_float, expected_float = actual.float(), expected.float()
-            delta = actual_float - expected_float
-            max_diff = float(delta.abs().max().item()) if delta.numel() else 0.0
-            rmse = float(torch.sqrt(torch.mean(delta.square())).item()) if delta.numel() else 0.0
-            if delta.numel():
-                cosine = torch.nn.functional.cosine_similarity(actual_float.flatten(), expected_float.flatten(), dim=0)
-                cos_diff = float(1.0 - cosine.abs().item())
-            else:
-                cos_diff = 0.0
-        else:
-            max_diff = rmse = cos_diff = 0.0
+                try:
+                    _save_reference_cache(torch, cache_file, expected)
+                except Exception as error:
+                    return _failed_correctness(
+                        total=cases, index=index, name=name, category=category,
+                        code="OPERATOR_REFERENCE_CACHE_FAILURE", role="backend", message=str(error),
+                        dtype_name=dtype_name, metrics=None, details=details, cache_stats=cache_stats, started=started)
+        # A throwing candidate.run was still attempted for this named case (never not_run)
+        # and its uncomputed numeric diagnostics stay null, never a fabricated 0.
         try:
-            _assert_close(torch, actual, expected, case_atol, case_rtol)
-            if cos_diff >= cos_limit:
-                raise AssertionError(f"cos_diff {cos_diff} is not below {cos_limit}")
+            actual = module.run(inputs)
+            _sync(torch)
         except Exception as error:
-            return {
-                "passed": False,
-                "total": cases,
-                "passedCases": index,
-                "failedCase": index + 1,
-                "failedCaseName": case["name"],
-                "failedCaseCategory": case["category"],
-                "error": str(error),
-                "caseResults": details + [{"case": case["name"], "dtype": dtype_name, "maxDiff": max_diff, "rmse": rmse, "cosDiff": cos_diff, "passed": False}],
-                "referenceCache": cache_stats,
-                "durationMs": round((time.perf_counter() - started) * 1000, 3),
-            }
-        details.append({"case": case["name"], "dtype": dtype_name, "maxDiff": max_diff, "rmse": rmse, "cosDiff": cos_diff, "passed": True})
+            return _failed_correctness(
+                total=cases, index=index, name=name, category=category,
+                code="OPERATOR_CANDIDATE_EXCEPTION", role="candidate", message=str(error),
+                dtype_name=dtype_name, metrics=None, details=details, cache_stats=cache_stats, started=started)
+        # Reading the output dtype, the output diagnostics and the oracle
+        # comparison are one candidate stage: a shape/type/numeric/cosine failure
+        # there is an OPERATOR_CORRECTNESS_MISMATCH that keeps the attempted case
+        # and its prefix, never a lost generic runner error. Diagnostics really
+        # computed before the failure are kept; ones never computed stay null.
+        metrics = None
+        try:
+            floating_inputs = [value for value in inputs.values() if tensor_type and isinstance(value, tensor_type) and value.is_floating_point()]
+            dtype_name = str((floating_inputs[0].dtype if floating_inputs else getattr(actual, "dtype", "unknown"))).replace("torch.", "")
+            tolerance = dtype_tolerance.get(dtype_name) or {}
+            case_atol, case_rtol = float(tolerance.get("atol", atol)), float(tolerance.get("rtol", rtol))
+            metrics, metric_error = _case_metrics(torch, actual, expected)
+            if metric_error is not None:
+                raise metric_error
+            _assert_close(torch, actual, expected, case_atol, case_rtol)
+            if metrics is not None and metrics["cosDiff"] >= cos_limit:
+                raise AssertionError(f"cos_diff {metrics['cosDiff']} is not below {cos_limit}")
+        except Exception as error:
+            return _failed_correctness(
+                total=cases, index=index, name=name, category=category,
+                code="OPERATOR_CORRECTNESS_MISMATCH", role="candidate", message=str(error),
+                dtype_name=dtype_name, metrics=metrics, details=details, cache_stats=cache_stats, started=started)
+        observed = {"maxDiff": None, "rmse": None, "cosDiff": None}
+        if metrics is not None:
+            observed.update(metrics)
+        details.append({"case": name, "dtype": dtype_name, **observed, "passed": True})
     return {
+        "status": "passed",
         "passed": True,
         "total": cases,
+        "executedCases": cases,
         "passedCases": cases,
+        "failedCase": None,
+        "failedCaseName": None,
+        "failedCaseCategory": None,
+        "failure": None,
+        "error": None,
         "categories": sorted({str(case["category"]) for case in generated_cases}),
         "caseNames": [str(case["name"]) for case in generated_cases],
         "caseResults": details,
@@ -563,22 +782,67 @@ def _run(args):
     run_py = Path(args.run_py or os.environ["OPERATOR_LOCAL_C500_RUN_PY"]).resolve()
     result_json = Path(args.result_json or os.environ["OPERATOR_LOCAL_C500_RESULT_JSON"]).resolve()
     task_dir = Path(os.environ.get("OPERATOR_LOCAL_C500_TASK_DIR", result_json.parent)).resolve()
-    diagnostics_mode = _diagnostics_mode()
-    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    task = {}
+    matrix = {}
+    diagnostics_mode = None
+
+    def persist_failure(code, message, phase, role, *, correctness=None, hardware=None, total=0):
+        """Persist a structured terminal failure atomically instead of only stderr."""
+        error = _typed_error(code, message, phase, role)
+        terminal = correctness if correctness is not None else _not_run_correctness(total)
+        environment = _environment_record(task, matrix, hardware=hardware, diagnostics_mode=diagnostics_mode)
+        record = _failed_result(task, error, terminal, environment)
+        _write_json_atomic(task_dir / "correctness.json", terminal)
+        _write_json_atomic(result_json, record)
+        return record
+
+    try:
+        diagnostics_mode = _diagnostics_mode()
+    except Exception as error:
+        persist_failure("OPERATOR_DIAGNOSTICS_CONFIG_INVALID", str(error), "preflight", "backend")
+        raise
+    try:
+        task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+        if not isinstance(task, dict):
+            task = {}
+        matrix = task.get("matrix") if isinstance(task.get("matrix"), dict) else {}
+    except Exception as error:
+        task, matrix = {}, {}
+        persist_failure("OPERATOR_TASK_CONFIG_INVALID", str(error), "preflight", "backend")
+        raise
+    correctness_cases = 0
+    try:
+        correctness_cases = max(1, int(matrix.get("correctnessCases") or 24))
+        warmup = max(0, int(matrix.get("warmup") or 50))
+        repeats = max(1, int(matrix.get("repeats") or 200))
+        # The testSpec tolerances are part of the same preflight: a malformed spec
+        # is a typed preflight failure, not a generic runner error on stderr.
+        test_spec = matrix.get("testSpec") or {}
+        if not isinstance(test_spec, dict):
+            raise TypeError(f"matrix.testSpec must be an object, got {type(test_spec).__name__}")
+        correctness_spec = test_spec.get("correctness") or {}
+        if not isinstance(correctness_spec, dict):
+            raise TypeError(f"matrix.testSpec.correctness must be an object, got {type(correctness_spec).__name__}")
+        atol = float(correctness_spec.get("atol", args.atol))
+        rtol = float(correctness_spec.get("rtol", args.rtol))
+    except Exception as error:
+        persist_failure("OPERATOR_MATRIX_INVALID", str(error), "preflight", "backend", total=correctness_cases)
+        raise
     diagnostics_binding = _diagnostics_binding(task)
-    module = _load_operator(run_py)
-    oracle_path = os.environ.get("OPERATOR_LOCAL_C500_ORACLE_RUN_PY")
-    oracle_module = _load_operator(Path(oracle_path).resolve()) if oracle_path else module
-    torch, device = _torch_and_device()
-    hardware = _probe_c550(torch, device)
-    matrix = task.get("matrix") or {}
-    correctness_cases = max(1, int(matrix.get("correctnessCases") or 24))
-    warmup = max(0, int(matrix.get("warmup") or 50))
-    repeats = max(1, int(matrix.get("repeats") or 200))
-    test_spec = matrix.get("testSpec") or {}
-    correctness_spec = test_spec.get("correctness") or {}
-    atol = float(correctness_spec.get("atol", args.atol))
-    rtol = float(correctness_spec.get("rtol", args.rtol))
+    try:
+        module = _load_operator(run_py)
+        oracle_path = os.environ.get("OPERATOR_LOCAL_C500_ORACLE_RUN_PY")
+        oracle_module = _load_operator(Path(oracle_path).resolve()) if oracle_path else module
+    except Exception as error:
+        persist_failure("OPERATOR_MODULE_LOAD_FAILURE", str(error), "preflight", "backend", total=correctness_cases)
+        raise
+    try:
+        torch, device = _torch_and_device()
+        hardware = _probe_c550(torch, device)
+    except Exception as error:
+        # A missing probe never becomes current-host/default metadata.
+        persist_failure("OPERATOR_HARDWARE_PROBE_FAILURE", str(error), "probe", "backend", total=correctness_cases)
+        raise
     _write_runner_status(task_dir, 15, "correctness", f"Running {correctness_cases} fixed correctness cases.")
     cache_root = os.environ.get("OPERATOR_LOCAL_C500_REFERENCE_CACHE_DIR")
     oracle_file = Path(oracle_path).resolve() if oracle_path else run_py
@@ -599,15 +863,38 @@ def _run(args):
                 "macaVersion": next((part.strip() for line in str(hardware.get("mxSmi") or "").splitlines() if "MACA Version:" in line for part in [line.split("MACA Version:", 1)[1].split()[0]]), None),
             },
         }
-    correctness = _run_correctness(module, torch, correctness_cases, atol, rtol, test_spec, oracle_module, reference_cache)
-    (task_dir / "correctness.json").write_text(json.dumps(correctness, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    if not correctness["passed"]:
+    try:
+        correctness = _run_correctness(module, torch, correctness_cases, atol, rtol, test_spec, oracle_module, reference_cache)
+    except Exception as error:
+        # Oracle case/metadata generation threw before any case was attempted.
+        persist_failure("OPERATOR_ORACLE_EXCEPTION", str(error), "correctness", "oracle",
+                        total=correctness_cases, hardware=hardware)
+        raise
+    if correctness.get("status") == "failed":
+        failure = correctness.get("failure") or _typed_error(
+            "OPERATOR_CORRECTNESS_MISMATCH", correctness.get("error") or "correctness failed", "correctness", "candidate")
+        environment = _environment_record(task, matrix, hardware=hardware, diagnostics_mode=diagnostics_mode)
+        record = _failed_result(task, failure, correctness, environment)
         _write_runner_status(task_dir, 100, "correctness_failed", f"Correctness failed: {correctness.get('failedCaseName') or correctness.get('failedCase')}.")
+        _write_json_atomic(task_dir / "correctness.json", correctness)
+        _write_json_atomic(result_json, record)
         raise RuntimeError(f"correctness failed on case {correctness.get('failedCase')}: {correctness.get('error')}")
+    # Keep the already-observed passed correctness on disk before any benchmark
+    # work starts: a later benchmark-stage failure must never erase it.
+    _write_json_atomic(task_dir / "correctness.json", correctness)
     _write_runner_status(task_dir, 55, "correctness_complete", f"All {correctness_cases} correctness cases passed.")
-    benchmark_profiles = _named_benchmark_profiles(oracle_module, test_spec)
-    _write_runner_status(task_dir, 60, "benchmark", f"Running {len(benchmark_profiles)} fixed benchmark profiles.")
-    benchmark_results = _benchmark_inputs(module, torch, benchmark_profiles, warmup, repeats, oracle_module)
+    try:
+        benchmark_profiles = _named_benchmark_profiles(oracle_module, test_spec)
+        _write_runner_status(task_dir, 60, "benchmark", f"Running {len(benchmark_profiles)} fixed benchmark profiles.")
+        benchmark_results = _benchmark_inputs(module, torch, benchmark_profiles, warmup, repeats, oracle_module)
+    except Exception as error:
+        # A benchmark-stage exception preserves the already observed passed correctness
+        # and is never relabeled as a correctness mismatch.
+        failure = _typed_error("OPERATOR_BENCHMARK_FAILURE", str(error), "benchmark", "backend")
+        environment = _environment_record(task, matrix, hardware=hardware, diagnostics_mode=diagnostics_mode)
+        record = _failed_result(task, failure, correctness, environment)
+        _write_json_atomic(result_json, record)
+        raise
     _write_runner_status(task_dir, 90, "benchmark_complete", f"Completed {len(benchmark_profiles)} benchmark profiles.")
 
     runner = Path(__file__).resolve()
@@ -637,7 +924,13 @@ def _run(args):
     profiler_result = _diagnostic_result("profiler", profile, diagnostics_binding)
     _write_runner_status(task_dir, 95, "optional_diagnostics", f"Optional diagnostics handled (mode={diagnostics_mode}).")
     environment_name = str((matrix.get("environments") or ["C550"])[0])
+    environment = _environment_record(
+        task, matrix, hardware=hardware, diagnostics_mode=diagnostics_mode,
+        tracer_status=tracer_result["status"], profiler_status=profiler_result["status"])
     result = {
+        "status": "completed",
+        "correctness": correctness,
+        "error": None,
         "benchmark": [{
             "environment": environment_name,
             "metric": task.get("metric") or "latency_p50",
@@ -653,20 +946,13 @@ def _run(args):
         } for benchmark in benchmark_results],
         "tracer": tracer_result,
         "profiler": profiler_result,
-        "environment": {
-            "requested": task.get("hardware") or matrix.get("environments") or ["C550"],
-            "runtime": "local-c500-runner/v1",
-            "service": "local-c500-adapter",
-            "liveHardware": True,
-            "source": "local-c500",
-            "hardware": hardware,
-            "candidateDigest": (task.get("candidate") or {}).get("digest"),
-            "runPySource": task.get("runPySource"),
-            "diagnosticsMode": diagnostics_mode,
-            "optionalDiagnostics": {"mctracer": tracer_result["status"], "mcProfiler": profiler_result["status"]},
-        },
+        "environment": environment,
     }
-    result_json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    package = _execution_package(task)
+    if package:
+        result["executionPackage"] = package
+        environment["executionPackage"] = package
+    _write_json_atomic(result_json, result)
     _write_runner_status(task_dir, 100, "complete", "Correctness and benchmark completed.")
 
 

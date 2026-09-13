@@ -24,8 +24,15 @@ Code provenance hashes all tracked and nonignored source files under
 files or an unavailable Git inventory leave contentDigest unknown.
 
 - `scripts/e2e-shared-gpu-agent-iteration.mjs` — live driver, read-only observer.
+  Its artifact parent may be redirected with `E2E_GPU_ARTIFACT_DIR` (absolute
+  path) so raw run directories/logs stay outside the repository snapshot; each
+  run still gets its own `mkdtemp` run root and nothing else changes.
 - `scripts/summarize-gpu-agent-runs.mjs` — read-only ledger over retained run dirs
   (re-exports `summarizeAcceptanceRuns`).
+- `scripts/run-shared-gpu-regression-batch.mjs` — thin batch entry point that
+  spawns the unchanged driver and feeds its retained artifacts to this ledger.
+  See `scripts/run-shared-gpu-regression-batch.md`; it defines no second driver,
+  scheduler or acceptance threshold.
 
 ## `verifyContinuationAudit({ audit, sourceRound, experiences, missionId, projectId })`
 

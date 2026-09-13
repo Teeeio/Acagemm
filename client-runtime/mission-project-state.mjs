@@ -32,7 +32,63 @@ const factsFiles = (value) => {
   return [];
 };
 
+// 失败 benchmark 的顶层 correctness 是权威事实：即使 result.benchmark=[] 或残留旧的
+// 成功行，也按同一 round-facts schema 投影，绝不把失败改写成 passed，也不补造测量。
+const roundFailedCorrectnessFacts = (correctness, environment) => {
+  const source = factsText(environment?.source);
+  const failedCase = factsNumber(correctness?.failedCase);
+  const failedCaseName = factsText(correctness?.failedCaseName);
+  const failedCaseCategory = factsText(correctness?.failedCaseCategory);
+  const error = factsText(correctness?.error);
+  const total = factsNumber(correctness?.total);
+  const passedCases = factsNumber(correctness?.passedCases);
+  const cases = [];
+  for (const item of Array.isArray(correctness?.caseResults) ? correctness.caseResults : []) {
+    if (!item || typeof item !== 'object') continue;
+    cases.push({
+      environment: source,
+      profile: null,
+      case: factsText(item.case),
+      dtype: factsText(item.dtype),
+      passed: factsBoolean(item.passed),
+      maxDiff: factsNumber(item.maxDiff),
+      rmse: factsNumber(item.rmse),
+      cosDiff: factsNumber(item.cosDiff),
+    });
+  }
+  // failed 优先于 passed（矛盾时以 failed 为准），not_run/未知仍为 not_observed。
+  // failed benchmark 阶段异常但顶层 correctness 已 passed 时，按同一 schema 映射 passed
+  // 并保留已观测的 case，绝不丢成 not_observed。
+  const failed = correctness?.status === 'failed' || correctness?.passed === false;
+  const passed = correctness?.status === 'passed' || correctness?.passed === true;
+  return {
+    status: failed ? 'failed' : passed ? 'passed' : 'not_observed',
+    total,
+    failedCase,
+    failedCaseName,
+    failedCaseCategory,
+    error,
+    environments: [{
+      environment: source,
+      profile: null,
+      stage: 'Correctness',
+      passed: correctness?.passed === true ? true : correctness?.passed === false ? false : null,
+      total,
+      passedCases,
+      failedCase,
+      failedCaseName,
+      failedCaseCategory,
+      error,
+    }],
+    cases,
+  };
+};
+
 const roundCorrectnessFacts = (benchmark) => {
+  const topLevel = benchmark?.result?.correctness;
+  if (benchmark?.status === 'failed' && topLevel && typeof topLevel === 'object' && !Array.isArray(topLevel)) {
+    return roundFailedCorrectnessFacts(topLevel, benchmark.result?.environment);
+  }
   const measurements = Array.isArray(benchmark?.result?.benchmark) ? benchmark.result.benchmark : [];
   const environments = [];
   const cases = [];

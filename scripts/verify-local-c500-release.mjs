@@ -151,6 +151,9 @@ const checks = [
   'test:local-c500-tui-refresh',
   'test:local-c500-terminal-screen',
   'build',
+  'test:shared-gpu-failure-result',
+  'test:failed-execution-feedback',
+  'test:failed-execution-boundary',
 ];
 
 console.log(`[release-check] runtime ${process.version}`);

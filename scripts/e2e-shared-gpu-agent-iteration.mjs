@@ -55,7 +55,13 @@ const expressions = {
 };
 const sourceFor = (family) => `import torch\n\ndef inputs_for(rows, cols):\n    x = torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return ${expressions[family]}\n\ndef run(inputs):\n    # Initial implementation deliberately does one redundant device copy.\n    value = ${expressions[family]}\n    return value.clone()\n`;
 
-const parent = path.join(root, '.tmp-real-agent');
+// Artifact parent override (E2E_GPU_ARTIFACT_DIR). The batch runner keeps the
+// large raw run directories outside the repository/scratch snapshot; without the
+// override the historical in-repo default is unchanged. Only the parent directory
+// is overridden: every run still gets its own mkdtemp runRoot below it, and no
+// other driver behavior (matrix, budgets, timeout, families, tasks) is affected.
+const artifactParentOverride = String(process.env.E2E_GPU_ARTIFACT_DIR || '').trim();
+const parent = artifactParentOverride ? path.resolve(artifactParentOverride) : path.join(root, '.tmp-real-agent');
 await mkdir(parent, { recursive: true });
 const runRoot = await mkdtemp(path.join(parent, 'shared-gpu-'));
 const attemptPath = path.join(runRoot, 'attempt.json');

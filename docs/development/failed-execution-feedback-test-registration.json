@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "operator-studio.test-registration/v1",
+  "batch": "failed-execution-feedback",
+  "authority": {
+    "path": "docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md",
+    "sha256": "55727780c161a2068b27702339df702737d9eaed78e5c2c29d6a1d72b182fbbb"
+  },
+  "createdAt": "2026-09-13",
+  "status": "pending-single-writer",
+  "note": "Isolated registration manifest only. This batch must not edit package.json, the two verification scripts, tests/README.md or any production file; a later single writer registers the test in package.json, both gates and tests/README.md, then the upstream runs integration and the final gates.",
+  "tests": [
+    {
+      "file": "tests/failed-execution-feedback-test.mjs",
+      "sha256": "5744a62d202f4f468af60e1ecce023d79474b040506bdc5b7cbe1785d49e4dd9",
+      "kind": "hardware-free contract/integration acceptance",
+      "npmScript": "test:failed-execution-feedback",
+      "npmCommand": "node tests/failed-execution-feedback-test.mjs",
+      "registerInGates": [
+        "verify:local-c500-release",
+        "verify:non-hardware-robustness"
+      ],
+      "readmeSection": "Failed execution feedback / next-round fact injection (hardware-free)",
+      "implementationDependency": "client-runtime/application/shared-gpu-experience-verifier.mjs (failed-observation branch with required readTask, typed candidate-only failures) and client-runtime/mission-project-state.mjs roundCorrectnessFacts (top-level result.correctness authority for a failed benchmark, not_run -> not_observed). Producer changes (tools/local-c500-runner.py, tools/local-shared-gpu-runner.py) are outside this Node test's direct surface.",
+      "expectedCurrentState": "red. The delivered run stops at the first failed positive (tests/failed-execution-feedback-test.mjs:245): the trusted verifier only admits benchmark.status=complete / queue task.status=completed, and roundCorrectnessFacts only walks benchmark rows, so nothing records or archives a failed candidate observation yet. The file must not be weakened to match this pre-integration tree.",
+      "covers": [
+        "Result-envelope fidelity: correctness.error and each case.error keep the real string error.message, while result.error, correctness.failure and the final case failure carry the same typed error object; the committed fixture-level assertion reports the real computed maxDiff/rmse/cosDiff for a mismatch and null (never a fabricated 0) for the OPERATOR_CANDIDATE_EXCEPTION case whose metrics were never computed",
+        "Complete executionPackage binding: makeBinding/buildFailedFixture/buildFailedSnapshot build the same workspaceId/target/build/adapter for payload, projected result, persisted benchmark state and queue receipt; the admission port validates the actual request (Mission, workspace, package/environment/acceptance digests, run identity, candidate binding, target/build/adapter) instead of approving unconditionally",
+        "Trusted failed-observation positive: bound candidate correctness failure (OPERATOR_CORRECTNESS_MISMATCH) and candidate exception (OPERATOR_CANDIDATE_EXCEPTION) verify; proof.summary deterministically carries typed code, phase/role, failed case name/category, total/executed/passed counts and the real error",
+        "Bounded failure detail: a 5000-repeat failure message is accepted but the longest surviving run of the repeated character must be <=2000 and the TAIL_MARKER tail must be gone, so a >2000-char suffix cannot pass behind a loose total-length bound",
+        "Failed verifier negative matrix, each negative mutating exactly one target on a fixture that verifies unmutated. Semantic negatives (counts/prefix/case name/zero total/probe/simulation) mutate every corresponding result/queue/environment copy and assert queue-vs-projection equality before the acceptance call, so they cannot be rejected early as a queue != projection disagreement; the dedicated one-sided negatives (queue error/correctness/evidence/executionPackage mismatch) stay one-sided. Cases: pass/failed outcome contradiction, benchmark complete, wrong Mission/candidate/applied candidate/run/request/workspace, wrong queue taskId, running/cancelled queue, missing or unconfirmed benchmark/queue release, wrong package/environment/acceptance/admission/prepared-artifact binding, invalid prepared-artifact port verdict alone (digest untouched), queue result evidence/correctness/error/executionPackage disagreement, missing projected experienceEvidence, missing readTask port, role=oracle, phase=preflight/benchmark, OPERATOR_ORACLE_EXCEPTION, unfrozen backend code, not_run, fabricated counts/prefix/failedCase/case-name/zero total, missing or incomplete real target probe, simulation executionMode and conflicting liveHardware=false",
+        "Rejection is read-only for the trusted verifier: a rejected observation must not rewrite the projected result, the observation evidence or the queue receipt. Real Experience repository non-growth is asserted separately in scenario E",
+        "Successful legacy observation path still verifies and still rejects a wrong candidate identity",
+        "Real production failed-round pipeline: createBenchmarkProjectionService -> applyOperatorTestSnapshot -> roundExperience.collect -> real filesystem Experience repository -> resetMissionRunState archive -> agent-round-service + agentRuntime next prompt/audit with an injected provider port double; no Claude/Codex process, GPU, network or N=20 batch",
+        "First failed candidate correctness produces result.benchmark=[] and is recorded once through the real verifier/repository with source=execution, publishable=false, exact evidence identity and summary content; replaying the identical observation is idempotent (same id/version/evidenceKey, no new record)",
+        "Archived round facts take the top-level result.correctness as authority: status/total/failedCase/name/category, the real string error, environment from the result source with stage=Correctness and profile=null, the real attempted cases and metrics; stale successful benchmark rows cannot turn the round into passed; not_run stays not_observed with total retained and no fabricated failed case or experience",
+        "The failed correctness case/code/error and the exact recorded experience id/version/content reach the next-round provider prompt and the pre-send audit (roundFacts deep-equal, selection lists the execution-sourced record); applying the next candidate and archive replay keep the failed candidate identity and the frozen facts",
+        "A rejected failed observation (queue receipt disagrees with the projection) does not grow the real experience repository"
+      ],
+      "redBaseline": {
+        "command": "node tests/failed-execution-feedback-test.mjs",
+        "runAt": "2026-09-13",
+        "result": "failed",
+        "observed": "AssertionError [ERR_ASSERTION]: a fully bound failed candidate observation must verify / false !== true at tests/failed-execution-feedback-test.mjs:245 (Section 1 first positive). This exact run terminated at that assertion: the trusted verifier rejects benchmark.status=failed, so no failed observation is recorded and none of the later verifier negatives, the legacy-success guard, or pipeline scenarios A-E executed in this run. They must not be reported as executed acceptance.",
+        "harnessValidation": "Local debugging only, on the unchanged pre-implementation tree and with no delivered artifact: temporarily guarding the first positive (a scratch in-file switch, since reverted) let the rest of Section 1 run. All ~40 verifier negatives were rejected with a structured code and the queue/projection consistency assertions held, the legacy successful-observation guard verified, and Section 2 reached the real projection and stopped at 'the verified failed observation must be recorded exactly once' (0 !== 1) as expected while production still records no failed experience. No production code was changed and this is not green acceptance evidence."
+      }
+    }
+  ],
+  "registrationEditsForSingleWriter": [
+    "package.json: add \"test:failed-execution-feedback\": \"node tests/failed-execution-feedback-test.mjs\"",
+    "scripts/verify-local-c500-release.mjs: append 'test:failed-execution-feedback'",
+    "scripts/verify-non-hardware-robustness.mjs: append 'test:failed-execution-feedback'",
+    "tests/README.md: add a section documenting the test under the round feedback / pre-send prompt audit coverage"
+  ],
+  "mustNotChange": [
+    "package.json",
+    "scripts/verify-local-c500-release.mjs",
+    "scripts/verify-non-hardware-robustness.mjs",
+    "tests/README.md",
+    "docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md",
+    "client-runtime/application/shared-gpu-experience-verifier.mjs",
+    "client-runtime/mission-project-state.mjs",
+    "client-runtime/application/round-experience-service.mjs",
+    "client-runtime/operator-test-evidence.mjs",
+    "tools/local-c500-runner.py",
+    "tools/local-shared-gpu-runner.py"
+  ],
+  "verificationCommands": [
+    "node --check tests/failed-execution-feedback-test.mjs",
+    "node tests/failed-execution-feedback-test.mjs"
+  ],
+  "boundaries": [
+    "No live provider, Agent, GPU, network call or N=20 batch is started by this test. The Agent provider, queue snapshot source, package admission/readTask and prepared-artifact adapter are injected port doubles; the projection/collection/archive/prompt code and the experience storage are real.",
+    "The test does not hand-author roundFacts, iterationContext or experiences; they are read back after production code produces them from an injected queue snapshot.",
+    "A green run of this test is contract/integration evidence only; it is never a hardware sample, stability, publication or N=20 eligibility claim.",
+    "The frozen contract and its acceptance matrix are upstream-owned; test authors must not weaken them to match a pre-integration tree."
+  ]
+}

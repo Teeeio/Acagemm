@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "operator-studio.test-registration/v1",
+  "batch": "failed-execution-boundary",
+  "authority": {
+    "path": "docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md",
+    "sha256": "55727780c161a2068b27702339df702737d9eaed78e5c2c29d6a1d72b182fbbb"
+  },
+  "createdAt": "2026-09-13",
+  "status": "pending-single-writer",
+  "note": "Isolated registration manifest only. This batch delivers one independent hardware-free Node regression plus this manifest. It edits no production file, no existing test, package.json, the two verification gates or tests/README.md; a later single writer registers the npm script, both gate entries and the tests/README.md section. tests/failed-execution-feedback-test.mjs is a different author's frozen deliverable (sha256 5744a62d202f4f468af60e1ecce023d79474b040506bdc5b7cbe1785d49e4dd9) and is neither imported nor executed here.",
+  "hardwareFree": true,
+  "hardwareFreeStatement": "The test never imports real hardware, starts a Runtime, GPU, driver, nvidia-smi, diagnostic tool, Python runner, model, provider or network call. createSharedGpuExperienceVerifier is driven with in-process admission/prepared-artifact/readTask port doubles and the real public mission-project-state createMissionProjectState/resetMissionRunState archive path. All state is in memory; only unique temporary roots under the OS temp directory are created and each is removed in finally. A green result after integration would be contract/integration evidence only, never a hardware sample, stability claim or N=20 eligibility claim.",
+  "tests": [
+    {
+      "id": "failed-execution-boundary",
+      "file": "tests/failed-execution-boundary-test.mjs",
+      "sha256": "387ad8cb914c954b30200e3819d6c97ae1aca5fdcfa1c3e9aa049c56d5e6692a",
+      "kind": "hardware-free independent boundary regression (real public verifier + real production archive entry)",
+      "owner": "independent test author (failed-observation consumer boundaries)",
+      "npmScript": {
+        "name": "test:failed-execution-boundary",
+        "command": "node tests/failed-execution-boundary-test.mjs"
+      },
+      "verificationGates": [
+        {
+          "script": "scripts/verify-local-c500-release.mjs",
+          "checksArray": "checks",
+          "addEntry": "  'test:failed-execution-boundary',"
+        },
+        {
+          "script": "scripts/verify-non-hardware-robustness.mjs",
+          "checksArray": "checks",
+          "addEntry": "  'test:failed-execution-boundary',"
+        }
+      ],
+      "packageJsonScriptEntry": "\"test:failed-execution-boundary\": \"node tests/failed-execution-boundary-test.mjs\"",
+      "readmeSection": "## Failed execution boundary regression (hardware-free)",
+      "readmeDescription": "`failed-execution-boundary-test.mjs` freezes the failed-execution acceptance boundaries Root reproduced on the pre-integration snapshot: a control fully bound failed-candidate observation plus each targeted boundary as one mutation whose projected/queue/observation copies stay in sync. It drives the real `createSharedGpuExperienceVerifier` and the real `createMissionProjectState`/`resetMissionRunState` archive entry, never imports the frozen `failed-execution-feedback-test.mjs`, starts no GPU/model/provider/network call and removes its own temporary root in `finally`. Every case runs in one pass; a red control positive reports each dependent boundary as `blocked` (never green) so an unrelated pre-integration rejection is not counted as a targeted rejection. It is contract/integration evidence only and must not be weakened to match a pre-integration tree.",
+      "expectedCurrentState": "green on the current snapshot, where the failed-observation consumer v2 is integrated. The trusted verifier now admits the fully bound failed candidate, rejects each targeted boundary mutation, and bounds the complete failure-detail suffix at 2000 characters, and resetMissionRunState archives a provided passed top-level correctness even when the benchmark state failed. The test is still contract/integration evidence only and must not be weakened to match any pre-integration tree.",
+      "actualBaseline": {
+        "command": "node tests/failed-execution-boundary-test.mjs",
+        "exitCode": 0,
+        "result": "16/16 independent cases passed, 0 failed, 0 blocked.",
+        "capturedOn": "current snapshot with the failed-observation consumer v2 integrated (production read-only, no delivered production change); re-captured after excluding the one ASCII joining space that production emits between the fixed trusted-admission base sentence and the <=2000-character failure detail",
+        "cases": [
+          {"name": "control-failed-candidate-positive", "outcome": "passed", "detail": "verified; summary length 355"},
+          {"name": "success-legacy-positive", "outcome": "passed", "detail": "legacy success path verifies and still rejects a wrong candidate"},
+          {"name": "bounded-overall-summary", "outcome": "passed", "detail": "verified; summary length 2123; failure-detail length 2000; longest runs Q:1466 N:188 C:184"},
+          {"name": "boundary-environment-source-mock", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH"},
+          {"name": "boundary-environment-hardware-cpu", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH"},
+          {"name": "boundary-environment-publishable-true", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE"},
+          {"name": "boundary-environment-live-hardware-false", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE"},
+          {"name": "boundary-payload-target-mismatch", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH"},
+          {"name": "boundary-payload-build-mismatch", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH"},
+          {"name": "boundary-payload-adapter-mismatch", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH"},
+          {"name": "boundary-payload-purpose-baseline", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH"},
+          {"name": "boundary-typed-error-retryable-true", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH"},
+          {"name": "boundary-typed-error-empty-message", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH"},
+          {"name": "boundary-typed-error-missing-details", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH"},
+          {"name": "boundary-preceding-case-missing-name", "outcome": "passed", "detail": "rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH"},
+          {"name": "passed-correctness-archive", "outcome": "passed", "detail": "archived correctness passed with 4 cases; failure stayed SHARED_GPU_BENCHMARK_FAILED"}
+        ]
+      },
+      "rootBoundaryMapping": [
+        "Root probe list (7 wrongly accepted boundaries) maps onto the 12 targeted negatives: environment identity 1 (source=mock), 2 (hardware=cpu), 3 (publishable=true), 4 (liveHardware=false); queue payload binding 5 (target), 6 (build), 7 (adapter) and 8 (purpose=baseline); typed first failure 9 (retryable=true), 10 (empty message), 11 (missing details); plus 12 (preceding passed case without a name). Each listed boundary is one single-field mutation of the same fully bound control, so splitting them keeps every negative attributable instead of merging four environment claims or three binding claims into one probe.",
+        "The control probe is the fully bound failed candidate; the success-legacy case is the frozen compatibility guard, not one of the seven."
+      ],
+      "covers": [
+        "Control positive: a fully bound failed candidate correctness observation (benchmark status=failed, queue task status=failed with confirmed release, real targetProbe deviceName/driverVersion, typed OPERATOR_CORRECTNESS_MISMATCH/phase=correctness/role=candidate, total 4 / executed 3 / passed 2 / failedCase 3 with two passed preceding cases) verifies through the real verifier and its summary carries the typed code, phase/role, failed case name, total/executed/passed counts and the real error",
+        "Environment identity boundaries fail closed even when the projected and queue environment copies agree: source=mock, hardware=cpu, publishable=true, and an explicit liveHardware=false that conflicts with the authorized live-GPU evidence",
+        "Queue payload binding boundaries fail closed when task.payload target, build or adapter disagree with the selected executionPackage binding, and when task.payload purpose=baseline contradicts the candidate observation",
+        "Typed first-failure boundaries fail closed when result.error / correctness.failure / the final case failure agree on retryable=true, on an empty message (with the string error.message copies synced) or on missing details",
+        "A preceding passed case without a case name is rejected even though the failing case and its exact failedCaseName still agree",
+        "Every negative asserts queue/projection/observation agreement before the acceptance call (so an early queue-vs-projection mismatch cannot mask the intended branch) and asserts the verifier stayed read-only on the projected result, evidence and queue receipt after rejection",
+        "Bounded failure detail: 5000-repeat error message, failed case name and failed case category are triggered simultaneously and the COMPLETE failure-detail suffix stays <=2000 characters, with the unbounded tail markers gone, the typed code, phase/role and total/executed/passed counts retained, and the real error prefix visible. The suffix is the summary text after the fixed trusted-admission base sentence's end marker 'development evidence remains non-publishable.' plus the single ASCII joining space production emits immediately after it; only that one separator is excluded (arbitrary whitespace is not trimmed, and nothing is excluded when the base sentence is absent), so the real observed detail is exactly 2000 characters at summary length 2123. Per-field-only bounds (three ~2000-character fields at once) and total-only <=4096/<=7000 bounds are each explicitly insufficient and would fail this assertion",
+        "Successful legacy path compatibility guard: an outcome=passed observation still verifies and still rejects a wrong candidate identity",
+        "Real production passed-correctness archive: with benchmark status=failed, result.error phase=benchmark, benchmark=[] and a provided top-level correctness status=passed/passed=true/total=4/executedCases=4/passedCases=4 over four named cases, the real resetMissionRunState archives roundFacts.correctness.status=passed with total 4 and four passed cases and no fabricated failed case, while the archived failure fact stays the benchmark error code/message. roundFacts and iterationContext are never hand-authored",
+        "Per-case aggregation: a red control or assertion does not stop the remaining matrix; dependent negatives are reported blocked rather than green, and the process exits nonzero unless every case passed"
+      ],
+      "notCovered": [
+        "One-sided queue-vs-projection disagreements (queue error/correctness/evidence/executionPackage mismatch), wrong Mission/candidate/applied candidate/run/request/workspace/taskId, running/cancelled/release-missing queue states, prepared-artifact single-port failure, oracle role/code, phase=preflight/benchmark, not_run, fabricated counts/prefix/zero-total, missing probe and simulation mode remain covered by the frozen tests/failed-execution-feedback-test.mjs, which this file neither imports nor replaces",
+        "The producer (Python) half belongs to tests/shared-gpu-failure-result-test.py",
+        "No live GPU/model/provider/network call is started, so this test makes no live-hardware, stability or N=20 claim"
+      ]
+    }
+  ],
+  "registrationEditsForSingleWriter": [
+    "package.json: add \"test:failed-execution-boundary\": \"node tests/failed-execution-boundary-test.mjs\"",
+    "scripts/verify-local-c500-release.mjs: append 'test:failed-execution-boundary' to the checks array",
+    "scripts/verify-non-hardware-robustness.mjs: append 'test:failed-execution-boundary' to the checks array",
+    "tests/README.md: add the 'Failed execution boundary regression (hardware-free)' section documenting tests/failed-execution-boundary-test.mjs and that it is hardware-free contract/integration evidence only"
+  ],
+  "mustNotChange": [
+    "package.json",
+    "scripts/verify-local-c500-release.mjs",
+    "scripts/verify-non-hardware-robustness.mjs",
+    "tests/README.md",
+    "docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md",
+    "tests/failed-execution-feedback-test.mjs",
+    "client-runtime/application/shared-gpu-experience-verifier.mjs",
+    "client-runtime/mission-project-state.mjs",
+    "client-runtime/application/round-experience-service.mjs",
+    "client-runtime/operator-test-evidence.mjs",
+    "tools/local-c500-runner.py",
+    "tools/local-shared-gpu-runner.py"
+  ],
+  "verificationCommands": [
+    "node --check tests/failed-execution-boundary-test.mjs",
+    "node tests/failed-execution-boundary-test.mjs"
+  ],
+  "boundaries": [
+    "No live GPU, driver, model, provider, network, Python runner or N=20 batch is started by this test; the admission, prepared-artifact and readTask surfaces are in-process port doubles and the archive path is the real production code.",
+    "The frozen contract and the upstream acceptance matrix are read-only; the test must not be weakened to match any pre-integration tree. The green baseline above is the real current result with the failed-observation consumer v2 integrated.",
+    "A blocked outcome is not a pass: it records that the control positive was red, so the boundary rejection cannot be attributed to the mutation in this snapshot.",
+    "A green run after implementation would be contract/integration evidence only, never a hardware sample or a stability claim."
+  ],
+  "changedFiles": [
+    "tests/failed-execution-boundary-test.mjs",
+    "docs/development/failed-execution-boundary-test-registration.json"
+  ]
+}

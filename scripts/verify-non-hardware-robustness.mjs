@@ -70,6 +70,9 @@ const checks = [
   'test:workflow-summary',
   'test:release',
   'test:smoke',
+  'test:shared-gpu-failure-result',
+  'test:failed-execution-feedback',
+  'test:failed-execution-boundary',
 ];
 
 console.log(`[non-hardware-check] runtime ${process.version}; physical hardware execution is disabled`);

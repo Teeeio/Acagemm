@@ -79,6 +79,57 @@ Pure, testable projection. `kind` is `tracer` or `profiler`; `collection` is an
   stdout/stderr paths, exit code, duration); its `simulated` flag is kept
   consistent with the normalized verdict.
 
+## Terminal correctness and result persistence
+
+`_run` persists a structured terminal state for every outcome instead of leaving
+only stderr. `correctness.json` and `result.json` are each written with a
+temporary file plus `os.replace` in the destination directory; a direct write of
+either final path (including an atomic replace followed by a plain overwrite) is
+not allowed. A failed execution carries `status=failed`, `benchmark=[]`,
+`publishable=false`, the retained `environment` and, when the task provides it,
+the admitted `executionPackage` binding.
+
+`_run_correctness` returns the typed correctness contract
+(`docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md`):
+
+- `status=passed|failed`, `passed=true|false`; `total` stays the requested case
+  count and is never lowered to the attempted prefix.
+- `executedCases`/`passedCases` count real attempted/passed cases;
+  `caseResults` is the actual early-stop prefix, `failedCase` is one-based and
+  `failedCaseName`/`failedCaseCategory` identify the real case.
+- Each failed case carries `error` (the real message string) and `failure` (the
+  typed first failure); `correctness.failure` and `result.error` are that same
+  typed value, and preceding successful cases stay in `caseResults`.
+
+Frozen neutral codes for this base path: `OPERATOR_CORRECTNESS_MISMATCH`
+(phase `correctness`, role `candidate`) for an oracle comparison mismatch
+including an output shape/type/numeric/cosine failure, `OPERATOR_CANDIDATE_EXCEPTION`
+(phase `correctness`, role `candidate`) when `candidate.run` throws (the case was
+attempted, never `not_run`), and `OPERATOR_ORACLE_EXCEPTION` (phase
+`correctness`, role `oracle`) when oracle input generation (including a throwing
+`make_inputs`) or `reference` throws. A reference-cache failure is backend
+infrastructure, not an operator failure: it keeps the passed prefix with
+`OPERATOR_REFERENCE_CACHE_FAILURE` at role `backend`.
+
+Each stage of a selected named case preserves that case's index and the
+already-observed prefix. Input generation and dtype resolution run under the
+oracle role; output diagnostics and the comparison run under the candidate role,
+so a shape/type error in the numeric difference is a candidate correctness
+mismatch and never a generic outer `OPERATOR_ORACLE_EXCEPTION` or `not_run`.
+Numeric diagnostics that were not really computed stay `null`, never a
+fabricated `0`; only a known empty tensor pair keeps its actual zero difference.
+
+A benchmark-stage exception after correctness passed preserves the passed
+correctness (`correctness.failure`/`correctness.error` stay `null`) and records a
+`phase=benchmark`, `role=backend` error; it is never relabeled as a correctness
+mismatch. The passed `correctness.json` is written atomically as soon as
+correctness completes, before any benchmark work starts, so the observed facts
+survive a later benchmark failure. Preflight, task/matrix (including a malformed
+`testSpec`/tolerance), module-load and hardware-probe failures persist a
+structured failed record with an accurate phase/role and a `not_run` correctness
+(requested total when matrix metadata was parsed); a missing probe is never
+replaced by current-host/default metadata.
+
 ## Evidence rule
 
 `format` validity does not imply `available`, and `available` does not imply

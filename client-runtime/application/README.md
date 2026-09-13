@@ -40,7 +40,7 @@
 | `mission-control-service.mjs` | Agent cancellation, human feedback, and Mission stop | persisted state and control result |
 | `experience-api-service.mjs` | Project-scoped human experience CRUD | versioned guidance DTOs and conflicts |
 | `round-experience-service.mjs` | Frozen per-round experience, selection-audit sidecar, and verified observations | frozen context, selection sidecar, and record status through injected ports |
-| `shared-gpu-experience-verifier.mjs` | Revalidate shared-GPU package receipts at the composition boundary | trusted verified observation or explicit skip |
+| `shared-gpu-experience-verifier.mjs` | Revalidate shared-GPU package receipts at the composition boundary, including the strict released failed-candidate correctness path (real shared-GPU environment/probe, queue payload target/build/adapter and whole result agreement) | trusted verified observation (success or bounded failed summary) or explicit skip |
 | `knowledge-service.mjs` | Knowledge draft editing, asset references, and retired manual publication | persisted state or governance response |
 | `runtime-query-service.mjs` | Runtime state, preflight, and active workspace queries | state/workspace query | transport-neutral query DTOs |
 | `runtime-state-service.mjs` | TUI state patch, budget validation, and pause/resume command | state command body | persisted state or stable validation error |

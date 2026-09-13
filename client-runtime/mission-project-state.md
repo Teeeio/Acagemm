@@ -84,7 +84,19 @@ degraded markers/source run), `correctness` (per-environment and per-case result
 status `passed`/`failed`/`not_observed`), `failure` (classified through
 `isInfrastructureTestFailure` as `infrastructure` or `operator`, or `null` when no
 failure was observed), `gate`, `decision`, `rollback` and `currentBest` (including
-candidate/asset status). When the archived Gate carries a unified decision object,
+candidate/asset status). For a `failed` benchmark with a provided top-level
+`result.correctness`, that top-level correctness is the authority for the
+archived correctness — including when `result.benchmark=[]` or stale successful
+rows are present: `status`, `total`, `failedCase`/name/category, the attempted
+cases and their real metrics are projected with `environment` from the result
+source, `profile=null` and `stage='Correctness'`. A failed benchmark whose
+top-level correctness already `passed` (for example a benchmark-stage exception
+after correctness succeeded) maps to `passed` and keeps its observed cases rather
+than being dropped to `not_observed`; `failed` still wins over a contradictory
+`passed=true`. `not_run` yields `not_observed` with no fabricated failed case and
+no invented measurement, while the successful legacy row-based path and its
+schema/semantics are unchanged.
+When the archived Gate carries a unified decision object,
 `gate.evidenceDecision` is a deep clone of the same decision the production path
 projected; legacy records without a decision are left unchanged. The next prompt
 consumes it through the existing round-facts channel only — no second process and

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "operator-studio.command-preflight/v1",
+  "createdAt": "2026-09-13T10:24:43.461Z",
+  "cwd": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_ee296f9bef944a938c18c46dc2fe91f2\\workspace",
+  "gitHead": "a5e77b535806afeefffa38f1c814b41df0d95367",
+  "node": "v22.23.2",
+  "contractSha256": "55727780c161a2068b27702339df702737d9eaed78e5c2c29d6a1d72b182fbbb",
+  "gpuPythonExists": true,
+  "nodeModulesExists": false,
+  "userCliEndpoint": "http://127.0.0.1:15721",
+  "parentAgentControlPresent": [],
+  "modelCredentialEnvPresent": [],
+  "passed": true
+}

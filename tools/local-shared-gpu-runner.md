@@ -56,6 +56,39 @@ preflight or module loading fails before normal artifacts exist. This keeps
 queue polling finite and diagnosable. Candidate code may import modules from
 the prepared package root; it cannot resolve host paths.
 
+## Failed result normalization
+
+Normalization never downgrades a real typed failure. It adds
+`schemaVersion=operator-studio.shared-gpu-result/v1`, forces
+`publishable=false`, and rewrites `result.json` atomically (temporary file +
+`os.replace`). A base correctness failure whose typed `failure` has
+`phase=correctness` and `role=candidate` is preserved verbatim, including its
+attempted `caseResults` prefix, counts and real error strings; it is never
+replaced by a generic `not_run` record. That preservation covers every base
+correctness stage: a throwing oracle input generation (`role=oracle`), a
+candidate output shape/type error or candidate `run` throw (`role=candidate`),
+and a reference-cache failure (`role=backend`) each keep the real earlier passed
+cases instead of collapsing to `not_run`. Metrics that were never computed stay
+`null`. Any stale `result.json` already in the task directory is dropped before
+the run, so a preflight, probe or backend failure can never be masked by a
+previous successful result.
+
+`environment.targetProbe` keeps the authoritative driver probe. `hardware`
+stays the vendor category `nvidia-gpu`, while `architecture`, `device` and
+`driverVersion` are copied only when the driver confirmed them. Without a real
+probe (preflight/probe failure) `liveHardware=false`, `targetProbe=null` and no
+GPU identity is claimed.
+
+`experienceEvidence` compatibility for successful executions is unchanged. A
+failed `experienceEvidence` is attached only for a genuine candidate
+correctness failure — `status=failed`, `benchmark=[]`, a real probe, and a typed
+`OPERATOR_CORRECTNESS_MISMATCH` / `OPERATOR_CANDIDATE_EXCEPTION` at
+`phase=correctness`, `role=candidate` with a consistent attempted prefix — and
+is bound from `payload.requestId`, `payload.missionId`, `payload.candidate`
+and the admitted package digests, never from a backend task id or active state.
+Oracle, probe, preflight and benchmark failures carry no eligible failed
+operator observation.
+
 Run the real smoke and production queue checks with:
 
 ```powershell
