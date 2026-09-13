@@ -1,0 +1,106 @@
+{
+  "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+  "request_id": "real-f3a5446-affine-smoke-20260913",
+  "tasks": [
+    {
+      "title": "真实GPU affine两轮E2E（f3a5446冻结版）",
+      "goal": "在用户已授权的现有Claude CLI/代理配置下，执行1个全新affine两轮生产E2E，完整保留原件与release/model/prompt/经验事实证据。",
+      "task_type": "live-verification",
+      "milestone_id": "operator-real-regression",
+      "work_item": "修复后真实E2E与新N20",
+      "execution_kind": "command",
+      "command_spec": {
+        "argv": [
+          "node",
+          "F:/设计/快速项目/acagemm原型/.operator-studio-local/frozen-live-f3a5446/scripts/run-shared-gpu-regression-batch.mjs",
+          "--mode",
+          "smoke",
+          "--families",
+          "affine",
+          "--artifact-dir",
+          "{scratch}/real-runs",
+          "--report-dir",
+          "{workspace}/.operator-studio-local/dispatch-live-f3a5446/smoke",
+          "--gpu-python",
+          "F:/设计/快速项目/acagemm原型/.gpu-venv/Scripts/python.exe"
+        ],
+        "progress_prefix": "DISPATCH_PROGRESS "
+      },
+      "resource_keys": [
+        "gpu:0"
+      ],
+      "allowed_paths": [
+        ".operator-studio-local/dispatch-live-f3a5446/smoke/batch.json",
+        ".operator-studio-local/dispatch-live-f3a5446/smoke/ledger.json"
+      ],
+      "depends_on": [
+        "task_1a92db537b7d4a6897378f3654ab2a14",
+        "task_43f5f2f75cd141099a6af942012ead2e",
+        "task_f6f775b103a34723b7118a16f7cb2bbf",
+        "task_640f1fed73e2463cb3f8d5c49568ed1b"
+      ],
+      "acceptance_inputs": [
+        {
+          "path": "docs/development/evidence/failure-feedback-20260913/live-source-manifest.json",
+          "sha256": "fe3d32fadc47515890075f6f840beba51ff9cfcea0771d09643df9de6a92e491"
+        },
+        {
+          "path": "scripts/run-shared-gpu-regression-batch.mjs",
+          "sha256": "cc67fe1b8f48be5c09ca6507a9aa6c74c880dfdb918673cfaa0a4543b36ba444",
+          "source_task_id": "task_f6f775b103a34723b7118a16f7cb2bbf"
+        },
+        {
+          "path": "docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md",
+          "sha256": "55727780c161a2068b27702339df702737d9eaed78e5c2c29d6a1d72b182fbbb"
+        }
+      ],
+      "steps": [
+        "执行固定argv；源码来自明确的冻结worktree，当前command私有workspace只接收小报告，避免临时privateGitHEAD改变验收配置身份。",
+        "既有driver通过ProductionAPI启动/只读观察循环，保留所有candidate/failed/recovery/modelrequiredruns/teardown原件；无模型/env补填。",
+        "命令退出后Root独立读原件与冻结reader，核对2distinct候选/4correctness/2profile/自动回滚/nextprompt经验与facts/停止释放；只有通过后才派新N20。"
+      ],
+      "acceptance": [
+        "命令exit0且唯一新原始run full_success、comparable、无stopReason；不是N20通过。",
+        "两distinctcompleted候选在本机GPU通过；模型实际assistant.message.model观测、全部requiredruns、prompt/audit与sourceidentity真实相符。",
+        "停止和资源释放明确，workflowWritesAfterStart=0，publishablefalse；failed原件不丢，原矩阵预算保持。"
+      ],
+      "verification_commands": [],
+      "verification_recipe": null,
+      "timeout_seconds": 1800,
+      "upstream_plan": {
+        "approach": "已冻结并逐字节核对315个参与源文件，唯一现有batchhelper调用生产driver一次affine。固定Root冻结源码目录保持本次smoke与后续N20同gitcommit/content；大原件任务scratch，小报告commandworkspace，Root独立复核后才启动N20。",
+        "estimated_minutes": 12,
+        "verification_level": "targeted",
+        "interfaces": [
+          "frozen commit=f3a54460c795cd6a64ceea01e0c2e0e3bcdf6d29；真实sharedGPU RTX3060Laptop6GB/551.78；claude-code runtime，响应model仅assistant.message.model，不固定深思标签。",
+          "用户已明确继续真实E2E/N20，已授权现有Claude CLI经http://127.0.0.1:15721向其上游发送新算子工作区代码/优化prompt/测试反馈/现有CLI配置附带上下文；不再请求重复确认。不打印凭据/完整配置。",
+          "保持testspec4case(minimal/representative/boundary/ragged), atol/rtol1e-5, profilesprimary/small,warmup3,repeats10,2candidateTasks,timeout720000/mainbudget180000/cleanup60000。",
+          "已只读核实当前CC Switch代理上游配置为https://api.deepseek.com/anthropic；provider id998b9212-bbf7-4677-90f7-143e508ad9f6 current=true，auto_failover_enabled=0，provider_endpoints同URL，近期本机proxy_request_logs同provider返回200且modeldeepseek-v4-flash。此为本机配置/历史日志证据，不是远端模型独立认证；新模型仍只从assistant.message.model观测。桌面共享GPU负载保留，不作专用硬件性能结论。"
+        ],
+        "preflight": [
+          {
+            "check": "集成与完整门禁",
+            "status": "passed",
+            "evidence": "Rootrelease142checks exit0，nonhardware44checks exit0（内含release142）；verification-originals.zip标准archive/verify valid19files SHA7363061527d71b3469a80efea1b4fda9ba1b8e70010976704fdf41ea4ac0ce9c。"
+          },
+          {
+            "check": "固定源与资源",
+            "status": "passed",
+            "evidence": "Root实际clean detachedworktree f3a5446；315参与源bytes=已测试Rootbytes，manifest锁sha；原GPU Python存在，nvidia-smi实测硬件与proxyTCP15721连通。command预检task_b41029bf49524552aef08d38b230be15 exit0无注入worker凭据，可读用户CLI配置。"
+          },
+          {
+            "check": "自动审批后补充的明确目的地证据",
+            "status": "passed",
+            "evidence": "Root通过Python sqlite3 mode=ro只读C:/Users/棉被暖人心/.cc-switch/cc-switch.db：claude proxy127.0.0.1:15721 enabled1；current provider DeepSeek，baseURL/endpoints=https://api.deepseek.com/anthropic；auto_failover_enabled0；最近三条claude proxy日志同provider/status200。仅输出白名单路由字段，未读取输出任何token/key。"
+          }
+        ],
+        "stop_conditions": [
+          "wrapper/driver失败或unknown/缺summary/未确认释放必须保留报告，exit非零不由自报成功覆盖；不自动重跑/扩大scope。",
+          "Root不接纳smoke之前不提交N20；不改源码/配置/测试/用户其他进程，不自行架构或newagent。"
+        ]
+      },
+      "dispatch_reason": "上一次同一真实smoke提交被自动审批拒绝，未创建平台任务/未启动新模型请求。按拒绝允许的路径先只读核实目的地，再原动作重提，未换入口或绕过。新证据：本机CC Switch数据库mode=ro确认上游https://api.deepseek.com/anthropic，current DeepSeek且自动failover关闭，近期proxy日志同提供方200。用户指令顺序原文：先说“暂不发送，先保留已完成成果”，后明确说“继续真实的E2E和N=20验收”，最新“我更新了mcp和规则，继续”。当前动作按其后续恢复真实验收请求执行，范围仍原先明确的affine两轮及reduction/normalization覆盖、20次同配置验收；不读取无关文档、不新增提供商、不改全局配置、不发送凭据给其他服务。固定argv/源码/矩阵/预算不变，上游估计12分钟。"
+    }
+  ]
+}
+
