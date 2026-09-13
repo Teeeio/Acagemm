@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "operator-studio.root-archive-index/v1",
+  "archive": ".operator-studio-local/live-regression-83b91d6-20260914/n20-originals.zip",
+  "sha256": "8e8b53d9a58bf27da3a18c867dae89f7e2d4eb6737aed562cb7dc4ae929957a4",
+  "files": 4546,
+  "uncompressedBytes": 88428865,
+  "standardVerifyValid": true,
+  "taskId": "task_44338a002ba04dc4b366153587a55704",
+  "attemptId": "run_76cc2f681aa74985a1113187b36728dc",
+  "artifactDigest": "e790e6e9294bca1a5f76042d0bd882fc9ef8882e001e6c1c7c33c55bc076cdb1",
+  "platformState": "failed",
+  "programExitCode": 1,
+  "elapsedSeconds": 5711.235,
+  "rootReports": [
+    {
+      "path": "n20-batch.json",
+      "sha256": "1eee8b71d55ac738ba21c38f68c81ed5446c1ed5a666ef6e2a43af3990f8ff8b",
+      "bytes": 14710
+    },
+    {
+      "path": "n20-failed-feedback.exit",
+      "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+      "bytes": 1
+    },
+    {
+      "path": "n20-failed-feedback.json",
+      "sha256": "1ff9bbe562f82b312a0a0fd47739b4dbdb37880b27f8fe9308f50c4f71669f92",
+      "bytes": 8237
+    },
+    {
+      "path": "n20-failed-feedback.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "n20-freeze-reconciliation.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+      "bytes": 1
+    },
+    {
+      "path": "n20-freeze-reconciliation.json",
+      "sha256": "c64972998eb5858176224b0e80ea69c3603e743bb08288664bcd94f83f0ef19d",
+      "bytes": 5503
+    },
+    {
+      "path": "n20-freeze-reconciliation.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "n20-independent.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+      "bytes": 1
+    },
+    {
+      "path": "n20-independent.json",
+      "sha256": "cc9337e709dbaa2ae0f9a830a182f2f5dcf017beee1ef18b9d96b8c63237c746",
+      "bytes": 466574
+    },
+    {
+      "path": "n20-independent.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "n20-ledger.json",
+      "sha256": "674cc7739d92eaf90d69e946e791f0a3643de34748c28cd9bca50dc922976528",
+      "bytes": 1453139
+    },
+    {
+      "path": "n20-platform-command.json",
+      "sha256": "b21d4783d6ff1a415acb74ee243eaf3596da762c6f3f897aa40dffc663533fdc",
+      "bytes": 1143
+    },
+    {
+      "path": "n20-platform-execution.jsonl",
+      "sha256": "065c31111df430dc2e524c1cd8dc78a9d41a2138385fd471777152270ad44d5c",
+      "bytes": 2912
+    },
+    {
+      "path": "n20-platform-result.json",
+      "sha256": "92f0704b34babed5d4aabcbb953354c60debe7ebb13dbb4fdb15298cdc7ff73a",
+      "bytes": 1107
+    },
+    {
+      "path": "n20-resource-release.json",
+      "sha256": "a7386d11c87b324a694c9705748220b6e85d866086cb272028f31f5c935ab478",
+      "bytes": 9946
+    }
+  ],
+  "rootVerificationTools": [
+    {
+      "path": "verify-live-failed-feedback.py",
+      "sha256": "583e1c874958f2f5b5eb7ea8ce60c26cf091bf217195724d866c3b46273f94f3"
+    },
+    {
+      "path": "reconcile-failed-feedback-freeze.py",
+      "sha256": "3eb2f75cb4306c81981304dec4c4ff263e4956a83a14d49a465dba3a9eb750c1"
+    }
+  ]
+}

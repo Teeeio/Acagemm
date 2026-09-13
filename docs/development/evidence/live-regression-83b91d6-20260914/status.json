@@ -14,13 +14,13 @@
   },
   "freshN20": {
     "taskId": "task_44338a002ba04dc4b366153587a55704",
-    "status": "running",
+    "status": "strict-gate-failed-originals-independently-verified",
     "requiredRuns": 20,
     "strictPass": false,
     "attemptId": "run_76cc2f681aa74985a1113187b36728dc",
-    "lastObservedCompleted": 1,
-    "lastObservedFullSuccess": 1,
-    "lastObservedComparable": 1,
+    "lastObservedCompleted": 20,
+    "lastObservedFullSuccess": 20,
+    "lastObservedComparable": 19,
     "finalAcceptance": false,
     "preLaunchFailures": [
       {
@@ -29,13 +29,72 @@
         "gpuOriginals": 0,
         "resolution": "byte-identical docs copies with locked provenance; fixed argv/source/budgets unchanged"
       }
-    ]
+    ],
+    "lastObservedAt": "2026-09-13T21:16:11.437080+00:00",
+    "currentInvocation": null,
+    "failedCandidatesInCompletedRuns": 4,
+    "strictGateAlreadyUnsatisfied": true,
+    "strictGateReason": "Invocation 13: provider.model unknown; 5 required model runs, 4 observed; frozen sample retained without replacement.",
+    "verificationComplete": true,
+    "programExitCode": 1,
+    "elapsedSeconds": 5711.235,
+    "independentReaderExitCode": 0,
+    "independentVerifiedRuns": 20,
+    "requiredModelRuns": 46,
+    "observedModelRuns": 45,
+    "unknownModelRuns": 1,
+    "archive": ".operator-studio-local/live-regression-83b91d6-20260914/n20-originals.zip",
+    "archiveSha256": "8e8b53d9a58bf27da3a18c867dae89f7e2d4eb6737aed562cb7dc4ae929957a4",
+    "archiveVerified": true,
+    "archiveFiles": 4546,
+    "resourcesReleased": true,
+    "queueTasks": 64,
+    "failureFeedback": {
+      "failedCandidates": 4,
+      "persistedWithPreparedBinding": 4,
+      "failedFactsInRecoveryPrompt": 4,
+      "immediateExperienceAuditPassed": false,
+      "immediateAuditExitCode": 1,
+      "existingSameRoundFreezeConformant": true,
+      "newLogicalRoundExperienceObserved": 2,
+      "noLaterNewLogicalRound": 2,
+      "note": "Immediate-audit failure retained separately; no assertion or source change. New-round observations are pre-send prompt artifacts, not a claim about upstream model internals."
+    }
   },
   "separateCoverage": {
-    "status": "not-started",
+    "status": "independently-accepted-command-integrated",
     "families": [
       "reduction",
       "normalization"
-    ]
+    ],
+    "taskId": "task_8e90edc775e14bedb2eb1b3e0dfb352e",
+    "attemptId": "run_fd9462bbac17432ebe42ca5a636b6dfe",
+    "countsTowardN20": false,
+    "programExitCode": 0,
+    "elapsedSeconds": 433.969,
+    "fullSuccess": true,
+    "verified": true,
+    "distinctPassedCandidates": 4,
+    "requiredModelRuns": 4,
+    "observedModelRuns": 4,
+    "actualModel": "deepseek-v4-flash",
+    "resourcesReleased": true,
+    "failedFeedbackObserved": false,
+    "archive": ".operator-studio-local/live-regression-83b91d6-20260914/coverage-originals.zip",
+    "archiveSha256": "8f6a9c278380f658ea2cecf067f3382ecf8c2c54f82bc318b84ef5616c27cc09",
+    "archiveVerified": true,
+    "archiveFiles": 391,
+    "platformChangedFiles": 0,
+    "reportRetention": "Root copied exact original workspace reports into docs; platform integrated the verified command record only.",
+    "artifactDigest": "41e15bed699f90dee736aaa5127a5e9c29fd1f8c12e25c0f4114d781d5beefbb"
+  },
+  "completedAt": "2026-09-13T21:26:51.963884+00:00",
+  "overall": {
+    "requestedRunsCompleted": true,
+    "allOriginalsIndependentlyVerified": true,
+    "strictN20Passed": false,
+    "productionStabilityProven": false,
+    "runningTasks": 0,
+    "nextDevelopment": "Diagnose no-response/cancellation timing; preserve unknown semantics and fixed budgets; a new frozen N20 requires an explicit verified change, not replacement sampling."
   }
 }
