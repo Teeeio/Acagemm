@@ -106,10 +106,12 @@ boundary 边界回归包的 artifact digest
 - `verify:non-hardware-robustness`：**44 checks，exit 0**，其中包含既有配置要求的 release 142 项；
 - [验证摘要](verification-summary.json)与[19 份验证原件归档](verification-originals.zip)已保存，标准归档校验通过；历史旧树的 139 / 41 不作为当前结果。
 - 代码冻结为 `f3a54460c795cd6a64ceea01e0c2e0e3bcdf6d29`；[源码清单](live-source-manifest.json)记录了与已测试版本字节一致的 315 个参与文件。
-- **新的真实 E2E 和 N=20 尚未启动**：自动审批两次拒绝真实任务提交，未创建下游任务、未发送新的模型请求。只读核实的当前代理上游配置为 `https://api.deepseek.com/anthropic`，自动故障转移关闭。完整原因与范围见[接续状态](live-run-status.json)。
+- 最新授权后，**新的 affine 两轮真实 E2E 已完成并独立验收**：2 个不同通过候选，3 次实际模型观测均为 `deepseek-v4-flash`，停止和释放确认。此前两次 E2E 审批拒绝已成为历史记录。
+- **新 N=20 尚未启动**：额外失败候选暴露生产准备回调漏传 `preparedArtifactDigest`，严格校验因此跳过失败经验。根因原件、独立验收及修复请求见[本次接续证据](../queue-prepared-binding-20260913/README.md)。新的实现/测试任务外发被自动审批拒绝，修复任务未创建。
+- 当前已核实配置仍为本地代理到 `https://api.deepseek.com/anthropic`，自动故障转移关闭。[接续状态](live-run-status.json)保留旧审批记录和最新进展。
 
 ## 5. 下一步
 
-1. 自动审批要求用户明确授权将算子代码、优化提示词、测试反馈及现有 Claude CLI 上下文发送至上述 DeepSeek 上游；[冻结请求](live-run-request.json)已保存。
-2. 获得该授权后，从冻结版本执行 **real affine 两轮** smoke，独立复核原件后再启动 **20 个全新 affine 样本**。
+1. E2E 外发授权已经获得并完成 smoke；新的开发任务需按自动审批要求补充明确授权，范围见[冻结修复请求](../queue-prepared-binding-20260913/repair-dispatch-request.json)。
+2. 平台派发准备摘要接线修复与独立入口测试，组合验收、集成及既有门禁后冻结新源码；重新执行 **real affine 两轮** smoke，再启动 **20 个全新 affine 样本**。
 3. **coverage（reduction/normalization）单独另行**，不并入 N20、不与旧批次混算；复核真实失败候选的结构化结果及后续经验、事实注入。

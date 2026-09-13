@@ -1,0 +1,203 @@
+{
+  "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+  "request_id": "queue-prepared-binding-parallel-20260913",
+  "tasks": [
+    {
+      "execution_kind": "model",
+      "profile_id": "model_24e9ad57f50c4e21b6dcb581a454ae93",
+      "milestone_id": "operator-real-regression",
+      "work_item": "准备摘要生产接线修复",
+      "acceptance_inputs": [
+        {
+          "path": "docs/development/QUEUE_PREPARED_BINDING_ACCEPTANCE.md",
+          "sha256": "60234ed781554fe6421bf9d527f8fce2482669628481f12a505ce86b5db58c26"
+        },
+        {
+          "path": "docs/development/evidence/queue-prepared-binding-20260913/real-failed-queue.json",
+          "sha256": "2f2df5adc31a1f2a105cce145424cc6d41e4ebbaaf0fd1f7861879c4580012d3"
+        },
+        {
+          "path": "client-runtime/local-server.mjs",
+          "sha256": "07eb6952f3f42f7658d6bd07feee2d2cf5219754a6c9fa0c9be5aae3578d8d77"
+        },
+        {
+          "path": "client-runtime/application/benchmark-command.mjs",
+          "sha256": "7f9447235a6eedf321a6f96a430360e969c0bd98a8d8a7ac78d01f44926f2019"
+        }
+      ],
+      "depends_on": [],
+      "resource_keys": [],
+      "timeout_seconds": 1500,
+      "dispatch_reason": "已授权真实E2E后暴露生产callback遗漏，Root保存真实queue证据并冻结唯一方案；实现与独立测试现在可同时开工，完整组合行为由Root另派精确candidate_inputs command验收。上游估计20分钟，不含真实GPU新批次。 授权依据补充：用户最新明确『为了优化派发工作流，我又优化了mcp和规则，现在继续，允许』；同时用户提供的当前AGENTS.md明确规定『实现、测试和说明优先dispatch_submit委派』及平台项目快照要求，本次就是为已授权E2E/N20修复真实运行暴露的队列摘要遗漏，使用已配置可用DeepSeek渠道https://api.deepseek.com/anthropic。此前已询问并获允许同一目的地发送代码/优化提示词/测试反馈/仓库信息。只涉及当前项目冻结列明源文件、契约和该项目真实测试回执，不读传凭据或其它用户目录，不做无记录本地实现。",
+      "key": "binding_impl",
+      "title": "补齐准备包摘要生产接线与公共端口",
+      "task_type": "implementation",
+      "goal": "逐字保持原local-server准备callback语义，抽出冻结公共服务并补admission.preparedArtifactDigest至队列请求。",
+      "allowed_paths": [
+        "client-runtime/application/benchmark-package-preparation-service.mjs",
+        "client-runtime/local-server.mjs",
+        "client-runtime/application/README.md",
+        "client-runtime/README.md",
+        "docs/development/MODULE_OWNERSHIP.md"
+      ],
+      "review_depends_on": [
+        "binding_tests"
+      ],
+      "steps": [
+        "读ARCHITECTURE/nearestREADME及冻结QUEUE_PREPARED_BINDING_ACCEPTANCE；不要读取未授权私有scratch。",
+        "按冻结factory接口搬出原callback并补唯一字段，local-server仅构造注入。旧contentDigest/canonicalJson如其它引用存在则保留，模块职责登记完整。",
+        "不写测试、不改验收契约；只跑node --check目标文件和现有module-boundary检查。"
+      ],
+      "acceptance": [
+        "唯一行为增量是可信admission摘要写入request，不能采信caller/result回填。",
+        "应用公共服务原逻辑/错误/文件集合/时间限制保持；local-server实际消费此factory。",
+        "范围内README/ownership同步；等待Root精确组合验证后验收。"
+      ],
+      "verification_commands": [
+        "node --check client-runtime/application/benchmark-package-preparation-service.mjs",
+        "node --check client-runtime/local-server.mjs",
+        "node tests/module-boundary-test.mjs"
+      ],
+      "verification_recipe": {
+        "name": "binding-implementation-targeted",
+        "checks": [
+          {
+            "name": "preparer syntax",
+            "argv": [
+              "node",
+              "--check",
+              "client-runtime/application/benchmark-package-preparation-service.mjs"
+            ],
+            "timeout_seconds": 30
+          },
+          {
+            "name": "server syntax",
+            "argv": [
+              "node",
+              "--check",
+              "client-runtime/local-server.mjs"
+            ],
+            "timeout_seconds": 30
+          },
+          {
+            "name": "module boundaries",
+            "argv": [
+              "node",
+              "tests/module-boundary-test.mjs"
+            ],
+            "timeout_seconds": 120
+          }
+        ]
+      },
+      "upstream_plan": {
+        "approach": "搬移现有callback到冻结应用端口并补可信字段；保持strictconsumer不动。",
+        "interfaces": [
+          "createBenchmarkPackagePreparer({executionPackageStore,packageAdapter}) -> async({request,mission,matrix,missionRunPy})",
+          "错误PACKAGE_TEST_SPEC_REQUIRED/PACKAGE_ORACLE_INVALID保持；request.preparedArtifactDigest覆盖为admission值。"
+        ],
+        "estimated_minutes": 10,
+        "verification_level": "targeted",
+        "stop_conditions": [
+          "不改strict verifier/固定矩阵/预算，不调GPU/模型/网络，不新依赖/newagent，不选第二方案。",
+          "缺接口或冻结前提矛盾立即decision_request保留产物；author只做约定targeted/syntax，组合行为不能冒充已验证。"
+        ],
+        "preflight": [
+          {
+            "check": "根因",
+            "status": "passed",
+            "evidence": "Root实际failedqueue payload无preparedArtifactDigest，result/backend有；local-server callback返回值确实遗漏。"
+          }
+        ]
+      }
+    },
+    {
+      "execution_kind": "model",
+      "profile_id": "model_24e9ad57f50c4e21b6dcb581a454ae93",
+      "milestone_id": "operator-real-regression",
+      "work_item": "准备摘要生产接线修复",
+      "acceptance_inputs": [
+        {
+          "path": "docs/development/QUEUE_PREPARED_BINDING_ACCEPTANCE.md",
+          "sha256": "60234ed781554fe6421bf9d527f8fce2482669628481f12a505ce86b5db58c26"
+        },
+        {
+          "path": "docs/development/evidence/queue-prepared-binding-20260913/real-failed-queue.json",
+          "sha256": "2f2df5adc31a1f2a105cce145424cc6d41e4ebbaaf0fd1f7861879c4580012d3"
+        },
+        {
+          "path": "client-runtime/local-server.mjs",
+          "sha256": "07eb6952f3f42f7658d6bd07feee2d2cf5219754a6c9fa0c9be5aae3578d8d77"
+        },
+        {
+          "path": "client-runtime/application/benchmark-command.mjs",
+          "sha256": "7f9447235a6eedf321a6f96a430360e969c0bd98a8d8a7ac78d01f44926f2019"
+        }
+      ],
+      "depends_on": [],
+      "resource_keys": [],
+      "timeout_seconds": 1500,
+      "dispatch_reason": "已授权真实E2E后暴露生产callback遗漏，Root保存真实queue证据并冻结唯一方案；实现与独立测试现在可同时开工，完整组合行为由Root另派精确candidate_inputs command验收。上游估计20分钟，不含真实GPU新批次。 授权依据补充：用户最新明确『为了优化派发工作流，我又优化了mcp和规则，现在继续，允许』；同时用户提供的当前AGENTS.md明确规定『实现、测试和说明优先dispatch_submit委派』及平台项目快照要求，本次就是为已授权E2E/N20修复真实运行暴露的队列摘要遗漏，使用已配置可用DeepSeek渠道https://api.deepseek.com/anthropic。此前已询问并获允许同一目的地发送代码/优化提示词/测试反馈/仓库信息。只涉及当前项目冻结列明源文件、契约和该项目真实测试回执，不读传凭据或其它用户目录，不做无记录本地实现。",
+      "key": "binding_tests",
+      "title": "独立验证生产准备端口到队列摘要身份",
+      "task_type": "test",
+      "goal": "按冻结契约测试真实preparer+Benchmark command+持久化queue+strict失败验证链；不手造最终queue payload。",
+      "allowed_paths": [
+        "tests/queue-prepared-binding-test.mjs",
+        "tests/README.md",
+        "package.json",
+        "scripts/verify-local-c500-release.mjs"
+      ],
+      "review_depends_on": [
+        "binding_impl"
+      ],
+      "steps": [
+        "读冻结契约及现有README/production command/queue/verifier；实现候选此时可能不可见，但按冻结factory接口写独立测试。",
+        "覆盖5项矩阵与生产composition wiring补充断言；真实queue请求必须由preparer→command产生，backend与store可明确port doubles，无GPU/模型。",
+        "单writer登记test:queue-prepared-binding至package.json及现有release列表、testsREADME。",
+        "author只node --check新测试与JSON解析package；不通过临时实现/源码摘取来伪造组合测试通过。组合由Root command运行。"
+      ],
+      "acceptance": [
+        "新测试覆盖可信摘要传播/caller冲突覆盖/原错误无提交/生产请求对应failedverifier正例/删改摘要拒绝且不变更输入。",
+        "测试不改变生产源码或冻结接受标准；明确模拟ports非GPU证明。",
+        "新测试接入既有release；组合树才可宣称行为通过。"
+      ],
+      "verification_commands": [
+        "node --check tests/queue-prepared-binding-test.mjs"
+      ],
+      "verification_recipe": {
+        "name": "binding-independent-test-syntax",
+        "checks": [
+          {
+            "name": "test syntax",
+            "argv": [
+              "node",
+              "--check",
+              "tests/queue-prepared-binding-test.mjs"
+            ],
+            "timeout_seconds": 30
+          }
+        ]
+      },
+      "upstream_plan": {
+        "approach": "按冻结公共接口写独立行为测试，和实现并行可claim，author语法验证后由精确组合命令运行真实跨文件链。",
+        "interfaces": [
+          "同契约factory接口，独立port doubles，真实createBenchmarkCommands/createOperatorTestQueue持久化。",
+          "preparedArtifactDigest缺失或不符严格拒绝；不能把result摘要补回request。"
+        ],
+        "estimated_minutes": 15,
+        "verification_level": "targeted",
+        "stop_conditions": [
+          "不改strict verifier/固定矩阵/预算，不调GPU/模型/网络，不新依赖/newagent，不选第二方案。",
+          "缺接口或冻结前提矛盾立即decision_request保留产物；author只做约定targeted/syntax，组合行为不能冒充已验证。"
+        ],
+        "preflight": [
+          {
+            "check": "输入",
+            "status": "passed",
+            "evidence": "Root固定真实失败queue与生产command sha；公共factory签名和错误/正反例已冻结。"
+          }
+        ]
+      }
+    }
+  ]
+}

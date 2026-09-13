@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "operator-studio.queue-binding-resume/v1",
+  "recordedAt": "2026-09-13T15:55:09.107866+00:00",
+  "codeCommit": "f3a54460c795cd6a64ceea01e0c2e0e3bcdf6d29",
+  "smokeTaskId": "task_baf9fc222be74e38afb3fbd67eb545c6",
+  "smokeAttemptId": "run_3cd5adce8d7b44888113f3a4e0ca787b",
+  "smokeArtifactDigest": "086f32d33a2c2888d411a8573ec1ce768e5120bc73e6bf35adc08ebe1c549c3b",
+  "smokeTaskStatus": "integrated",
+  "independentResult": {
+    "ok": true,
+    "exitCode": 0,
+    "runCount": 1,
+    "fullSuccessRuns": 1,
+    "verifiedRuns": 1,
+    "strictN20Eligible": false
+  },
+  "modelSummary": {
+    "schemaVersion": "operator-studio.model-observation/v1",
+    "status": "observed",
+    "model": "deepseek-v4-flash",
+    "modelSource": "observed",
+    "models": [
+      "deepseek-v4-flash"
+    ],
+    "requiredRunCount": 3,
+    "observedRunCount": 3,
+    "reasons": []
+  },
+  "newN20Invocations": 0,
+  "newCoverageInvocations": 0,
+  "strictN20Passed": false,
+  "failureFeedbackComplete": false,
+  "rawRunRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_3cd5adce8d7b44888113f3a4e0ca787b\\scratch\\real-runs\\shared-gpu-5WLmXI",
+  "archive": {
+    "smoke-originals.zip": {
+      "path": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\live-regression-f3a5446-20260913\\smoke-originals.zip",
+      "bytes": 946440,
+      "sha256": "624d824e74f594d65d773b7d5279f10e414a70b2172e09a5df09a566c8dbde27"
+    },
+    "smoke-originals.zip.manifest.json": {
+      "path": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\live-regression-f3a5446-20260913\\smoke-originals.zip.manifest.json",
+      "bytes": 56596,
+      "sha256": "42da374138431fb07b92025668a45868a21af6f2bef4c75b27a724cd6e376c83"
+    }
+  },
+  "archiveVerified": true,
+  "archiveFiles": 250,
+  "archiveUncompressedBytes": 5189447,
+  "repairTaskIds": [],
+  "repairDispatchStatus": "automatic_approval_rejected_before_task_creation",
+  "automaticReviewReason": "重试仍会向外部DeepSeek模型发送生产源码、失败队列证据和修复细节以执行新的实现/测试派发；此前用户授权限定于真实E2E验收外发，未明确覆盖该开发任务。",
+  "nextAction": "Obtain explicit authorization for the frozen repair implementation/test dispatch to the configured DeepSeek model. Then submit the saved request, independently combine and validate exact candidate artifacts, integrate, final gates, freeze new code and rerun smoke before fresh N20 and separate coverage. Do not pool older source batches or backfill unknown models."
+}

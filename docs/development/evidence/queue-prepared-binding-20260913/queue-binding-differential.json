@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "operator-studio.queue-binding-differential/v1",
+  "boundary": "Read-only diagnostic replay with explicit admission/artifact port doubles. Corrected copy exists only in memory; not repaired production or live proof.",
+  "original": {
+    "verified": false,
+    "code": "EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH",
+    "admissionCalls": 0
+  },
+  "singleFieldInMemoryCopy": {
+    "verified": true,
+    "admissionCalls": 1
+  },
+  "originalUnchanged": true,
+  "producer": {
+    "errorCode": "OPERATOR_CORRECTNESS_MISMATCH",
+    "failedCase": "minimal",
+    "executed": 1,
+    "total": 4,
+    "metrics": {
+      "case": "minimal",
+      "dtype": "float32",
+      "maxDiff": 0.125,
+      "rmse": 0.125,
+      "cosDiff": 0,
+      "passed": false,
+      "error": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+      "failure": {
+        "code": "OPERATOR_CORRECTNESS_MISMATCH",
+        "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+        "phase": "correctness",
+        "role": "candidate",
+        "retryable": false,
+        "details": {
+          "case": "minimal",
+          "caseIndex": 1,
+          "category": "minimal"
+        }
+      }
+    }
+  },
+  "expected": true
+}
