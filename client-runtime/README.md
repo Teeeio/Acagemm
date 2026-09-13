@@ -125,6 +125,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 | `application/baseline-failure-projection.mjs` | baseline failure state projection | benchmark state | changed flag |
 | `application/benchmark-projection-service.mjs` | Operator Test snapshot projection | benchmark state | changed state |
+| `application/benchmark-package-preparation-service.mjs` | Shared-GPU execution package preparation port (`createBenchmarkPackagePreparer`) | request, mission, frozen matrix, injected store/adapter | admission-bound Benchmark request |
 | `application/repository-adoption-service.mjs` | Accept Gate repository adoption | projected state | changed state |
 | `application/autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `application/autopilot-context-service.mjs` | automatic iteration context preparation | state | autopilot context |
@@ -353,8 +354,8 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 
 | 公共模块 | API / 责任 |
 |---|---|
-| [execution-package-contract](execution-package-contract.md) | 纯 manifest、路径、层、Candidate/Workspace、验收与准入绑定规则 |
-| [execution-package-store](execution-package-store.md) | assemble / validate / prepare / reconcilePreparation / verifyAdmission；私有 CAS 与可信准入 |
+| [execution-package-contract](execution-package-contract.md) | 纯 manifest、路径、层、Candidate/Workspace、验收与准入绑定规则；canonical 纯 `contentDigest(bytes)`（仅 `node:crypto`，无 I/O） |
+| [execution-package-store](execution-package-store.md) | assemble / validate / prepare / reconcilePreparation / verifyAdmission；私有 CAS 与可信准入；`contentDigest` 仅为指向 contract canonical 函数的同绑定兼容导出 |
 | [execution-package-import](execution-package-import.md) | 将目录或 tar/tar.gz/zip 归档读取为候选、依赖、独立验收层；拒绝链接、设备、越界路径后交给 package store 准入 |
 | [operator-test-tool](operator-test-tool.md) | capabilities / prepare / submit / read-only get / cancel / findByRequestId；仅调用一个队列 |
 | [experience-contract](experience-contract.md) | 版本、范围、来源、证据与非发布型开发经验规则 |

@@ -167,6 +167,7 @@
     "test:shared-gpu-failure-result": "python tests/shared-gpu-failure-result-test.py",
     "test:failed-execution-feedback": "node tests/failed-execution-feedback-test.mjs",
     "test:failed-execution-boundary": "node tests/failed-execution-boundary-test.mjs",
+    "test:queue-prepared-binding": "node tests/queue-prepared-binding-test.mjs",
     "test:token-usage": "node tests/token-usage-test.mjs",
     "test:bundled-node-package": "node tests/bundled-node-package-test.mjs",
     "test:local-c500-production-tui": "node tests/local-c500-production-tui-test.mjs",

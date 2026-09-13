@@ -55,6 +55,7 @@
 | `materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 | `baseline-failure-projection.mjs` | idempotent baseline failure projection | benchmark state | changed flag |
 | `benchmark-projection-service.mjs` | Operator Test queue snapshot and artifact projection | benchmark state | changed state |
+| `benchmark-package-preparation-service.mjs` | Shared-GPU execution package assembly, oracle admission, and trusted `preparedArtifactDigest` binding through injected store/adapter ports | request, mission, frozen matrix, mission run.py | admission-bound Benchmark request |
 | `repository-adoption-service.mjs` | managed runtime candidate repository adoption | projected state | changed state |
 | `autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `autopilot-context-service.mjs` | auto-tick context preparation | state | autopilot context |

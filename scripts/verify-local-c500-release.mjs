@@ -154,6 +154,7 @@ const checks = [
   'test:shared-gpu-failure-result',
   'test:failed-execution-feedback',
   'test:failed-execution-boundary',
+  'test:queue-prepared-binding',
 ];
 
 console.log(`[release-check] runtime ${process.version}`);

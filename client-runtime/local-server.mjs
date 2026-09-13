@@ -40,11 +40,10 @@ import { consumeWorkflowRecoveryBudget, reconcileWorkflowState } from './workflo
 import { normalizeWorkflowError, serializeWorkflowError } from './workflow-error.mjs';
 import { createLocalC500ServiceClient, localC500Config } from './local-c500-service-client.mjs';
 import { createOperatorTestTool } from './operator-test-tool.mjs';
-import { createExecutionPackageStore, contentDigest } from './execution-package-store.mjs';
+import { createExecutionPackageStore } from './execution-package-store.mjs';
 import { importExecutionPackage } from './execution-package-import.mjs';
 import { createExecutionPackageImportService } from './application/execution-package-import-service.mjs';
 import { createExecutionPackageRoutes } from './server/execution-package-routes.mjs';
-import { canonicalJson } from './execution-package-contract.mjs';
 import { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARED_GPU_PACKAGE_ADAPTER } from './local-shared-gpu-package-adapter.mjs';
 import { migrateLocalC500TesterState } from './local-c500-state-migration.mjs';
 import { LOCAL_C500_RUNTIME_CONTRACT_VERSION } from './local-c500-runtime-contract.mjs';
@@ -96,6 +95,7 @@ import { createBaselineSourceService } from './application/baseline-source-servi
 import { createMaterializerPolicyService } from './application/materializer-policy-service.mjs';
 import { projectBaselineFailure } from './application/baseline-failure-projection.mjs';
 import { createBenchmarkProjectionService } from './application/benchmark-projection-service.mjs';
+import { createBenchmarkPackagePreparer } from './application/benchmark-package-preparation-service.mjs';
 import { createRepositoryAdoptionService } from './application/repository-adoption-service.mjs';
 import { selectAutopilotCandidate } from './application/autopilot-candidate-service.mjs';
 import { createAutopilotContextService } from './application/autopilot-context-service.mjs';
@@ -401,38 +401,9 @@ const streamMissionEvents = async (request, response, missionId, after = 0) => {
 
 const { guardMutation, hasMissionBudgetInput, validateMissionBudgetInput, guardSupportedRuntimeAction, guardWorkflowTransition, interventionOutcomeMeta, adoptCandidateState } = createWorkflowCommandPolicy({ addAuditEvent, agentRuntime, appendRuntimeEvent, createCurrentBestState, createDecisionReviewState, isManagedWorkspaceRuntimeMode, markCandidateAccepted, normalizeMissionBudgetMs });
 
+// 准备端口由冻结的公共 factory 构造；组合根只注入可信 store 与 adapter 身份。
 const prepareExecutionPackage = executionPackageStore
-  ? async ({ request, mission, matrix, missionRunPy }) => {
-    const testSpec = matrix.testSpec;
-    if (!testSpec || typeof testSpec !== 'object') throw Object.assign(new Error('Shared-GPU execution requires a frozen testSpec from the active Profile.'), { code: 'PACKAGE_TEST_SPEC_REQUIRED', status: 409 });
-    const candidateFiles = { 'run.py': String(missionRunPy?.content || request.runPy || '') };
-    const dependencyFiles = Object.fromEntries(Object.entries(missionRunPy?.implementationFiles || request.implementationFiles || {}));
-    const oracle = request.oracleRunPy;
-    if (!oracle) throw Object.assign(new Error('Execution package requires an independent acceptance entrypoint.'), { code: 'PACKAGE_ORACLE_INVALID', status: 409 });
-    const candidateDigest = /^sha256:[a-f0-9]{64}$/.test(request.candidate?.digest || '')
-      ? request.candidate.digest
-      : contentDigest(Buffer.from(candidateFiles['run.py'], 'utf8'));
-    const semanticDigest = request.semanticBinding?.semanticDigest && /^sha256:[a-f0-9]{64}$/.test(request.semanticBinding.semanticDigest)
-      ? request.semanticBinding.semanticDigest
-      : contentDigest(Buffer.from(canonicalJson(testSpec), 'utf8'));
-    const assembled = await executionPackageStore.assemble({
-      language: 'python', adapter: SHARED_GPU_PACKAGE_ADAPTER, environmentId: 'local-shared-gpu',
-      binding: { missionId: request.missionId, workspaceId: mission.workspaceId || mission.id || request.missionId, candidateId: request.candidate?.id, candidateDigest },
-      candidateEntrypoint: 'run.py', candidateFiles, dependencyFiles,
-      acceptance: { entrypoint: 'oracle.py', files: { 'oracle.py': oracle }, semanticDigest, testSpec }, build: {},
-    });
-    const admission = await executionPackageStore.prepare(assembled.packageDigest);
-    return {
-      ...request,
-      candidate: { ...request.candidate, digest: candidateDigest },
-      workspaceId: mission.workspaceId || mission.id || request.missionId,
-      packageDigest: assembled.packageDigest, admissionId: admission.admissionId,
-      environmentDigest: admission.environmentDigest, acceptanceDigest: admission.acceptanceDigest,
-      target: admission.target, build: admission.build, adapter: admission.adapter,
-      checks: ['correctness', 'benchmark'],
-      deadline: new Date(Date.now() + Number(request.limits?.timeoutSeconds || 600) * 1000).toISOString(),
-    };
-  }
+  ? createBenchmarkPackagePreparer({ executionPackageStore, packageAdapter: SHARED_GPU_PACKAGE_ADAPTER })
   : null;
 
 

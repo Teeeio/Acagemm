@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "operator-studio.final-verification-archive/v1",
+  "archive": ".operator-studio-local/queue-prepared-binding-20260914/final-verification-originals.zip",
+  "manifest": ".operator-studio-local/queue-prepared-binding-20260914/final-verification-originals.zip.manifest.json",
+  "sha256": "372c7969d914065fa83b0abb9d6df6fce2ce0981de0ef21dd2357d633f8ce993",
+  "files": 39,
+  "uncompressedBytes": 568015,
+  "standardVerify": {
+    "exitCode": 0,
+    "valid": true
+  },
+  "rootRelease": {
+    "checks": 143,
+    "exitCode": 0
+  },
+  "rootNonHardware": {
+    "checks": 44,
+    "includesReleaseChecks": 143,
+    "exitCode": 0
+  },
+  "testedSourceFilesUnchanged": 317,
+  "scope": "Final integrated source, exact-candidate combination raw proof and historical first failure, Root final gate logs/exit codes. Hardware-free only."
+}

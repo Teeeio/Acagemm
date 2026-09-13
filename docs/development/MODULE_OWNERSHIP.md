@@ -91,6 +91,7 @@ TUI / GUI
 | `candidate-validation-service.md` | Patch 应用、Benchmark 启动和阶段回滚 | candidate/benchmark command | validation result、state |
 | `operator-test-service.md` | 查询和取消串行测试任务 | task ID、queue port | task DTO、queue metadata |
 | `benchmark-projection-service.md` | 将 Queue snapshot 投影到 workflow | benchmark/task state | changed state |
+| `benchmark-package-preparation-service.md` | 组装共享 GPU 执行包、校验 oracle 并写入可信准入摘要 | execution package store、adapter、冻结 testSpec | 带 admission 绑定的 Benchmark 请求 |
 | `decision-service.md` | 采用、拒绝和撤销采用 | decision command | decision result、recovery metadata |
 | `repository-adoption-service.md` | 将通过 Gate 的 Candidate 写回仓库 | projected state、workspace port | changed state |
 | `experience-api-service.md` | 正式人工经验 API 的项目范围和输入边界 | 只读状态、Experience service ports | 版本化人工经验 DTO |

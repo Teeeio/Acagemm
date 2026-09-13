@@ -178,6 +178,38 @@ so an unrelated pre-integration rejection is not counted as a targeted rejection
 It is contract/integration evidence only and must not be weakened to match a
 pre-integration tree. It runs in both verification gates.
 
+## Queue prepared-artifact binding (hardware-free)
+
+`queue-prepared-binding-test.mjs` is the independent acceptance for
+`docs/development/QUEUE_PREPARED_BINDING_ACCEPTANCE.md`. What is real: the exported
+production preparer `createBenchmarkPackagePreparer`, the production
+`createBenchmarkCommands` `start-benchmark` prepare/apply path, the file-backed
+`createOperatorTestQueue` persistence and the unchanged strict
+`createSharedGpuExperienceVerifier` failed-candidate path. What is a declared port
+double: package storage/admission `assemble`/`prepare`/`verifyAdmission`, the
+prepared-artifact adapter and the queue backend `serviceClient`, so no GPU, driver,
+model, provider, network call or Python runner is started.
+
+The final queue payload is produced by preparer → command → `queue.submit` and is
+read back from the durable JSONL, never hand-authored. Coverage: the trusted
+admission digest appears identically in the returned request, the recorded command
+intent, the persisted queue payload and the applied benchmark execution-package
+binding; a conflicting caller digest is overwritten while unrelated fields and
+dependent implementation files survive; the frozen `PACKAGE_TEST_SPEC_REQUIRED` /
+`PACKAGE_ORACLE_INVALID` failures submit nothing; a complete typed failed-candidate
+projection against the production-created request verifies on the unchanged strict
+verifier; and deleting or changing the persisted `preparedArtifactDigest` is rejected
+with `EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH` while rewriting neither the request nor
+the result. A focused read-only composition-root wiring assertion is supplementary to
+the behavioral chain, never a substitute: it reads the actual
+`createBenchmarkPackagePreparer` construction arguments and requires the frozen
+`SHARED_GPU_PACKAGE_ADAPTER` identity constant (never the adapter implementation
+instance) to be bound as `packageAdapter`. The trusted admission fixture carries a
+fixed non-empty `admissionId`, because the store port result is the only source of
+that identity and a JSON-persisted queue receipt drops an undefined field. Projected environment fields are labelled
+port doubles, so a green result is contract/integration evidence only — never a
+hardware sample, stability or publishability claim. It runs in the release gate.
+
 ## Query/advancement coverage
 
 `runtime-read-isolation-test.mjs` boots an isolated Runtime with hardware disabled.
@@ -466,6 +498,13 @@ and are not affected.
 execution-package-contract-test and execution-package-store-test cover portable
 multi-language envelopes, offline blobs, content/admission conflicts, directory
 junctions, environment/artifact changes, preparation deadlines and recovery races.
+execution-package-contract-test additionally pins the pure `contentDigest` helper
+with literal SHA-256 vectors for empty and `abc` input, asserts the canonical
+contract export and the legacy store re-export are the identical function, checks
+UTF-8 string/Buffer and binary Uint8Array/Buffer equivalence, requires binary
+bytes not to be stringified, verifies inputs are not mutated, and retains native
+invalid-input rejection. The unchanged state-domain-boundary test remains the
+authoritative transitive dependency check for the store-free preparer import.
 execution-package-import-test and execution-package-import-service-test cover
 directory/tar archive ingestion, complete dependency closure, explicit entrypoint
 presence, unsafe source rejection and the application import→prepare boundary.
