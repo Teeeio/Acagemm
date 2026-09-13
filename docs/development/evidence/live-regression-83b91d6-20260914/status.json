@@ -1,0 +1,41 @@
+{
+  "codeCommit": "83b91d658b97fe90d98be8a407e0fb83741103da",
+  "sourceManifest": "../queue-prepared-binding-20260914/live-source-manifest.json",
+  "smoke": {
+    "taskId": "task_7ebdf3cf0d964f7392d80ca07c0876b3",
+    "status": "independently-accepted-and-integrated",
+    "archive": ".operator-studio-local/live-regression-83b91d6-20260914/smoke-originals.zip",
+    "sha256": "2340cb0beb2fc77ca92d1ab6ea26d9a8134981a6484a7cd5cfec8bf905b09ee3",
+    "archiveVerified": true,
+    "files": 219,
+    "uncompressedBytes": 3706430,
+    "countsTowardN20": false,
+    "failedFeedbackObserved": false
+  },
+  "freshN20": {
+    "taskId": "task_44338a002ba04dc4b366153587a55704",
+    "status": "running",
+    "requiredRuns": 20,
+    "strictPass": false,
+    "attemptId": "run_76cc2f681aa74985a1113187b36728dc",
+    "lastObservedCompleted": 1,
+    "lastObservedFullSuccess": 1,
+    "lastObservedComparable": 1,
+    "finalAcceptance": false,
+    "preLaunchFailures": [
+      {
+        "attemptId": "run_e2fc7b227527415eb623fd66c346c0b2",
+        "reason": "ignored directory acceptance reports absent in private snapshot",
+        "gpuOriginals": 0,
+        "resolution": "byte-identical docs copies with locked provenance; fixed argv/source/budgets unchanged"
+      }
+    ]
+  },
+  "separateCoverage": {
+    "status": "not-started",
+    "families": [
+      "reduction",
+      "normalization"
+    ]
+  }
+}
