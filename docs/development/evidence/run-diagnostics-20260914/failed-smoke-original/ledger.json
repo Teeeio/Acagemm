@@ -1,0 +1,273 @@
+{
+  "schemaVersion": "operator-studio.gpu-acceptance-ledger/v1",
+  "totals": {
+    "runs": 1,
+    "receivedRecords": 1,
+    "duplicateRuns": 0,
+    "full_success": 0,
+    "budget_terminal": 0,
+    "failure": 1,
+    "timeout": 0,
+    "missing_summary": 0,
+    "summariesMissing": 0,
+    "attemptsMissing": 0,
+    "attemptsNotTerminal": 0,
+    "comparableRuns": 0
+  },
+  "duplicates": [],
+  "groups": [
+    {
+      "fingerprint": "sha256:933177bc9cac03e0ee0d30c1882580212d76eb54e90ee06b09398a469372667c",
+      "groupKey": "sha256:933177bc9cac03e0ee0d30c1882580212d76eb54e90ee06b09398a469372667c",
+      "provider": {
+        "runtime": "claude-code",
+        "cliVersion": "2.1.232 (Claude Code)",
+        "cliVersionSource": "runtime-descriptor",
+        "model": "unknown",
+        "modelSource": "unknown",
+        "modelObservationStatus": "unknown",
+        "modelObservationVersion": "operator-studio.model-observation/v1"
+      },
+      "backend": {
+        "kind": "local-shared-gpu",
+        "executionMode": "gpu",
+        "publishable": false
+      },
+      "matrixFingerprint": "sha256:7cd70eed55ab122eeb7defe0b69741d58d19dd4a2f1bb7491c7ec6a56c048fdf",
+      "promptPolicy": {
+        "experienceSelectionPolicyVersion": "operator-studio.experience-selection/v1+scope-match+updatedAt-desc-id-asc",
+        "roundFactsSchemaVersion": "operator-studio.round-facts/v1"
+      },
+      "budgets": {
+        "missionBudgetMs": 720000,
+        "mainAgentBudgetMs": 180000,
+        "logicalCleanupMs": 60000,
+        "taskTimeoutSeconds": 120
+      },
+      "families": [
+        "affine"
+      ],
+      "runs": [
+        {
+          "index": 0,
+          "runDir": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_189b972e6c6a45d6baef54781ee7b0f1\\scratch\\real-runs\\shared-gpu-auPt3l",
+          "identity": "shared-gpu-auPt3l",
+          "outcome": "failure",
+          "issues": [
+            "family_coverage_incomplete"
+          ],
+          "attemptOutcome": "failure",
+          "summaryOutcome": "failure",
+          "config": {
+            "driver": {
+              "schemaVersion": "operator-studio.gpu-acceptance-attempt/v1",
+              "script": "scripts/e2e-shared-gpu-agent-iteration.mjs"
+            },
+            "provider": {
+              "runtime": "claude-code",
+              "cliVersion": "2.1.232 (Claude Code)",
+              "cliVersionSource": "runtime-descriptor",
+              "model": "unknown",
+              "modelSource": "unknown",
+              "modelObservationStatus": "unknown",
+              "modelObservationVersion": "operator-studio.model-observation/v1"
+            },
+            "backend": {
+              "kind": "local-shared-gpu",
+              "executionMode": "gpu",
+              "publishable": false
+            },
+            "hardware": [
+              "nvidia-gpu"
+            ],
+            "architecture": [
+              "sm86"
+            ],
+            "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+            "driverVersion": "551.78",
+            "families": [
+              "affine"
+            ],
+            "candidateTasks": 2,
+            "matrix": {
+              "environments": [
+                "local-shared-gpu"
+              ],
+              "stages": [
+                "Correctness",
+                "Full Benchmark"
+              ],
+              "correctnessCases": 4,
+              "warmup": 3,
+              "repeats": 10,
+              "testSpec": {
+                "schemaVersion": "operator-studio.test-spec/v1",
+                "correctness": {
+                  "requestedCases": 4,
+                  "requiredCategories": [
+                    "minimal",
+                    "representative",
+                    "boundary",
+                    "ragged"
+                  ],
+                  "atol": 0.00001,
+                  "rtol": 0.00001,
+                  "requireNamedCases": true
+                },
+                "benchmark": {
+                  "requiredProfiles": [
+                    "primary",
+                    "small"
+                  ],
+                  "primaryProfile": "primary",
+                  "warmup": 3,
+                  "repeats": 10
+                }
+              }
+            },
+            "promptPolicy": {
+              "experienceSelectionPolicyVersion": "operator-studio.experience-selection/v1+scope-match+updatedAt-desc-id-asc",
+              "roundFactsSchemaVersion": "operator-studio.round-facts/v1"
+            },
+            "budgets": {
+              "missionBudgetMs": 720000,
+              "mainAgentBudgetMs": 180000,
+              "logicalCleanupMs": 60000,
+              "taskTimeoutSeconds": 120
+            },
+            "code": {
+              "commit": null,
+              "dirty": null,
+              "dirtyFileCount": null,
+              "contentDigest": null,
+              "sourceDigests": [
+                {
+                  "path": "client-runtime/agent-runtime.mjs",
+                  "sha256": "sha256:aaeebacafa2e5428d311a93005f4e1a53dda09ad739c497b04997e4aec38830c"
+                },
+                {
+                  "path": "client-runtime/application/agent-round-service.mjs",
+                  "sha256": "sha256:41c332ace8c91da294edd6342b006c739374a382326c043b52ff53467070eccd"
+                },
+                {
+                  "path": "client-runtime/application/benchmark-command.mjs",
+                  "sha256": "sha256:7f9447235a6eedf321a6f96a430360e969c0bd98a8d8a7ac78d01f44926f2019"
+                },
+                {
+                  "path": "client-runtime/application/round-experience-service.mjs",
+                  "sha256": "sha256:d3bfbfe16bfecd6c85e3568eaf8b0f84bf3c8dfbd4a247f7143486e7b120cdcb"
+                },
+                {
+                  "path": "client-runtime/experience-contract.mjs",
+                  "sha256": "sha256:fd7ef652bc7d4faac6fad4269d525376873168c54236d39d99ee813e03ac190c"
+                },
+                {
+                  "path": "client-runtime/mission-project-state.mjs",
+                  "sha256": "sha256:16804215e1afb0981875d9af8103fb4c75e75c49f378f347acf74e117f6d6739"
+                },
+                {
+                  "path": "scripts/e2e-shared-gpu-agent-iteration.mjs",
+                  "sha256": "sha256:b11a1f5f70cb2615cb90d3abce7a0022b731f788eb346bd95879c89f6499e31a"
+                },
+                {
+                  "path": "scripts/shared-gpu-acceptance.mjs",
+                  "sha256": "sha256:242d3fe2562bd9dbd59762721402591d146d3a22259e58597b099a3712767955"
+                },
+                {
+                  "path": "scripts/summarize-gpu-agent-runs.mjs",
+                  "sha256": "sha256:91bbab8a3437bb819fcc688c285a701f5b93e6103a19e07e5cba5757bc0c2aa1"
+                }
+              ]
+            },
+            "observedTarget": {
+              "hardware": [
+                "nvidia-gpu"
+              ],
+              "architecture": [
+                "sm86"
+              ],
+              "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+              "driverVersion": "551.78"
+            }
+          },
+          "configFingerprint": "sha256:933177bc9cac03e0ee0d30c1882580212d76eb54e90ee06b09398a469372667c",
+          "declaredFingerprint": "sha256:933177bc9cac03e0ee0d30c1882580212d76eb54e90ee06b09398a469372667c",
+          "unknownFields": [
+            "provider.model",
+            "code.commit",
+            "code.contentDigest"
+          ],
+          "comparabilityIssues": [
+            "provider.model",
+            "code.commit",
+            "code.contentDigest"
+          ],
+          "comparable": false,
+          "attemptValid": true,
+          "provider": {
+            "runtime": "claude-code",
+            "cliVersion": "2.1.232 (Claude Code)",
+            "cliVersionSource": "runtime-descriptor",
+            "model": "unknown",
+            "modelSource": "unknown",
+            "modelObservationStatus": "unknown",
+            "modelObservationVersion": "operator-studio.model-observation/v1"
+          },
+          "backend": {
+            "kind": "local-shared-gpu",
+            "executionMode": "gpu",
+            "publishable": false
+          },
+          "families": [
+            "affine"
+          ],
+          "attemptPhase": "terminal",
+          "attemptTerminal": true,
+          "summaryMissing": false,
+          "attemptMissing": false,
+          "modelObservation": {
+            "status": "unknown",
+            "model": null,
+            "modelSource": "unknown",
+            "requiredRunCount": 4,
+            "observedRunCount": 0
+          },
+          "modelObservationIssues": [],
+          "errors": []
+        }
+      ],
+      "unknownFields": [
+        "provider.model",
+        "code.commit",
+        "code.contentDigest"
+      ],
+      "comparabilityIssues": [
+        "provider.model",
+        "code.commit",
+        "code.contentDigest"
+      ],
+      "counts": {
+        "runs": 1,
+        "full_success": 0,
+        "budget_terminal": 0,
+        "failure": 1,
+        "timeout": 0,
+        "missing_summary": 0
+      },
+      "comparable": false,
+      "stabilityDenominator": 1,
+      "n20": {
+        "eligible": false,
+        "comparable": false,
+        "requiredRuns": 20,
+        "runs": 1,
+        "reason": "non-comparable group: provider.model, code.commit, code.contentDigest"
+      }
+    }
+  ],
+  "n20": {
+    "eligibleGroups": [],
+    "eligibleGroupCount": 0,
+    "note": "Only groups whose provider, CLI/model version, backend, hardware, architecture, device, driver, code revision, matrix, prompt policy and budgets are all observed and identical may be pooled. A declared (env/configured) value or any unknown field keeps the group non-comparable. Missing summaries, timeouts and failures stay in the denominator of their own group; duplicate identities are counted once with a warning."
+  }
+}

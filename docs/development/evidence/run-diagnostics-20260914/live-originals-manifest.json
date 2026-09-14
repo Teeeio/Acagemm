@@ -1,0 +1,861 @@
+{
+  "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\failed-smoke-originals.zip",
+  "sha256": "c50b7de215cbb73339b6cd4e5dcd58e221810bf127b584ab083f9eefdf606c6d",
+  "entries": [
+    {
+      "path": "affine-state.json",
+      "bytes": 186899,
+      "sha256": "8ce2c599e6e23d07a0a8f316d8ec9cfe872ee2a0427ac6681a701c287be811dc"
+    },
+    {
+      "path": "attempt.json",
+      "bytes": 220781,
+      "sha256": "0dab8b2041d71a7b71ecd731adacf3137b1e9446bcc8f0691a8a1699c748df4f"
+    },
+    {
+      "path": "bridge/claude-empty-mcp.json",
+      "bytes": 18,
+      "sha256": "e93fc8db2b1bd77107fe6c758bca9545fa864cf7cce8ab93a7b2b93a1d566a7b"
+    },
+    {
+      "path": "bridge/claude-runs/claude_MU1MQ1D6_E01918CB.json",
+      "bytes": 3260,
+      "sha256": "296a1a6be97eec6d41af7d274f830c60b368641d69add2760f66278cc049924d"
+    },
+    {
+      "path": "bridge/claude-runs/claude_MU1MQ1D6_E01918CB.jsonl",
+      "bytes": 1166,
+      "sha256": "b6f954cca589ca6b6901685422a16a4f17145f7124987dae43682ba473ae3d04"
+    },
+    {
+      "path": "bridge/claude-runs/claude_MU1MU8S6_08FA5FDF.json",
+      "bytes": 3260,
+      "sha256": "0b729124343f55332755ba0a8eeed09b2982411715dcdaef0250549c4ff03799"
+    },
+    {
+      "path": "bridge/claude-runs/claude_MU1MU8S6_08FA5FDF.jsonl",
+      "bytes": 1166,
+      "sha256": "5207d447f77fdd0b9ef8be04981c7c05122af3ac7f510cae3d702298a6bf9561"
+    },
+    {
+      "path": "bridge/claude-runs/claude_MU1MYK67_427EB533.json",
+      "bytes": 3260,
+      "sha256": "40ce51c12c13535e9230aff6432bfcc42dc4dde3d2602e4ecbdd3d393f677a90"
+    },
+    {
+      "path": "bridge/claude-runs/claude_MU1MYK67_427EB533.jsonl",
+      "bytes": 1166,
+      "sha256": "e112f2f3e03d226d733557981a9a3afdf7e46fff2b5c8faff5ad996f0eb62d1f"
+    },
+    {
+      "path": "bridge/claude-runs/claude_research_MU1N2QYI_20452C1F.json",
+      "bytes": 3690,
+      "sha256": "dd13d349623692e6ae1b5633f668253dcc4bec9d33679d03aa95d7995a811ed8"
+    },
+    {
+      "path": "bridge/claude-runs/claude_research_MU1N2QYI_20452C1F.jsonl",
+      "bytes": 1199,
+      "sha256": "4b6a7f1e180fa4bf607eec5f5200735f8d7bd59c93f04c65e4d0ce7ed3675ef2"
+    },
+    {
+      "path": "bridge/git-trust/23034c412c88c15d09c91aff.gitconfig",
+      "bytes": 305,
+      "sha256": "fbba063e0601eb30672916686cceb003aea8742241d1be1bdad6776b0b07997d"
+    },
+    {
+      "path": "bridge/git-trust/d62d9688a7b09f4b22b1d2c5.gitconfig",
+      "bytes": 303,
+      "sha256": "8ca3df760393fd1d751902a72d98cd3fad8fe7b9a64ae82692c8e531c202db81"
+    },
+    {
+      "path": "bridge/prompt-audits/claude_MU1MQ1D6_E01918CB.json",
+      "bytes": 14239,
+      "sha256": "ad0d68742f5f83b2fe138244b21da8b9206e6a9b4a45e603f80cc3d44aeefcc1"
+    },
+    {
+      "path": "bridge/prompt-audits/claude_MU1MU8S6_08FA5FDF.json",
+      "bytes": 20049,
+      "sha256": "baecba8b49b6f9bac8fd9477cca7aa570441a54683f8056fb07fb5d0bab1597c"
+    },
+    {
+      "path": "bridge/prompt-audits/claude_MU1MYK67_427EB533.json",
+      "bytes": 20069,
+      "sha256": "fd2593aa221558eadd64f7b5739ee87c9f8d94441387506bef34ac3fa418a489"
+    },
+    {
+      "path": "data/mock-db.json",
+      "bytes": 158887,
+      "sha256": "822c0a10ca7d26d8600f22fcab336773a99261515053ccf19722f1c2d24127a8"
+    },
+    {
+      "path": "packages/adapter/artifacts/f4123eccd4b614850cb874eddff72f104ac7ea2422730f10c4a0d5432dcfa958.json",
+      "bytes": 1004,
+      "sha256": "7914232cedb6f1b13f8f8e89ac917ce65c92f8f91ce684b20b4b96ca6d52b366"
+    },
+    {
+      "path": "packages/adapter/preparations/prepare_97cf7d95-9c54-47a5-93ae-7cb2a95c4164.json",
+      "bytes": 611,
+      "sha256": "39aa880d23ae9b6b40be6ead4aa641411067e48b6840d37a06fba893b5f988b4"
+    },
+    {
+      "path": "packages/adapter/prepared/0b3adf0a3930eb2ff623df0b4742acb5f0bc325a32448ffe9c3a99bff19649cc-prepare_97cf7d95-9c54-47a5-93ae-7cb2a95c4164/oracle.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "packages/adapter/prepared/0b3adf0a3930eb2ff623df0b4742acb5f0bc325a32448ffe9c3a99bff19649cc-prepare_97cf7d95-9c54-47a5-93ae-7cb2a95c4164/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "packages/store/admissions/45187c0a3a8903d1f44324b6803c95c72488ada4e19337d58670aaa91baf7c1d.json",
+      "bytes": 752,
+      "sha256": "f090ea75bb8f365eda48e5d3d9af30f824b0edf25996710573ab8315973140b7"
+    },
+    {
+      "path": "packages/store/blobs/1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d",
+      "bytes": 312,
+      "sha256": "1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d"
+    },
+    {
+      "path": "packages/store/blobs/919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "packages/store/manifests/0b3adf0a3930eb2ff623df0b4742acb5f0bc325a32448ffe9c3a99bff19649cc.json",
+      "bytes": 1542,
+      "sha256": "ad36a1b2eecd4b0de6aa31959cab31f3e53da155ee4f7ed21d4670a96f39efe9"
+    },
+    {
+      "path": "packages/store/preparations/0b3adf0a3930eb2ff623df0b4742acb5f0bc325a32448ffe9c3a99bff19649cc.json",
+      "bytes": 374,
+      "sha256": "754bedf0a436aa7e60c923ba67d48350625be592f55dd3330c466dd401f48c43"
+    },
+    {
+      "path": "projects/affine/.operator-studio/project.json",
+      "bytes": 886,
+      "sha256": "36c2a42f08eaf9e5605cb97d5a6429c7e60ec694d26e560da13e4145a5efe08a"
+    },
+    {
+      "path": "projects/affine/.operator-studio/source-registry.json",
+      "bytes": 42,
+      "sha256": "c6917c067151f17eea999bc6c6b747ddc7a01628bee5419bfd922cba2a073aad"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/COMMIT_EDITMSG",
+      "bytes": 33,
+      "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/config",
+      "bytes": 218,
+      "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/index",
+      "bytes": 137,
+      "sha256": "6697dd188f0a425794961ea15196f9c9c80d02d25e6b954a6c7b996d112541b7"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/info/exclude",
+      "bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/logs/HEAD",
+      "bytes": 198,
+      "sha256": "93bb6550af1f6df2a2fef940f8a7b05caec79bef48e4ad315b183847cc515a40"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/logs/refs/heads/master",
+      "bytes": 198,
+      "sha256": "93bb6550af1f6df2a2fef940f8a7b05caec79bef48e4ad315b183847cc515a40"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/objects/12/aec9e32146d3a8f4d35e5e71b0844216b89453",
+      "bytes": 144,
+      "sha256": "e16925c180dde67911cadfcbb0b7ca119471809428763a3aabc63b9c7c733ecd"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/objects/3d/9841810103e1046bd02b9bb3563fd235e80a74",
+      "bytes": 51,
+      "sha256": "ffc7e9a857841233bc3c6434d175e35652d59b743178391cf2680e29b7f07a0e"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/objects/d8/421bab611561d0c79c286fc746a7fba144dbbf",
+      "bytes": 442,
+      "sha256": "fa362d7a3d3399eb4edb9a796109a5e5da7da7de6e9dcc50e4686b36b0c89faf"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "ec2c9f126a82f9dd5544093e92571148eb85ecdd048e284eae7beee81f76b39d"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/repository/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/config",
+      "bytes": 214,
+      "sha256": "f51b1f71f221131f09d0c6c6e5f704c046ef9318d1c26fcfdf1d4ff4b404569b"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/research/.git/info/exclude",
+      "bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "projects/affine/.operator-studio/workspaces/MIS_MU1MP7HP/workspace.json",
+      "bytes": 741,
+      "sha256": "1c5eeab0f74f778975f87599a19c562ce37d8cde2c92ca66ac4fa9eec6e006dc"
+    },
+    {
+      "path": "projects/affine/repository/.git/COMMIT_EDITMSG",
+      "bytes": 29,
+      "sha256": "4e8a97fd1287be5b1892a807b2ccdce100f57e45ca6caee424d2d14b5e0fb148"
+    },
+    {
+      "path": "projects/affine/repository/.git/config",
+      "bytes": 200,
+      "sha256": "d3df7bb7804fe3c142969ced24327de496239151ec0e2477b9f81823641d0044"
+    },
+    {
+      "path": "projects/affine/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "projects/affine/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "projects/affine/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "projects/affine/repository/.git/index",
+      "bytes": 137,
+      "sha256": "29a34770c16303b796e5c324168bdf9f92551cd19e63528c6e8dd350e73fb095"
+    },
+    {
+      "path": "projects/affine/repository/.git/info/exclude",
+      "bytes": 258,
+      "sha256": "aa88cbe1915b2447b118bc3ec2f0896a9bb19dc62e7f063f5011033a29d7c10a"
+    },
+    {
+      "path": "projects/affine/repository/.git/logs/HEAD",
+      "bytes": 378,
+      "sha256": "0e34e212f9032d084c6ffb448e1222fe6563f08ae46cf1dbce7a550f7fabaedc"
+    },
+    {
+      "path": "projects/affine/repository/.git/logs/refs/heads/master",
+      "bytes": 378,
+      "sha256": "0e34e212f9032d084c6ffb448e1222fe6563f08ae46cf1dbce7a550f7fabaedc"
+    },
+    {
+      "path": "projects/affine/repository/.git/objects/3d/9841810103e1046bd02b9bb3563fd235e80a74",
+      "bytes": 51,
+      "sha256": "ffc7e9a857841233bc3c6434d175e35652d59b743178391cf2680e29b7f07a0e"
+    },
+    {
+      "path": "projects/affine/repository/.git/objects/4b/825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "bytes": 15,
+      "sha256": "e72602cad67ed061ec84b13e92568f873172efac19a512a1b561dbf54e2c8426"
+    },
+    {
+      "path": "projects/affine/repository/.git/objects/97/ebad79c2cb29da81d9814b0a952d084fbd5fa9",
+      "bytes": 144,
+      "sha256": "24cd4e9880973b7acad5b23bb6811219455de282aa7197c7e4ef643a4a5b85a9"
+    },
+    {
+      "path": "projects/affine/repository/.git/objects/d8/284e38ad3323a87f0e775334c86817737db963",
+      "bytes": 180,
+      "sha256": "51caefd0f0d603074a1a9ebf2afb107ff915ef649d0aa9234efe33a5ff8cf162"
+    },
+    {
+      "path": "projects/affine/repository/.git/objects/d8/421bab611561d0c79c286fc746a7fba144dbbf",
+      "bytes": 442,
+      "sha256": "fa362d7a3d3399eb4edb9a796109a5e5da7da7de6e9dcc50e4686b36b0c89faf"
+    },
+    {
+      "path": "projects/affine/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "74a97a6daccb94f8ba54a115e13811473b210cb03b2a459a3d8d9a9b4a67268b"
+    },
+    {
+      "path": "projects/affine/repository/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "runtime/checkpoints/MIS_MU1MP7HP/cp_433716B9-383/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "runtime/checkpoints/MIS_MU1MP7HP/cp_6187AC83-36D/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "runtime/checkpoints/MIS_MU1MP7HP/cp_94A8E39D-539/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "runtime/command-journal.jsonl",
+      "bytes": 13519,
+      "sha256": "032305b9dad3a560ef8224b77eeff3b47e63f6878dc32f7bca2e0fca42d0d019"
+    },
+    {
+      "path": "runtime/git-trust/23034c412c88c15d09c91aff.gitconfig",
+      "bytes": 305,
+      "sha256": "fbba063e0601eb30672916686cceb003aea8742241d1be1bdad6776b0b07997d"
+    },
+    {
+      "path": "runtime/git-trust/23e3471ad24b4d2635a367f8.gitconfig",
+      "bytes": 278,
+      "sha256": "0c7a18309efcd89bc9b897d8e76610291850c75aae7734f99ddcdc4e90261088"
+    },
+    {
+      "path": "runtime/git-trust/dea595650a7a0ae18bbe1d0e.gitconfig",
+      "bytes": 264,
+      "sha256": "028d8cbc5214eb18825f12802c616686b42280fe423382f7e6bdebd37c208a68"
+    },
+    {
+      "path": "runtime/operator-studio.pid",
+      "bytes": 6,
+      "sha256": "974e38c75e1ffcee902bb8c1d541e4cf5ed07f2d9c40f991f4b7a226e5a12c6c"
+    },
+    {
+      "path": "runtime/operator-test-queue.jsonl",
+      "bytes": 13602,
+      "sha256": "f98dee9df8b52442ff74b74b7f0974f9dfa993140d5451f91c30977346e6474c"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/COMMIT_EDITMSG",
+      "bytes": 33,
+      "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/config",
+      "bytes": 218,
+      "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/index",
+      "bytes": 530,
+      "sha256": "1badc1a2930d2754266f9a56147946b6bf67139a6f292ffeb86a8588f506510a"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/info/exclude",
+      "bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/logs/HEAD",
+      "bytes": 198,
+      "sha256": "e963c0d7b583bbcc0e7cc9875bbb926c64650f0c96d8a89c2761aa193c35c6e5"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/logs/refs/heads/master",
+      "bytes": 198,
+      "sha256": "e963c0d7b583bbcc0e7cc9875bbb926c64650f0c96d8a89c2761aa193c35c6e5"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/14/1ac3d21a60f5b445d546ef829bddb347cbc61a",
+      "bytes": 214,
+      "sha256": "07beb84b64ba0f80f723cd14b88e6dc7ba20e0010f41032de5704537898d82e8"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/53/906eb59cec71c2232538876896ccb9bfa4d6ca",
+      "bytes": 145,
+      "sha256": "72458b46d72bc15c696caa4712f7e26a65b64d8fd2656073b52e2452bf92bba8"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/68/a8c18407e44135c00f5b19911f819198c0e6af",
+      "bytes": 63,
+      "sha256": "50039b3a221b510ec6317b720ba68e54da3cb1c7d5653457c72e244fbd9686fe"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/7c/dfcc064fb32cc5620f2a20c37cfe0d2060825c",
+      "bytes": 69,
+      "sha256": "77acb078b6ca87745fca278ea59fa3e1fd0181b79ef61b201f2f183b495fe355"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/a3/c0c71572e0ab4740a1146fb4e19fa31290f23f",
+      "bytes": 226,
+      "sha256": "79f3a5bc38c8a918a87b0085d4b2a0282582a517eaa015559e7f1c20217d7577"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/cf/2ab6ee5cf260ac816248ebeec979670ec1d9ac",
+      "bytes": 71,
+      "sha256": "5dc0355c57866875a91922b8e34129bf7ea841ed0a6d12b7a69f7862d13ebb4c"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/d2/874deabe85a0c334b276e9a72d0f9117ae3ed4",
+      "bytes": 103,
+      "sha256": "f63addbb38f481796b86edec842f322adf0f7a44673d6b154e3b47a0420c4d62"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/e6/95f13fb5c02b2b2434582d5e5524a229de7c57",
+      "bytes": 152,
+      "sha256": "4d62d2407692a1af3d38ba93461b930fd375f4f433ad4a9bb8fb569cd8726ddd"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/objects/ff/546476bdd4d3153ab96b3e77e0d603a028d43d",
+      "bytes": 128,
+      "sha256": "eb7f0454fce551a69b664a8087f5edd2dbf7a542d1e39a7221a6f67676355c82"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "8cc6cac005b2d098e0c5892f0f5c6542a3b8bbc0588f7e28a3a12eb1dfd51cdd"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/benchmarks/mla_paged_attention.yaml",
+      "bytes": 108,
+      "sha256": "16fcb324cd3c9d4e3bd90a894db3a13b510e0ec0806d925dbbc1a02daa87933b"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/kernels/paged_attention.cu",
+      "bytes": 331,
+      "sha256": "86188a7116efccc54ee2fa62f90ba26c18d17079a0e0ca39156fc5a6a9667c97"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/README.md",
+      "bytes": 300,
+      "sha256": "0295269a56165924f94e2b67f25c927af2cd214f65ead65d14402997bffcd139"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/repository/tests/paged_attention_cases.yaml",
+      "bytes": 129,
+      "sha256": "09b47ff2d469bdb0eef74d3cdba3ea319a5884c15e3074baf620fd0c6ddbd454"
+    },
+    {
+      "path": "runtime/workspaces/MIS_01JH7R/workspace.json",
+      "bytes": 499,
+      "sha256": "0ce4a36d8cbf7db6e68ac680144d654696971e6a65087cd1755c6f179b1f060d"
+    },
+    {
+      "path": "runtime.log",
+      "bytes": 63,
+      "sha256": "a14178b3d5ae38b5d23f0a44dc873a793290f394def655edaf3f9c62ddbcd2c0"
+    },
+    {
+      "path": "summary.json",
+      "bytes": 217716,
+      "sha256": "d56c554f0b0ecf8cef307befb9257af4907c964da1182f5975a794e6944c3283"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2104,
+      "sha256": "bffd1cb4788b7a9f05464bcfd60142552430e9361890230d2fd3528638832b0a"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/__pycache__/run.cpython-312.pyc",
+      "bytes": 2101,
+      "sha256": "ce7fa3de45e3554ef3e364bb759ba593aa44fbea148c2106895c727176fba84f"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/correctness.json",
+      "bytes": 1270,
+      "sha256": "754ac68d2f3b5f20a8422b5c10e4156b14603c7d369e585407869a675d35b4be"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/execution-claim.json",
+      "bytes": 343,
+      "sha256": "535507790a79577638fcad027d2fcee1f4803c03492a00e5c6d1f802fa8af60a"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/execution-config.json",
+      "bytes": 280,
+      "sha256": "c725f6a005c8b8d50e161d84c9ad7625ec806343bd09b484ee07be3136cac148"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/execution-exit.json",
+      "bytes": 608,
+      "sha256": "8f5628cb12d53d0fdcf365e64d00b679212e4f29873cb1628136680054667d34"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/oracle.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/result.json",
+      "bytes": 12129,
+      "sha256": "97f0646438d899786354e18e5bb21e36ee35d667d592daec3c7eed7d2e065e50"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/runner-status.json",
+      "bytes": 124,
+      "sha256": "bfd6abf6de2f39d2f6f6a16d369a9c418b73a7dbfc747a9af95b77b5917e5eff"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tasks/local_c500_0BE4195187BCC97C7934F6169FD81539/task.json",
+      "bytes": 24855,
+      "sha256": "6be8783e94df6f73aec904a10ecc16c276539d8ffdfb6f6b5acef9a5d567cd03"
+    },
+    {
+      "path": "tasks/reference-cache/08/08a47b4f0337b90a514b8ee80c5323ddcf34c9f2b88107f43f9f27b8b59c8827.pt",
+      "bytes": 1180,
+      "sha256": "e0b1a1595b7d0bbf5baca303acaf2d732fad5798680cf3cd7a6768bb6aef0fee"
+    },
+    {
+      "path": "tasks/reference-cache/70/70b083283da63ce8833cd54ea371a0d7d700a887c5549732930dd29b8f6d174f.pt",
+      "bytes": 1372,
+      "sha256": "75dba9685eb272d699f0712aef40b1b54bcf73ac0e800cbb0c4764bbd6014787"
+    },
+    {
+      "path": "tasks/reference-cache/88/886d934ba31d98d732f2d2f2ef9ec4c7495b8e5213491a769fb1590d238f66c4.pt",
+      "bytes": 1436,
+      "sha256": "71dad21175630f9473c887439e91f332945e92a3fc1b99cb5808cfeaffaed2be"
+    },
+    {
+      "path": "tasks/reference-cache/8e/8eea163a154cb508d53d02201cb975b8363e376ba157ec416e33b6676775fc34.pt",
+      "bytes": 33948,
+      "sha256": "44b0f1853ef1fadc38fe4e9262add53f80b1b0b0285ef5c900356b4acddfa2de"
+    }
+  ]
+}
