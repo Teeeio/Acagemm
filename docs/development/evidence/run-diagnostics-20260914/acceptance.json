@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "operator-studio.run-diagnostics-acceptance/v1",
+  "updatedAt": "2026-09-14T18:43:00Z",
+  "implementation": {
+    "state": "integrated",
+    "sources": [
+      {
+        "task_id": "task_4c947d98ea4a4037800012a270d08060",
+        "attempt_id": "run_5556da8e04c3411a81ff2c0c6dd98fcd",
+        "artifact_digest": "ae1a11ca51b50781b16241d667378bc55261a7d24215931aa33aa255d89f7ab5"
+      },
+      {
+        "task_id": "task_508330ccd8084fe687ade96396fa1b6f",
+        "attempt_id": "run_b30077005b534b74be612a2a3514fd32",
+        "artifact_digest": "527aeb09ddac646ac343934337f27720a5bd6a4347d1bbafbe989cb5043131e7"
+      },
+      {
+        "task_id": "task_3d6075d0a32643eaa82ab91c36440d6b",
+        "attempt_id": "run_0d1afecd5c4d4ad0b155d7de894ca14f",
+        "artifact_digest": "fd6526f41ad7e6e27cfb0b5bb6fbd3c48606c5605f2d37900fd746529b73daed"
+      }
+    ],
+    "combination": {
+      "taskId": "task_cff8fc85778f46f1a0198154c5f44aad",
+      "attemptId": "run_9de260e14be240ccb4de92f44e03f57e",
+      "artifactDigest": "bb8b1e92962ce9f4eac6ab6ae04fe05003d7b99431f51463edbfb5c7cbfb21c6",
+      "exitCode": 0,
+      "elapsedSeconds": 724.718
+    },
+    "checks": {
+      "release": 144,
+      "nonhardwareIncludingRelease": 44,
+      "diagnosticsScenarios": 12,
+      "cancellationLiveness": "passed",
+      "timeoutRecovery": "passed"
+    },
+    "manifest": [
+      {
+        "path": "client-runtime/README.md",
+        "sha256": "2a1501f39c7e131b4509a94314e11fba915e6957008a04ea942e9319ce5a3231",
+        "mode": 438
+      },
+      {
+        "path": "client-runtime/agent-runtime.md",
+        "sha256": "e9bd39500a9c618a3edd19d3080322096d2595e8b5f2d48d43f3923846b9a94d",
+        "mode": 438
+      },
+      {
+        "path": "client-runtime/agent-runtime.mjs",
+        "sha256": "aaeebacafa2e5428d311a93005f4e1a53dda09ad739c497b04997e4aec38830c",
+        "mode": 438
+      },
+      {
+        "path": "client-runtime/claude-client.mjs",
+        "sha256": "6b60c9fff283ed54ffa43040d4af3f3d04480ce8884edf3f8e0ac753385d385d",
+        "mode": 438
+      },
+      {
+        "path": "package.json",
+        "sha256": "c78b30c7abb2cc63e33335b0f7b10596bf8786ac1a1248219fff2297a084abde",
+        "mode": 438
+      },
+      {
+        "path": "scripts/verify-local-c500-release.mjs",
+        "sha256": "7f95413e50d1a24576d681b3578d22d627ab3020b8517fcbfdd7b90cf5d916d1",
+        "mode": 438
+      },
+      {
+        "path": "tests/README.md",
+        "sha256": "9f1b045aecc36478d421df8427de9819d0ff795172c7005b9d76cf62a93a5271",
+        "mode": 438
+      },
+      {
+        "path": "tests/agent-run-diagnostics-test.mjs",
+        "sha256": "ed6c7df72ae21a0eb46294450a463333af0b6dfaea5b210836ed4c13406d89ca",
+        "mode": 438
+      }
+    ]
+  },
+  "issues": [
+    {
+      "id": "diagnostics",
+      "fact": "安全统计、模型首次实际观测时间、取消实际分支和close生命周期已实现并通过固定契约及既有门禁。",
+      "inference": null,
+      "unknown": "真实模型运行记录尚未复核。",
+      "evidence": [
+        "task_4c947d98ea4a4037800012a270d08060",
+        "task_508330ccd8084fe687ade96396fa1b6f",
+        "task_3d6075d0a32643eaa82ab91c36440d6b"
+      ],
+      "next_action": "冻结集成源码，执行一次真实affine两轮。"
+    },
+    {
+      "id": "integration-blocking",
+      "fact": "本轮组合与来源验收/集成全部成功。无效配方分别暴露Windows npm.cmd启动、缺node_modules、离线cpSync异常退出和600秒上限；已使用确定性长command、精确离线依赖、失败即停止入口通过完整门禁。旧组合取消并保留4次历史。",
+      "inference": null,
+      "unknown": "cpSync异常退出内部原因未证明。",
+      "evidence": [
+        "task_97b9d8970a004130b8a7ed0503410f64",
+        "task_cff8fc85778f46f1a0198154c5f44aad"
+      ],
+      "next_action": "今后同类长跑直接用长command，组合前完成依赖准备。"
+    },
+    {
+      "id": "downstream-scope",
+      "fact": "独立测试作者曾超出syntax-only指令运行旧测试并写出范围，平台产物收集拒绝；返工后范围通过。",
+      "inference": null,
+      "unknown": "任务指令不是操作系统级工具隔离。",
+      "evidence": [
+        "task_3d6075d0a32643eaa82ab91c36440d6b"
+      ],
+      "next_action": "保留明确allowed_paths和作者阶段验证边界，继续独立核对实际工具行为。"
+    },
+    {
+      "id": "invalid-round-trips",
+      "fact": "本轮有实现返工与验证环境返工；不能宣称已证明工作流节省成本。长wait单次持续759.297秒后返回真实动作，无需短轮询。",
+      "inference": null,
+      "unknown": "未完成账单计量。",
+      "evidence": [
+        "task_cff8fc85778f46f1a0198154c5f44aad"
+      ],
+      "next_action": "复用真实失败日志，避免相同无变化全套重跑。"
+    },
+    {
+      "id": "state-display",
+      "fact": "submitted或主命令exit0仍可能同时配方失败；本次最终command、recipe、candidate verification均通过后才验收。",
+      "inference": null,
+      "unknown": null,
+      "evidence": [
+        "platform-candidate-verification.json",
+        "platform-verification.json"
+      ],
+      "next_action": "继续以真实门禁和精确attempt/digest判断放行。"
+    },
+    {
+      "id": "existing-recovery-lock",
+      "fact": "run_cc91c02b5091464eae0c29b00a0e3ba2在已有恢复测试6并发提交读取metadata.lock时EPERM。源码未改变；独立复核10 pass/1 skip，随后固定全链通过。",
+      "inference": "间歇性Windows锁读失败，未被本轮修复。",
+      "unknown": "底层触发原因。",
+      "evidence": [
+        "task_cff8fc85778f46f1a0198154c5f44aad",
+        "root-recovery-recheck.log"
+      ],
+      "next_action": "保留缺陷；再次复现时单独有界定位，禁止无限重试。"
+    },
+    {
+      "id": "strict-n20",
+      "fact": "旧83b91d6批次20/20功能成功，19可比、1模型unknown，严格N20未通过。",
+      "inference": null,
+      "unknown": "新源码稳定性尚待真实两轮和新冻结批次。",
+      "evidence": [
+        "../live-regression-83b91d6-20260914/README.md"
+      ],
+      "next_action": "真实两轮验收后决定新N20，不能给旧unknown补算模型。"
+    }
+  ],
+  "liveTwoRound": {
+    "state": "not_run"
+  },
+  "newN20": {
+    "state": "not_run"
+  }
+}

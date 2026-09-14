@@ -49,6 +49,34 @@ Agent 运行的失败原因与资源生命周期是两条独立契约：`agent.p
 携带 `candidate.sourceRunId`，Queue 请求与 `benchmark.candidate.sourceRunId`
 沿用该来源，不能用 Round 的首次 attempt ID 代替。
 
+每个新 Claude run 在既有 run JSON 中附带一个有界的 `diagnostics`
+（`operator-studio.agent-run-diagnostics/v1`），键集合固定为
+`schemaVersion/provider/runId/missionId/stdout/stderr/events/firstModelObservedAt/cancellation/close`，
+只保留计数、字节数、客户端边界的真实 UTC 时间、事件类别计数和子进程关闭事实，不复制
+stdout/stderr 正文、thinking、prompt、路径或凭据，也不新增另一路持久化或无界事件数组。
+`events`（`systemInit/thinkingTokens/assistant/result/other/invalidJson`）在遥测过滤前按既有
+type/subtype 逐行计数一次，含 close 时的未终止尾行，空行为 no-op；合法 JSON 的
+primitive/array（含 `null`）固定归 `other` 且不改变正常事件语义，主行、尾行、close 时重载的
+raw events 与 `readEvents` 都不得因此崩溃；`firstModelObservedAt` 只在既有
+[model-observation](model-observation.md) 权威首次给出 `observed` 时写入一次，init/usage/configured
+标签不设置，后续 conflict 既不回退历史时间也不使当前 DTO 可比，诊断永不改写该 DTO。`close` 在真实
+子进程 `close` 回调前为 null，之后严格为 `{at, exitCode, signal}`，exitCode 为回调整数值或 null，
+signal 为固定 Node 信号名或 null，不虚构成功码，也不构成新的进程树释放证明。
+
+Runtime 通过既有 provider cancel 端口 `cancel(runId, context?)` 提供可选诊断上下文；只有 Claude
+接收该附加参数，其他 provider 调用形状不变。对仍存活的自有子进程，首次真实取消在等待终止前即把
+`cancellation` 固定为 `{requestedAt, context}` 并经既有串行原子 run writer 落盘，因此在终止 pending
+期间即可观察；重复调用不覆盖首个 requestedAt/context，子进程已消失时不伪造请求，旧的无 diagnostics
+记录保持可读且不回填。context 为 `operator-studio.cancellation-context/v1`，仅复制白名单标量
+（`runId/missionId/role/trigger/triggeredAt/budgetMs/elapsedMs/stallTimeoutMs/idleMs`），逐字段校验：
+非法 schema、身份、role/trigger 枚举、时间或数值（负值、非正 stall timeout、非有限数）一律
+`context=null` 且不阻止取消；未知预算/耗时为 null，绝不猜成 0；多余键被丢弃，所以原始正文、
+stderr、thinking、路径与凭据无法进入诊断。`cancel(runId)` 的旧调用合法地产生 `context=null`。
+仅新 stderr 活动与取消须在 close 前可观察：每个非空 stderr chunk 都立即请求既有串行原子 writer
+的写入，同一时刻至多排队一次并把期间的 chunk 合并进同一次写入，所以单条 stderr 无需后续事件或
+等到 close 即已落盘，也不引入新 timer、不新增无界数组、不改 `lastActivityAt`。诊断不改变状态机、
+轮次预算、释放屏障、重试/单飞语义或既有 `lastActivityAt`/stall 行为。
+
 归档轮次的必需事实（上一轮 candidate/digest、Correctness 结果、失败分类、Gate、
 Decision、回滚真实性与 currentBest 资产状态）在 `resetMissionRunState` 归档时写入
 `iterationStats.roundFacts`，版本见

@@ -234,6 +234,113 @@ export const classifyClaudeFailure = (run = {}, events = []) => {
   };
 };
 
+const DIAGNOSTICS_SCHEMA_VERSION = 'operator-studio.agent-run-diagnostics/v1';
+const CANCELLATION_CONTEXT_SCHEMA_VERSION = 'operator-studio.cancellation-context/v1';
+const CANCELLATION_ROLES = new Set(['main', 'research', 'materializer']);
+const CANCELLATION_TRIGGERS = new Set([
+  'explicit_cancel', 'budget_exceeded', 'stall_timeout', 'budget_and_stall',
+  'logical_completion', 'prior_cancel_requested', 'terminal_unreleased', 'release_pending',
+]);
+// Fixed conventional Node signal names; anything else is reported as null.
+const NODE_SIGNAL_NAMES = new Set([
+  'SIGABRT', 'SIGALRM', 'SIGBREAK', 'SIGBUS', 'SIGCHLD', 'SIGCONT', 'SIGEMT', 'SIGFPE',
+  'SIGHUP', 'SIGILL', 'SIGINFO', 'SIGINT', 'SIGIO', 'SIGIOT', 'SIGKILL', 'SIGLOST',
+  'SIGPIPE', 'SIGPOLL', 'SIGPROF', 'SIGPWR', 'SIGQUIT', 'SIGSEGV', 'SIGSTKFLT',
+  'SIGSTOP', 'SIGSYS', 'SIGTERM', 'SIGTRAP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU',
+  'SIGURG', 'SIGUSR1', 'SIGUSR2', 'SIGVTALRM', 'SIGWINCH', 'SIGXCPU', 'SIGXFSZ',
+]);
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+
+const isPlainDiagnosticObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const saturatingAdd = (value, delta) => Math.min(value + delta, Number.MAX_SAFE_INTEGER);
+const diagnosticChunkBytes = (chunk, text) => (typeof chunk === 'string'
+  ? Buffer.byteLength(chunk)
+  : chunk && typeof chunk.length === 'number' ? chunk.length : Buffer.byteLength(text));
+
+// Bounded run diagnostics: counts, byte sizes, real client-boundary timestamps and
+// one child lifecycle receipt. No stream body, prompt, thinking, path or credential
+// is ever copied, and no separate persisted record is introduced.
+const createRunDiagnostics = (runId, missionId) => ({
+  schemaVersion: DIAGNOSTICS_SCHEMA_VERSION,
+  provider: 'claude-code',
+  runId,
+  missionId: missionId ?? null,
+  stdout: { chunks: 0, bytes: 0, firstAt: null, lastAt: null },
+  stderr: { chunks: 0, bytes: 0, firstAt: null, lastAt: null },
+  events: { systemInit: 0, thinkingTokens: 0, assistant: 0, result: 0, other: 0, invalidJson: 0 },
+  firstModelObservedAt: null,
+  cancellation: null,
+  close: null,
+});
+
+const countDiagnosticChunk = (stream, chunk, text) => {
+  if (!text) return;
+  const at = new Date().toISOString();
+  stream.chunks = saturatingAdd(stream.chunks, 1);
+  stream.bytes = saturatingAdd(stream.bytes, diagnosticChunkBytes(chunk, text));
+  if (stream.firstAt === null) stream.firstAt = at;
+  stream.lastAt = at;
+};
+
+// Event keys are a fixed set derived from the existing type/subtype, never from
+// arbitrary provider strings; primitives, arrays and unknown types are `other`.
+const classifyDiagnosticEvent = (event) => {
+  if (!isPlainDiagnosticObject(event)) return 'other';
+  if (event.type === 'system') {
+    if (event.subtype === 'init') return 'systemInit';
+    if (event.subtype === 'thinking_tokens') return 'thinkingTokens';
+    return 'other';
+  }
+  if (event.type === 'assistant') return 'assistant';
+  if (event.type === 'result') return 'result';
+  return 'other';
+};
+
+// Count one raw JSONL line exactly once, before telemetry filtering. Blank lines
+// are no-ops; `parsed === undefined` means the caller's JSON.parse already failed.
+const countDiagnosticLine = (events, line, parsed) => {
+  if (typeof line !== 'string' || !line.trim()) return;
+  const key = parsed === undefined ? 'invalidJson' : classifyDiagnosticEvent(parsed);
+  events[key] = saturatingAdd(events[key], 1);
+};
+
+const isIsoTimestamp = (value) => typeof value === 'string'
+  && ISO_TIMESTAMP_PATTERN.test(value) && Number.isFinite(Date.parse(value));
+const optionalNumber = (source, key) => (Object.hasOwn(source, key) && source[key] !== undefined ? source[key] : null);
+const isNonNegativeNumberOrNull = (value) => value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+const isPositiveNumberOrNull = (value) => value === null || (typeof value === 'number' && Number.isFinite(value) && value > 0);
+
+// Copy only the listed keys, as detached scalars. Any invalid schema, identity,
+// enum, time or numeric value yields null without preventing cancellation; a
+// missing optional timing/budget value is reported as null, never as a guessed zero.
+const detachCancellationContext = (context, record) => {
+  if (!isPlainDiagnosticObject(context)) return null;
+  if (context.schemaVersion !== CANCELLATION_CONTEXT_SCHEMA_VERSION) return null;
+  if (typeof context.runId !== 'string' || !context.runId.trim() || context.runId !== record.runId) return null;
+  if (typeof context.missionId !== 'string' || !context.missionId.trim() || context.missionId !== record.missionId) return null;
+  if (!CANCELLATION_ROLES.has(context.role)) return null;
+  if (!CANCELLATION_TRIGGERS.has(context.trigger)) return null;
+  if (!isIsoTimestamp(context.triggeredAt)) return null;
+  const budgetMs = optionalNumber(context, 'budgetMs');
+  const elapsedMs = optionalNumber(context, 'elapsedMs');
+  const stallTimeoutMs = optionalNumber(context, 'stallTimeoutMs');
+  const idleMs = optionalNumber(context, 'idleMs');
+  if (!isNonNegativeNumberOrNull(budgetMs) || !isNonNegativeNumberOrNull(elapsedMs)) return null;
+  if (!isPositiveNumberOrNull(stallTimeoutMs) || !isNonNegativeNumberOrNull(idleMs)) return null;
+  return {
+    schemaVersion: CANCELLATION_CONTEXT_SCHEMA_VERSION,
+    runId: context.runId,
+    missionId: context.missionId,
+    role: context.role,
+    trigger: context.trigger,
+    triggeredAt: context.triggeredAt,
+    budgetMs,
+    elapsedMs,
+    stallTimeoutMs,
+    idleMs,
+  };
+};
+
 export const createClaudeClient = (options = {}) => {
   const configuredCommand = options.command || process.env.CLAUDE_COMMAND || 'claude';
   const invocation = resolveCliInvocation({ provider: 'claude', configuredCommand });
@@ -246,6 +353,7 @@ export const createClaudeClient = (options = {}) => {
   const runsDir = path.join(bridgeDir, 'claude-runs');
   const emptyMcpConfigPath = path.join(bridgeDir, 'claude-empty-mcp.json');
   const children = new Map();
+  const liveRuns = new Map();
   const cancellationRequested = new Set();
   const runWriteChains = new Map();
   const terminateProcessTree = options.terminateProcessTreeImpl || (async (child) => {
@@ -356,6 +464,7 @@ export const createClaudeClient = (options = {}) => {
       boundary: { role, roots, enforcement: 'claude-permissions-and-workflow-diff' },
       activity: { kind: 'startup', status: 'running', name: 'Claude Code', summary: '正在启动候选生成智能体', updatedAt: new Date().toISOString() },
       modelObservation: observeClaudeModel({ runId, missionId, sessionId: '', events: [] }),
+      diagnostics: createRunDiagnostics(runId, missionId),
       error: null,
     };
     await persistRun(runId, record);
@@ -389,18 +498,30 @@ export const createClaudeClient = (options = {}) => {
       windowsHide: true,
       env: { ...scopedEnvironment, ...environment },
     });
-    children.set(runId, child);
     let stderr = '';
     let eventBuffer = '';
     let logicalTerminal = false;
     let appendChain = Promise.resolve();
     let lastActivityPersistedAt = Date.now();
+    // The live record is exposed so the first real cancel can durably record itself
+    // through the existing serialized atomic writer without delaying termination.
+    liveRuns.set(runId, {
+      record,
+      enqueueDiagnosticPersist: () => persistRun(runId, record).catch(() => {}),
+    });
+    children.set(runId, child);
     // Recompute the pure DTO from accumulated safe metadata; persist on change so a
     // metadata-only update is durable without waiting for the next activity write.
     const refreshModelObservation = () => {
       const next = observeClaudeModel({ runId, missionId, sessionId: streamSessionId || '', events: observationEvents });
       if (JSON.stringify(next) === JSON.stringify(record.modelObservation)) return;
       record.modelObservation = next;
+      // The first time the existing authority really observes a response model, the
+      // historical time is fixed for this run; init/usage/configured labels and a
+      // later conflict never set or erase it.
+      if (next.status === 'observed' && record.diagnostics.firstModelObservedAt === null) {
+        record.diagnostics.firstModelObservedAt = new Date().toISOString();
+      }
       appendChain = appendChain.then(() => persistRun(runId, record)).catch(() => {});
     };
     // The first real session in the current stream becomes the run identity and is
@@ -413,7 +534,29 @@ export const createClaudeClient = (options = {}) => {
       record.threadId = value;
       return true;
     };
-    child.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
+    // Bounded, merged stderr diagnostics persistence. At most one write is queued on
+    // the existing serialized run writer at a time and every chunk arriving while it
+    // is pending merges into it, so a burst costs one write while a single chunk still
+    // becomes durable on its own rather than waiting for a later chunk or for close.
+    // No timer is added and lastActivityAt/stall semantics stay untouched.
+    let stderrDiagnosticsQueued = false;
+    const queueStderrDiagnosticsPersist = () => {
+      if (stderrDiagnosticsQueued) return;
+      stderrDiagnosticsQueued = true;
+      appendChain = appendChain.then(async () => {
+        stderrDiagnosticsQueued = false;
+        await persistRun(runId, record);
+      }).catch(() => { stderrDiagnosticsQueued = false; });
+    };
+    child.stderr?.on('data', (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      if (!text) return;
+      // stderr-only activity stays observable through the same serialized run writer;
+      // lastActivityAt/stall semantics are not touched.
+      countDiagnosticChunk(record.diagnostics.stderr, chunk, text);
+      queueStderrDiagnosticsPersist();
+    });
     child.stdout?.on('data', (chunk) => {
       const text = chunk.toString();
       const activityAt = Date.now();
@@ -422,20 +565,26 @@ export const createClaudeClient = (options = {}) => {
         lastActivityPersistedAt = activityAt;
         appendChain = appendChain.then(() => persistRun(runId, record)).catch(() => {});
       }
+      countDiagnosticChunk(record.diagnostics.stdout, chunk, text);
       eventBuffer += text;
       const lines = eventBuffer.split(/\r?\n/);
       eventBuffer = lines.pop() || '';
       for (const line of lines) {
         let event;
         try { event = JSON.parse(line); } catch {
+          // Counted before telemetry filtering, exactly once per nonblank line.
+          countDiagnosticLine(record.diagnostics.events, line, undefined);
           appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${line}\n`, 'utf8')).catch(() => {});
           continue;
         }
+        countDiagnosticLine(record.diagnostics.events, line, event);
         // Safe model metadata is captured before telemetry filtering, so
         // thinking-only responses are still observed without persisting thinking.
         const modelMetadata = claudeModelMetadataFromEvent(event);
         if (modelMetadata) observationEvents.push(modelMetadata);
-        const learnedSession = learnStreamSession(event.session_id);
+        // Valid JSON primitives/arrays/null are already counted as `other`; they carry
+        // no stream fields, so every later read of this line is optional and harmless.
+        const learnedSession = learnStreamSession(event?.session_id);
         if (modelMetadata || learnedSession) refreshModelObservation();
         const previousActivity = record.activity;
         record.activity = claudeActivityFromEvent(event, previousActivity);
@@ -443,7 +592,7 @@ export const createClaudeClient = (options = {}) => {
           && (record.activity?.kind !== previousActivity?.kind || record.activity?.toolId !== previousActivity?.toolId || record.activity?.status !== previousActivity?.status);
         if (significantActivityChange) appendChain = appendChain.then(() => persistRun(runId, record)).catch(() => {});
         if (!isClaudeTelemetryEvent(event)) appendChain = appendChain.then(() => appendFile(eventsPath(runId), `${line}\n`, 'utf8')).catch(() => {});
-        if (event.type !== 'result' || logicalTerminal) continue;
+        if (event?.type !== 'result' || logicalTerminal) continue;
         logicalTerminal = true;
         const failed = event.is_error === true || (event.subtype && event.subtype !== 'success');
         record.status = failed ? 'failed' : 'completed';
@@ -460,14 +609,22 @@ export const createClaudeClient = (options = {}) => {
     });
     child.on('close', async (code, signal) => {
       children.delete(runId);
+      liveRuns.delete(runId);
       const cancelled = cancellationRequested.delete(runId);
+      // A real child lifecycle receipt, captured before any queued write is awaited.
+      record.diagnostics.close = {
+        at: new Date().toISOString(),
+        exitCode: Number.isInteger(code) ? code : null,
+        signal: NODE_SIGNAL_NAMES.has(signal) ? signal : null,
+      };
       // Capture the unterminated final line locally and clear the buffer first:
       // the deferred append/persist must never read an already-cleared buffer.
       const tailLine = eventBuffer;
       eventBuffer = '';
       if (tailLine.trim()) {
-        let tailEvent = null;
+        let tailEvent;
         try { tailEvent = JSON.parse(tailLine); } catch { /* preserve non-JSON diagnostics */ }
+        countDiagnosticLine(record.diagnostics.events, tailLine, tailEvent);
         const tailMetadata = claudeModelMetadataFromEvent(tailEvent);
         if (tailMetadata) observationEvents.push(tailMetadata);
         const learnedSession = learnStreamSession(tailEvent?.session_id);
@@ -477,10 +634,12 @@ export const createClaudeClient = (options = {}) => {
       refreshModelObservation();
       await appendChain;
       const rawEvents = parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => ''));
-      const session = rawEvents.find((event) => event.session_id)?.session_id || null;
+      // Raw lines can legitimately parse to primitives/arrays/null (counted as
+      // `other`), so every lookup over the reloaded raw events is optional.
+      const session = rawEvents.find((event) => event?.session_id)?.session_id || null;
       record.threadId = record.threadId || session;
       record.sessionId = record.sessionId || session;
-      const result = [...rawEvents].reverse().find((event) => event.type === 'result');
+      const result = [...rawEvents].reverse().find((event) => event?.type === 'result');
       const completed = result && result.is_error !== true && (!result.subtype || result.subtype === 'success');
       const failedResult = result && !completed;
       record.status = completed ? 'completed' : cancelled || signal ? 'cancelled' : 'failed';
@@ -501,11 +660,25 @@ export const createClaudeClient = (options = {}) => {
     return JSON.parse(await readFile(runPath(runId), 'utf8'));
   };
   const readEvents = async (runId) => normalizeClaudeEvents(parseLines(await readFile(eventsPath(runId), 'utf8').catch(() => '')));
-  const cancel = async (runId) => {
+  const cancel = async (runId, context) => {
     const child = children.get(runId);
     if (child) {
       cancellationRequested.add(runId);
+      const live = liveRuns.get(runId);
+      let cancellationWrite = null;
+      // Only a live owned child can record a request. The first actual call fixes
+      // {requestedAt, context}; repeats never replace it, and a child that is
+      // already gone fabricates nothing. The write is queued on the existing
+      // serialized atomic writer but never awaited before termination starts.
+      if (live && live.record.diagnostics.cancellation === null) {
+        live.record.diagnostics.cancellation = {
+          requestedAt: new Date().toISOString(),
+          context: detachCancellationContext(context, live.record),
+        };
+        cancellationWrite = live.enqueueDiagnosticPersist();
+      }
       await terminateProcessTree(child);
+      await cancellationWrite;
     }
     const record = await readRun(runId);
     return { ...record, status: child ? 'cancel_requested' : record.status };

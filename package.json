@@ -51,6 +51,7 @@
     "test:candidate-generation-eval-report": "node tests/candidate-generation-eval-report-test.mjs",
     "test:agent-runtime-registry": "node tests/agent-runtime-registry-test.mjs",
     "test:agent-runtime-timeout-recovery": "node tests/agent-runtime-timeout-recovery-test.mjs",
+    "test:agent-run-diagnostics": "node tests/agent-run-diagnostics-test.mjs",
     "test:agent-runtime-candidate-admission": "node tests/agent-runtime-candidate-admission-test.mjs",
     "test:round-settlement-interleaving": "node tests/round-settlement-interleaving-test.mjs",
     "test:agent-runtime-hardware-mock-e2e-contract": "node tests/agent-runtime-hardware-mock-e2e-contract-test.mjs",

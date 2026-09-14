@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "recipe_name": "diagnostics-contract-confirmation",
+  "recipe_digest": "f547aebb09af7541c9cac680f48368ded4ff0d2f9c1e72c27ee5319924bd8476",
+  "executed_at": "2026-09-14T18:41:32.773+00:00",
+  "passed": true,
+  "planned_checks": 1,
+  "interrupted": null,
+  "checks": [
+    {
+      "name": "diagnostics-contract",
+      "argv": [
+        "node",
+        "tests/agent-run-diagnostics-test.mjs"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.969,
+      "passed": true,
+      "truncated": false,
+      "cancelled": false,
+      "timeout": false
+    }
+  ],
+  "log": "verification.log",
+  "log_truncated": false
+}

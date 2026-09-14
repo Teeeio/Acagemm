@@ -458,6 +458,67 @@ and the helper stays pure. The test registers in `package.json` and in BOTH
 verification gates; the upstream runs the final gates after the production
 helpers land, and it must not be weakened to match a pre-integration tree.
 
+## Bounded run diagnostics acceptance (hardware-free)
+
+`agent-run-diagnostics-test.mjs` is the independent acceptance matrix for the frozen
+`docs/development/RUN_DIAGNOSTICS_ACCEPTANCE.md` (D1/D2/D3, T1–T9). It drives the real
+`createClaudeClient` entry point with an injected fake child process — no live Claude CLI,
+model, network, Python or GPU process is started — and the real
+`createAgentRuntime({ mode: 'claude-code' })` entry point with an injected provider port
+double that records the exact `cancel(runId, context)` call it receives. It is the only
+test allowed to assert diagnostic internals.
+
+T1–T4 cover the exact bounded run record: fixed key sets, defaults, separate simultaneous
+run identities and counts, per-stream stdout/stderr chunk and byte counters with ordered
+first/last times, blank/invalid/primitive/unknown line classes, the unterminated final line
+counted once at close, telemetry counted before filtering, `firstModelObservedAt` set once
+through the existing observation authority (thinking-only assistant, later conflict never
+erases it; init/usage alone never set it), the real close receipt
+(`exitCode`/conventional `signal`/null otherwise) and a durable JSON reload. Persistence
+ordering follows the frozen contract instead of an assumed flush: because D2 guarantees
+before-close observability only for stderr and cancellation while D1 only requires the
+final record to be durable at close, T1 asserts `close === null` before a controlled close
+and then reads every final counter per run, and T4 proves stderr visibility on its own
+fresh run that writes one stderr chunk with no stdout queued ahead of it. T4 also counts a
+valid JSON `null` on a main line and as the unterminated tail line as `other` (never
+invalid), and shows the `other` bucket is counted over raw JSONL before the existing
+filter: the provider-neutral `readEvents` log never fabricates an entry for those lines.
+
+T5 holds the termination promise pending and proves the first cancellation is durable while
+`close` is null, that repeat, foreign and context-less calls cannot replace a valid first
+one, and that after-close cancels never fabricate a request. Its invalid-context coverage is
+table-driven: foreign run identity, foreign Mission identity, role, trigger, timestamp and
+each numeric field are rejected one at a time, each on its own fresh run with every other
+field legal, so a later validation branch cannot hide behind a fully corrupted first
+context; a direct legacy `cancel(runId)` on a live child is separately proven to record
+`requestedAt` with `context: null`.
+
+T6/T7 drive the real Runtime branches: main budget-only, stall-only and both, research and
+materializer expiry, and explicit `cancelRun` for each role, asserting the detached context
+scalars and that no premature release or candidate admission happens. T8 holds the provider
+cancel across the caller deadline, proves single-flight reuse, finite retry exhaustion
+staying blocked/quarantined, that a late completion cannot mutate an earlier snapshot and
+that a later confirmed release converges without a new request; it drives that release
+through a real empty temporary Git workspace, because the convergence projection reaches
+the workspace-Diff authority, and it asserts the existing timeout-recovery terminal state
+(`completed` with `timedOut`, not a bare `cancelled`) rather than inventing a new outcome.
+
+T9 (the existing tests keep their old invariants, and no test was weakened to accept this
+change) is owned by the platform acceptance_inputs and the Root combination gate, which
+runs the unchanged existing model-observation, cancellation-liveness, timeout-recovery,
+runtime and claude-client tests. This file deliberately neither pins source/test digests
+nor re-spawns those suites: doing so would lock unrelated later edits and duplicate the
+release gate instead of proving the diagnostics contract.
+
+Every wait is a bounded condition wait, each scenario uses an isolated temporary root
+removed in `finally`, and negatives are arranged so the targeted branch is actually
+reached. This test was written before the producers landed and stays red until the
+combined candidate provides them; the author phase only runs `node --check`. It registers
+as `test:agent-run-diagnostics` in `package.json` and in the release gate
+(`verify:local-c500-release`), so the gate keeps covering it after integration. A green
+result is contract/integration evidence only, never a live-CLI, stability or
+publishability claim.
+
 ## Naming
 
 - `*-test.mjs`: Node unit/contract/integration test.

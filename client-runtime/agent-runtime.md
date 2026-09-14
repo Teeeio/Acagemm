@@ -118,6 +118,36 @@ from logical workflow status. Provider cancellation is single-flight per run and
 bounded (cancellationTimeoutMs, default 5 seconds). A late provider result cannot
 mutate a Mission snapshot; an unanswered cancellation remains unconfirmed.
 
+## Cancellation diagnostics context
+
+The first actual provider cancel call supplies a detached-scalar diagnostics
+context through the existing port: `cancel(runId, context?)`. Only the Claude Code
+provider receives the second argument; Codex and OpenCode keep the legacy
+single-argument call shape, and a direct legacy `cancel(runId)` legitimately
+yields `context: null` client-side. The exact keys are
+`operator-studio.cancellation-context/v1`: `runId`, `missionId`, `role`
+(`main`/`research`/`materializer`), `trigger`, `triggeredAt`, `budgetMs`,
+`elapsedMs`, `stallTimeoutMs`, `idleMs`. Unknown numbers are `null`, never a
+guessed zero, and the factory closes over immutable scalars only — it never
+captures a mutable state reference and creates no persisted copy, Mission DTO or
+new cancellation path.
+
+`triggeredAt` is generated when a genuinely new provider call is created, so a
+single-flight reuse neither calls the provider again nor generates replacement
+context. Triggers reuse the existing branch booleans without recomputing policy:
+main expiry records `budget_and_stall` when both the stall and budget booleans are
+true, otherwise the true one of `budget_exceeded`/`stall_timeout`; research and
+materializer expiry record `budget_exceeded`; explicit cancelRun records
+`explicit_cancel` for its selected role and leaves timing/budget values `null`
+because it evaluates no expiry. Automatic settlement without expiry chooses
+`logical_completion`, then `prior_cancel_requested`, then `terminal_unreleased`,
+then `release_pending`, in that order over the existing conditions. An already
+released run returns early and makes no cancellation request or context. Main
+expiry reports the effective main budget, elapsed, main stall timeout and
+measured idle at that branch; research/materializer report their effective
+existing budget/elapsed with `stallTimeoutMs`/`idleMs` null. Deadline, retry
+limit, pending/quarantine and late-result behavior are unchanged.
+
 Deadline/stall, owner loss, or inability to read a live run must never become a
 successful terminal projection. While release is unconfirmed the role remains
 cancel_requested, has no next Candidate action, and exposes reason/deadline/

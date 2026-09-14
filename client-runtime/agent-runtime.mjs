@@ -51,6 +51,43 @@ const safeAuditRunId = (runId) => typeof runId === 'string' && /^[A-Za-z0-9][A-Z
 const auditFailure = (message, code, cause) => Object.assign(new Error(message), { code, status: 500, ...(cause ? { cause } : {}) });
 const missionProjectIdFor = (state, mission) => mission?.projectId || state?.missions?.find((item) => item.id === mission?.id)?.projectId || state?.activeProjectId || null;
 const isNonBlankString = (value) => typeof value === 'string' && value.trim().length > 0;
+
+// §D3：取消诊断 context 的字节冻结形状。Runtime 只提供已经存在的标量事实；未知一律
+// null，绝不猜测为 0。此对象只用于 provider 诊断端口，不进入任何状态机或持久化 Mission。
+const CANCELLATION_CONTEXT_SCHEMA_VERSION = 'operator-studio.cancellation-context/v1';
+const finiteNonNegativeOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);
+const finitePositiveOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null);
+const elapsedSince = (startedAt) => {
+  const startedAtMs = Date.parse(startedAt || '');
+  return Number.isFinite(startedAtMs) ? Math.max(0, Date.now() - startedAtMs) : null;
+};
+// Factory：triggeredAt 必须在真正发起新的 provider cancel 调用时才生成。工厂只闭包
+// 不可变标量，不持有任何可变 state 引用，也不产生持久化副本。
+const cancellationContextFactory = ({ runId, role, missionId = null, trigger, budgetMs = null, elapsedMs = null, stallTimeoutMs = null, idleMs = null }) => () => ({
+  schemaVersion: CANCELLATION_CONTEXT_SCHEMA_VERSION,
+  runId,
+  missionId: isNonBlankString(missionId) ? missionId : null,
+  role,
+  trigger,
+  triggeredAt: new Date().toISOString(),
+  budgetMs: finiteNonNegativeOrNull(budgetMs),
+  elapsedMs: finiteNonNegativeOrNull(elapsedMs),
+  stallTimeoutMs: finitePositiveOrNull(stallTimeoutMs),
+  idleMs: finiteNonNegativeOrNull(idleMs),
+});
+// 触发分支只读取既有 boolean 与既有状态条件，不重算优先级或阈值：
+// 过期用调用方给出的既有触发；未过期按 logical_completion → prior_cancel_requested
+// → terminal_unreleased → release_pending 的既有条件顺序选择。
+const cancellationTriggerFor = ({ expired, logicalDone, previous, run, cancellation }) => {
+  if (expired) return cancellation?.expiryTrigger || 'budget_exceeded';
+  if (logicalDone) return 'logical_completion';
+  if (previous?.status === 'cancel_requested') return 'prior_cancel_requested';
+  if (['completed', 'failed', 'cancelled'].includes(run?.status)) return 'terminal_unreleased';
+  return 'release_pending';
+};
+const roleMissionIdFor = (role, state) => (isNonBlankString(role?.missionId)
+  ? role.missionId
+  : isNonBlankString(state?.activeMissionId) ? state.activeMissionId : null);
 // §model-observation: project only an exact current provider/run/mission/session
 // bound DTO, deep detached by the shared validation authority. Missing, foreign,
 // malformed or stale evidence clears the projected value; the observation is
@@ -1240,10 +1277,20 @@ export function createAgentRuntime(options = {}) {
   const cancellationCalls = new Map();
   const cancellationRetries = new Map();
   const cancellationTimeoutMs = Math.max(20, Number(options.cancellationTimeoutMs) || 5_000);
-  const requestCancellation = async (runId) => {
+  // D3：provider cancel 端口只在 Claude Code 上接收第二个诊断 context 参数；其余
+  // provider 保持原有的单参数调用形状（旧 provider 调用形状兼容）。
+  const invokeProviderCancel = (runId, context) => (mode === 'claude-code'
+    ? runtimeEngine.invoke(mode, 'cancel', runId, context)
+    : runtimeEngine.invoke(mode, 'cancel', runId));
+  const requestCancellation = async (runId, contextFactory = null) => {
     let operation = cancellationCalls.get(runId);
     if (!operation) {
-      operation = Promise.resolve().then(() => runtimeEngine.invoke(mode, 'cancel', runId));
+      // 单飞：只有真正新建 provider 调用时才构造 context 与 triggeredAt。已存在的
+      // operation 直接复用，不重新调用 provider，也不生成替代 context。
+      operation = Promise.resolve().then(() => invokeProviderCancel(
+        runId,
+        typeof contextFactory === 'function' ? contextFactory() : null,
+      ));
       cancellationCalls.set(runId, operation);
       operation.finally(() => { if (cancellationCalls.get(runId) === operation) cancellationCalls.delete(runId); }).catch(() => {});
     }
@@ -1278,7 +1325,7 @@ export function createAgentRuntime(options = {}) {
           ? previous.resourceRelease.status
           : 'pending', confirmed: false },
   });
-  const settleCancellation = async (previous, run, expired = false, logicalDone = false, { primaryFailure = null } = {}) => {
+  const settleCancellation = async (previous, run, expired = false, logicalDone = false, { primaryFailure = null, cancellation = null } = {}) => {
     const previousWithFailure = primaryFailure
       ? { ...previous, primaryFailure, resourceRelease: { ...(previous.resourceRelease || {}), primaryFailure } }
       : previous;
@@ -1295,7 +1342,17 @@ export function createAgentRuntime(options = {}) {
     const shouldRequest = (previousWithFailure.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') || releasePending;
     if (shouldRequest && retryCount < MAX_CANCELLATION_RETRIES) {
       cancellationRetries.set(previousWithFailure.runId, retryCount + 1);
-      outcome = await requestCancellation(previousWithFailure.runId);
+      const trigger = cancellationTriggerFor({ expired, logicalDone, previous: previousWithFailure, run, cancellation });
+      outcome = await requestCancellation(previousWithFailure.runId, cancellation ? cancellationContextFactory({
+        runId: previousWithFailure.runId,
+        role: cancellation.role,
+        missionId: cancellation.missionId,
+        trigger,
+        budgetMs: cancellation.budgetMs,
+        elapsedMs: cancellation.elapsedMs,
+        stallTimeoutMs: cancellation.stallTimeoutMs,
+        idleMs: cancellation.idleMs,
+      }) : null);
       if (isExecutionReleased(outcome)) return { run: { ...run, ...outcome }, projection: null };
     }
     const exhausted = releasePending && (cancellationRetries.get(previousWithFailure.runId) || 0) >= MAX_CANCELLATION_RETRIES;
@@ -1328,7 +1385,10 @@ export function createAgentRuntime(options = {}) {
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await requestCancellation(runId);
+      // D3：明确 cancelRun 记录 explicit_cancel；它不评估过期，时序/预算保持 null。
+      const result = await requestCancellation(runId, cancellationContextFactory({
+        runId, role: 'materializer', missionId: roleMissionIdFor(state.baseline.materializer, state), trigger: 'explicit_cancel',
+      }));
       state.baseline = {
         ...(state.baseline || {}),
         materializer: { ...state.baseline.materializer, status: isExecutionReleased(result) ? result.status : 'cancel_requested', phase: 'Baseline materializer 取消已请求', resourceRelease: cancellationRelease(state.baseline.materializer, result) },
@@ -1343,7 +1403,9 @@ export function createAgentRuntime(options = {}) {
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await requestCancellation(runId);
+      const result = await requestCancellation(runId, cancellationContextFactory({
+        runId, role: 'research', missionId: roleMissionIdFor(state.researchAgent, state), trigger: 'explicit_cancel',
+      }));
       state.researchAgent = { ...state.researchAgent, status: isExecutionReleased(result) ? result.status : 'cancel_requested', phase: '研究员取消已请求', resourceRelease: cancellationRelease(state.researchAgent, result) };
       appendRuntimeEvent(state, 'research.cancel_requested', { runId }, { kind: 'research', mode });
       return { state, result };
@@ -1355,7 +1417,9 @@ export function createAgentRuntime(options = {}) {
       throw error;
     }
     let result;
-    if (runtimeDefinition && runtimeEngine.supports(mode, 'cancellation')) result = await requestCancellation(runId);
+    if (runtimeDefinition && runtimeEngine.supports(mode, 'cancellation')) result = await requestCancellation(runId, cancellationContextFactory({
+      runId, role: 'main', missionId: roleMissionIdFor(state.agent, state), trigger: 'explicit_cancel',
+    }));
     else {
       const error = new Error(`Agent cancellation is not supported by runtime mode ${mode}.`);
       error.status = 409;
@@ -1475,7 +1539,18 @@ export function createAgentRuntime(options = {}) {
         const budgetExceeded = Number(prev.budgetMs) > 0
           && prev.startedAt
           && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
-        const settlement = await settleCancellation(prev, run, budgetExceeded, events.some(event => event.type === 'turn.completed'));
+        // D3：materializer 过期只记录 budget_exceeded；stall 值保持 null。
+        const settlement = await settleCancellation(prev, run, budgetExceeded, events.some(event => event.type === 'turn.completed'), {
+          cancellation: {
+            role: 'materializer',
+            missionId: roleMissionIdFor(prev, state),
+            budgetMs: typeof prev.budgetMs === 'number' ? prev.budgetMs : null,
+            elapsedMs: elapsedSince(prev.startedAt),
+            stallTimeoutMs: null,
+            idleMs: null,
+            expiryTrigger: budgetExceeded ? 'budget_exceeded' : null,
+          },
+        });
         if (settlement.projection) {
           const changed = runtimeChanged || JSON.stringify(settlement.projection) !== JSON.stringify(prev);
           state.baseline = { ...state.baseline, materializer: settlement.projection };
@@ -1624,7 +1699,18 @@ export function createAgentRuntime(options = {}) {
         const budgetExceeded = Number(prev.budgetMs) > 0
           && prev.startedAt
           && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
-        const settlement = await settleCancellation(prev, run, budgetExceeded, false);
+        // D3：researcher 过期只记录 budget_exceeded；stall 值保持 null。
+        const settlement = await settleCancellation(prev, run, budgetExceeded, false, {
+          cancellation: {
+            role: 'research',
+            missionId: roleMissionIdFor(prev, state),
+            budgetMs: typeof prev.budgetMs === 'number' ? prev.budgetMs : null,
+            elapsedMs: elapsedSince(prev.startedAt),
+            stallTimeoutMs: null,
+            idleMs: null,
+            expiryTrigger: budgetExceeded ? 'budget_exceeded' : null,
+          },
+        });
         if (settlement.projection) {
           const changed = runtimeChanged || usageChanged || JSON.stringify(settlement.projection) !== JSON.stringify(prev);
           state.researchAgent = settlement.projection;
@@ -1778,7 +1864,22 @@ export function createAgentRuntime(options = {}) {
           : !completed && !turnCompletedObserved && providerFailureSignal
             ? classifyManagedFailure(run, events)
             : null;
-        const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded, false, { primaryFailure: preSettlementFailure });
+        // D3：主线程使用本分支已有的有效预算/已用时/停滞阈值与实测空闲；两个既有
+        // boolean 同时为真时记录 budget_and_stall，否则记录真正触发的那个。
+        const mainCancellationMissionId = roleMissionIdFor(state.agent, state);
+        const measuredIdleMs = Number.isFinite(lastEventAt) && lastEventAt > 0 ? Math.max(0, Date.now() - lastEventAt) : null;
+        const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded, false, {
+          primaryFailure: preSettlementFailure,
+          cancellation: {
+            role: 'main',
+            missionId: mainCancellationMissionId,
+            budgetMs: state.agent.budgetMs || mainAgentBudgetMs,
+            elapsedMs: elapsed,
+            stallTimeoutMs: mainAgentStallMs,
+            idleMs: measuredIdleMs,
+            expiryTrigger: stalled && budgetExceeded ? 'budget_and_stall' : budgetExceeded ? 'budget_exceeded' : stalled ? 'stall_timeout' : null,
+          },
+        });
         if (settlement.projection) {
           // Cancellation settlement must not drop the latest exact-bound observation,
           // and must not keep one that the current run no longer supports.

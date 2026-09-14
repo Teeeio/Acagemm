@@ -116,6 +116,7 @@ const checks = [
   'test:baseline-materializer-agent',
   'test:agent-runtime-registry',
   'test:agent-runtime-timeout-recovery',
+  'test:agent-run-diagnostics',
   'test:agent-runtime-hardware-mock-e2e-contract',
   'test:claude',
   'test:claude-workflow',

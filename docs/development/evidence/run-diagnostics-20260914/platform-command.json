@@ -1,0 +1,19 @@
+{
+  "execution_kind": "command",
+  "argv": [
+    "node",
+    "-e",
+    "process.env.OPERATOR_RUNTIME_DIR=process.argv[1];process.env.OPERATOR_BRIDGE_DIR=process.argv[2];process.env.OPERATOR_DATA_DIR=process.argv[3];process.env.OPERATOR_AUTO_TICK='0';require('./docs/development/run-diagnostics-verification.cjs');",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_9de260e14be240ccb4de92f44e03f57e\\scratch/runtime",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_9de260e14be240ccb4de92f44e03f57e\\scratch/bridge",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_9de260e14be240ccb4de92f44e03f57e\\scratch/data"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 724.718,
+  "cancelled": false,
+  "timeout": false,
+  "progress": null,
+  "log_truncated": false,
+  "started_at": "2026-09-14T18:29:24.074+00:00",
+  "ended_at": "2026-09-14T18:41:28.779+00:00"
+}
