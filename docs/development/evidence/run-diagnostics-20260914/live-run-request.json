@@ -1,0 +1,173 @@
+{
+  "schemaVersion": "operator-studio.reviewable-live-request/v1",
+  "status": "blocked_by_host_auto_review_not_submitted",
+  "sourceCommit": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948",
+  "sourceDirectory": "F:/设计/快速项目/acagemm原型/.operator-studio-local/frozen-live-21c6d78",
+  "route": {
+    "front": "http://127.0.0.1:15721",
+    "upstream": "https://api.deepseek.com/anthropic",
+    "configurationEvidence": "current-route.json",
+    "autoFailoverEnabled": false,
+    "observationLimit": "只读当前配置；未用网络追踪证明实际外发路径。"
+  },
+  "payloadScope": [
+    "新建affine Mission Workspace算子代码与候选差异",
+    "生产优化提示词、基线、冻结矩阵、真实测试反馈、轮次事实和选定经验",
+    "现有Claude CLI配置附带的必要上下文，可能包含本机路径或仓库信息"
+  ],
+  "firstStep": {
+    "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+    "request_id": "run-diagnostics-real-smoke-21c6d78-20260914",
+    "tasks": [
+      {
+        "key": "smoke",
+        "title": "21c6d78：真实 affine 两轮与安全诊断观测",
+        "goal": "沿既有Production API→Client Runtime→本机共享GPU，执行一次真实affine两轮并保留原件，验证诊断在真实Claude运行中留存。",
+        "execution_kind": "command",
+        "task_type": "real-gpu-regression",
+        "milestone_id": "operator-real-regression",
+        "work_item": "安全运行诊断与真实两轮",
+        "allowed_paths": [
+          "docs/development/evidence/run-diagnostics-20260914/smoke/batch.json",
+          "docs/development/evidence/run-diagnostics-20260914/smoke/ledger.json"
+        ],
+        "required_artifacts": [
+          "docs/development/evidence/run-diagnostics-20260914/smoke/batch.json",
+          "docs/development/evidence/run-diagnostics-20260914/smoke/ledger.json"
+        ],
+        "depends_on": [],
+        "resource_keys": [
+          "gpu:0"
+        ],
+        "timeout_seconds": 1800,
+        "acceptance_inputs": [
+          {
+            "path": "docs/development/evidence/run-diagnostics-20260914/live-source-manifest.json",
+            "sha256": "6cfa37ac9dfe642f8964ff68b1f191f4bdaef1c7837040cb2fd4367af0107fbf"
+          },
+          {
+            "path": "scripts/run-shared-gpu-regression-batch.mjs",
+            "sha256": "cc67fe1b8f48be5c09ca6507a9aa6c74c880dfdb918673cfaa0a4543b36ba444"
+          },
+          {
+            "path": "scripts/e2e-shared-gpu-agent-iteration.mjs",
+            "sha256": "b11a1f5f70cb2615cb90d3abce7a0022b731f788eb346bd95879c89f6499e31a"
+          },
+          {
+            "path": "client-runtime/claude-client.mjs",
+            "sha256": "6b60c9fff283ed54ffa43040d4af3f3d04480ce8884edf3f8e0ac753385d385d",
+            "source_task_id": "task_4c947d98ea4a4037800012a270d08060"
+          },
+          {
+            "path": "client-runtime/agent-runtime.mjs",
+            "sha256": "aaeebacafa2e5428d311a93005f4e1a53dda09ad739c497b04997e4aec38830c",
+            "source_task_id": "task_508330ccd8084fe687ade96396fa1b6f"
+          }
+        ],
+        "steps": [
+          "仅运行固定argv一次，使用317源码逐字节核对且git clean的21c6d78冻结目录。原始运行与模型记录留在scratch，两个小报告作为产物。",
+          "不修改驱动、形状、正确性矩阵、预算、停止条件和模型观测规则；不追加第二次smoke替换失败。",
+          "运行前须取得针对本具体请求的宿主放行。当前配置已只读核对：Claude CLI http://127.0.0.1:15721 → https://api.deepseek.com/anthropic，自动failover关闭。command不注入worker模型或凭据。",
+          "Root在结束后独立核对诊断统计/实际模型/run身份/close/资源释放/两候选，再决定新N20。"
+        ],
+        "acceptance": [
+          "固定命令真实exit0，batch.status=passed且单一full_success/comparable；原件存在。",
+          "Root独立核对必须模型运行均observed、诊断身份计数时间和close真实留存、资源已释放。",
+          "smoke不计入N20；不把shared GPU证据声称publishable。"
+        ],
+        "command_spec": {
+          "argv": [
+            "node",
+            "F:/设计/快速项目/acagemm原型/.operator-studio-local/frozen-live-21c6d78/scripts/run-shared-gpu-regression-batch.mjs",
+            "--mode",
+            "smoke",
+            "--families",
+            "affine",
+            "--artifact-dir",
+            "{scratch}/real-runs",
+            "--report-dir",
+            "{workspace}/docs/development/evidence/run-diagnostics-20260914/smoke",
+            "--gpu-python",
+            "F:/设计/快速项目/acagemm原型/.gpu-venv/Scripts/python.exe"
+          ],
+          "progress_prefix": "DISPATCH_PROGRESS "
+        },
+        "verification_commands": [
+          "node -e (read-only strict batch/ledger assertions; no second model/GPU invocation)"
+        ],
+        "verification_recipe": {
+          "name": "real-smoke-terminal-report",
+          "checks": [
+            {
+              "name": "smoke-report",
+              "argv": [
+                "node",
+                "-e",
+                "const fs=require('node:fs');const b=JSON.parse(fs.readFileSync('docs/development/evidence/run-diagnostics-20260914/smoke/batch.json','utf8'));const l=JSON.parse(fs.readFileSync('docs/development/evidence/run-diagnostics-20260914/smoke/ledger.json','utf8'));if(b.status!=='passed'||b.requestedRuns!==1||b.invocations.length!==1||b.invocations[0].outcome!=='full_success'||b.invocations[0].comparable!==true||b.stopReason!==null)throw Error('strict smoke failed');console.log('strict smoke terminal report passed');"
+              ],
+              "timeout_seconds": 30
+            }
+          ]
+        },
+        "upstream_plan": {
+          "approach": "已通过并集成最小诊断与独立测试，冻结新源码后按原batch smoke命令做真实两轮；实际运行原件由Root审核，不新建驱动。",
+          "estimated_minutes": 12,
+          "verification_level": "targeted",
+          "interfaces": [
+            "冻结source 21c6d7868bd3c5aa74dfcc098f87e3ad4236f948；317参与文件与已测主树字节相同。",
+            "同一原始运行必须保留所有必需Claude调用；unknown不回填，cancel不当release。"
+          ],
+          "stop_conditions": [
+            "任何模型、配置、源码漂移或资源未释放按原driver停止并保留失败；不扩预算重试。",
+            "真实诊断不符合冻结契约时停止新N20并定位。"
+          ],
+          "preflight": [
+            {
+              "check": "集成源码与既有门禁",
+              "status": "passed",
+              "evidence": "Root已验收集成task_cff8...组合及A/B/C；release144/nonhardware44/新场景12/cancel/timeout通过；317参与文件SHA一致且冻结git clean。"
+            }
+          ]
+        },
+        "dispatch_reason": "实施与门禁已完成；2026-09-14宿主自动审批拒绝真实smoke提交，任务尚未创建。现已只读核对上游并形成具体发送请求，等待用户明确答复及宿主放行。"
+      }
+    ]
+  },
+  "conditionalNextStep": {
+    "onlyAfter": "Root独立验收真实两轮及诊断、实际模型观测和资源释放均通过",
+    "mode": "n20",
+    "families": [
+      "affine"
+    ],
+    "independentAttempts": 20,
+    "candidateTasksPerAttempt": 2,
+    "argv": [
+      "node",
+      "F:/设计/快速项目/acagemm原型/.operator-studio-local/frozen-live-21c6d78/scripts/run-shared-gpu-regression-batch.mjs",
+      "--mode",
+      "n20",
+      "--families",
+      "affine",
+      "--artifact-dir",
+      "{scratch}/real-runs",
+      "--report-dir",
+      "{workspace}/docs/development/evidence/run-diagnostics-20260914/n20",
+      "--gpu-python",
+      "F:/设计/快速项目/acagemm原型/.gpu-venv/Scripts/python.exe"
+    ],
+    "resourceKeys": [
+      "gpu:0"
+    ],
+    "invariants": [
+      "同一源码、配置、180000ms主Agent预算和720000ms E2E预算",
+      "保留所有20次及失败unknown；不补第21次，不替换或回填模型",
+      "原驱动安全停止/释放门槛保持；不发新版或公开发布"
+    ]
+  },
+  "hostRejection": {
+    "action": "dispatch_submit 真实affine smoke",
+    "reason": "真实 smoke 会通过现有 Claude 代理触发模型调用并可能向未确认的上游发送代码、提示词及上下文；用户未明确授权该具体敏感数据到该具体目的地，且此前曾明确要求暂不发送。",
+    "afterRejection": "仅只读核对目的地，未再次提交或绕过执行。"
+  },
+  "question": "是否允许将上述affine工作区代码、优化提示词、测试反馈和Claude CLI附带上下文经本地代理发送至 https://api.deepseek.com/anthropic，先运行真实两轮；验收通过后以同一冻结源码执行全新N=20？"
+}

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "operator-studio.run-diagnostics-acceptance/v1",
-  "updatedAt": "2026-09-14T18:43:00Z",
+  "updatedAt": "2026-09-14T18:53:46.585996+00:00",
   "implementation": {
     "state": "integrated",
     "sources": [
@@ -88,7 +88,7 @@
         "task_508330ccd8084fe687ade96396fa1b6f",
         "task_3d6075d0a32643eaa82ab91c36440d6b"
       ],
-      "next_action": "冻结集成源码，执行一次真实affine两轮。"
+      "next_action": "具体外发请求获得放行后执行真实两轮；当前317参与源码已冻结且git clean。"
     },
     {
       "id": "integration-blocking",
@@ -139,7 +139,7 @@
       "unknown": "底层触发原因。",
       "evidence": [
         "task_cff8fc85778f46f1a0198154c5f44aad",
-        "root-recovery-recheck.log"
+        "root-recovery-recheck.txt"
       ],
       "next_action": "保留缺陷；再次复现时单独有界定位，禁止无限重试。"
     },
@@ -155,9 +155,15 @@
     }
   ],
   "liveTwoRound": {
-    "state": "not_run"
+    "state": "blocked_by_host_auto_review",
+    "taskCreated": false,
+    "modelRequestsStarted": false,
+    "request": "live-run-request.json",
+    "currentRoute": "current-route.json"
   },
   "newN20": {
-    "state": "not_run"
-  }
+    "state": "not_run",
+    "condition": "真实两轮独立验收通过，并且具体外发请求获得宿主放行"
+  },
+  "sourceCommit": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948"
 }
