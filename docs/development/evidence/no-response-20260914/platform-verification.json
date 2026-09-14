@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "recipe_name": "diagnostic-report-shape",
+  "recipe_digest": "bc4c505ca7b88802ff74d4d2176f6bb96ac6d7537639d9c75abcef6625910b93",
+  "executed_at": "2026-09-14T13:56:44.653+00:00",
+  "passed": true,
+  "planned_checks": 1,
+  "interrupted": null,
+  "checks": [
+    {
+      "name": "report-json-shape",
+      "argv": [
+        "node",
+        "-e",
+        "const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('docs/development/evidence/no-response-20260914/client-review.json','utf8')); if(!p.schemaVersion||!Array.isArray(p.findings)||!Array.isArray(p.limitations)||!Array.isArray(p.verification)||!Object.hasOwn(p,'decisionRequest')||p.findings.some(f=>!f.claim||!['fact','inference','unknown'].includes(f.classification)||!Array.isArray(f.evidence))) process.exit(1);"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.188,
+      "passed": true,
+      "truncated": false,
+      "cancelled": false,
+      "timeout": false
+    }
+  ],
+  "log": "verification.log",
+  "log_truncated": false
+}

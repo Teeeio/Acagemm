@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "source": "platform",
+  "state": "passed",
+  "execution_kind": "command",
+  "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+  "task_id": "task_09b97e24ef43461e935798b037ca8b2b",
+  "attempt_id": "run_80078c200d9c4fcb91d3c7ed2c6c0aba",
+  "inputs": [
+    {
+      "task_id": "task_2a4cfe3fd9814151bce3f72190b4142f",
+      "attempt_id": "run_831c24667e19429988b1dc1fedc69bfb",
+      "artifact_digest": "d8b4185643fad3b6cff883b7f4df893db73ea4c086416dc7ba9c2d14a382672e"
+    }
+  ],
+  "manifest": [
+    {
+      "path": "docs/development/evidence/no-response-20260914/client-review.json",
+      "sha256": "35a194345e0c2611c624ce729eb4733ac7f7a243a49dc13ce4884d6f656d6c38",
+      "mode": 438,
+      "status": "added",
+      "base_sha256": null,
+      "base_mode": null,
+      "main_sha256": null,
+      "main_mode": null,
+      "source_task_id": "task_2a4cfe3fd9814151bce3f72190b4142f",
+      "source_attempt_id": "run_831c24667e19429988b1dc1fedc69bfb"
+    },
+    {
+      "path": "docs/development/evidence/no-response-20260914/client-review.md",
+      "sha256": "e0096697fc01e8ad4b92f5b363a5bf313a3da02089dde46a48cbfa9f70ba573a",
+      "mode": 438,
+      "status": "added",
+      "base_sha256": null,
+      "base_mode": null,
+      "main_sha256": null,
+      "main_mode": null,
+      "source_task_id": "task_2a4cfe3fd9814151bce3f72190b4142f",
+      "source_attempt_id": "run_831c24667e19429988b1dc1fedc69bfb"
+    }
+  ],
+  "snapshot_digest": "248fcce313c1e84445ad13bd27ba23c3d3d2c25957121e5677010919b69eb86e",
+  "input_digest": "ba4155accd4d8e757ec3a80b1960af0fe6b7748f5d670cef0fcc78b277abc87f",
+  "command_spec_digest": "b3cf9326357e8107cec0cb3a63f9c23421bbe1dba6c947338789d4ef6eb8b1f6",
+  "recipe_digest": "bc4c505ca7b88802ff74d4d2176f6bb96ac6d7537639d9c75abcef6625910b93",
+  "recipe_configured": true,
+  "exit_code": 0,
+  "checks_passed": true,
+  "fail_task": false,
+  "created_at": "2026-09-14T13:33:39.070+00:00",
+  "finalized_at": "2026-09-14T13:33:45.979+00:00",
+  "error": null
+}

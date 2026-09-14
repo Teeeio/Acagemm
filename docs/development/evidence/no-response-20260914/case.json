@@ -1,0 +1,540 @@
+{
+  "schemaVersion": "operator-studio.no-response-diagnostic-case/v1",
+  "sourceCommit": "83b91d658b97fe90d98be8a407e0fb83741103da",
+  "sourceTask": "task_44338a002ba04dc4b366153587a55704",
+  "sourceAttempt": "run_76cc2f681aa74985a1113187b36728dc",
+  "sourceTaskStatus": "failed",
+  "invocation": 13,
+  "targetRunId": "claude_MU09TRD5_8AB4CC30",
+  "budgets": {
+    "mainAgentMs": 180000,
+    "logicalCleanupMs": 60000,
+    "driverMs": 720000
+  },
+  "knownConclusion": {
+    "fullSuccess": true,
+    "comparable": false,
+    "strictN20Passed": false,
+    "modelUnknownPreserved": true
+  },
+  "records": [
+    {
+      "runId": "claude_MU09PFJ0_33E6CFCA",
+      "missionId": "MIS_MU09OXCH",
+      "sessionId": "71593ad4-3222-4153-8778-300190df9274",
+      "status": "completed",
+      "startedAt": "2026-09-13T20:29:43.367Z",
+      "lastActivityAt": "2026-09-13T20:30:39.307Z",
+      "completedAt": "2026-09-13T20:30:39.308Z",
+      "activityKind": "result",
+      "activityUpdatedAt": "2026-09-13T20:30:39.308Z",
+      "error": null,
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU09PFJ0_33E6CFCA",
+        "missionId": "MIS_MU09OXCH",
+        "sessionId": "71593ad4-3222-4153-8778-300190df9274",
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "source": "assistant.message.model",
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [
+          "claude-haiku-4-5",
+          "claude-opus-5[1m]"
+        ],
+        "observations": [
+          {
+            "eventIndex": 1,
+            "sessionId": "71593ad4-3222-4153-8778-300190df9274",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 2,
+            "sessionId": "71593ad4-3222-4153-8778-300190df9274",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 3,
+            "sessionId": "71593ad4-3222-4153-8778-300190df9274",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 4,
+            "sessionId": "71593ad4-3222-4153-8778-300190df9274",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 5,
+            "sessionId": "71593ad4-3222-4153-8778-300190df9274",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 6,
+            "sessionId": "71593ad4-3222-4153-8778-300190df9274",
+            "model": "deepseek-v4-flash"
+          }
+        ],
+        "reasons": []
+      },
+      "retainedEventTypes": {
+        "system:init": 1,
+        "assistant:": 3,
+        "user:": 2,
+        "result:success": 1
+      },
+      "retainedEventCount": 7,
+      "source": {
+        "record": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_MU09PFJ0_33E6CFCA.json",
+        "recordSha256": "299b030296108fd0dc363153c4f8c46fab5161ef952c7b00de0d91a33d52d2ef",
+        "stream": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_MU09PFJ0_33E6CFCA.jsonl",
+        "streamSha256": "76ed835dafc62844b8bab5c4692f9c7702d0c9e702b27edcbf305f174fb4cf94"
+      }
+    },
+    {
+      "runId": "claude_MU09REFK_B0B56A2F",
+      "missionId": "MIS_MU09OXCH",
+      "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+      "status": "completed",
+      "startedAt": "2026-09-13T20:31:15.250Z",
+      "lastActivityAt": "2026-09-13T20:32:22.183Z",
+      "completedAt": "2026-09-13T20:32:22.183Z",
+      "activityKind": "result",
+      "activityUpdatedAt": "2026-09-13T20:32:22.183Z",
+      "error": null,
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU09REFK_B0B56A2F",
+        "missionId": "MIS_MU09OXCH",
+        "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "source": "assistant.message.model",
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [
+          "claude-haiku-4-5",
+          "claude-opus-5[1m]"
+        ],
+        "observations": [
+          {
+            "eventIndex": 1,
+            "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 2,
+            "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 3,
+            "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 4,
+            "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 5,
+            "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 6,
+            "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 7,
+            "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 8,
+            "sessionId": "bb55d7ee-01bc-45c8-900f-e67ba5713d7f",
+            "model": "deepseek-v4-flash"
+          }
+        ],
+        "reasons": []
+      },
+      "retainedEventTypes": {
+        "system:init": 1,
+        "assistant:": 5,
+        "user:": 2,
+        "result:success": 1
+      },
+      "retainedEventCount": 9,
+      "source": {
+        "record": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_MU09REFK_B0B56A2F.json",
+        "recordSha256": "e5c278d8611244af7ab3082374b804d99a0c699bbd86e9792597398f5639013c",
+        "stream": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_MU09REFK_B0B56A2F.jsonl",
+        "streamSha256": "df1ca3c5ea5c77899fe4539a1f09f747a1a5628f13a061ae734bbaa0e0ca8c5b"
+      }
+    },
+    {
+      "runId": "claude_MU09TRD5_8AB4CC30",
+      "missionId": "MIS_MU09OXCH",
+      "sessionId": "6911879a-ec2c-4dcb-8e6f-46cd466bc86b",
+      "status": "cancelled",
+      "startedAt": "2026-09-13T20:33:05.332Z",
+      "lastActivityAt": "2026-09-13T20:36:07.582Z",
+      "completedAt": "2026-09-13T20:36:07.636Z",
+      "activityKind": "thinking",
+      "activityUpdatedAt": "2026-09-13T20:36:07.582Z",
+      "error": null,
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU09TRD5_8AB4CC30",
+        "missionId": "MIS_MU09OXCH",
+        "sessionId": "6911879a-ec2c-4dcb-8e6f-46cd466bc86b",
+        "status": "unknown",
+        "model": null,
+        "source": null,
+        "models": [],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [],
+        "observations": [],
+        "reasons": [
+          "no assistant response metadata in the run stream"
+        ]
+      },
+      "retainedEventTypes": {
+        "system:init": 1
+      },
+      "retainedEventCount": 1,
+      "source": {
+        "record": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_MU09TRD5_8AB4CC30.json",
+        "recordSha256": "62bcb9b0c88b97f2da97d972f1af2705c16bad5bfc6b636f2c460690e8e09592",
+        "stream": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_MU09TRD5_8AB4CC30.jsonl",
+        "streamSha256": "71d4f16d14076d923f81abfeb8df510f3a9adf1f0b0f4580b10eb1d059bf4201"
+      }
+    },
+    {
+      "runId": "claude_research_MU09XVS0_2A885070",
+      "missionId": "MIS_MU09OXCH",
+      "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+      "status": "completed",
+      "startedAt": "2026-09-13T20:36:17.899Z",
+      "lastActivityAt": "2026-09-13T20:38:24.306Z",
+      "completedAt": "2026-09-13T20:38:24.306Z",
+      "activityKind": "result",
+      "activityUpdatedAt": "2026-09-13T20:38:24.306Z",
+      "error": null,
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_research_MU09XVS0_2A885070",
+        "missionId": "MIS_MU09OXCH",
+        "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "source": "assistant.message.model",
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [
+          "claude-haiku-4-5",
+          "claude-opus-5[1m]"
+        ],
+        "observations": [
+          {
+            "eventIndex": 1,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 2,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 3,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 4,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 5,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 6,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 7,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 8,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 9,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 10,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 11,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 12,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 13,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 14,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 15,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 16,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 17,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 18,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 19,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 20,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 21,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 22,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 23,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 24,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 25,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 26,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 27,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 28,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 29,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 30,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 31,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 32,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 33,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 34,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 35,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 36,
+            "sessionId": "b4a73874-6274-4580-a243-351f46dc7579",
+            "model": "deepseek-v4-flash"
+          }
+        ],
+        "reasons": []
+      },
+      "retainedEventTypes": {
+        "system:init": 1,
+        "assistant:": 26,
+        "user:": 20,
+        "result:success": 1
+      },
+      "retainedEventCount": 48,
+      "source": {
+        "record": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_research_MU09XVS0_2A885070.json",
+        "recordSha256": "bbbb20ac159b3f92b7d7c088cdbeec0f01661c5ddb49dd2df0a5f766f7b41b67",
+        "stream": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_research_MU09XVS0_2A885070.jsonl",
+        "streamSha256": "06c60b4be7e5b83876dc730cd1faf4e8225c5832779ef724a8e8052290affd94"
+      }
+    },
+    {
+      "runId": "claude_MU0A0WT7_0323BFE7",
+      "missionId": "MIS_MU09OXCH",
+      "sessionId": "667697ae-cf2d-4176-abf4-98b3110e1360",
+      "status": "completed",
+      "startedAt": "2026-09-13T20:38:38.975Z",
+      "lastActivityAt": "2026-09-13T20:39:53.533Z",
+      "completedAt": "2026-09-13T20:39:53.533Z",
+      "activityKind": "result",
+      "activityUpdatedAt": "2026-09-13T20:39:53.533Z",
+      "error": null,
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU0A0WT7_0323BFE7",
+        "missionId": "MIS_MU09OXCH",
+        "sessionId": "667697ae-cf2d-4176-abf4-98b3110e1360",
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "source": "assistant.message.model",
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [
+          "claude-haiku-4-5",
+          "claude-opus-5[1m]"
+        ],
+        "observations": [
+          {
+            "eventIndex": 1,
+            "sessionId": "667697ae-cf2d-4176-abf4-98b3110e1360",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 2,
+            "sessionId": "667697ae-cf2d-4176-abf4-98b3110e1360",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 3,
+            "sessionId": "667697ae-cf2d-4176-abf4-98b3110e1360",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 4,
+            "sessionId": "667697ae-cf2d-4176-abf4-98b3110e1360",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 5,
+            "sessionId": "667697ae-cf2d-4176-abf4-98b3110e1360",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 6,
+            "sessionId": "667697ae-cf2d-4176-abf4-98b3110e1360",
+            "model": "deepseek-v4-flash"
+          }
+        ],
+        "reasons": []
+      },
+      "retainedEventTypes": {
+        "system:init": 1,
+        "assistant:": 3,
+        "user:": 2,
+        "result:success": 1
+      },
+      "retainedEventCount": 7,
+      "source": {
+        "record": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_MU0A0WT7_0323BFE7.json",
+        "recordSha256": "f822262e25c5ff214a9258149faa4f37d6d5b10e4b4f66ed60b1d4014d188e6c",
+        "stream": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\bridge\\claude-runs\\claude_MU0A0WT7_0323BFE7.jsonl",
+        "streamSha256": "7e3c4190866c2b60335ceec10de17ee5da2b692535c4fba77be843a4101fa1d6"
+      }
+    }
+  ],
+  "limitations": [
+    "Retained stream excludes system thinking_tokens and thinking-only assistant bodies. Model metadata is separately captured before filtering.",
+    "Only structural metadata is retained in this case: no prompt, code payload, thinking text, credentials or provider request body.",
+    "No upstream network trace is available; transport/provider causes cannot be asserted from init-only retained output."
+  ]
+}
