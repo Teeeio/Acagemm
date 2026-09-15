@@ -1,0 +1,1868 @@
+{
+  "result": "passed",
+  "runs": 20,
+  "modelRuns": 44,
+  "actualModels": {
+    "deepseek-v4-flash": 44
+  },
+  "queueStatuses": {
+    "completed": 60,
+    "failed": 3
+  },
+  "cancellationTriggers": {},
+  "allResourcesReleased": true,
+  "diagnostics": [
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-3zpjpS",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-3zpjpS\\bridge\\claude-runs\\claude_MU1YJKZT_215CDD4B.json",
+          "sha256": "3bdcc6ad9e7be2b41917b0bcb9cbdd9699f37d9eca26a4a95ae6e2d2cf06939a",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1YJKZT_215CDD4B",
+            "missionId": "MIS_MU1YIYTF",
+            "stdout": {
+              "chunks": 3982,
+              "bytes": 1036343,
+              "firstAt": "2026-09-15T00:52:49.430Z",
+              "lastAt": "2026-09-15T00:53:23.511Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 5088,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T00:53:09.521Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T00:53:24.104Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-3zpjpS\\bridge\\claude-runs\\claude_MU1YLNK7_FF1C6CD6.json",
+          "sha256": "7ef13f68497ea57e7bbfade9c36837298ec199ad25a37e00a8c9c7f16032da8a",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1YLNK7_FF1C6CD6",
+            "missionId": "MIS_MU1YIYTF",
+            "stdout": {
+              "chunks": 11736,
+              "bytes": 2901724,
+              "firstAt": "2026-09-15T00:54:26.092Z",
+              "lastAt": "2026-09-15T00:55:47.871Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 14326,
+              "assistant": 10,
+              "result": 1,
+              "other": 3,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T00:55:29.415Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T00:55:48.432Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-455pRN",
+      "modelRuns": 3,
+      "queueTasks": 4,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-455pRN\\bridge\\claude-runs\\claude_MU1YP4JB_1B24B96B.json",
+          "sha256": "55a87296e23b853a851aa8a5bf226b4987d1ebc8b3d5a4c802546a5800c17a45",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1YP4JB_1B24B96B",
+            "missionId": "MIS_MU1YOIB8",
+            "stdout": {
+              "chunks": 5834,
+              "bytes": 1471420,
+              "firstAt": "2026-09-15T00:57:07.534Z",
+              "lastAt": "2026-09-15T00:57:48.829Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 7308,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T00:57:38.546Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T00:57:49.376Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-455pRN\\bridge\\claude-runs\\claude_MU1YRCTN_B0593B5D.json",
+          "sha256": "709852222f201e34cd3714cf48e50142f5908d161a1eaabe4e2260813f919a25",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1YRCTN_B0593B5D",
+            "missionId": "MIS_MU1YOIB8",
+            "stdout": {
+              "chunks": 12961,
+              "bytes": 3145942,
+              "firstAt": "2026-09-15T00:58:51.662Z",
+              "lastAt": "2026-09-15T01:00:19.871Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 15574,
+              "assistant": 8,
+              "result": 1,
+              "other": 3,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:00:00.959Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:00:20.490Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-455pRN\\bridge\\claude-runs\\claude_MU1YUJMG_CC28A87C.json",
+          "sha256": "895ca991387a5ea022e01bbe6e70e807e4fdef1ad6e125e5c0f4bc39572ae09d",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1YUJMG_CC28A87C",
+            "missionId": "MIS_MU1YOIB8",
+            "stdout": {
+              "chunks": 10078,
+              "bytes": 2451573,
+              "firstAt": "2026-09-15T01:01:20.666Z",
+              "lastAt": "2026-09-15T01:02:25.729Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 12134,
+              "assistant": 8,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:02:13.545Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:02:26.281Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-9DR0qo",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-9DR0qo\\bridge\\claude-runs\\claude_MU1YXNLC_060A8F89.json",
+          "sha256": "ba517a3f02f84bf2c1977b5057e40ac021b32c0b1f0b6d97820036d5c95ce174",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1YXNLC_060A8F89",
+            "missionId": "MIS_MU1YX19D",
+            "stdout": {
+              "chunks": 1291,
+              "bytes": 324958,
+              "firstAt": "2026-09-15T01:03:45.871Z",
+              "lastAt": "2026-09-15T01:04:00.078Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 1538,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:03:53.667Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:04:00.640Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-9DR0qo\\bridge\\claude-runs\\claude_MU1YZ77G_6DEEF9CE.json",
+          "sha256": "804e74ea500a3420c30842fb2b0ed9f8518d04155104f4d84a32e2c908b135ba",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1YZ77G_6DEEF9CE",
+            "missionId": "MIS_MU1YX19D",
+            "stdout": {
+              "chunks": 15341,
+              "bytes": 3742005,
+              "firstAt": "2026-09-15T01:04:57.603Z",
+              "lastAt": "2026-09-15T01:06:30.108Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 18688,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:06:21.142Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:06:30.653Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-bxoQ1W",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-bxoQ1W\\bridge\\claude-runs\\claude_MU1Z2QQY_03D434CC.json",
+          "sha256": "3d77d65b257060b187e6e1c29c1c2bab4106c5d708e47344bf559fb4c21cb850",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1Z2QQY_03D434CC",
+            "missionId": "MIS_MU1Z28RP",
+            "stdout": {
+              "chunks": 2066,
+              "bytes": 550011,
+              "firstAt": "2026-09-15T01:07:42.839Z",
+              "lastAt": "2026-09-15T01:08:04.374Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 2658,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:07:44.019Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:08:04.991Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-bxoQ1W\\bridge\\claude-runs\\claude_MU1Z4HJM_FF23D04C.json",
+          "sha256": "9cdcef3c086aebed3820973130789d011d6e63e6d6e68caac5b4154f5e1183a5",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1Z4HJM_FF23D04C",
+            "missionId": "MIS_MU1Z28RP",
+            "stdout": {
+              "chunks": 8118,
+              "bytes": 1996397,
+              "firstAt": "2026-09-15T01:09:04.437Z",
+              "lastAt": "2026-09-15T01:09:57.267Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 9920,
+              "assistant": 8,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:09:38.253Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:09:57.811Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-c22EpL",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-c22EpL\\bridge\\claude-runs\\claude_MU1Z7D63_DADCC101.json",
+          "sha256": "4fd207d92ba3a679cb3db0395ff01b581b65c98ea85509d0120dd3a71770d2be",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1Z7D63_DADCC101",
+            "missionId": "MIS_MU1Z6R5O",
+            "stdout": {
+              "chunks": 2450,
+              "bytes": 658715,
+              "firstAt": "2026-09-15T01:11:18.756Z",
+              "lastAt": "2026-09-15T01:11:44.160Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 3189,
+              "assistant": 8,
+              "result": 1,
+              "other": 3,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:11:31.507Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:11:44.711Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-c22EpL\\bridge\\claude-runs\\claude_MU1Z99YN_8DAD3644.json",
+          "sha256": "6878ce55d8f50814a06ef497680068afb8adcf32dc011121fa54ca7320aa7831",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1Z99YN_8DAD3644",
+            "missionId": "MIS_MU1Z6R5O",
+            "stdout": {
+              "chunks": 9851,
+              "bytes": 2418688,
+              "firstAt": "2026-09-15T01:12:47.767Z",
+              "lastAt": "2026-09-15T01:13:57.452Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 11909,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:13:37.335Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:13:58.009Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-xCwzG3",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-xCwzG3\\bridge\\claude-runs\\claude_MU1ZCHS6_C7309977.json",
+          "sha256": "6c99a692c63ae830c7c6001d8fd318e8ec606c92f8ee5cf766fcbbf6a511c2f1",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ZCHS6_C7309977",
+            "missionId": "MIS_MU1ZBVSI",
+            "stdout": {
+              "chunks": 6331,
+              "bytes": 1580598,
+              "firstAt": "2026-09-15T01:15:17.652Z",
+              "lastAt": "2026-09-15T01:15:59.720Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 7873,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:15:18.875Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:16:00.274Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-xCwzG3\\bridge\\claude-runs\\claude_MU1ZEP5W_9855F3BE.json",
+          "sha256": "0101feeb3f51f312e619c5cfa45370cddb204c758f0d61b5822105c53f33bdc5",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ZEP5W_9855F3BE",
+            "missionId": "MIS_MU1ZBVSI",
+            "stdout": {
+              "chunks": 6296,
+              "bytes": 1520957,
+              "firstAt": "2026-09-15T01:17:00.859Z",
+              "lastAt": "2026-09-15T01:17:44.307Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 7548,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:17:33.989Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:17:44.854Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-r6xNsC",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-r6xNsC\\bridge\\claude-runs\\claude_MU1ZHEMF_A1F98EF6.json",
+          "sha256": "4fc7c603023268aeeacdc2c402e6bdc8b5733edf3b843e35836ff88744943a32",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ZHEMF_A1F98EF6",
+            "missionId": "MIS_MU1ZGSKF",
+            "stdout": {
+              "chunks": 2261,
+              "bytes": 600436,
+              "firstAt": "2026-09-15T01:19:06.866Z",
+              "lastAt": "2026-09-15T01:19:28.161Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 2916,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:19:17.085Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:19:28.706Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-r6xNsC\\bridge\\claude-runs\\claude_MU1ZJ81K_B6632E46.json",
+          "sha256": "497ff72967e566f26daa553f0978867501797078495fe72fb08a4f9ecb633a05",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ZJ81K_B6632E46",
+            "missionId": "MIS_MU1ZGSKF",
+            "stdout": {
+              "chunks": 15374,
+              "bytes": 3836309,
+              "firstAt": "2026-09-15T01:20:31.679Z",
+              "lastAt": "2026-09-15T01:22:04.118Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 19163,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:21:52.790Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:22:04.671Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Nxr7Yv",
+      "modelRuns": 5,
+      "queueTasks": 5,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Nxr7Yv\\bridge\\claude-runs\\claude_MU1ZMZ11_0538C4E0.json",
+          "sha256": "36b75b29832c7d640b36ab61d2c18dd1df45d1e62ffa19de36cc4b9a5d21efd8",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ZMZ11_0538C4E0",
+            "missionId": "MIS_MU1ZMD3E",
+            "stdout": {
+              "chunks": 12027,
+              "bytes": 3055998,
+              "firstAt": "2026-09-15T01:23:26.743Z",
+              "lastAt": "2026-09-15T01:24:44.700Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 15209,
+              "assistant": 8,
+              "result": 1,
+              "other": 3,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:24:26.187Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:24:45.439Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Nxr7Yv\\bridge\\claude-runs\\claude_MU1ZPL6Y_C18CECDC.json",
+          "sha256": "4e50dd61f7a6af0e1d0cba8e023f49c5fe9883b1b949ff561f9a875684b1a977",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ZPL6Y_C18CECDC",
+            "missionId": "MIS_MU1ZMD3E",
+            "stdout": {
+              "chunks": 5490,
+              "bytes": 1321488,
+              "firstAt": "2026-09-15T01:25:29.040Z",
+              "lastAt": "2026-09-15T01:26:08.260Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 6514,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:25:56.875Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:26:08.877Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Nxr7Yv\\bridge\\claude-runs\\claude_MU1ZRRT0_E73C983D.json",
+          "sha256": "d24c978a4d79b2c605b1864ea96e973c799d23b0a245eba1b92ee2411a9f7058",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ZRRT0_E73C983D",
+            "missionId": "MIS_MU1ZMD3E",
+            "stdout": {
+              "chunks": 11670,
+              "bytes": 2812970,
+              "firstAt": "2026-09-15T01:27:10.671Z",
+              "lastAt": "2026-09-15T01:28:24.013Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 14022,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:28:09.136Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:28:24.577Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Nxr7Yv\\bridge\\claude-runs\\claude_MU1ZWEK5_BB751317.json",
+          "sha256": "db80800090bae9ed6941bae382204c4e15467f80a580709d0d4099744abbec62",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ZWEK5_BB751317",
+            "missionId": "MIS_MU1ZMD3E",
+            "stdout": {
+              "chunks": 14042,
+              "bytes": 3677204,
+              "firstAt": "2026-09-15T01:30:46.820Z",
+              "lastAt": "2026-09-15T01:32:26.864Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 18260,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:32:13.753Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:32:27.417Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Nxr7Yv\\bridge\\claude-runs\\claude_research_MU1ZUCKU_0C2A50EF.json",
+          "sha256": "af253345311bd0c3525455d654215ffe318eb1596d068f6ed9df08e6c0b5fbf3",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_research_MU1ZUCKU_0C2A50EF",
+            "missionId": "MIS_MU1ZMD3E",
+            "stdout": {
+              "chunks": 3099,
+              "bytes": 835074,
+              "firstAt": "2026-09-15T01:29:11.191Z",
+              "lastAt": "2026-09-15T01:30:13.995Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 3534,
+              "assistant": 33,
+              "result": 1,
+              "other": 15,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:29:11.887Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:30:14.543Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-VtnOAW",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-VtnOAW\\bridge\\claude-runs\\claude_MU200A5B_624A0277.json",
+          "sha256": "0781da0b98aaf94ceae87015fc2a988d16b130848a06b953c8dec0391e5c9859",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU200A5B_624A0277",
+            "missionId": "MIS_MU1ZZOAD",
+            "stdout": {
+              "chunks": 2929,
+              "bytes": 784008,
+              "firstAt": "2026-09-15T01:33:47.814Z",
+              "lastAt": "2026-09-15T01:34:21.504Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 3823,
+              "assistant": 8,
+              "result": 1,
+              "other": 3,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:34:07.496Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:34:22.133Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-VtnOAW\\bridge\\claude-runs\\claude_MU202AIY_F842DEC7.json",
+          "sha256": "cb95d60e69a4d07d26169125e756229fb14ee684fd72a643b87abae2ae9cc2f3",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU202AIY_F842DEC7",
+            "missionId": "MIS_MU1ZZOAD",
+            "stdout": {
+              "chunks": 18014,
+              "bytes": 4693362,
+              "firstAt": "2026-09-15T01:35:22.209Z",
+              "lastAt": "2026-09-15T01:37:21.854Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 23433,
+              "assistant": 8,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:37:01.274Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:37:22.403Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-a6riHU",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-a6riHU\\bridge\\claude-runs\\claude_MU206LJ9_38BFBD6D.json",
+          "sha256": "27350949de24ae312455be559f910844521834160f90cd3f57b243cb5cc0485e",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU206LJ9_38BFBD6D",
+            "missionId": "MIS_MU205ZQ2",
+            "stdout": {
+              "chunks": 15265,
+              "bytes": 3896125,
+              "firstAt": "2026-09-15T01:38:42.498Z",
+              "lastAt": "2026-09-15T01:40:17.330Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 19460,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:40:05.837Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:40:17.885Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-a6riHU\\bridge\\claude-runs\\claude_MU209X7D_BF5B4D3C.json",
+          "sha256": "15df999e61c6d18fb7c02509df4f50864c4a2eb5321397c10944fbf4348e6cf1",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU209X7D_BF5B4D3C",
+            "missionId": "MIS_MU205ZQ2",
+            "stdout": {
+              "chunks": 21471,
+              "bytes": 5446519,
+              "firstAt": "2026-09-15T01:41:17.645Z",
+              "lastAt": "2026-09-15T01:43:36.422Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 27094,
+              "assistant": 8,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:43:20.317Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:43:36.970Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-lcUN5t",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-lcUN5t\\bridge\\claude-runs\\claude_MU20ENQ3_E8EC95F0.json",
+          "sha256": "2627dfcb0565d73012692f8595ffd0a031b333b95218889af929c85c14d323c4",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20ENQ3_E8EC95F0",
+            "missionId": "MIS_MU20E2IG",
+            "stdout": {
+              "chunks": 2093,
+              "bytes": 555984,
+              "firstAt": "2026-09-15T01:44:58.564Z",
+              "lastAt": "2026-09-15T01:45:19.800Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 2696,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:45:11.350Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:45:20.369Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-lcUN5t\\bridge\\claude-runs\\claude_MU20GK0Q_0631254E.json",
+          "sha256": "82622b7c252f1b33e25bf2cb526c9d8175b9f829c7aeea9ebafc29d2920d3688",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20GK0Q_0631254E",
+            "missionId": "MIS_MU20E2IG",
+            "stdout": {
+              "chunks": 6441,
+              "bytes": 1595144,
+              "firstAt": "2026-09-15T01:46:27.193Z",
+              "lastAt": "2026-09-15T01:47:18.596Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 7844,
+              "assistant": 9,
+              "result": 1,
+              "other": 3,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:47:04.715Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:47:19.321Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-wEY3Gd",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-wEY3Gd\\bridge\\claude-runs\\claude_MU20JDSR_6DF67F66.json",
+          "sha256": "723948e4c07b8ae02c8afb5f7b0166ef10ea5f9b835d262455099741fa0b98de",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20JDSR_6DF67F66",
+            "missionId": "MIS_MU20ISKF",
+            "stdout": {
+              "chunks": 1689,
+              "bytes": 470751,
+              "firstAt": "2026-09-15T01:48:39.404Z",
+              "lastAt": "2026-09-15T01:49:00.907Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 2207,
+              "assistant": 8,
+              "result": 1,
+              "other": 3,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:48:45.604Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:49:01.503Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-wEY3Gd\\bridge\\claude-runs\\claude_MU20L7TJ_3EABE38C.json",
+          "sha256": "6281e084c2e5382e4991dab39a7c569f2efc0c54eb511cb61bceeed83be8fc74",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20L7TJ_3EABE38C",
+            "missionId": "MIS_MU20ISKF",
+            "stdout": {
+              "chunks": 10426,
+              "bytes": 2661403,
+              "firstAt": "2026-09-15T01:50:04.622Z",
+              "lastAt": "2026-09-15T01:51:16.101Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 13254,
+              "assistant": 7,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:51:03.376Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:51:16.732Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-v5hRKH",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-v5hRKH\\bridge\\claude-runs\\claude_MU20OJB1_00626613.json",
+          "sha256": "2376ef172652349793aaab562bcf7c2637500323eff2b69fef93483987a31a29",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20OJB1_00626613",
+            "missionId": "MIS_MU20NXS3",
+            "stdout": {
+              "chunks": 1511,
+              "bytes": 416120,
+              "firstAt": "2026-09-15T01:52:39.604Z",
+              "lastAt": "2026-09-15T01:52:57.554Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 1983,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:52:43.677Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:52:58.154Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-v5hRKH\\bridge\\claude-runs\\claude_MU20Q8NP_914B05CE.json",
+          "sha256": "a20253ca0607d6c02066857377ce5063c9d148b1929937189f64e41e7c763d17",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20Q8NP_914B05CE",
+            "missionId": "MIS_MU20NXS3",
+            "stdout": {
+              "chunks": 11052,
+              "bytes": 2770678,
+              "firstAt": "2026-09-15T01:53:58.976Z",
+              "lastAt": "2026-09-15T01:55:14.501Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 13791,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:55:04.012Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:55:15.049Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-zv3eSX",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-zv3eSX\\bridge\\claude-runs\\claude_MU20TK9M_7D68976D.json",
+          "sha256": "e4ece0761224ae47087fbb5fefcd4866c17371c79eaa6e4b9e84f33f86eb41eb",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20TK9M_7D68976D",
+            "missionId": "MIS_MU20SYLU",
+            "stdout": {
+              "chunks": 1801,
+              "bytes": 483858,
+              "firstAt": "2026-09-15T01:56:34.008Z",
+              "lastAt": "2026-09-15T01:56:55.068Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 2320,
+              "assistant": 4,
+              "result": 1,
+              "other": 1,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:56:45.472Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:56:55.634Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-zv3eSX\\bridge\\claude-runs\\claude_MU20VBNI_23ECE3D3.json",
+          "sha256": "21d7a23c5bac406f15ccdba5ca84cbaf7812e806dc1fd07c7c34a40989cfb7a3",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20VBNI_23ECE3D3",
+            "missionId": "MIS_MU20SYLU",
+            "stdout": {
+              "chunks": 11280,
+              "bytes": 2836795,
+              "firstAt": "2026-09-15T01:57:56.123Z",
+              "lastAt": "2026-09-15T01:59:19.484Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 13992,
+              "assistant": 7,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T01:59:03.808Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T01:59:20.049Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-1834rH",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-1834rH\\bridge\\claude-runs\\claude_MU20YU1B_82E21DA5.json",
+          "sha256": "d17c20b0169e5e5a15734bd044ff51ad1baaa08a0cb30d7cd058e9ab4c808670",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU20YU1B_82E21DA5",
+            "missionId": "MIS_MU20Y7Y7",
+            "stdout": {
+              "chunks": 2059,
+              "bytes": 546855,
+              "firstAt": "2026-09-15T02:00:39.738Z",
+              "lastAt": "2026-09-15T02:01:03.574Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 2639,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:00:42.110Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:01:04.125Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-1834rH\\bridge\\claude-runs\\claude_MU210L60_2B503373.json",
+          "sha256": "8082f6fe7bcc3eea6589b42fe6b7055912bb3175887bd974949776860ff5619e",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU210L60_2B503373",
+            "missionId": "MIS_MU20Y7Y7",
+            "stdout": {
+              "chunks": 14568,
+              "bytes": 3599733,
+              "firstAt": "2026-09-15T02:02:01.635Z",
+              "lastAt": "2026-09-15T02:03:39.412Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 17963,
+              "assistant": 5,
+              "result": 1,
+              "other": 1,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:03:19.280Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:03:40.027Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-4gl7nC",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-4gl7nC\\bridge\\claude-runs\\claude_MU214EQD_7766F825.json",
+          "sha256": "61838ec83200f607bc9b3d3074071c1583c168854f1e60af8bfdf29b77c1c121",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU214EQD_7766F825",
+            "missionId": "MIS_MU213SZ5",
+            "stdout": {
+              "chunks": 8203,
+              "bytes": 2090081,
+              "firstAt": "2026-09-15T02:05:00.098Z",
+              "lastAt": "2026-09-15T02:06:03.806Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 10364,
+              "assistant": 8,
+              "result": 1,
+              "other": 3,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:05:49.214Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:06:04.377Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-4gl7nC\\bridge\\claude-runs\\claude_MU216PDC_A4C1CFCB.json",
+          "sha256": "b698cefffc59ad1ab4b1024d5554db856e18c9b96567dce3fa5e5021b1d9c8b2",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU216PDC_A4C1CFCB",
+            "missionId": "MIS_MU213SZ5",
+            "stdout": {
+              "chunks": 11588,
+              "bytes": 2839178,
+              "firstAt": "2026-09-15T02:06:47.155Z",
+              "lastAt": "2026-09-15T02:08:07.571Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 14076,
+              "assistant": 7,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:07:53.708Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:08:08.298Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-M5zmup",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-M5zmup\\bridge\\claude-runs\\claude_MU21A6SG_123E42F0.json",
+          "sha256": "26da116f1f0e1e69b7edab74987797fd1da5a985b3d3e7578977abd7177f4340",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU21A6SG_123E42F0",
+            "missionId": "MIS_MU219L30",
+            "stdout": {
+              "chunks": 2233,
+              "bytes": 614584,
+              "firstAt": "2026-09-15T02:09:30.169Z",
+              "lastAt": "2026-09-15T02:09:55.218Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 2971,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:09:42.248Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:09:55.774Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-M5zmup\\bridge\\claude-runs\\claude_MU21C446_34123E1F.json",
+          "sha256": "ec74f5a5369d4fb35af9e6244d4dee1c13659f49206f2f654389c3f73be626fe",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU21C446_34123E1F",
+            "missionId": "MIS_MU219L30",
+            "stdout": {
+              "chunks": 18071,
+              "bytes": 4496960,
+              "firstAt": "2026-09-15T02:10:59.405Z",
+              "lastAt": "2026-09-15T02:12:51.226Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 22496,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:12:38.496Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:12:51.791Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-qjzq49",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-qjzq49\\bridge\\claude-runs\\claude_MU21GAVI_60E682E8.json",
+          "sha256": "8ed51f5bde3200805aca3dcee264f90f2cfba487e1712f09c9dd021c664a8e7d",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU21GAVI_60E682E8",
+            "missionId": "MIS_MU21FNYI",
+            "stdout": {
+              "chunks": 1848,
+              "bytes": 486920,
+              "firstAt": "2026-09-15T02:14:14.872Z",
+              "lastAt": "2026-09-15T02:14:33.960Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 2344,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:14:24.205Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:14:34.530Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-qjzq49\\bridge\\claude-runs\\claude_MU21HZ85_718F9D57.json",
+          "sha256": "8b902ea7b2d3d2b0ef3991f3014115cf6e54ac0e43153d65224c1ecc8ac5b836",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU21HZ85_718F9D57",
+            "missionId": "MIS_MU21FNYI",
+            "stdout": {
+              "chunks": 11595,
+              "bytes": 2833579,
+              "firstAt": "2026-09-15T02:15:33.157Z",
+              "lastAt": "2026-09-15T02:16:49.070Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 14124,
+              "assistant": 7,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:16:36.091Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:16:49.636Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Erc1Nq",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Erc1Nq\\bridge\\claude-runs\\claude_MU21LB40_D7B66194.json",
+          "sha256": "e1c0b40371e2e6420f851d559411b1ba3ac4d80117267370759cc0f4fe8c7089",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU21LB40_D7B66194",
+            "missionId": "MIS_MU21KOYV",
+            "stdout": {
+              "chunks": 6406,
+              "bytes": 1632680,
+              "firstAt": "2026-09-15T02:18:08.456Z",
+              "lastAt": "2026-09-15T02:18:56.855Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 8115,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:18:44.407Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:18:57.417Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Erc1Nq\\bridge\\claude-runs\\claude_MU21NNCA_D1B537CA.json",
+          "sha256": "2d8a381a449e7f0a073444d3433033953830a7ae31cc8352119ec5891b20a4b2",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU21NNCA_D1B537CA",
+            "missionId": "MIS_MU21KOYV",
+            "stdout": {
+              "chunks": 20049,
+              "bytes": 4924145,
+              "firstAt": "2026-09-15T02:19:57.455Z",
+              "lastAt": "2026-09-15T02:22:08.263Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 24511,
+              "assistant": 7,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:21:53.246Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:22:08.819Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-oQEe6L",
+      "modelRuns": 2,
+      "queueTasks": 3,
+      "allReleased": true,
+      "workflowWritesAfterStart": 0,
+      "diagnostics": [
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-oQEe6L\\bridge\\claude-runs\\claude_MU21S75N_65EDB267.json",
+          "sha256": "180aac561aff525b38fd87eef5bd82210485b9fd24aab8aafb02823f3488cbb8",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU21S75N_65EDB267",
+            "missionId": "MIS_MU21RLYX",
+            "stdout": {
+              "chunks": 3637,
+              "bytes": 979496,
+              "firstAt": "2026-09-15T02:23:30.125Z",
+              "lastAt": "2026-09-15T02:24:05.475Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 4819,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:23:49.102Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:24:06.033Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        },
+        {
+          "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-oQEe6L\\bridge\\claude-runs\\claude_MU21UDX7_84389526.json",
+          "sha256": "4cc5b5916cbb3f231511929961a0de3f36a3a4a374b13832c1d3e805b2779445",
+          "status": "completed",
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU21UDX7_84389526",
+            "missionId": "MIS_MU21RLYX",
+            "stdout": {
+              "chunks": 14587,
+              "bytes": 3662928,
+              "firstAt": "2026-09-15T02:25:12.163Z",
+              "lastAt": "2026-09-15T02:26:50.620Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 18333,
+              "assistant": 6,
+              "result": 1,
+              "other": 2,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": "2026-09-15T02:26:18.150Z",
+            "cancellation": null,
+            "close": {
+              "at": "2026-09-15T02:26:51.400Z",
+              "exitCode": 0,
+              "signal": null
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

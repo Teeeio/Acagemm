@@ -1,0 +1,21 @@
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":0,\"total\":20,\"message\":\"invocation 1/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":1,\"total\":20,\"message\":\"invocation 2/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":2,\"total\":20,\"message\":\"invocation 3/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":3,\"total\":20,\"message\":\"invocation 4/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":4,\"total\":20,\"message\":\"invocation 5/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":5,\"total\":20,\"message\":\"invocation 6/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":6,\"total\":20,\"message\":\"invocation 7/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":7,\"total\":20,\"message\":\"invocation 8/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":8,\"total\":20,\"message\":\"invocation 9/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":9,\"total\":20,\"message\":\"invocation 10/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":10,\"total\":20,\"message\":\"invocation 11/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":11,\"total\":20,\"message\":\"invocation 12/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":12,\"total\":20,\"message\":\"invocation 13/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":13,\"total\":20,\"message\":\"invocation 14/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":14,\"total\":20,\"message\":\"invocation 15/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":15,\"total\":20,\"message\":\"invocation 16/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":16,\"total\":20,\"message\":\"invocation 17/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":17,\"total\":20,\"message\":\"invocation 18/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":18,\"total\":20,\"message\":\"invocation 19/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":19,\"total\":20,\"message\":\"invocation 20/20 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"finish\",\"completed\":20,\"total\":20,\"message\":\"batch passed\"}"}

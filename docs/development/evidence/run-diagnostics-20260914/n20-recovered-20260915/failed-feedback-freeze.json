@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "operator-studio.failed-feedback-freeze-reconciliation/v1",
+  "mode": "read-only-retained-originals",
+  "strictImmediateAudit": {
+    "path": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\n20-recovered-failed-feedback.json",
+    "sha256": "ec12e00ef70dbc9324348430736ad37937551c1f6a9406fcf7a817ed30181bd6",
+    "passed": false
+  },
+  "contract": {
+    "path": "client-runtime/application/round-experience-service.md",
+    "sha256": "c4d0524cbeea71f0da91ae207721a5e5b8fa1182793f5512652542ae77ea5511",
+    "rule": "同轮恢复不重查、不刷新清单。不同轮才取得新快照。"
+  },
+  "rows": [
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-455pRN",
+      "taskId": "queue_27C62DA77B064D5D",
+      "immediateAuditPassed": false,
+      "immediateAuditIssues": [
+        "failed experience selected",
+        "complete failed experience in prompt"
+      ],
+      "sourceRunId": "claude_MU1YRCTN_B0593B5D",
+      "recoveryRunId": "claude_MU1YUJMG_CC28A87C",
+      "sameRoundChecks": {
+        "sameLogicalRound": true,
+        "differentRun": true,
+        "sameFrozenSelection": true,
+        "sameExperienceBytes": true,
+        "recordWrittenAfterSourcePromptBeforeRecovery": true,
+        "bothPromptDigestsValid": true,
+        "otherImmediateChecksPassed": true
+      },
+      "newLogicalRound": {
+        "status": "not_observed",
+        "reason": "No later new logical round exists in these retained originals."
+      },
+      "contractConformant": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Nxr7Yv",
+      "taskId": "queue_0F42E4CBEC0047B1",
+      "immediateAuditPassed": false,
+      "immediateAuditIssues": [
+        "failed experience selected",
+        "complete failed experience in prompt"
+      ],
+      "sourceRunId": "claude_MU1ZMZ11_0538C4E0",
+      "recoveryRunId": "claude_MU1ZPL6Y_C18CECDC",
+      "sameRoundChecks": {
+        "sameLogicalRound": true,
+        "differentRun": true,
+        "sameFrozenSelection": true,
+        "sameExperienceBytes": true,
+        "recordWrittenAfterSourcePromptBeforeRecovery": true,
+        "bothPromptDigestsValid": true,
+        "otherImmediateChecksPassed": true
+      },
+      "newLogicalRound": {
+        "status": "observed",
+        "runId": "claude_MU1ZWEK5_BB751317",
+        "roundId": "MIS_MU1ZMD3E:round:4",
+        "checks": {
+          "promptDigestValid": true,
+          "selectedExactIdentity": true,
+          "fullContentExact": true,
+          "versionAndContextExact": true,
+          "newSnapshot": true
+        }
+      },
+      "contractConformant": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_271aad43764f461faa63c361ad468204\\scratch\\real-runs\\shared-gpu-Nxr7Yv",
+      "taskId": "queue_C7E7D9877C374BBF",
+      "immediateAuditPassed": false,
+      "immediateAuditIssues": [
+        "failed experience selected",
+        "complete failed experience in prompt"
+      ],
+      "sourceRunId": "claude_MU1ZPL6Y_C18CECDC",
+      "recoveryRunId": "claude_MU1ZRRT0_E73C983D",
+      "sameRoundChecks": {
+        "sameLogicalRound": true,
+        "differentRun": true,
+        "sameFrozenSelection": true,
+        "sameExperienceBytes": true,
+        "recordWrittenAfterSourcePromptBeforeRecovery": true,
+        "bothPromptDigestsValid": true,
+        "otherImmediateChecksPassed": true
+      },
+      "newLogicalRound": {
+        "status": "observed",
+        "runId": "claude_MU1ZWEK5_BB751317",
+        "roundId": "MIS_MU1ZMD3E:round:4",
+        "checks": {
+          "promptDigestValid": true,
+          "selectedExactIdentity": true,
+          "fullContentExact": true,
+          "versionAndContextExact": true,
+          "newSnapshot": true
+        }
+      },
+      "contractConformant": true
+    }
+  ],
+  "eligibleFailedCandidates": 3,
+  "contractConformant": true,
+  "newLogicalRoundObservedCount": 2,
+  "interpretation": "This separately checks existing freeze semantics. It does not change or override the immediate-injection audit failure, full E2E verifier, or N20 gate. No failed candidate means not observed, never proof."
+}

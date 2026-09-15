@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "operator-studio.shared-gpu-regression-batch/v1",
+  "mode": "smoke",
+  "families": [
+    "affine"
+  ],
+  "requestedRuns": 1,
+  "startedAt": "2026-09-15T00:39:40.722Z",
+  "finishedAt": "2026-09-15T00:44:54.433Z",
+  "status": "passed",
+  "invocations": [
+    {
+      "index": 0,
+      "status": "completed",
+      "startedAt": "2026-09-15T00:39:40.735Z",
+      "finishedAt": "2026-09-15T00:44:54.407Z",
+      "exitCode": 0,
+      "signal": null,
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_560416040a7249a9ab618f19dcc73621\\scratch\\real-runs\\shared-gpu-cMvSAe",
+      "logPath": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_560416040a7249a9ab618f19dcc73621\\scratch\\real-runs\\logs\\run-01.log",
+      "outcome": "full_success",
+      "comparable": true,
+      "configFingerprint": "sha256:fe436e13e464411c9f80c82b290f4ebe1c7c65abd6b5df2793e1d649d4eb5460",
+      "issues": []
+    }
+  ],
+  "stopReason": null,
+  "strictN20Passed": false
+}

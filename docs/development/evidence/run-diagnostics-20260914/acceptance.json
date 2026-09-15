@@ -1,6 +1,6 @@
 {
   "schemaVersion": "operator-studio.run-diagnostics-acceptance/v1",
-  "updatedAt": "2026-09-14T20:20:29.091478+00:00",
+  "updatedAt": "2026-09-15T02:33:53.208541+00:00",
   "implementation": {
     "state": "integrated",
     "sources": [
@@ -80,15 +80,17 @@
   "issues": [
     {
       "id": "diagnostics",
-      "fact": "新增诊断已在4次真实Acagemm运行agent调用中核验；3次主调用实际触发budget_exceeded，调研调用explicit_cancel；均只有init，无assistant，close与身份记录完整。",
+      "fact": "恢复后affine smoke 2/2及新N20 44/44实际模型观测成功；N20全部diagnostics身份/计数/观测时间/close原件核验通过。旧无响应与取消记录保留。",
       "inference": null,
-      "unknown": "CLI/代理/上游无回答的具体根因仍未知。",
+      "unknown": "旧CLI/代理/上游无回答的精确根因仍未证明；当前已恢复。",
       "evidence": [
         "task_4c947d98ea4a4037800012a270d08060",
         "task_508330ccd8084fe687ade96396fa1b6f",
-        "task_3d6075d0a32643eaa82ab91c36440d6b"
+        "task_3d6075d0a32643eaa82ab91c36440d6b",
+        "smoke-recovered-20260915/reader.json",
+        "n20-recovered-20260915/diagnostics.json"
       ],
-      "next_action": "不新增诊断功能；先恢复模型渠道，再按既有验收路径继续。"
+      "next_action": "无需新增诊断功能。"
     },
     {
       "id": "integration-blocking",
@@ -145,13 +147,15 @@
     },
     {
       "id": "strict-n20",
-      "fact": "旧83b91d6批次20/20功能成功，19可比、1模型unknown，严格N20未通过。",
+      "fact": "新21c6d78严格N20已通过并验收集成：20/20功能成功且可比、44/44实际模型观测；旧83b91d6的19可比+1unknown失败历史保留。",
       "inference": null,
-      "unknown": "新源码稳定性尚待真实两轮和新冻结批次。",
+      "unknown": null,
       "evidence": [
-        "../live-regression-83b91d6-20260914/README.md"
+        "../live-regression-83b91d6-20260914/README.md",
+        "n20-recovered-20260915/batch.json",
+        "n20-recovered-20260915/reader.json"
       ],
-      "next_action": "新两轮失败且渠道探针无回答，当前不启动新20；用户授权已保存，不重复询问。"
+      "next_action": "已完成affine N20；新版本额外reduction/normalization覆盖因宿主拒绝尚未启动，等待该独立范围明确批准。"
     }
   ],
   "liveTwoRound": {
@@ -564,10 +568,47 @@
     "reportProvenance": "Failed dispatch task remains failed; these files are Root copies of original evidence, not accepted/integrated success artifacts"
   },
   "newN20": {
-    "state": "not_run",
-    "authorization": "already_allowed",
-    "reason": "new smoke still failed with5/5 unknown,0candidates; bounded loopback probe also timed out",
-    "nextAction": "compare with the user-verified working Claude CLI invocation before more model/GPU runs"
+    "state": "passed",
+    "taskId": "task_65736e77aae34934b6698aa9adea074d",
+    "attemptId": "run_271aad43764f461faa63c361ad468204",
+    "artifactDigest": "81d91f91280226bfcca127d6e61d1bce076940ab3db2f0e6f8ea39b8e4eab692",
+    "platformState": "integrated",
+    "exitCode": 0,
+    "elapsedSeconds": 5728.109,
+    "originalDenominator": 20,
+    "fullSuccess": 20,
+    "independentlyVerified": 20,
+    "comparable": 20,
+    "strictN20Passed": true,
+    "configFingerprint": "sha256:fe436e13e464411c9f80c82b290f4ebe1c7c65abd6b5df2793e1d649d4eb5460",
+    "actualModel": "deepseek-v4-flash",
+    "requiredModelRuns": 44,
+    "observedModelRuns": 44,
+    "distinctCompletedCandidates": 40,
+    "queueOutcomes": {
+      "completed": 60,
+      "failed": 3
+    },
+    "allQueueTasksTerminalAndReleased": true,
+    "workflowWritesAfterStart": 0,
+    "archive": {
+      "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\n20-recovered-originals.zip",
+      "sha256": "ccd79f9354f9f82bde76b4d8242b56b72505568c27be360b38d0fa8be2f92aca",
+      "verified": true,
+      "files": 4493,
+      "originalBytes": 75748429
+    },
+    "independentReader": "n20-recovered-20260915/reader.json",
+    "diagnostics": "n20-recovered-20260915/diagnostics.json",
+    "failedFeedback": {
+      "contractConformant": 3,
+      "newRoundInjectionObserved": 2,
+      "noLaterRound": 1,
+      "immediateInjectionSupplementalExitCode": 1,
+      "frozenContractReconciliationExitCode": 0,
+      "explanation": "Same logical round retains frozen experience selection; two failures are observed injected on the subsequent new logical round, one has no later round. The supplemental immediate-injection audit is preserved, not rewritten as passed."
+    },
+    "scope": "Frozen21c6d78/local-shared-gpu/affine/two-candidate E2E; smoke and historical batches excluded; not a universal stability or publishable-hardware claim."
   },
   "sourceCommit": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948",
   "authorization": {
@@ -977,5 +1018,51 @@
       "provenance": "Root copies of failed originals; failed platform task is not accepted/integrated as success"
     }
   ],
-  "latestLiveAttempt": "liveRetries.after-user-reported-proxy-repair"
+  "latestLiveAttempt": "newN20",
+  "liveRecovery": {
+    "state": "passed",
+    "taskId": "task_aae9d7f36e174c1bb6d88d4770bdf060",
+    "attemptId": "run_560416040a7249a9ab618f19dcc73621",
+    "artifactDigest": "73b437fdd7eb03cb6794d0eb96b61954835d62e2b6ab2e06dc0584de16d85162",
+    "exitCode": 0,
+    "elapsedSeconds": 314.547,
+    "actualModelsObserved": 2,
+    "completedCandidates": 2,
+    "independentReader": "smoke-recovered-20260915/reader.json",
+    "archive": {
+      "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\smoke-recovered-originals.zip",
+      "sha256": "f519a0ccc79bdcb274022c0a8de052fb156c5deb1a8ec3e20d4098d01ebca045",
+      "verified": true,
+      "files": 219,
+      "originalBytes": 3834792
+    },
+    "headlessProbe": {
+      "taskId": "task_8fc8b18e1e484a64a55f011cd085807d",
+      "exitCode": 0,
+      "elapsedSeconds": 3.109,
+      "model": "deepseek-v4-flash",
+      "response": "OK"
+    },
+    "interpretation": "Current headless CLI and real GPU chain recovered without source/global configuration edits; earlier proxy/CLI failure root cause remains unproven."
+  },
+  "newN20History": [
+    {
+      "state": "not_run",
+      "authorization": "already_allowed",
+      "reason": "new smoke still failed with5/5 unknown,0candidates; bounded loopback probe also timed out",
+      "nextAction": "compare with the user-verified working Claude CLI invocation before more model/GPU runs"
+    }
+  ],
+  "additionalCoverage": {
+    "state": "not_started",
+    "families": [
+      "reduction",
+      "normalization"
+    ],
+    "requestId": "21c6d78-coverage-recovered-20260915",
+    "hostResult": "auto_review_rejected",
+    "reason": "This launches additional reduction/normalization GPU runs that send project data to DeepSeek, but the trusted authorization explicitly covered affine and N20 only, not this separate coverage scope.",
+    "nextAction": "Ask explicit approval for this separate data-sending coverage scope; do not retry or bypass.",
+    "previousCoverage": "83b91d6 historical coverage remains valid for that earlier source only."
+  }
 }
