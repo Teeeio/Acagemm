@@ -1,5 +1,9 @@
+import { createHash } from 'node:crypto';
 import { appendExperience, emptyExperienceStore, experienceError, formatExperienceContext, validateExperienceContext, EXPERIENCE_LIMITS, EXPERIENCE_SELECTION_POLICY_VERSION, EXPERIENCE_SELECTION_SCHEMA_VERSION } from '../experience-contract.mjs';
-import { isBackendTargetName } from '../operator-test-evidence.mjs';
+import { isBackendTargetName, isInfrastructureTestFailure } from '../operator-test-evidence.mjs';
+// 方案 D 的冻结策略版本来自纯选择模块：静态导入保证未组合/缺失时直接失败，
+// 依赖该轮知识的新 Agent 不会被静默放行（不设按需加载或空知识回退）。
+import { WIKI_SELECTION_POLICY_VERSION } from '../experience-selection.mjs';
 
 const requiredEvidence = ['missionId', 'candidateId', 'runId', 'patchDigest', 'packageDigest', 'environmentDigest', 'acceptanceDigest', 'hardware', 'executionMode', 'outcome'];
 const preparingRounds = new WeakMap();
@@ -129,7 +133,315 @@ const auditSelection = (raw, context, identity) => {
       && item?.source === context.items[index].source && item?.useAs === context.items[index].useAs);
   if (!aligned) throw fail('ROUND_EXPERIENCE_SELECTION_CONFLICT', 'Experience selection does not match its frozen context');
   if (raw.auditSource === 'context-derived') return { ...structuredClone(raw), ...selectionEvidence(context, identity) };
-  return { ...structuredClone(raw), ...selectionEvidence(context, identity), requestedLimit: raw.requestedLimit, exclusionReasonsRecorded: true, auditSource: 'retrieve-with-selection' };
+  // 审计保留检索端口实际使用的策略版本：D 选择不得被旧 retrieve-only 版本号覆盖。
+  const policyVersion = typeof raw.policyVersion === 'string' && raw.policyVersion ? raw.policyVersion : EXPERIENCE_SELECTION_POLICY_VERSION;
+  return { ...structuredClone(raw), ...selectionEvidence(context, identity), policyVersion, requestedLimit: raw.requestedLimit, exclusionReasonsRecorded: true, auditSource: 'retrieve-with-selection' };
+};
+
+// ---------------------------------------------------------------------------
+// prepare 的选择输入派生（方案 D）
+//
+// 只读既有、已提交的同 Mission 事实（roundFacts / runHistory / benchmark / 冻结
+// context），缺失的维度保持空。绝不把自由文本变成硬件能力，不猜测量瓶颈，不为
+// 未知字段编造 ID/版本绑定；派生的症状/技术词表是固定且可审计的假设。
+// ---------------------------------------------------------------------------
+const SELECTION_FEATURE_LIMIT = 8;
+const SELECTION_FEATURE_PER_KIND = 2;
+const SELECTION_FEATURE_VALUE = 160;
+const SELECTION_FEATURE_BASIS = 1000;
+const SELECTION_PREFERRED_LIMIT = 20;
+const SELECTION_REPEATED_LIMIT = 20;
+const SELECTION_TARGET_LIMIT = 16;
+const SELECTION_FACTS_LIMIT = 20;
+// 已提交（终态）benchmark 沿用既有生产状态集合（同 collect 与 operator-test-evidence）：
+// running/idle/queued 的执行可能已缓存 experienceEvidence，但尚未结算，不能当事实或重复证据。
+const TERMINAL_BENCHMARK_STATUSES = ['complete', 'failed', 'cancelled'];
+
+const selectionText = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+const selectionRecord = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : null);
+// 稳定 JSON（递归键排序）保证同一尝试身份不因对象构造顺序不同而得到不同摘要。
+const stableSelectionValue = (value) => JSON.stringify(value, (_key, item) => (item && typeof item === 'object' && !Array.isArray(item)
+  ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]]))
+  : item));
+const selectionDigest = (value) => createHash('sha256').update(stableSelectionValue(value)).digest('hex');
+const selectionList = (value, max = SELECTION_TARGET_LIMIT) => {
+  const items = Array.isArray(value) ? value : value == null ? [] : [value];
+  const result = [];
+  for (const item of items) {
+    const text = selectionText(item, SELECTION_FEATURE_VALUE).toLowerCase();
+    if (!text || result.includes(text)) continue;
+    result.push(text);
+    if (result.length >= max) break;
+  }
+  return result;
+};
+// 固定词表：只把 Mission 自己写明的词映射为可匹配 wiki topic 的假设标签，不带数值
+// 置信度，不推断瓶颈。候选文件名/产物路径不是结构证据，指标名或耗时数值也不是症状
+// ——它们只是测量名，不能当作已观测瓶颈。
+const SYMPTOM_HYPOTHESES = [
+  { pattern: /tail|尾块|余数|partial\s+block/iu, value: 'tail/partial-block handling' },
+  { pattern: /unalign|misalign|非对齐|不对齐/iu, value: 'unaligned access' },
+  { pattern: /small[-\s]?batch|小\s*batch|小批量/iu, value: 'small-batch workload' },
+  { pattern: /memory[-\s]?bound|访存|带宽受限/iu, value: 'memory-bound workload' },
+];
+const TECHNIQUE_HYPOTHESES = [
+  { pattern: /vectoriz|向量化/iu, value: 'vectorization' },
+  { pattern: /fusion|fuse|融合/iu, value: 'operator fusion' },
+  { pattern: /tiling|tile|分块/iu, value: 'tiling' },
+  { pattern: /pipelin|流水线/iu, value: 'software pipelining' },
+];
+// 失败词表同样固定：把已提交失败记录映射为可匹配 wiki topic 的算子级类型，不猜根因。
+const FAILURE_LESSONS = [
+  { pattern: /compil|nvcc|toolchain|编译/iu, value: 'compiler/toolchain failure' },
+  { pattern: /correct|accuracy|mismatch|assert|数值|精度|正确性/iu, value: 'correctness failure' },
+  { pattern: /operator|kernel|launch|算子/iu, value: 'operator/kernel failure' },
+];
+const featureCollector = () => {
+  const features = [];
+  const counts = new Map();
+  return {
+    add(kind, value, basis) {
+      const text = selectionText(value, SELECTION_FEATURE_VALUE);
+      const why = selectionText(basis, SELECTION_FEATURE_BASIS);
+      if (!text || !why || features.length >= SELECTION_FEATURE_LIMIT) return;
+      if ((counts.get(kind) || 0) >= SELECTION_FEATURE_PER_KIND) return;
+      if (features.some((item) => item.kind === kind && item.value === text)) return;
+      counts.set(kind, (counts.get(kind) || 0) + 1);
+      features.push({ kind, value: text, basis: why });
+    },
+    values: () => features,
+  };
+};
+// 已提交的同 Mission/同 Project 轮次事实：归档 runHistory（新→旧）与
+// iterationStats.roundFacts 一起按各自 recordedAt 排序，旧快照不得遮蔽更新的归档事实。
+// 只有带真实 run 身份、Mission/Project 都一致的事实才参与派生；未提交对象、别 Mission
+// 或别 Project 的 benchmark 一律不造事实。
+const factsRecency = (facts) => selectionText(facts?.recordedAt, 40);
+const committedFacts = (state, mission) => {
+  const projectId = selectionText(mission?.projectId, 160);
+  const missionId = selectionText(mission?.id, 160);
+  // 归属未知就连事实都读不出来：绝不按「另一方一致」互补所有权，也不拿别 Project 的
+  // 事实凑数（missing owner 与矛盾同样排除）。
+  if (!projectId || !missionId) return [];
+  const seen = new Set();
+  const collected = [];
+  const push = (value) => {
+    const facts = selectionRecord(value);
+    if (!facts) return;
+    // 只有当投递目标与来源 run 都明确属于同一 Mission 时才是本轮可用的事实。
+    if (selectionText(facts.previous?.missionId, 160) !== missionId) return;
+    if (selectionText(facts.target?.missionId, 160) !== missionId) return;
+    // 两个项目归属字段都必须已知且都等于本 Mission 的 Project；任一缺失或矛盾即排除。
+    const previousProject = selectionText(facts.previous?.projectId, 160);
+    const targetProject = selectionText(facts.target?.projectId, 160);
+    if (!previousProject || !targetProject || previousProject !== projectId || targetProject !== projectId) return;
+    const sourceRunId = selectionText(facts.previous?.runId, 160);
+    if (!sourceRunId) return;
+    const identity = `${factsRecency(facts)}|${sourceRunId}`;
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    collected.push(facts);
+  };
+  const history = Array.isArray(state?.runHistory) ? state.runHistory.slice(0, SELECTION_FACTS_LIMIT) : [];
+  for (const round of history) push(round?.roundFacts);
+  push(state?.iterationStats?.roundFacts);
+  collected.sort((left, right) => factsRecency(right).localeCompare(factsRecency(left)));
+  return collected;
+};
+// 冻结 context 是本轮之前已提交的投影；其中执行记录带完整 evidence，可逐条重算尝试身份。
+const frozenExecutionItems = (state) => {
+  const items = selectionRecord(state?.iterationStats?.roundExperience)?.items;
+  return (Array.isArray(items) ? items : []).filter((item) => item?.source === 'execution'
+    && selectionText(item?.id, 160) && Number.isInteger(item?.version) && item.version >= 1);
+};
+const goalSelectionText = (mission) => [mission.goal, mission.title].filter((item) => typeof item === 'string' && item.trim()).join('\n');
+const vocabularyMatches = (collector, text, kind, vocabulary, basisFor) => {
+  for (const entry of vocabulary) if (entry.pattern.test(text)) collector.add(kind, entry.value, basisFor(entry));
+};
+// 已提交事实里的失败类型：infrastructure/provider 失败必须先被识别，绝不能变成算子优化
+// 线索；正确性/编译/算子失败才映射为有据的失败特征。
+const failureFeatures = (collector, facts, describe) => {
+  const failure = selectionRecord(facts?.failure);
+  const correctness = selectionRecord(facts?.correctness);
+  const failed = correctness?.status === 'failed';
+  if (!failure && !failed) return;
+  // isInfrastructureTestFailure 只接受对象，缺记录时保持「不是基础设施失败」的保守判断。
+  const infrastructure = failure?.classification === 'infrastructure'
+    || (failure ? isInfrastructureTestFailure(failure) : false)
+    || (correctness ? isInfrastructureTestFailure(correctness) : false);
+  if (infrastructure) return;
+  const detail = failed ? selectionText(correctness.failedCaseCategory || correctness.failedCaseName || correctness.failedCase || correctness.error, 160) : '';
+  // classification 只是粗粒度归类（operator/infrastructure），本身不是症状词，不参与词表匹配。
+  const text = [
+    selectionText(failure?.code, 160),
+    selectionText(failure?.message, 240),
+    selectionText(failure?.source, 80),
+    detail,
+  ].filter(Boolean).join(' ');
+  if (!text) return;
+  const code = selectionText(failure?.code, 120) || detail || 'correctness';
+  const matched = FAILURE_LESSONS.filter((entry) => entry.pattern.test(text));
+  if (matched.length) {
+    for (const entry of matched) collector.add('failure', entry.value, describe(code));
+    return;
+  }
+  const fallback = selectionText(failure?.code || detail, SELECTION_FEATURE_VALUE);
+  if (fallback) collector.add('failure', fallback, describe(code));
+};
+const selectionFeatures = (state, mission) => {
+  const collector = featureCollector();
+  // 结构线索只有 Mission 显式声明的算子身份：候选文件名/产物路径不是结构证据。
+  const operator = selectionText(mission.operatorProfile?.operator || mission.operator, SELECTION_FEATURE_VALUE);
+  if (operator) collector.add('structure', operator, 'explicit Mission operator identity (never inferred from file names, metrics or backend names)');
+  // 症状/技术线索只来自 Mission 明确写下的目标语义，经固定词表映射成可匹配 wiki topic 的假设。
+  const goal = goalSelectionText(mission);
+  if (goal) {
+    vocabularyMatches(collector, goal, 'symptom', SYMPTOM_HYPOTHESES,
+      (entry) => `Mission goal/title states "${entry.value}" as a symptom hypothesis, never as a measured bottleneck`);
+    vocabularyMatches(collector, goal, 'technique', TECHNIQUE_HYPOTHESES,
+      (entry) => `Mission goal/title names "${entry.value}" as an intended technique`);
+  }
+  // 已提交的同 Mission 事实（最新在前）补充失败类型与上一轮实际尝试过的改动方向。
+  const factsList = committedFacts(state, mission);
+  for (const [index, facts] of factsList.entries()) {
+    const age = index === 0 ? 'latest committed round' : `committed round #${index + 1}`;
+    failureFeatures(collector, facts, (code) => `${age} facts report failure "${code}" as a correctness/compiler/operator failure (infrastructure failures are excluded)`);
+    const attempted = [facts.candidate?.title, facts.candidate?.direction].filter((item) => typeof item === 'string' && item.trim()).join('\n');
+    if (attempted) vocabularyMatches(collector, attempted, 'technique', TECHNIQUE_HYPOTHESES,
+      (entry) => `${age} facts describe "${entry.value}" as the already attempted change`);
+  }
+  return collector.values();
+};
+// capabilities/software 只在 resolvedTarget 显式为同一 Mission 提供时读取；否则保持空数组。
+const selectionTarget = (state, mission, scope) => {
+  const bound = selectionRecord(state?.iterationStats?.resolvedTarget);
+  const sameMission = bound && selectionText(bound.missionId, 160) === mission.id;
+  return {
+    hardware: selectionList(scope?.hardware),
+    architecture: selectionList(scope?.architecture),
+    capabilities: sameMission ? selectionList(bound.capabilities) : [],
+    software: sameMission ? selectionList(bound.software) : [],
+  };
+};
+// 尝试身份 = 修改内容（patch/package 摘要）+ 参数与环境（environment 摘要）+ 验收条件
+// （acceptance 摘要）+ 实际执行条件（hardware/architecture/executionMode/operation）。
+// 刻意不含 candidateId/runId：同一修改在全新 candidate 身份下重提也必须能判定为重复；
+// 但完整来源身份（mission/run/candidate）必须存在，否则不构成可归属的尝试。缺任一必需
+// 摘要、执行条件或来源身份即不声明重复（保留 unknown），绝不用猜测补齐。
+const ATTEMPT_DIGEST_KEYS = ['patchDigest', 'packageDigest', 'environmentDigest', 'acceptanceDigest'];
+const attemptBinding = (value) => {
+  const evidence = selectionRecord(value);
+  if (!evidence) return null;
+  const missionId = selectionText(evidence.missionId, 160);
+  const runId = selectionText(evidence.runId, 160);
+  const candidateId = selectionText(evidence.candidateId, 160);
+  if (!missionId || !runId || !candidateId) return null;
+  const digests = ATTEMPT_DIGEST_KEYS.map((key) => {
+    const digest = selectionText(evidence[key], 80).toLowerCase().replace(/^sha256:/u, '');
+    return /^[a-f0-9]{64}$/u.test(digest) ? digest : '';
+  });
+  const hardware = selectionText(evidence.hardware, SELECTION_FEATURE_VALUE).toLowerCase();
+  const executionMode = selectionText(evidence.executionMode, SELECTION_FEATURE_VALUE).toLowerCase();
+  const operation = selectionText(evidence.operation, SELECTION_FEATURE_VALUE).toLowerCase();
+  if (digests.some((item) => !item) || !hardware || !executionMode || !operation) return null;
+  const identity = {
+    patchDigest: digests[0],
+    packageDigest: digests[1],
+    environmentDigest: digests[2],
+    acceptanceDigest: digests[3],
+    hardware,
+    architecture: selectionText(evidence.architecture, SELECTION_FEATURE_VALUE).toLowerCase(),
+    executionMode,
+    operation,
+  };
+  return { key: 'attempt_' + selectionDigest(identity), missionId, runId, candidateId, identity };
+};
+// 当前尝试只认绑定本 Mission 且已结算（终态）的执行证据：running/idle/queued 的
+// benchmark 可能已缓存 experienceEvidence，但尚未提交，不得据此声明重复。
+const currentAttempt = (state, mission) => {
+  const benchmark = selectionRecord(state?.benchmark);
+  if (!benchmark || !TERMINAL_BENCHMARK_STATUSES.includes(benchmark.status)) return null;
+  const binding = attemptBinding(selectionRecord(benchmark.result)?.experienceEvidence);
+  return binding && binding.missionId === mission.id ? binding : null;
+};
+// 归档尝试同样只看终态 benchmark：归档里的 running 条目只是未结算快照。
+const archivedAttempts = (state, mission) => {
+  const history = Array.isArray(state?.runHistory) ? state.runHistory.slice(0, SELECTION_FACTS_LIMIT) : [];
+  const projectId = selectionText(mission?.projectId, 160);
+  const bindings = [];
+  for (const round of history) {
+    const benchmark = selectionRecord(round?.benchmark);
+    if (!benchmark || !TERMINAL_BENCHMARK_STATUSES.includes(benchmark.status)) continue;
+    const binding = attemptBinding(selectionRecord(benchmark.result)?.experienceEvidence);
+    if (!binding || binding.missionId !== mission.id) continue;
+    // 归档事实已给出项目归属且与本 Mission 矛盾时排除；归属缺失不据此造事实。
+    const owner = selectionText(round?.roundFacts?.previous?.projectId, 160);
+    if (owner && projectId && owner !== projectId) continue;
+    bindings.push(binding);
+  }
+  return bindings;
+};
+// 只有同一「修改+参数+条件」在另一个 run 上真实发生过才算重复；本轮自己的归档条目不算。
+const repeatedAttempt = (state, mission) => {
+  const current = currentAttempt(state, mission);
+  if (!current) return null;
+  return archivedAttempts(state, mission).some((item) => item.key === current.key && item.runId !== current.runId) ? current : null;
+};
+// 只有能由完整证据逐条重算、确认是同一「修改+条件」且归属同一 Mission/Project 的经验
+// 记录才降权：别 Mission/别 Project 的同 digest 记录不能被降权。只有 id/version 的收集
+// 摘要不足以判定，一律不声明重复；绝不把同一个 key 套给所有收集记录，也不因一次重复
+// 封禁整类技术。
+const repeatedAttemptsFor = (state, mission, current) => {
+  if (!current) return [];
+  const projectId = selectionText(mission?.projectId, 160);
+  const attempts = [];
+  for (const item of frozenExecutionItems(state)) {
+    if (selectionText(item.evidence?.missionId, 160) !== mission.id) continue;
+    if (selectionText(item.projectId, 160) !== projectId) continue;
+    const binding = attemptBinding(item.evidence);
+    if (!binding || binding.key !== current.key) continue;
+    attempts.push({ id: item.id, version: item.version, attemptKey: current.key });
+    if (attempts.length >= SELECTION_REPEATED_LIMIT) break;
+  }
+  return attempts;
+};
+// preferred 只认能被既有证据绑定到本轮目标候选（上一失败候选/当前最佳/本轮执行候选）且
+// 归属同一 Mission/Project 的执行记录；真实候选身份取已提交事实的 candidate.id，历史兼容的
+// previous.candidateId 只在其缺失时回退（previous 未必是候选身份）。绑定不上就整体省略，
+// 不给全部收集记录套上同一个偏好。
+const preferredIdsFor = (state, mission, current, excluded) => {
+  const facts = committedFacts(state, mission)[0] || null;
+  const projectId = selectionText(mission?.projectId, 160);
+  const factsCandidateId = selectionText(facts?.candidate?.id, 160) || selectionText(facts?.previous?.candidateId, 160);
+  const best = selectionRecord(state?.currentBest);
+  const bound = new Set([
+    factsCandidateId,
+    selectionText(best?.candidateId, 160),
+    selectionText(current?.candidateId, 160),
+  ].filter(Boolean));
+  if (!bound.size) return [];
+  const preferred = [];
+  for (const item of frozenExecutionItems(state)) {
+    if (excluded.has(item.id) || preferred.includes(item.id)) continue;
+    if (selectionText(item.evidence?.missionId, 160) !== mission.id) continue;
+    if (selectionText(item.projectId, 160) !== projectId) continue;
+    if (!bound.has(selectionText(item.evidence?.candidateId, 160))) continue;
+    preferred.push(item.id);
+    if (preferred.length >= SELECTION_PREFERRED_LIMIT) break;
+  }
+  return preferred;
+};
+const selectionQueryFor = (state, mission, scope) => {
+  const repeat = repeatedAttempt(state, mission);
+  const repeatedAttempts = repeatedAttemptsFor(state, mission, repeat);
+  const preferredIds = preferredIdsFor(state, mission, repeat, new Set(repeatedAttempts.map((item) => item.id)));
+  return {
+    policyVersion: WIKI_SELECTION_POLICY_VERSION,
+    features: selectionFeatures(state, mission),
+    target: selectionTarget(state, mission, scope),
+    ...(preferredIds.length ? { preferredIds } : {}),
+    ...(repeatedAttempts.length ? { repeatedAttempts } : {}),
+  };
 };
 
 export const createRoundExperienceService = ({ experienceService, resolveAccess, verifyObservationEvidence, timers, timeoutMs = 3000 } = {}) => {
@@ -198,6 +510,9 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
     const operation = (async () => {
       try {
         const query = { ...access, missionId: mission.id, roundId, scope: resolvedScope };
+        // 真实 retrieveWithSelection 端口带方案 D 选择输入；旧 retrieve-only 注入
+        // 不传任何新参数，保持既有顺序与行为。
+        if (typeof experienceService.retrieveWithSelection === 'function') query.selection = selectionQueryFor(state, mission, resolvedScope);
         // 一次仓库读取同时取得冻结内容和选注清单；旧 retrieve-only 注入按原端口运行。
         const retrieved = await bounded('retrieve', async (signal) => {
           if (typeof experienceService.retrieveWithSelection === 'function') {

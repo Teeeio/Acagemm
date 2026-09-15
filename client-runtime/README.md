@@ -386,9 +386,11 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 | [execution-package-store](execution-package-store.md) | assemble / validate / prepare / reconcilePreparation / verifyAdmission；私有 CAS 与可信准入；`contentDigest` 仅为指向 contract canonical 函数的同绑定兼容导出 |
 | [execution-package-import](execution-package-import.md) | 将目录或 tar/tar.gz/zip 归档读取为候选、依赖、独立验收层；拒绝链接、设备、越界路径后交给 package store 准入 |
 | [operator-test-tool](operator-test-tool.md) | capabilities / prepare / submit / read-only get / cancel / findByRequestId；仅调用一个队列 |
-| [experience-contract](experience-contract.md) | 版本、范围、来源、证据与非发布型开发经验规则 |
+| [experience-contract](experience-contract.md) | 版本、范围、来源、证据与非发布型开发经验规则；可选版本绑定的选择元数据与上下文硬上限 |
+| [experience-selection](experience-selection.md) | 纯规范化与确定性排序：`normalizeSelectionMetadata`、`rankExperienceCandidates`、`WIKI_SELECTION_POLICY_VERSION`、配额与排除原因 |
+| [kernel-wiki-import](kernel-wiki-import.md) | 纯解析/构建/原子导入：`parseKernelWikiPage`、`buildKernelWikiSnapshot`、`applyKernelWikiSnapshot`；来源固定为 Git blob，绝不解释上游性能声明 |
 | [experience-repository](experience-repository.md) | 私有原子存储、同进程事务、不可变历史 |
-| [experience-service](application/experience-service.md) | 注入端口的人工经验、观察记录、冻结检索上下文与审计选择清单 |
+| [experience-service](application/experience-service.md) | 注入端口的人工经验、观察记录、KernelWiki 快照导入、冻结检索上下文与审计选择清单 |
 | [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；保存同轮选择 sidecar；完整可信凭据才记录执行观察 |
 | [round-budget-contract](round-budget-contract.md) | 主 Agent、测试与同轮重试共享 15 分钟墙钟；暂停/恢复不刷新 |
 | [cancellation-contract](cancellation-contract.md) | 资源释放真相、只读 barrier 与显式推进中的确认收敛 |

@@ -38,7 +38,7 @@
 | `operator-test-service.mjs` | Operator Test Queue queries and cancellation | task DTOs and queue path |
 | `execution-package-import-service.mjs` | source import and trusted preparation through injected ports | immutable manifest and admission DTO |
 | `mission-control-service.mjs` | Agent cancellation, human feedback, and Mission stop | persisted state and control result |
-| `experience-api-service.mjs` | Project-scoped human experience CRUD | versioned guidance DTOs and conflicts |
+| `experience-api-service.mjs` | Project-scoped human experience CRUD plus KernelWiki snapshot import (`{snapshot,author}` only, owning Project checked first) | versioned guidance DTOs, import result, and conflicts |
 | `round-experience-service.mjs` | Frozen per-round experience, selection-audit sidecar, and verified observations | frozen context, selection sidecar, and record status through injected ports |
 | `shared-gpu-experience-verifier.mjs` | Revalidate shared-GPU package receipts at the composition boundary, including the strict released failed-candidate correctness path (real shared-GPU environment/probe, queue payload target/build/adapter and whole result agreement) | trusted verified observation (success or bounded failed summary) or explicit skip |
 | `knowledge-service.mjs` | Knowledge draft editing, asset references, and retired manual publication | persisted state or governance response |
@@ -128,6 +128,11 @@ injected repository/clock/ID ports. Its public `retrieveWithSelection(query)`
 returns the frozen context plus the audited selection sidecar from one repository
 read; when only `retrieve` is supplied, round-experience-service derives an
 explicitly marked context-derived sidecar without changing the injected set.
+`importKernelWiki(snapshot, { projectId, author })` wraps the pure apply API in one
+repository transaction using the injected clock, so a KernelWiki snapshot is
+imported atomically through the same store; the HTTP route
+`POST /api/projects/:projectId/experiences/import-kernel-wiki` precedes the generic
+ID matcher and accepts only `{snapshot,author}` within the existing body-size bound.
 Production supplies it to
 [round-experience-service.mjs](round-experience-service.md) and the project-scoped
 human Experience API. Agent commands and automatic rounds persist one frozen

@@ -31,13 +31,25 @@ context 只存 `state.iterationStats.roundExperience`，利用既有 Mission 投
 
 同轮冻结的审计清单保存在 `state.iterationStats.roundExperienceSelection`（与 `roundExperience` 同 round 的 sidecar）：含选中/排除记录的 ID/version/source/reason、策略版本、repositoryRevision/contextId、`contextBytes` 与 `renderedBytes`（均按 UTF-8 `Buffer.byteLength` 实测）。内容和清单来自同一次仓库读取，严格核对 contextId/revision/scopeDigest、身份、选中记录的顺序/版本/来源；审计端口返回不一致时以 `ROUND_EXPERIENCE_SELECTION_CONFLICT` 阻止本轮准备，存储错误不吞掉。旧结构/旧 retrieve-only 注入仍可读，其清单标记 `auditSource:context-derived`、`exclusionReasonsRecorded:false`、原因 `frozen-context`，不编造排除原因。同轮恢复不重查、不刷新清单。
 
+存在真实 `retrieveWithSelection` 端口时，prepare 传 `query.selection={policyVersion,features,target,preferredIds?,repeatedAttempts?}`（方案 D 选择）：策略版本静态取自 [experience-selection](../experience-selection.md) 的冻结导出 `WIKI_SELECTION_POLICY_VERSION`，模块缺失即加载失败并阻止依赖该轮知识的新 Agent 启动，不静默退回无知识。
+
+`features` 至多 8 条、每类（structure/failure/symptom/technique）至多 2 条，0 条合法。来源只有两类：Mission 显式字段与已提交事实。structure 仅取 Mission 显式声明的算子身份；symptom/technique 由 Mission goal/title 原文经固定词表映射为可匹配 wiki topic 的假设；failure 与"上一轮已尝试的改动"由已提交同 Mission 事实映射。**候选文件名/产物路径不是结构证据，指标名与耗时数值不是症状**——它们只是测量名，不能当作已观测瓶颈，因此不进入特征。失败特征先判定 infrastructure/provider 分类并整条排除，只保留正确性/编译/算子失败。每条特征都带非空 basis（≤1000），不产生硬件能力、不猜根因、不带数值置信度。
+
+事实只来自已提交、已归档且绑定同一 Mission 与 Project 的轮次事实：归档 `runHistory.roundFacts` 与 `iterationStats.roundFacts` 合并后按各自 `recordedAt` 排序，**旧快照不得遮蔽更新的归档事实**。归属必须双向已知且一致——`previous.missionId` 与 `target.missionId` 都必须等于本 Mission，`previous.projectId` 与 `target.projectId` 都必须存在且都等于本 Mission 的 Project；Mission 没有已知 projectId、owner 缺失或两个归属字段互相矛盾时整条排除，不互补、不取其一、不拿别 Project 事实凑数。缺 run 身份、别 Mission、别 Project 的条目一律不参与。未提交对象与别 Mission 的 benchmark 不能造出任何事实。
+
+`target` 的 hardware/architecture 与规范 scope 一致；capabilities/software 只在 `resolvedTarget` 显式为同一 Mission 提供时读取，未知维度保持空数组（不从 goal、tags、backend 名或硬件字符串反推）。
+
+`preferredIds` 只绑定能由既有证据指认候选的经验 ID：候选身份以已提交事实的真实字段 `candidate.id` 为先，`previous.candidateId` 只是历史兼容字段、仅在其缺失时回退（previous 未必是候选身份）；当前最佳取 `state.currentBest.candidateId`。冻结 context 中的执行记录必须同时满足 `evidence.missionId` 等于本 Mission、`projectId` 等于本 Mission 的 Project，且 `evidence.candidateId` 等于上一失败候选、当前最佳或本轮执行候选之一；绑定不上就整体省略，不给全部收集记录套同一个偏好。
+
+`repeatedAttempts` 的尝试身份 = 修改内容（patch/package 摘要）+ 参数与环境（environment 摘要）+ 验收条件（acceptance 摘要）+ 实际执行条件（hardware/architecture/executionMode/operation），用递归键排序的 SHA-256 得到有界 `attempt_<64hex>` 身份。**刻意不含 candidateId/runId**：同一修改在全新 candidate 身份下重提仍可判定为重复；但完整来源身份（`evidence.missionId`/`runId`/`candidateId` 三者都非空）是声明重复的前提，缺任一必需摘要、执行条件或来源身份即不声明（保留 unknown）。当前尝试与其归档对照都必须来自**终态** benchmark（沿用既有生产状态集合 `complete`/`failed`/`cancelled`）：running/idle/queued 的执行可能已缓存 `experienceEvidence` 但尚未结算，不得据此声明重复；归档条目还必须在已给出的 `roundFacts` 项目归属与 Mission 矛盾时排除。重复成立后，只有冻结 context 中能逐条重算、确认同一身份**且** `evidence.missionId` 等于本 Mission、`projectId` 等于本 Mission 的 Project 的执行记录才被降权（精确 id/version）；别 Mission/别 Project 的同 digest 记录不得降权，只有 id/version 的收集摘要不足以判定即不声明——绝不把同一 key 套给所有收集记录，也不因一次重复封禁整类技术。旧 retrieve-only 注入不传任何新增参数。审计 sidecar 保留检索端口实际使用的策略版本，不用旧 retrieve-only 版本号覆盖 D 选择。
+
 roundExperienceStatus 记录 preparing/ready/failed；experienceCollection 记录有界的计数、ID/version/evidenceKey 或 skipped 原因。迟到检索结果不写状态，也不替换别的 Mission。读取人工 advice 不会调用任何 Agent 端口。
 
 CPU/仿真保持 development-record，所有写回观察必须 publishable=false。验证失败返回明确 skipped；摘要冲突、存储/超时错误不吞掉。batch deadline 传递到 record 和 verify 的组合 signal，截止后不再发起新写入；已经开始的存储写可能无法物理取消，超时保留 effectUnknown，后续以同证据键显式核实/幂等重试。
 
 ## Dependencies / Side Effects
 
-仅导入 experience-contract 的公开纯 API；计时、授权、验证与经验存储均由端口提供。内存变更仅 iterationStats 的冻结 context、选择清单 sidecar 与两个状态记录。无 state-store、FS/HTTP/Provider 实现、发布 Gate 或硬件依赖。
+仅导入 experience-contract 的公开纯 API、operator-test-evidence 的失败分类/backend 判定、静态导入的纯选择策略模块与 `node:crypto`（尝试身份摘要）；没有动态加载器或域应用的旁路。计时、授权、验证与经验存储均由端口提供。内存变更仅 iterationStats 的冻结 context、选择清单 sidecar 与两个状态记录。无 state-store、FS/HTTP/Provider 实现、发布 Gate 或硬件依赖。
 
 ## Error Contract
 

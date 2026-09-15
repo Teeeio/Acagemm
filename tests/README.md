@@ -519,6 +519,177 @@ as `test:agent-run-diagnostics` in `package.json` and in the release gate
 result is contract/integration evidence only, never a live-CLI, stability or
 publishability claim.
 
+## Kernel Wiki import and deterministic selection acceptance (hardware-free)
+
+These three files are the independent acceptance matrix for
+`docs/development/PHASE3_WIKI_CONTRACT.md` sections A–D. They were written against
+the frozen interface before the parallel producers were combined; until the
+combination provides `client-runtime/experience-selection.mjs`,
+`client-runtime/kernel-wiki-import.mjs`, `scripts/import-kernel-wiki.mjs` and the
+import/prepare integration they can only be syntax-checked, and the author phase
+runs `node --check` only. They register as `test:experience-selection`,
+`test:kernel-wiki-import` and `test:kernel-wiki-runtime` in `package.json` and in
+the release gate (`verify:local-c500-release`), so the gate keeps covering them
+after integration. A green result is contract/integration evidence only: it is
+software correctness, never a claim about selection benefit, the historical
+strict N20, provider quality, GPU behaviour, stability or publishability.
+
+All three files run every independent case behind a shared per-case harness: a
+failing case prints its own name and stack, the remaining cases still run so one
+combination collects every failure instead of only the first, and any failure
+sets a non-zero process exit code instead of ending on a summary line. Every
+rejected input is asserted against an explicit domain error code (an exact frozen
+code where one exists, otherwise the presence of a coded domain error) and, for
+the pinned CLI, against a non-zero process exit, so a case can never pass because
+of an unrelated `TypeError` or a fixture that broke earlier than its target
+branch. A case that compares a whole frozen artifact also asserts the documented
+result shape (for the apply path, the `created`/`updated`/`unchanged` counts, the
+per-unit `records` identities within the 160-character bound, the pinned source
+commit and a 64-hex snapshot digest).
+
+`experience-selection-test.mjs` drives the pure selector plus the real experience
+repository, the real contract retrieval and the real HTTP application API (the
+only writer of selection metadata). It covers the frozen policy version and the
+exact metadata key set with an unsafe/invalid matrix (unknown keys, uppercase or
+short commit, path escapes, unsafe ids, bad digests, oversized arrays, unknown or
+contradictory applicability modes), generic HTTP create/update rejection of
+`selectionMetadata` plus the same rejection on the generic service create/update
+ports (the rejection belongs to the domain write path, not to an HTTP field
+filter, and the explicit import API stays the only entry) with byte-compatible
+schema-1 records, legacy ordering/policy version with zero migration, local-first
+ranking with the D quotas (local ≤4, Wiki ≤6 =
+symptom ≤2 / technique ≤3 / guidance ≤1, never padded, so a default selection
+never exceeds the 10-unit D cap), metadata recall beyond the legacy top-20
+window, `sm100`+`nvidia-gpu` rejected for an `sm86`+`nvidia-gpu` target (and a
+missing target dimension failing applicability instead of being assumed: an empty
+architecture dimension left empty on both the canonical query scope and the
+selection target stays a legal query that selects zero items, while a selection
+target that disagrees with the canonical query scope on architecture or on
+hardware is rejected with a coded domain error instead of being answered), the
+exact same-project head of an updated record being selected while a foreign
+project's record is neither selected nor named, a version pin below the head
+selecting nothing while the pinned-out head is audited with the frozen
+`version-pinned` reason and the historical version stays readable by an explicit
+version read, a real `type: pattern` page ranked in the **symptom** bucket
+(TEAM_HANDOFF 8.3: `wiki/patterns/` pages are symptom-indexed and are themselves
+a one-hop source; a pattern unit is never promoted to technique or guidance),
+one-hop `candidateTechniques` expansion without recursion and without duplicates
+(one hop selects exactly the matching symptom unit and its technique-unit
+candidate, and a pattern unit without a matching symptom is neither a hop target
+nor a guidance fallback), exact-repeat-only demotion for local and Wiki units
+alike that never bans a technique category, status/expiry revalidation with no
+inaccessible ID or content in the audit, raw Wiki units and their reviewed
+transfers staying separate records that never overwrite each other with the audit
+naming each selected unit's own record/version/unitDigest/source commit (two
+selected units never collapse into one audited source identity), the 24 KiB soft
+budget measured on rendered
+UTF-8 bytes (an oversized optional
+record is skipped and a later smaller one still selected) under the 64 KiB/20-item
+hard bounds, Wiki provenance never being diagnostic evidence (a schema-valid but
+non-real diagnostic envelope is ineligible next to a positive control that proves
+the fixture itself qualifies, each non-real provenance reporting its own frozen
+reason; a wrong-format envelope fails the schema branch with exactly
+`diagnostic.schema.invalid`, and a schema-valid envelope without the expected
+candidate/run binding is available but never eligible for
+`diagnostic.binding.expected_missing`), and bounded, deterministic options
+(preferred IDs still recalled with no topical feature, and the preferred/repeat
+negatives failing on their own bound rather than on a missing `features` field).
+
+`kernel-wiki-import-test.mjs` covers real source-like frontmatter (quoted colons,
+inline and block lists, an ignored nested `performance_claims` block), explicit
+failures for malformed pages, topology and pin mismatches (duplicate page
+identities, a review for an unknown page, a malformed commit), the exact title
+fallback both ways — a page whose only heading is absent keeps its page id as the
+display title, and a page carrying a heading derives the title from the first
+markdown heading, with the imported page id unchanged in both cases (title is
+display text, never import identity) — a frozen page and every stored record
+keeping the exact source commit citation in their content, snapshot determinism
+and change sensitivity (with
+the canonical envelope digest recomputed independently), the atomic apply path
+against the real repository (pinned per-project record IDs,
+unverified/non-publishable provenance, and raw Wiki topics never copied into
+scope: at the raw snapshot envelope stage the scope is the pre-domain shape and
+carries no `tags` key at all — an absent or empty `tags` is the correct state and
+must never equal the page's source `topics` — while the stored domain record
+normalizes `scope.tags` to `[]`), a full review
+lifecycle on one stable page unit (an architecture-specific review qualifies the
+original unit in place, revoking the review advances the same ID again, a
+`reviewed-transfer` review with explicit content adds a separate
+`pageId-transfer-reviewId` unit while the raw unit keeps its bytes, and a second
+review id derives a second stable unit), illegal unit combinations (unitId
+disagreeing with pageId, a selection pageId disagreeing with its unitId, an
+underived transfer unitId, a source path outside `wiki/`, two units sharing one
+unitId, a metadata unitDigest that does not cover the content) each rejected on
+their own rule after the envelope digest is recomputed so the whole transaction
+stays byte-identical, identical re-import as a revision-preserving no-op, changed
+source advancing the same ID append-only, cross-project ID isolation, an
+unrelated existing record on a pinned ID conflicting rather than being
+overwritten, rejected malformed or digest-stale snapshots writing nothing
+(including a recomputed envelope digest whose edited unit must still roll the
+whole transaction back), and the pinned CLI
+end to end in a throwaway Git repository: only the blob at the exact commit is
+read (a dirty working tree and a later commit are ignored), only `wiki/` and the
+MIT `LICENSE` are read, the envelope carries a structured MIT license provenance
+(`spdx`/`path`/`copyright` validated separately from the committed `LICENSE` blob
+text, which must be carried verbatim rather than summarized or substituted), the
+source repository and its Git config are left
+untouched, an existing output file is never overwritten, a missing, foreign or
+malformed pin fails without output, no live Runtime storage or side file is
+created, the optional reviews file is honoured, and the resulting envelope
+applies through the production import path.
+
+`kernel-wiki-runtime-test.mjs` registers its isolated Project through the
+production `createProject` API on a legal seed state (the seed state owns no
+Project registry) and runs a real isolated Runtime child (temporary
+`OPERATOR_DATA_DIR`/`OPERATOR_RUNTIME_DIR`, hardware disabled, local C500 mocked,
+auto-tick off) to drive the production HTTP import route: create once, identical
+re-import as a no-op that reports the unchanged unit without rewriting the store
+file or advancing the repository revision, a changed page advancing the same
+stable ID append-only, the payload carrying the apply result (`created`/
+`updated`/`unchanged`) with no `changed` wrapper, list/get showing
+non-publishable imported records, no write on GET, no side-index file, unknown
+Project, forged body key, tampered envelope digest, an oversized body refused by
+the retained request bound, and Runtime state never mutated. It then composes the
+production prepare path (round-experience service + real repository + D selection
++ the real Agent command `runs.prepare`) with the production formatter and prompt
+builder: the D policy version is recorded in the audit with explicit, well-formed
+features, no invented numeric bottleneck, measured (not estimated) rendered bytes
+inside the soft budget, same-round freeze across a retry (no reselection and no
+restamping of the legacy policy version) and reselection in a fresh logical round,
+complete mandatory round facts in the FINAL assembled prompt even when the
+selection is empty (the formatter's always-present untrusted block then renders
+zero items, and the mandatory facts stay outside it), a mandatory fact never
+moving inside that block, an infrastructure failure never becoming an operator
+symptom, backend-as-hardware rejected with `ROUND_EXPERIENCE_TARGET_INVALID`, a
+retrieve-only legacy port still preparing without additional arguments, and a
+selection error blocking the dependent Agent start instead of silently injecting
+no knowledge. Two further prepare scenarios pin the committed-fact rules: the
+newest committed same-Mission run history wins over a stale `iterationStats`
+snapshot, freshness there only orders features of the same kind — the freshest
+one must come first inside its kind and each kind stays capped, while an older
+committed same-Mission fact may legally remain — and foreign-Mission,
+foreign-Project and identity-less facts (even newer ones) never become selection
+features. The committed `iterationStats` snapshot itself is produced by a run
+that really exists in the newest-first archive, so the mandatory `run-previous`
+round fact still names a committed run.
+
+The repeat scenario is built from real transactions instead of a hand-written
+attempt: both observations are written through the real repository, the previous
+logical round's frozen context is produced by the real retrieval (and is asserted
+to contain both records before any demotion is claimed), the current round id
+differs so `prepare` runs a fresh selection, the already-finished `run-old`/
+`candidate-old` attempt sits in the newest-first run history and the live
+benchmark carries the current `run-new`/`candidate-new` attempt. An exact
+completed attempt then demotes only the one experience record bound to its own
+modification+parameters+conditions — identical four digests and execution
+conditions with a different candidate/run still counts as the same attempt and is
+audited with the `repeated-attempt` reason on that record alone — while a changed
+digest, a changed execution condition, a missing candidate/run id or a
+running/idle attempt claims no repeat and changes nothing; the control record and
+an identical-digest record bound to another Mission are never demoted, and an
+ordering assertion is only made where the records really share a tier. No model,
+provider, network, Python or GPU process is started.
+
 ## Naming
 
 - `*-test.mjs`: Node unit/contract/integration test.

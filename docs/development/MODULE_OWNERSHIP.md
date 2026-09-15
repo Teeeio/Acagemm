@@ -94,10 +94,10 @@ TUI / GUI
 | `benchmark-package-preparation-service.md` | 组装共享 GPU 执行包、校验 oracle 并写入可信准入摘要 | execution package store、adapter、冻结 testSpec | 带 admission 绑定的 Benchmark 请求 |
 | `decision-service.md` | 采用、拒绝和撤销采用 | decision command | decision result、recovery metadata |
 | `repository-adoption-service.md` | 将通过 Gate 的 Candidate 写回仓库 | projected state、workspace port | changed state |
-| `experience-api-service.md` | 正式人工经验 API 的项目范围和输入边界 | 只读状态、Experience service ports | 版本化人工经验 DTO |
+| `experience-api-service.md` | 正式人工经验 API 的项目范围和输入边界，含 KernelWiki 快照导入（`importKernelWiki`，仅接受 `{snapshot,author}`） | 只读状态、Experience service ports | 版本化人工经验 DTO、导入结果 |
 | `round-experience-service.md` | 主轮冻结经验引用、选择审计清单与可信执行观察 | 经验服务、轮状态、验证端口 | 冻结上下文、审计清单、可追踪记录结果 |
+| `experience-service.md` | 版本化开发经验、人工注入、KernelWiki 快照原子导入（`importKernelWiki`）、冻结检索上下文与选择审计清单（`retrieveWithSelection`） | 受信项目授权、repository/clock/ID ports | 非发布型经验、引用上下文与审计清单 |
 | `shared-gpu-experience-verifier.md` | 共享 GPU 执行包回执的准入、产物和候选绑定复核 | execution package store、adapter、terminal benchmark state | verified 或显式 skipped 的开发观察 |
-| `experience-service.md` | 版本化开发经验、人工注入、冻结检索上下文与选择审计清单（`retrieveWithSelection`） | 受信项目授权、repository/clock/ID ports | 非发布型经验、引用上下文与审计清单 |
 | `knowledge-service.md` | 编辑经验草稿和引用经验资产 | draft/reference command | governed state 或稳定错误 |
 
 ### 单轮迭代与自动推进
@@ -182,7 +182,10 @@ TUI / GUI
 | `candidate-generation/README.md`、`candidate-generation/CONSTRAINTS.md` | Candidate Generation Contract | 03 候选生成输入、输出、确定性步骤和职责边界 | Provider 生命周期、Queue/Gate/采用/下一轮决策 |
 | [`execution-package-contract.mjs`](../../client-runtime/execution-package-contract.md) | Domain / Package | 语言无关闭包、摘要与准入绑定 | I/O、环境执行 |
 | [`cancellation-contract.mjs`](../../client-runtime/cancellation-contract.md) | Domain / Liveness | 资源释放屏障与匹配身份的确认 | 终止进程、持久化 |
-| [`experience-contract.mjs`](../../client-runtime/experience-contract.md) | Domain / Experience | 版本、来源、范围和非发布观察 | 发布授权、存储 |
+| [`experience-contract.mjs`](../../client-runtime/experience-contract.md) | Domain / Experience | 版本、来源、范围和非发布观察；可选选择元数据与上下文硬上限 | 发布授权、存储 |
+| [`experience-selection.mjs`](../../client-runtime/experience-selection.md) | Domain / Experience Selection | 选择元数据规范化、确定性优化假设排序（`WIKI_SELECTION_POLICY_VERSION`）、配额与选择清单 | I/O、Provider、硬件执行、发布授权 |
+| [`kernel-wiki-import.mjs`](../../client-runtime/kernel-wiki-import.md) | Domain / Experience Import | KernelWiki 页面解析、确定性快照构建、原子经验导入 | 网络/模型调用、直接写 Runtime 存储 |
+| [`scripts/import-kernel-wiki.mjs`](../../scripts/import-kernel-wiki.md) | Dev Tool / Import CLI | 固定 commit 的只读 Git blob 导入为快照文件（`--source/--commit/--out/--reviews`） | 检出/修改来源、写 live Runtime 存储、实现 workflow |
 | [`experience-repository.mjs`](../../client-runtime/experience-repository.md) | Experience Adapter | 原子版本存储 | Mission 决策 |
 | [`execution-package-store.mjs`](../../client-runtime/execution-package-store.md) | Package Adapter | CAS、受信准入与准备恢复 | 另建测试队列、假定宿主机隔离 |
 | [`execution-package-import.mjs`](../../client-runtime/execution-package-import.md) | Package Import Adapter | 目录/归档读取、依赖闭包与路径安全 | 安装依赖、执行源码、绕过准入 |

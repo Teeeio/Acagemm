@@ -1,7 +1,19 @@
+const IMPORT_PATH = /^\/api\/projects\/([^/]+)\/experiences\/import-kernel-wiki$/;
+const COLLECTION_PATH = /^\/api\/projects\/([^/]+)\/experiences(?:\/([^/]+))?$/;
+
 export function createExperienceRoutes({ json, readJson, experiences } = {}) {
   if (typeof json !== 'function' || typeof readJson !== 'function' || !experiences) throw new TypeError('Experience routes require HTTP helpers and an application service.');
   return async ({ request, response, url }) => {
-    const match = /^\/api\/projects\/([^/]+)\/experiences(?:\/([^/]+))?$/.exec(url.pathname);
+    // 导入路径必须先于通用 ID 匹配器判断：否则 "import-kernel-wiki" 会被当成经验 ID，
+    // 落到通用 POST 分支之外。GET 等其它方法在此路径上不处理，交由后续路由。
+    const imported = IMPORT_PATH.exec(url.pathname);
+    if (imported) {
+      if (request.method !== 'POST') return false;
+      const outcome = await experiences.importKernelWiki(decodeURIComponent(imported[1]), await readJson(request));
+      json(response, outcome.statusCode, outcome.payload);
+      return true;
+    }
+    const match = COLLECTION_PATH.exec(url.pathname);
     if (!match) return false;
     const projectId = decodeURIComponent(match[1]);
     const id = match[2] ? decodeURIComponent(match[2]) : null;
