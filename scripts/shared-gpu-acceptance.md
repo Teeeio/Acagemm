@@ -292,6 +292,31 @@ Returns `{ observations, requiredRuns, summary, unboundRuns }`.
   `summarizeModelObservations(observations, { requiredRuns })`; `unboundRuns`
   retain the run identity plus a nonblank reason.
 
+### `hasDurableCollectedExperience(collection)`
+
+Pure observation-ready predicate for the live driver's success polling break
+(`docs/development/EXPERIENCE_STUDY_STOP_CONTRACT.md` §S1). It answers "is this
+round's experience already durably collected?", never "did the round succeed".
+I/O-free and never a success, audit or release signal.
+
+Returns `true` exactly when `collection.status === 'recorded'` **and** the durable
+record counters sum positive:
+
+- `recorded` (this round created a new durable record) and `existing` (this
+  round's inspection idempotently matched an already-durable record for the same
+  evidence key) are the same durable fact. The real slot-02 run reached two
+  completed candidates with `recorded: 0, existing: 1`; a recorded-only wait made
+  the observer wait out a collect timeout/recovery and a third Agent start that
+  was cancelled without a response, which made the whole invocation
+  non-comparable.
+- An absent or `undefined` counter counts as zero; every other supplied value must
+  be a nonnegative safe integer. A negative, fractional, nonfinite
+  (`NaN`/`Infinity`), string, `null` or boolean counter is malformed and returns
+  `false` — it is never coerced.
+- Missing/non-object collection, a zero total, `skipped`, `mixed`, `failed`,
+  `pending` and any unknown status return `false`. Only `recorded` proves the
+  round's collection reached a durable, observable state.
+
 ### `evaluateMissionStopReceipt({ missionId, receipt })`
 
 Evaluates the real Mission-stop HTTP body `{state}` (or a later bounded read-only

@@ -41,7 +41,11 @@
 // the whole fixture tree rather than by a reported flag.
 //
 // This file was written against the frozen interface while the parallel A/B producers were
-// still uncombined; the author phase runs `node --check` only. A green run after
+// still uncombined; the author phase runs `node --check`, plus the one bounded targeted check
+// that the nested fixture it constructs is internally consistent with the real pure helpers.
+// Measured boundary in this isolated tree (never a pass): 20 pre-existing cases pass and the
+// three `matrix 14` cases fail only on the still-unlanded production reader rule that must not
+// require the nested driver exit code to equal the smoke batch exit code. A green run after
 // combination is contract/integration evidence for the frozen interface, never a selection
 // benefit, stability, N20 or publishability claim.
 import assert from 'node:assert/strict';
@@ -64,6 +68,10 @@ import {
   buildConfigFingerprint, normalizeConfigForFingerprint, verifyContinuationAudit, verifyRoundFactsAudit,
 } from '../scripts/shared-gpu-acceptance.mjs';
 import { BATCH_SCHEMA_VERSION } from '../scripts/run-shared-gpu-regression-batch.mjs';
+// The real end-of-batch ledger: the nested-failure fixture takes its per-invocation
+// comparability verdict and issue list from the same production pure function the smoke batch
+// uses, instead of hand-writing a "non-comparable" claim.
+import { summarizeAcceptanceRuns } from '../scripts/summarize-gpu-agent-runs.mjs';
 import { createExperienceRepository } from '../client-runtime/experience-repository.mjs';
 import { createExperienceService } from '../client-runtime/application/experience-service.mjs';
 import { createExperienceApiService } from '../client-runtime/application/experience-api-service.mjs';
@@ -392,6 +400,51 @@ const modelProofFor = (model, runId) => {
     modelObservationSummary: summarizeModelObservations(observations, { requiredRuns }),
   };
 };
+// The retained response-model proof of a slot whose provider model was never truthfully
+// observed: one required run identity really answered while the other one stayed unobserved, so
+// the production summarizer reports the incomplete proof as `unknown` with a named reason and
+// the run cannot be comparable. This is the real shape behind the frozen nested-exit case — the
+// workflow itself succeeded, the evidence about which model served it did not. It is built with
+// the same production pure API, so the ledger's independent recomputation over the retained
+// DTOs still agrees with the declared summary.
+const unknownModelProofFor = (runId) => {
+  const observedSession = `sess-${runId}-observed`;
+  const unobservedSession = `sess-${runId}-unobserved`;
+  const observations = [
+    observeClaudeModel({
+      runId: `${runId}_observed`, missionId: MISSION_ID, sessionId: observedSession,
+      events: [{ type: 'assistant', session_id: observedSession, message: { model: OBSERVED_MODEL } }],
+    }),
+    // Only a session bootstrap: the run really started but no response model was ever read, so
+    // the run stays a required, unobserved identity rather than a fabricated observation.
+    observeClaudeModel({
+      runId, missionId: MISSION_ID, sessionId: unobservedSession,
+      events: [{ type: 'system', subtype: 'init', session_id: unobservedSession, model: null }],
+    }),
+  ];
+  const requiredRuns = [
+    { provider: MODEL_OBSERVATION_PROVIDER, runId: `${runId}_observed`, missionId: MISSION_ID, sessionId: observedSession },
+    { provider: MODEL_OBSERVATION_PROVIDER, runId, missionId: MISSION_ID, sessionId: unobservedSession },
+  ];
+  return {
+    modelObservations: observations,
+    modelObservationRequiredRuns: requiredRuns,
+    modelObservationSummary: summarizeModelObservations(observations, { requiredRuns }),
+  };
+};
+// The terminal provider identity the real driver derives from its frozen model summary
+// (`model: modelObserved ? modelSummary.model : 'unknown'`, `modelSource: modelObserved ?
+// 'observed' : 'unknown'`, and the summary's own status/schema version). A fixture that keeps a
+// declared observed model next to an unknown proof is self-contradictory, so the nested case
+// derives its provider identity from the proof it really retains instead of declaring a model the
+// run never read. Everything derived from that configuration - the fingerprint, the retained
+// attempt/summary provider copies and the acceptance ledger's comparability verdict - then agrees.
+const unobservedProviderIdentity = (summary) => ({
+  model: 'unknown',
+  modelSource: 'unknown',
+  modelObservationStatus: summary.status,
+  modelObservationVersion: summary.schemaVersion,
+});
 // The shared-GPU runner result shape (`tools/local-shared-gpu-runner.py` normalizing
 // `tools/local-c500-runner.py`): per-profile rows carry the measured value, its unit and the
 // percentiles, the environment carries the live-hardware probe and the candidate digest the
@@ -582,16 +635,52 @@ const writeJson = async (file, value) => {
 const assertFixtureComplete = ({ index, documents, snapshot, sourceRound, condition, drifted = false }) => {
   const label = `slot ${index}`;
   const { record, state, studyAudit, proof, batch } = documents;
-  // The retained model proof is complete and really observed for the declared model, and the
-  // attempt/summary carry the same top-level evidence the production driver retains.
-  assert.equal(proof.modelObservationSummary.status, 'observed', `${label}: the fixture must retain a complete observed model proof`);
-  assert.equal(proof.modelObservationSummary.model, documents.config.provider.model, `${label}: the observed model is the declared model`);
-  assert.equal(proof.modelObservationSummary.observedRunCount, proof.modelObservationSummary.requiredRunCount,
-    `${label}: every required run identity is observed`);
-  assert.ok(proof.modelObservationSummary.requiredRunCount >= 1, `${label}: at least one run identity is required`);
-  assert.deepEqual(proof.modelObservationSummary.reasons, [], `${label}: an observed summary carries no unresolved reason`);
+  // A nested-failure fixture is the one deliberate exception to the complete observed-model
+  // proof: its workflow really completed but its retained model evidence is honestly
+  // incomplete. It must still be a well-formed UNKNOWN proof — a real required identity left
+  // unobserved with a named reason — never a malformed or fabricated one, otherwise the case
+  // would be exercising a broken fixture instead of the frozen non-comparable failure.
+  const nested = documents.nestedNonComparable === true;
+  if (nested) {
+    assert.equal(proof.modelObservationSummary.status, 'unknown', `${label}: the nested fixture must retain an incomplete model proof`);
+    assert.equal(proof.modelObservationSummary.observedRunCount < proof.modelObservationSummary.requiredRunCount, true,
+      `${label}: the nested fixture must really leave a required run unobserved`);
+    assert.ok(proof.modelObservationSummary.requiredRunCount >= 1, `${label}: at least one run identity is required`);
+    assert.ok(proof.modelObservationSummary.reasons.length >= 1, `${label}: an unresolved proof names why it is unresolved`);
+    assert.equal(documents.config.provider.model, 'unknown', `${label}: the nested fixture declares a provider model it never observed`);
+    // The whole terminal provider identity is the one the driver derives from this proof, not just
+    // the model label: provenance, status and schema version are the summary's own, so the
+    // configuration can never claim an observation its retained evidence does not support.
+    assert.equal(documents.config.provider.modelSource, 'unknown',
+      `${label}: the nested fixture claims no observed provenance for a model it never read`);
+    assert.equal(documents.config.provider.modelObservationStatus, proof.modelObservationSummary.status,
+      `${label}: the nested fixture's declared model status is its retained summary's status`);
+    assert.equal(documents.config.provider.modelObservationVersion, proof.modelObservationSummary.schemaVersion,
+      `${label}: the nested fixture's declared model schema version is its retained summary's version`);
+    for (const container of [record.attempt, record.summary]) {
+      const where = container === record.attempt ? 'attempt' : 'summary';
+      assert.equal(container.provider?.model, 'unknown', `${label}: the retained ${where} provider copy is the same unobserved model identity`);
+      assert.equal(container.provider?.modelSource, 'unknown', `${label}: the retained ${where} provider copy claims no observed provenance`);
+      assert.equal(container.provider?.modelObservationStatus, proof.modelObservationSummary.status,
+        `${label}: the retained ${where} provider status is the retained summary's status`);
+      assert.equal(container.provider?.modelObservationVersion, proof.modelObservationSummary.schemaVersion,
+        `${label}: the retained ${where} provider schema version is the retained summary's version`);
+    }
+    assert.equal(record.attempt.fullSuccess, true, `${label}: the nested fixture's workflow really did complete`);
+    assert.equal(record.summary.fullSuccess, true, `${label}: the nested fixture's retained summary really did complete`);
+  } else {
+    // The retained model proof is complete and really observed for the declared model, and the
+    // attempt/summary carry the same top-level evidence the production driver retains.
+    assert.equal(proof.modelObservationSummary.status, 'observed', `${label}: the fixture must retain a complete observed model proof`);
+    assert.equal(proof.modelObservationSummary.model, documents.config.provider.model, `${label}: the observed model is the declared model`);
+    assert.equal(proof.modelObservationSummary.observedRunCount, proof.modelObservationSummary.requiredRunCount,
+      `${label}: every required run identity is observed`);
+    assert.ok(proof.modelObservationSummary.requiredRunCount >= 1, `${label}: at least one run identity is required`);
+    assert.deepEqual(proof.modelObservationSummary.reasons, [], `${label}: an observed summary carries no unresolved reason`);
+  }
   for (const container of [record.attempt, record.summary]) {
-    assert.equal(container.modelObservationSummary?.status, 'observed', `${label}: the ${container === record.attempt ? 'attempt' : 'summary'} retains the observed model summary`);
+    assert.equal(container.modelObservationSummary?.status, nested ? 'unknown' : 'observed',
+      `${label}: the ${container === record.attempt ? 'attempt' : 'summary'} retains the ${nested ? 'incomplete' : 'observed'} model summary`);
     assert.deepEqual(container.modelObservationRequiredRuns, proof.modelObservationRequiredRuns, `${label}: the required run identities are retained verbatim`);
     assert.ok(Array.isArray(container.modelObservations) && container.modelObservations.length === proof.modelObservations.length,
       `${label}: the raw per-run observations are retained`);
@@ -687,7 +776,19 @@ const materializeSlot = async ({ index, condition, artifactDir, reportDir, snaps
   // the real one, and only a deliberate override below can make them disagree.
   const config = studyConfig(condition, merge({ promptPolicy: { wikiSnapshotDigest: snapshot.snapshotDigest } }, options.config));
   const runRoot = path.join(artifactDir, `run-fixture-${String(index).padStart(2, '0')}`);
-  const proof = modelProofFor(config.provider.model, runId);
+  // `smoke: 'nested-noncomparable'` is the frozen nested-exit case: the slot's smoke batch
+  // really failed (exit 1, status failed) because the single live driver it invoked completed
+  // successfully but its provider model was never observed. The driver still reports a
+  // completed full-success attempt; only the comparability verdict is false. The fixture below
+  // keeps those two facts distinct instead of collapsing them into one verdict.
+  const nested = options.smoke === 'nested-noncomparable';
+  const proof = nested ? unknownModelProofFor(runId) : modelProofFor(config.provider.model, runId);
+  // An unknown model proof and a configuration that still declares an observed model are two
+  // contradictory claims about the same run: the real driver writes the terminal provider
+  // identity it derived from the frozen summary, so the nested fixture derives it from its own
+  // proof. The fingerprint, the retained attempt/summary provider copies and the ledger verdict
+  // below are all recomputed from this configuration, so they stay consistent by construction.
+  if (nested) Object.assign(config.provider, unobservedProviderIdentity(proof.modelObservationSummary));
   const record = runRecordFor({
     runRoot, config, label: `${index}`, proof, sourceRound, continuationAudit: receipt,
     outcome: options.smoke === 'failed' ? 'family_failure' : 'full_success',
@@ -697,6 +798,7 @@ const materializeSlot = async ({ index, condition, artifactDir, reportDir, snaps
     runRoot,
     config,
     proof,
+    nestedNonComparable: nested,
     record,
     audit,
     receipt,
@@ -713,7 +815,10 @@ const materializeSlot = async ({ index, condition, artifactDir, reportDir, snaps
       requestedRuns: 1,
       startedAt: '2026-09-15T08:00:10.000Z',
       finishedAt: '2026-09-15T08:00:20.000Z',
-      status: options.smoke === 'failed' ? 'failed' : 'passed',
+      // The nested case is a batch whose smoke verdict is failed for a reason that is not a
+      // stop: the production batch records exactly this as status failed with a null
+      // stopReason, because the run reached full success and only its comparability failed.
+      status: options.smoke === 'failed' || nested ? 'failed' : 'passed',
       stopReason: options.smoke === 'failed' ? 'smoke_not_full_success: family_failure' : null,
       strictN20Passed: false,
       invocations: [{
@@ -721,12 +826,15 @@ const materializeSlot = async ({ index, condition, artifactDir, reportDir, snaps
         status: options.smoke === 'failed' ? 'failed' : 'completed',
         startedAt: '2026-09-15T08:00:10.000Z',
         finishedAt: '2026-09-15T08:00:20.000Z',
+        // The invocation exit code is the nested live driver's own exit code. For the nested
+        // case it really is zero even though the batch around it failed, which is precisely why
+        // the two process layers must never be required to agree.
         exitCode: options.smoke === 'failed' ? 1 : 0,
         signal: null,
         runRoot,
         logPath: path.join(artifactDir, 'logs', `run-${String(index).padStart(2, '0')}.log`),
         outcome: options.smoke === 'failed' ? 'family_failure' : 'full_success',
-        comparable: options.smoke !== 'failed',
+        comparable: options.smoke !== 'failed' && !nested,
         configFingerprint: null,
         issues: [],
       }],
@@ -806,6 +914,42 @@ const materializeSlot = async ({ index, condition, artifactDir, reportDir, snaps
     container.comparable = identity.comparable;
   }
   documents.batch.invocations[0].configFingerprint = identity.fingerprint;
+  if (nested) {
+    // The per-invocation comparability verdict and issue list are taken from the real
+    // end-of-batch ledger over the retained raw documents — the same production pure function
+    // the smoke batch itself uses — instead of being written by hand. Whatever the case then
+    // asserts about the non-comparable failure is the ledger's own verdict, and the fixture's
+    // declared evidence and that verdict cannot disagree unless a case deliberately mutates the
+    // report after this point.
+    const ledger = summarizeAcceptanceRuns([
+      { runDir: documents.runRoot, attempt: documents.record.attempt, summary: documents.record.summary },
+    ]);
+    const entry = (ledger.groups ?? []).flatMap((group) => group.runs ?? []).find((run) => run.index === 0) ?? null;
+    assert.ok(entry, `slot ${index}: the nested fixture must be classified by the real acceptance ledger`);
+    assert.equal(entry.comparable, false, `slot ${index}: the nested fixture must really be non-comparable`);
+    assert.ok(failureOf(entry.comparabilityIssues).includes('provider.model'),
+      `slot ${index}: the nested fixture must be refused by the provider.model fingerprint field`);
+    // The ledger reads the same derived identity back out of the retained configuration and out
+    // of its own fingerprint: the non-comparability is the unobserved model, and the ledger never
+    // reports the declared observed model the fixture would otherwise have left behind.
+    assert.equal(entry.provider?.model, 'unknown',
+      `slot ${index}: the ledger must read the unobserved provider identity from the retained configuration`);
+    assert.equal(entry.provider?.modelObservationStatus, documents.proof.modelObservationSummary.status,
+      `slot ${index}: the ledger must read the unobserved model status from the retained configuration`);
+    assert.ok(failureOf(entry.unknownFields).includes('provider.model'),
+      `slot ${index}: the ledger's own unknown-field set must name the unobserved model fingerprint field`);
+    documents.batch.invocations[0].comparable = entry.comparable;
+    documents.batch.invocations[0].issues = [...new Set([
+      ...documents.batch.invocations[0].issues,
+      ...failureOf(entry.issues),
+      ...failureOf(entry.comparabilityIssues),
+      ...failureOf(entry.modelObservationIssues),
+    ])];
+  }
+  // The last word on the retained smoke report, applied after the ledger derived its verdict: a
+  // case uses this to state a report that contradicts the raw evidence it retains (a claimed
+  // pass, an invented successful invocation). It can never make the fixture self-consistent.
+  if (typeof options.batchMutate === 'function') await options.batchMutate(documents);
   if (options.smoke === 'none') return { exitCode: 0, signal: null };
   await writeJson(path.join(reportDir, 'batch.json'), documents.batch);
   await writeJson(path.join(documents.runRoot, 'attempt.json'), documents.record.attempt);
@@ -818,7 +962,11 @@ const materializeSlot = async ({ index, condition, artifactDir, reportDir, snaps
   await mkdir(path.join(artifactDir, 'logs'), { recursive: true });
   await writeFile(documents.batch.invocations[0].logPath, `[study-fixture] slot ${index} ${condition}: no live child was started.\n`, 'utf8');
   await writeFile(path.join(documents.runRoot, 'runtime.log'), `[study-fixture] slot ${index}: in-memory fixture log.\n`, 'utf8');
-  return { exitCode: options.smoke === 'failed' ? 1 : 0, signal: null };
+  // The exit code the RUNNER sees is the smoke BATCH child's own exit code, which is a
+  // different thing from the nested live driver's exit code recorded inside batch.json. The
+  // nested case is exactly the truthful failure where the two disagree: the batch around the
+  // run failed (exit 1) although the driver it invoked completed with exit 0.
+  return { exitCode: options.smoke === 'failed' || nested ? 1 : 0, signal: null, runRoot };
 };
 
 // --- runner fixture directories ----------------------------------------------------------
@@ -1569,6 +1717,164 @@ try {
       await runDriftCase({ ...drift, snapshot });
     });
   }
+
+  // --- S2: the three process layers have separate exit meanings ---------------------------
+  //
+  // `study.invocations[N].exitCode` is the smoke BATCH child exit; the nested
+  // `slot-NN/batch.json.invocations[0].exitCode` is the individual live driver exit. The
+  // frozen observed valid failure is: driver exit0 / completed / full_success, the smoke batch
+  // around it status failed because comparable=false with a provider.model issue, and the outer
+  // slot exit1 / failed. The reader must return a verified stopped study for that truthful
+  // failure - it must NOT require the two child exit codes to be equal - while a claimed pass
+  // over a nonzero outer exit, and a nested failure that dropped its own non-comparable proof,
+  // stay refusals.
+
+  // Run the real study runner with slot 1 complete and slot 2 the frozen nested-exit failure.
+  // `spawned` keeps the runner's own per-slot directories, so every assertion below reads the
+  // bytes the runner really retained instead of a re-derived expectation.
+  const runNestedStudy = async (label) => {
+    const { snapshot } = await setup(`nested-${label}`, { execution: true });
+    const dirs = await studyDirs(`nested-${label}`, snapshot);
+    const spawned = [];
+    const runRoots = new Map();
+    const outcome = await attemptStudy(dirs.argv, {
+      invokeSmoke: async (invocation) => {
+        spawned.push(slotSummary(invocation));
+        const result = await materializeSlot({
+          index: invocation.index, condition: invocation.condition,
+          artifactDir: invocation.artifactDir, reportDir: invocation.reportDir,
+          snapshot, snapshotFile: dirs.snapshotFile,
+          options: invocation.index === 2
+            ? { label, smoke: 'nested-noncomparable' } : { label: 'green' },
+        });
+        // The port result carries the slot's own run root back, so the case reads the raw
+        // driver artifacts from the path the fixture really wrote instead of re-deriving it.
+        runRoots.set(invocation.index, result.runRoot ?? null);
+        return result;
+      },
+    });
+    assert.equal(outcome instanceof Error, false,
+      `${label}: a nested non-comparable failure is a stopped study, not a harness error: ${outcome?.message ?? ''}`);
+    assert.deepEqual(spawned.map((slot) => slot.index), [1, 2],
+      `${label}: the green first slot must be followed by the nested second slot (started ${spawned.map((slot) => slot.index).join(',')})`);
+    const document = await readStudyJson(dirs.reportDir);
+    retainedSchedule(document);
+    retainedInvocations(document);
+    return { dirs, snapshot, spawned, document, runRootOf: (index) => runRoots.get(index) ?? null };
+  };
+  const nestedBatchFile = (spawned) => path.join(spawned[1].reportDir, 'batch.json');
+  // The nested slot's own retained evidence, read from its raw originals rather than trusted
+  // from the smoke report: the workflow really succeeded and only the model proof is
+  // incomplete, which is what makes the run non-comparable instead of unsuccessful.
+  const assertNestedEvidenceTruthful = async ({ spawned, runRootOf }, label) => {
+    const batch = JSON.parse(await readFile(nestedBatchFile(spawned), 'utf8'));
+    assert.equal(batch.status, 'failed', `${label}: the nested smoke batch really failed`);
+    assert.equal(batch.invocations[0].exitCode, 0, `${label}: the nested live driver itself really exited zero`);
+    assert.equal(batch.invocations[0].status, 'completed', `${label}: the nested live driver really completed`);
+    assert.equal(batch.invocations[0].outcome, 'full_success', `${label}: the nested live driver really reached full success`);
+    assert.equal(batch.invocations[0].comparable, false, `${label}: the nested driver run is not comparable`);
+    assert.ok(failureOf(batch.invocations[0].issues).includes('provider.model'),
+      `${label}: the nested failure names the provider.model comparability issue, saw ${JSON.stringify(failureOf(batch.invocations[0].issues))}`);
+    const runRoot = runRootOf(2);
+    assert.ok(runRoot, `${label}: the nested slot retained no run root`);
+    const attempt = JSON.parse(await readFile(path.join(runRoot, 'attempt.json'), 'utf8'));
+    assert.equal(attempt.fullSuccess, true, `${label}: the retained driver attempt really completed successfully`);
+    assert.equal(attempt.modelObservationSummary?.status, 'unknown',
+      `${label}: the retained driver attempt really never observed its provider model`);
+    assert.equal(attempt.comparable, false, `${label}: the retained driver attempt is really non-comparable`);
+    return { batch, attempt };
+  };
+  // A nested-failure reader negative: the stopped fixture is built and verified first, then the
+  // nested slot's own retained smoke report is mutated. The reader must refuse it, and the
+  // refusal must leave every retained byte exactly as the tamper left it.
+  const nestedReaderRejects = async (label, tamper) => {
+    const fixture = await runNestedStudy(label);
+    const { dirs, spawned, document } = fixture;
+    const receipt = await verifyStudyReport(dirs.reportDir);
+    assert.equal(receipt.ok, true, `${label}: the nested fixture verified before the tamper`);
+    assert.equal(receipt.status, 'stopped', `${label}: the nested fixture is a stopped study`);
+    assert.deepEqual(slotCountsOf(receipt, label), { completed: 1, failed: 1, stopped: 7 },
+      `${label}: the untampered nested fixture keeps its one-completed/one-failed/seven-stopped histogram`);
+    assert.equal(countOf(receipt.verifiedSlots), 9, `${label}: the nested fixture verified all nine retained slots before the tamper`);
+    const cleanReport = await treeIdentity(dirs.reportDir);
+    const cleanArtifacts = await treeIdentity(dirs.artifactDir);
+    await tamper({ ...fixture, batchFile: nestedBatchFile(spawned) });
+    const tamperedReport = await treeIdentity(dirs.reportDir);
+    const tamperedArtifacts = await treeIdentity(dirs.artifactDir);
+    assert.notEqual(`${tamperedReport}\u0000${tamperedArtifacts}`, `${cleanReport}\u0000${cleanArtifacts}`,
+      `${label}: the tamper must really change the retained report or its raw originals`);
+    await assert.rejects(() => verifyStudyReport(dirs.reportDir), Error, `${label}: the reader must refuse this report`);
+    assert.equal(await treeIdentity(dirs.reportDir), tamperedReport, `${label}: a refusing reader rewrites no report byte`);
+    assert.equal(await treeIdentity(dirs.artifactDir), tamperedArtifacts, `${label}: a refusing reader rewrites no raw artifact byte`);
+  };
+
+  await test('matrix 14a: a nested driver exit0 under a failed smoke batch is a verified stopped study', async () => {
+    const fixture = await runNestedStudy('positive');
+    const { dirs, spawned, document } = fixture;
+    // The first slot really succeeded and stays completed; the nested slot is retained failed
+    // and the remaining seven slots never start.
+    assert.equal(invocationOf(document, 1).status, 'completed', 'the first slot is retained as completed');
+    assert.equal(invocationOf(document, 1).exitCode, 0, 'the first slot really exited zero');
+    assert.equal(invocationOf(document, 2).status, 'failed', 'the nested slot is retained as a failure');
+    assert.equal(invocationOf(document, 2).exitCode, 1,
+      'the nested slot keeps the real exit code of its own smoke batch child');
+    for (const slot of FROZEN_SCHEDULE.slice(2)) {
+      assert.equal(invocationOf(document, slot.index).status, 'stopped', `slot ${slot.index} must never start after the nested failure`);
+      assert.deepEqual(issuesOf(document, slot.index), ['study_stopped'], `slot ${slot.index} stays explicitly stopped`);
+    }
+    assert.equal(document.status, 'stopped', 'the study is retained as stopped, never as completed');
+    assert.equal(document.strictN20Passed, false, 'a stopped study never claims the strict N20 rule');
+    // The nested layer is the observed valid failure and its own raw evidence says so.
+    const { batch } = await assertNestedEvidenceTruthful(fixture, 'matrix 14a');
+    assert.notEqual(invocationOf(document, 2).exitCode, batch.invocations[0].exitCode,
+      'the two child exit codes really differ: that disagreement is the case, not a defect');
+    // The read-only reader verifies this truthful failure: it must not require the outer smoke
+    // exit to equal the nested driver exit, must not emit the invented success, and must still
+    // report the real outcome histogram of the nine scheduled slots.
+    const receipt = await verifyStudyReport(dirs.reportDir);
+    assert.equal(receipt.ok, true, 'the nested-failure study is a faithfully verified report');
+    assert.equal(receipt.status, 'stopped', 'the verified study is stopped');
+    assert.equal(receipt.strictN20Passed, false, 'the verified study never claims strict N20');
+    assert.deepEqual(slotCountsOf(receipt, 'matrix 14a'), { completed: 1, failed: 1, stopped: 7 },
+      'the verified study retains one completed, one failed and seven unstarted slots');
+    const verified = verifiedSlotsOf(receipt, document, 'matrix 14a');
+    assert.equal(verified.length, FROZEN_SCHEDULE.length, 'every retained slot is verified, including the nested failure');
+    assert.equal(verified.filter((slot) => slot.status === 'completed').length, 1,
+      'exactly the first slot counts as completed');
+    // The verified slot detail keeps the outer smoke exit code of the failed slot as its own
+    // fact; the nested driver exit stays in the slot's raw evidence, never merged into it.
+    // `verifiedSlotsOf` deliberately projects each verified slot down to `{ index, status }`,
+    // so the exit-code fact is read from the reader's raw receipt record, not that projection.
+    const rawNestedSlot = receipt.verifiedSlots.find((slot) => slot.index === 2);
+    assert.equal(rawNestedSlot?.exitCode, 1,
+      'the verified nested slot reports the outer smoke exit code it really retained');
+  });
+
+  await test('matrix 14b: a claimed passed batch over a nonzero smoke exit stays a contradiction', async () => {
+    // The tamper states the one thing the frozen reader must never accept: a smoke report that
+    // claims success while the study retained a nonzero exit for that same slot.
+    await nestedReaderRejects('false-green', async ({ batchFile }) => {
+      const batch = JSON.parse(await readFile(batchFile, 'utf8'));
+      batch.status = 'passed';
+      batch.stopReason = null;
+      await writeJson(batchFile, batch);
+    });
+  });
+
+  await test('matrix 14c: a nested failure whose non-comparable proof was dropped is refused', async () => {
+    await nestedReaderRejects('missing-proof', async ({ batchFile, ...nested }) => {
+      const before = await assertNestedEvidenceTruthful(nested, 'matrix 14c');
+      assert.equal(before.batch.invocations[0].comparable, false, 'the untampered nested report really is non-comparable');
+      const batch = JSON.parse(await readFile(batchFile, 'utf8'));
+      // The claimed pass is exactly the invented success the contract forbids: the batch still
+      // says failed, but its one invocation now asserts comparability and drops the issue that
+      // made the run non-comparable while the raw driver artifacts still retain the unknown
+      // model proof. Nothing in the fixture can be made self-consistent by this mutation.
+      batch.invocations[0].comparable = true;
+      batch.invocations[0].issues = failureOf(batch.invocations[0].issues).filter((issue) => issue !== 'provider.model');
+      await writeJson(batchFile, batch);
+    });
+  });
 
   await test('matrix 11c/missing-artifacts: a slot whose raw record is unreadable stops the study', async () => {
     const { snapshot } = await setup('runner-drift-missing', { execution: true });

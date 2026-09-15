@@ -843,6 +843,49 @@ export const collectModelObservationEvidence = ({ provider, missionIds = [], kno
   return { observations, requiredRuns, summary, unboundRuns };
 };
 
+// The single collection status that proves this round's own experience was
+// durably collected. The production collector writes `recorded` when at least one
+// inspected observation created a new durable record or idempotently matched an
+// already-durable one, with no skips. `skipped`, `mixed`, `failed`, `pending` and
+// any unfamiliar/malformed status fail closed.
+const DURABLE_EXPERIENCE_STATUS = 'recorded';
+
+// A durable counter is a nonnegative safe integer. An absent (or undefined)
+// counter means the producer did not report it and counts as zero; every other
+// supplied value — negative, fractional, nonfinite, string, null, boolean — is
+// malformed and fails the whole observation closed instead of being coerced.
+const durableExperienceCount = (value) => {
+  if (value === undefined) return 0;
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+};
+
+/**
+ * Pure observation-ready predicate: has this round's experience already been
+ * durably collected, whether it was created now or found idempotently?
+ *
+ * True exactly when `collection.status === 'recorded'` AND at least one durable
+ * record exists — `recorded` (this round created it) or `existing` (this round's
+ * inspection matched an already-durable record for the same evidence key, so
+ * nothing further has to be produced). The real slot-02 run reached two completed
+ * candidates with `recorded=0, existing=1`; waiting for a new record alone made
+ * the observer wait out a collect timeout/recovery and a third Agent start that
+ * was cancelled without a response.
+ *
+ * False for a missing/non-object collection, any status other than `recorded`
+ * (`failed`, `pending`, `skipped`, `mixed`, unknown), a malformed counter and a
+ * zero total. I/O-free and NEVER a success signal: it only says the experience is
+ * observable now, and replaces none of the candidate, audit, rollback, budget or
+ * stop-receipt checks.
+ */
+export const hasDurableCollectedExperience = (collection) => {
+  if (!collection || typeof collection !== 'object' || Array.isArray(collection)) return false;
+  if (collection.status !== DURABLE_EXPERIENCE_STATUS) return false;
+  const recorded = durableExperienceCount(collection.recorded);
+  const existing = durableExperienceCount(collection.existing);
+  if (recorded === null || existing === null) return false;
+  return recorded + existing > 0;
+};
+
 // The loop intent a confirmed Mission stop must have persisted. A proving stop
 // is exactly `stopped`: `paused`/`idle` by themselves are not a stopped intent.
 const STOPPED_LOOP_STATUSES = Object.freeze(['stopped']);

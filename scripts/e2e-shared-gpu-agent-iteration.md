@@ -30,6 +30,52 @@ directly. Authority: `docs/development/REAL_GPU_REGRESSION.md`,
 Every wait is bounded by `E2E_GPU_TIMEOUT_MS`; the driver asserts real evidence
 at each step and throws rather than reporting an unproven success.
 
+## Observation-ready break and early production stop
+
+Authority: `docs/development/EXPERIENCE_STUDY_STOP_CONTRACT.md` §S1.
+
+The success polling loop leaves as soon as the round's experience is **durably
+collected**, which the pure `hasDurableCollectedExperience`
+(`scripts/shared-gpu-acceptance.mjs`) decides: `recorded` (created now) and
+`existing` (this round's inspection idempotently matched an already-durable
+record) are the same durable fact, so waiting for `recorded > 0` alone is wrong.
+In the real slot-02 run two candidates completed with `recorded: 0, existing: 1`;
+the recorded-only wait ran through a collect timeout/recovery and a third Agent
+start that was cancelled without a response model, which made the whole
+invocation non-comparable. The predicate is only an observation-ready signal — it
+replaces none of the completed-candidate, unique-source-archive, continuation,
+queue/correctness/profile/digest/rollback/condition/prompt/model or stop checks,
+and it never upgrades an outcome.
+
+Leaving the loop is also the stop point. The driver requests the existing
+production stop **immediately**, before any further experience/audit filesystem or
+API read, so the live loop cannot start another Agent round while the harness
+validates; the bridge record sweep for all real started runs still happens after
+the stop and before Runtime teardown. Two invariants hold on this path:
+
+- Every candidate/audit/rollback binding stays on the **pre-stop** observation
+  state captured when the loop left. States returned by the stop are only ever
+  read for additional model-run observations; they never overwrite the binding
+  state (`continuedRun` and the source-round/rollback lookups included).
+- Releasing ownership is not the same as losing identity. The stop request uses
+  the **cleanup-ownership** token, which is cleared once the stop is confirmed so
+  the `finally` teardown cannot stop the same Mission twice. The Mission id every
+  later consumer binds evidence to is a separate **immutable** identity captured
+  at Mission creation and never cleared: the retained pre-send audit lookup, the
+  continuation / study-condition verification, the per-invocation
+  `study-audit.json` and `summaries[].missionId` all use it. A successful early
+  stop therefore cannot leave a post-stop verification reading a null Mission id
+  and silently missing the already-retained audit.
+- The real stop receipt is retained even when a validation *after* the stop
+  throws, both per family in `summaries[].stopReceipt` / `cleanup.stopReceipts`
+  and via the untouched `finally` teardown. An unconfirmed or unreadable stop is
+  still a hard failure (`MISSION_STOP_UNCONFIRMED`) and can never be a
+  `full_success`.
+
+This shortens an unnecessary overrun. It does not claim an atomic server-side
+two-round limit and does not change any deadline, provider, matrix, source
+identity rule or runtime autopilot behavior.
+
 ## Configuration
 
 | Variable | Default | Meaning |

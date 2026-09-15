@@ -11,7 +11,7 @@ import { WIKI_SELECTION_POLICY_VERSION } from '../client-runtime/experience-sele
 import {
   GPU_ATTEMPT_SCHEMA_VERSION, GPU_SUMMARY_SCHEMA_VERSION, ROUND_FACTS_SCHEMA_VERSION,
   budgetTerminalEvidence, buildConfigFingerprint, collectModelObservationEvidence, combineAttemptOutcome, digestJson,
-  evaluateFamilyOutcome, evaluateMissionStopReceipt, hexDigest, verifyContinuationAudit,
+  evaluateFamilyOutcome, evaluateMissionStopReceipt, hasDurableCollectedExperience, hexDigest, verifyContinuationAudit,
 } from './shared-gpu-acceptance.mjs';
 import {
   EXPERIENCE_CONDITIONS, EXPERIENCE_STUDY_GOAL_POLICY_VERSION, EXPERIENCE_STUDY_GOAL_SUFFIX,
@@ -366,7 +366,20 @@ const baseAttempt = {
 // still visible in the ledger instead of vanishing.
 await writeFile(attemptPath, JSON.stringify(baseAttempt, null, 2));
 
+// Two deliberately separate identities:
+//   * `missionId` is the CLEANUP OWNERSHIP token. It is cleared as soon as this
+//     family's production stop is confirmed, so the `finally` teardown can never
+//     stop the same Mission twice (and still does on the error/timeout path,
+//     where ownership was never released).
+//   * `familyMissionId` is the immutable EVIDENCE identity of the Mission this
+//     family owns. It is captured once at Mission creation and never cleared, so
+//     the post-stop retained-audit lookup, the continuation/study-condition
+//     verification, the per-invocation study audit and the retained summary all
+//     bind to the real Mission id. The §S1 early stop must not blank it: doing so
+//     made every later consumer read `null`, miss the already-retained audit and
+//     write evidence with no Mission binding.
 let missionId;
+let familyMissionId = null;
 let failure;
 let terminalOutcome = 'failure';
 let terminalFullSuccess = false;
@@ -540,9 +553,12 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
       hardware: ['local-shared-gpu'], implementation: 'pytorch-python', metric: 'latency p50', testMatrix: matrix, missionBudgetMs: limit,
       objective: { mode: 'threshold', metric: 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.999999 } });
     missionId = created.state.activeMissionId;
+    // The immutable evidence identity of this family's Mission (see above): it is
+    // never cleared, not even by the confirmed early stop.
+    familyMissionId = missionId;
     // The expected Mission set is fixed when the Mission is created: only runs
     // bound to one of these Missions may ever contribute model evidence.
-    if (isNonBlank(missionId)) expectedMissionIds.add(missionId);
+    if (isNonBlank(familyMissionId)) expectedMissionIds.add(familyMissionId);
     await request('/api/actions/start-benchmark', { purpose: 'baseline', baselineKind: 'naive_v0', runPy: source, operator: `generic_${family}`, matrix, timeoutSeconds: 120,
       baselineSource: { authority: 'generated', kind: 'naive_v0', type: 'naive_v0', repository: 'mission-workspace', commit: `gpu-${family}-v0`, path: 'run.py', operator: `generic_${family}`, expandedSingleFile: true, basedOn: 'v0' } });
     let state;
@@ -565,15 +581,15 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
     let started;
     const observedBeforeStart = (await request('/api/state')).state;
     observeStateModelRuns(observedBeforeStart);
-    if (observedBeforeStart.agent?.status === 'running' && observedBeforeStart.agent?.missionId === missionId) {
+    if (observedBeforeStart.agent?.status === 'running' && observedBeforeStart.agent?.missionId === familyMissionId) {
       started = { state: observedBeforeStart };
     } else {
       try {
-        started = await request(`/api/missions/${missionId}/runs`, { goal });
+        started = await request(`/api/missions/${familyMissionId}/runs`, { goal });
       } catch (error) {
         if (error.code !== 'AGENT_RUN_ALREADY_ACTIVE') throw error;
         const recovered = (await request('/api/state')).state;
-        assert.equal(recovered.agent?.missionId, missionId, '409 active run belongs to another Mission');
+        assert.equal(recovered.agent?.missionId, familyMissionId, '409 active run belongs to another Mission');
         assert.equal(recovered.agent?.status, 'running', '409 active run is not running');
         started = { state: recovered };
       }
@@ -592,7 +608,7 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
     while (Date.now() < deadline) {
       state = (await request('/api/state')).state;
       observeStateModelRuns(state);
-      tasks = (await request('/api/operator-tests')).tasks.filter((task) => task.payload?.missionId === missionId);
+      tasks = (await request('/api/operator-tests')).tasks.filter((task) => task.payload?.missionId === familyMissionId);
       completed = tasks.filter((task) => task.payload?.purpose === 'candidate' && task.status === 'completed');
       const next = JSON.stringify({ family, stage: state.stage, agent: state.agent?.status, runId: state.agent?.runId, test: state.benchmark?.status, round: state.iterationStats?.round, completed: completed.length, experience: state.iterationStats?.experienceCollection, failure: state.workflowFailure?.code });
       if (next !== progress) { console.log('[gpu-agent-e2e] ' + next); progress = next; }
@@ -608,11 +624,19 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
         ? (candidateSourceRunIdOf(firstVerifiedTask) || firstSourceRound?.runId || null) : null;
       const continuedRound = Boolean(state.agent?.runId && firstProducingRunId && state.agent.runId !== firstProducingRunId);
       const enoughRounds = desiredTasks < 2 || (Boolean(firstSourceRound) && continuedRound);
-      if (completed.length >= desiredTasks && state.iterationStats?.experienceCollection?.recorded > 0 && enoughRounds) { loopBroke = true; break; }
+      // Observation-ready, not "created this round": the production collector
+      // reports `existing > 0` when the round's inspection idempotently matched an
+      // already-durable record, which is exactly as observable as a new one. The
+      // frozen §S1 predicate replaces the recorded-only test here; waiting for a
+      // new record made a real run wait out a collect timeout/recovery and start a
+      // third Agent run that was cancelled without a response.
+      if (completed.length >= desiredTasks
+        && hasDurableCollectedExperience(state.iterationStats?.experienceCollection)
+        && enoughRounds) { loopBroke = true; break; }
       // A bounded provider/round budget may legitimately stop the loop before a
       // second Candidate. Only accept that terminal with a recorded budget reason
       // AND confirmed resource release; needs_human alone is never enough.
-      const budget = budgetTerminalEvidence(state, { missionId, runId: state.agent?.runId ?? null });
+      const budget = budgetTerminalEvidence(state, { missionId: familyMissionId, runId: state.agent?.runId ?? null });
       const safeBudgetTerminal = desiredTasks >= 2 && budget.safe && Boolean(firstSourceRound) && continuedRound
         && completed.length >= 1
         && ((state.iterationStats?.experienceCollection?.recorded || 0)
@@ -647,6 +671,37 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
     if (!loopBroke && Date.now() >= deadline) {
       throw Object.assign(new Error(`GPU acceptance timed out for ${family} before the two-round path completed`), { code: 'E2E_TIMEOUT' });
     }
+    // §S1: leaving the observer loop means this round's durable experience is
+    // already observable. Request the existing production stop IMMEDIATELY — before
+    // any further experience/audit filesystem or API read — so the live loop cannot
+    // start another Agent round while this harness validates (a third, response-less
+    // cancelled run was exactly what made the frozen real invocation non-comparable).
+    //
+    // The stop receipt is retained even if a validation below throws, and an
+    // unconfirmed stop still fails the invocation. The production stop's returned
+    // states only ever add model-run observations: every candidate/audit/rollback
+    // binding below stays on the PRE-STOP observation state captured here, which no
+    // stop receipt may overwrite.
+    //
+    // The stop is requested with the cleanup-ownership token (`missionId`); the
+    // Mission identity every validation/summary below binds to is the separate,
+    // immutable `familyMissionId`, which this successful stop never clears.
+    const preStopState = state;
+    const stopReceipt = await stopMissionNow(missionId);
+    familyStopReceipts.push({ family, ...stopReceipt });
+    // Read the current Mission's retained bridge records after the production stop
+    // but before the Runtime is torn down: a run started between two polls (or a
+    // teardown/recovery run) must not be lost. Read-only; expected Mission gate.
+    await collectBridgeRecords();
+    if (!stopReceipt.confirmed) {
+      throw Object.assign(new Error(`Mission stop for ${family} was not confirmed: ${stopReceipt.reasons.join(', ')}`),
+        { code: 'MISSION_STOP_UNCONFIRMED' });
+    }
+    // The Mission is stopped: the `finally` teardown must not stop it a second
+    // time. Release ONLY the cleanup-ownership token — `familyMissionId` stays the
+    // binding identity for the retained-audit lookup, the continuation/condition
+    // verification, the study audit and the summary below.
+    missionId = null;
     assert.ok(completed.length >= (budgetTerminalAccepted ? 1 : desiredTasks), 'Insufficient completed real Candidate tasks');
     assert.equal(writes.length, writesAtStart, 'Harness must not drive automatic iterations');
     const experiences = (await request(`/api/projects/${project.id}/experiences`)).experiences;
@@ -661,7 +716,7 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
       const verifiedDigest = candidateDigestOf(verifiedTask);
       const verifiedQueueRequestId = queueRequestIdOf(verifiedTask);
       assert.ok(verifiedDigest && verifiedQueueRequestId, 'first verified candidate is missing its candidate digest / queue request id');
-      const matches = archivedRoundsForTask(state, verifiedTask);
+      const matches = archivedRoundsForTask(preStopState, verifiedTask);
       assert.equal(matches.length, 1, `first verified candidate must match exactly one archived round (found ${matches.length})`);
       sourceRound = matches[0];
       assert.ok(sourceRound.roundId, 'verified candidate archive has no roundId');
@@ -677,8 +732,8 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
       }
       const firstOutcome = sourceRound.decisionReview?.resolution?.outcome;
       assert.ok(['reference', 'reject'].includes(firstOutcome), `verified Candidate unexpectedly resolved as ${firstOutcome}`);
-      assert.ok(state.agent?.runId && state.agent.runId !== candidateSourceRunId, 'unmet target did not automatically start the next Agent round');
-      rollbackEvents = (state.runtimeEvents || []).filter((event) => event.type === 'workflow.round_rolled_back');
+      assert.ok(preStopState.agent?.runId && preStopState.agent.runId !== candidateSourceRunId, 'unmet target did not automatically start the next Agent round');
+      rollbackEvents = (preStopState.runtimeEvents || []).filter((event) => event.type === 'workflow.round_rolled_back');
       assert.ok(rollbackEvents.length >= 1, 'automatic next round did not record a workspace rollback');
       assert.ok(rollbackEvents.every((event) => event.payload?.workspaceClean === true), 'rollback evidence must confirm a clean workspace');
 
@@ -688,19 +743,19 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
       // never the newest retained audit or the current state.agent.runId.
       const targetRoundId = sourceRound.roundFacts?.target?.roundId;
       assert.ok(targetRoundId, 'verified candidate archive has no frozen target roundId');
-      const auditScan = await findRetainedAudit({ auditDir: promptAuditDir, missionId, roundId: targetRoundId, sourceRunId: sourceRound.runId });
+      const auditScan = await findRetainedAudit({ auditDir: promptAuditDir, missionId: familyMissionId, roundId: targetRoundId, sourceRunId: sourceRound.runId });
       if (auditScan.audit) {
         // Explicit study mode uses the condition verifier; every other mode keeps the
         // original strict continuation verifier unchanged.
         const studyReceipt = studyEnabled
           ? verifyExperienceConditionAudit({ condition: studyCondition, audit: auditScan.audit, sourceRound,
-            experiences, missionId, projectId: project.id, snapshot: studySnapshot })
+            experiences, missionId: familyMissionId, projectId: project.id, snapshot: studySnapshot })
           : null;
         continuationAudit = {
           path: auditScan.path,
           matchedAuditsForTargetRound: auditScan.matched.map((item) => item.runId),
           selectedBy: 'sourceRound.roundFacts.target.roundId',
-          ...(studyReceipt ?? verifyContinuationAudit({ audit: auditScan.audit, sourceRound, experiences, missionId, projectId: project.id })),
+          ...(studyReceipt ?? verifyContinuationAudit({ audit: auditScan.audit, sourceRound, experiences, missionId: familyMissionId, projectId: project.id })),
         };
         // Per-invocation study audit: the explicit condition, the fixed snapshot
         // identity, the candidate-bound continuation audit and the ACTUAL selected
@@ -711,7 +766,7 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
             condition: studyCondition,
             snapshot: { path: studySnapshotPath, ...studySnapshotIdentityValue },
             projectId: project.id,
-            missionId,
+            missionId: familyMissionId,
             family,
             candidate: {
               taskId: verifiedTask.taskId,
@@ -749,12 +804,16 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
     });
     const budgetEvidence = acceptedBudgetEvidence;
     summaries.push({
-      family, missionId, firstRun, sourceRunId: candidateSourceRunId, sourceRoundId: sourceRound?.roundId || null,
+      family, missionId: familyMissionId, firstRun, sourceRunId: candidateSourceRunId, sourceRoundId: sourceRound?.roundId || null,
       sourceRoundTargetRoundId: sourceRound?.roundFacts?.target?.roundId || null,
       firstRoundOutcome: sourceRound?.decisionReview?.resolution?.outcome || null,
       outcome: familyOutcome.outcome, fullSuccess: familyOutcome.fullSuccess, outcomeReasons: familyOutcome.reasons,
       budgetTerminalAccepted, budgetTerminalEvidence: budgetEvidence,
-      continuationAudit, continuedRun: state.agent?.runId || null, rollbackCount: rollbackEvents.length,
+      // The real production stop receipt, requested as soon as the observer loop
+      // left (§S1). Retained here AND in cleanup.stopReceipts even when a later
+      // validation throws. `continuedRun` comes from the pre-stop state.
+      stopReceipt,
+      continuationAudit, continuedRun: preStopState.agent?.runId || null, rollbackCount: rollbackEvents.length,
       completed: completed.map((task) => ({ taskId: task.taskId, candidateDigest: task.payload.candidate.digest,
         candidateSourceRunId: candidateSourceRunIdOf(task), queueRequestId: queueRequestIdOf(task), packageDigest: task.payload.packageDigest })),
       workflowWritesAfterStart: writes.length - writesAtStart, experienceCount: experiences.length,
@@ -768,22 +827,10 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
       observedTarget: observedTarget ? { hardware: observedTarget.hardware || [], architecture: observedTarget.architecture || [],
         device: observedTarget.device || null, driverVersion: observedTarget.driverVersion || null, backend: observedTarget.backend || null } : null,
     });
+    // The owned Mission was already stopped through the real production API as soon
+    // as this family left its observer loop (§S1); an unconfirmed release can never
+    // be a full_success and forbids starting the next Mission.
     assert.notEqual(familyOutcome.outcome, 'failure', `GPU family acceptance failed: ${familyOutcome.reasons.join(', ')}`);
-    // Teardown of the owned Mission through the real production API, before the
-    // Runtime is killed. An unconfirmed release can never be a full_success and
-    // forbids starting the next Mission.
-    const stopReceipt = await stopMissionNow(missionId);
-    familyStopReceipts.push({ family, ...stopReceipt });
-    summaries.at(-1).stopReceipt = familyStopReceipts.at(-1);
-    // Read the current Mission's retained bridge records after the production stop
-    // but before the Runtime is torn down: a run started between two polls (or a
-    // teardown/recovery run) must not be lost. Read-only; expected Mission gate.
-    await collectBridgeRecords();
-    if (!stopReceipt.confirmed) {
-      throw Object.assign(new Error(`Mission stop for ${family} was not confirmed: ${stopReceipt.reasons.join(', ')}`),
-        { code: 'MISSION_STOP_UNCONFIRMED' });
-    }
-    missionId = null;
   }
 } catch (error) { failure = { message: error.message, code: error.code || null, stack: error.stack }; }
 finally {

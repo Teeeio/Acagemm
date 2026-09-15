@@ -446,13 +446,28 @@ const readSmokeBatchReport = async ({ index, reportDir, artifactDir }) => {
 // The retained batch verdict of a slot WITHOUT requiring a pass, used by the
 // read-only verifier to prove that a non-zero study exit is not contradicted by a
 // batch report that claims success. An unreadable report stays unknown (null).
+//
+// Three process layers meet in this one file and they carry separate exit meanings:
+// the smoke batch child exit is the STUDY slot's `exitCode`, while
+// `invocations[0].exitCode` is the nested live-driver exit. The nested record is
+// therefore read as evidence of what the driver really did (its own status,
+// comparability and issues), never as a second copy of the same number.
 const readRetainedBatchStatus = async (reportDir) => {
   try {
     const parsed = await readJsonFile(path.join(reportDir, 'batch.json'), 'slot batch report');
     const value = parsed.value;
     if (!isPlainObject(value)) return null;
-    return { status: value.status ?? null,
-      invocationExitCode: isPlainObject(value.invocations?.[0]) ? value.invocations[0].exitCode ?? null : null };
+    const invocations = Array.isArray(value.invocations) ? value.invocations : null;
+    const invocation = isPlainObject(invocations?.[0]) ? invocations[0] : null;
+    return {
+      status: value.status ?? null,
+      requestedRuns: Number.isInteger(value.requestedRuns) ? value.requestedRuns : null,
+      invocationCount: invocations ? invocations.length : null,
+      invocationStatus: invocation?.status ?? null,
+      invocationExitCode: invocation?.exitCode ?? null,
+      invocationComparable: invocation?.comparable ?? null,
+      invocationIssues: Array.isArray(invocation?.issues) ? [...invocation.issues] : null,
+    };
   } catch { return null; }
 };
 
@@ -1249,8 +1264,27 @@ export const verifyStudyReport = async (reportPath) => {
         if (batch) {
           assert.notEqual(batch.status, 'passed',
             `slot ${slot.index} exited with ${String(exitCode)} while its retained batch report claims success`);
-          assert.notEqual(batch.invocationExitCode, 0,
-            `slot ${slot.index} retained batch invocation exit code is 0 although the smoke child exited with ${String(exitCode)}`);
+          // The nested driver exit is a DIFFERENT process layer and is never required
+          // to equal the smoke batch child exit. A driver that itself exited 0 under a
+          // failed batch is the observed truthful non-comparable failure, and it stays
+          // readable only when the retained one-invocation record proves it: the batch
+          // really failed, the single smoke invocation really completed with exit 0,
+          // it is explicitly NOT comparable, and it kept the issues that made it so.
+          // An "all green" nested record is an invented success and is refused.
+          if (batch.invocationExitCode === 0) {
+            assert.equal(batch.status, 'failed',
+              `slot ${slot.index} nested driver exited 0 although its retained batch status is ${String(batch.status)}, not failed`);
+            assert.equal(batch.requestedRuns, 1,
+              `slot ${slot.index} nested driver exited 0 although its retained batch requested ${String(batch.requestedRuns)} runs, not one`);
+            assert.equal(batch.invocationCount, 1,
+              `slot ${slot.index} nested driver exited 0 although its retained batch kept ${String(batch.invocationCount)} invocations, not one`);
+            assert.equal(batch.invocationStatus, 'completed',
+              `slot ${slot.index} nested driver exited 0 although its retained invocation status is ${String(batch.invocationStatus)}, not completed`);
+            assert.equal(batch.invocationComparable, false,
+              `slot ${slot.index} nested driver exited 0 under a failed batch although its retained invocation claims comparability`);
+            assert.ok(Array.isArray(batch.invocationIssues) && batch.invocationIssues.length > 0,
+              `slot ${slot.index} nested driver exited 0 under a failed batch without retaining the issues that made it non-comparable`);
+          }
         }
       } else {
         // A zero exit without retained evidence is only readable when the slot names

@@ -514,6 +514,113 @@ This test continues the cancelled `task_8825a5839e92468184c69d5d7166ac47`
 contracts and makes no new production change and no N=20 or publishability
 claim. It runs in both verification gates.
 
+## Experience study stop and nested-exit acceptance (hardware-free, NOT YET COMBINED)
+
+`shared-gpu-observer-stop-test.mjs` and the `matrix 14` cases of
+`experience-condition-study-test.mjs` are the independent positive/negative pair for the
+frozen addendum `docs/development/EXPERIENCE_STUDY_STOP_CONTRACT.md` (S1 durable experience may
+already exist, S2 three process layers have separate exit meanings). They were written by the
+single independent test writer that owns both files and this README; they edit no production
+file and no acceptance input.
+
+**These additions are not combined yet, and nothing here is claimed as combined evidence.**
+The S1 production helper `hasDurableCollectedExperience` is a newly frozen interface that the
+implementation candidates had not landed at author time, and the S2 reader rule that accepts the
+nested `driver exit0 under a failed smoke batch` truth was not landed either. In this isolated
+author tree both files therefore run against a tree without that production change: the author
+phase ran `node --check` on both files plus one bounded targeted consistency check of the real
+pure verifier receipt shape (no reader, no driver and no simulated implementation). The measured
+boundary, never a pass:
+
+- **S1**: the first independent full run of `shared-gpu-observer-stop-test.mjs` against a
+  combined candidate reported 26/27. The single failure was the Mission-identity case asserting
+  `continuation.facts.target.missionId` — a `target` subtree the production verifier receipt never
+  returns, because its `facts` projection is flat (`previousRunId`, `previousRoundId`,
+  `previousCandidateId`, `previousQueueRequestId`, `gateResult`, `rollbackPerformed`,
+  `currentBestCandidateId`). The case now asserts the identity where the producer really keeps it;
+  the receipt shape it relies on was re-checked against the real pure verifier (6/6). A combined
+  S1 re-run is still owed.
+- **S2**: the full `experience-condition-study-test.mjs` suite reports **20 passed / 3 failed** in
+  this tree, before and after the fixture correction. All twenty pre-existing cases stay green.
+  The three new `matrix 14` cases previously stopped inside fixture construction
+  (`nested fixture declares provider model never observed actual deepseek-v4-flash expected
+  unknown`); with the derived unknown provider identity they now reach the target branch and fail
+  only on the still-unlanded production reader rule
+  (`scripts/run-experience-condition-study.mjs`: *slot 2 retained batch invocation exit code is 0
+  although the smoke child exited with 1*), which the frozen S2 contract requires to be relaxed
+  for exactly this truthful nested failure.
+- **Final combination has not passed.** The S1 helper/live-driver wiring and the S2 reader change
+  must be landed by the implementation candidates, after which both files must be re-run in
+  combination. Until then a red result is the expected pending-combination state, exactly like a
+  missing export or an unchanged recorded-only driver, and it is never a pass.
+
+S1 — `shared-gpu-observer-stop-test.mjs` has two independent layers, reported case by case.
+The first reads `hasDurableCollectedExperience` off the **real** module namespace of
+`scripts/shared-gpu-acceptance.mjs` at runtime, so a missing export is an explicit
+expected-red contract failure instead of an import crash and the case can never be satisfied by
+a predicate copied into the test. Its positive cases are the frozen evidence shapes the
+production round-experience service really writes (`status: 'recorded'` for a new record, for an
+idempotent existing-only collect and for a mixed counter pair) and every documented negative is
+its own case: absent/non-object collection, zero or missing counters, `failed`/`pending`/
+`skipped`/`mixed`/unknown/blank/case-variant status, and negative, string, `NaN`, infinite,
+fractional, null and boolean counters.
+
+The second layer executes the **real live driver** as a child process against an explicitly
+inert harness. There is no source-root override of any kind: a shadow root is built from this
+repository, holding a byte-identical copy of the driver and of every local module it imports
+(each copy's SHA-256 is asserted against the repository file in its own case), and the one file
+the driver spawns — `client-runtime/local-server.mjs` — is replaced by an inert loopback port
+double. Inside that shadow root no client Runtime, provider CLI, model call, Python, GPU runner
+or outbound socket is contacted: the provider-CLI probe is answered from a declared label, the
+GPU baseline/queue/test projections are scripted state, and the only child process is the
+double, whose only socket is its own reserved loopback port. The double serves the real R4
+evidence shape — two completed real Candidate tasks, a continued second Agent round and
+`experienceCollection = {status:'recorded', recorded:0, existing:1}` — together with a **real**
+prepared-before-send audit and the real bound execution experience of the source round, both
+owned by the original Mission id. The frozen consumer must leave the loop on the existing-only
+evidence, request the production stop promptly and **before** the later experience/audit reads,
+keep the pre-stop observation state, retain the confirmed stop receipt, and still verify the
+post-stop continuation audit **under the original Mission identity**: a driver that drops the
+Mission id after the stop can no longer select that artifact, and the "no retained pre-send
+audit" failure it produces is refused by the named identity case instead of being accepted as a
+missing artifact. That case asserts the identity where the producer really keeps it — the
+retained artifact's own frozen round facts, the driver's retained family identity, and the real
+artifact/target-round/continuation-run binding — because the verifier receipt projects the
+audited facts into flat fields and returns no `target` subtree; the receipt's flat fields are
+then required to agree field by field with the artifact on disk. An unchanged recorded-only
+consumer never leaves the loop at all and is reported against its own deadline. Every started
+run is still collected after the stop, with the
+cancelled/unobserved run retained as required and unknown and never promoted to a borrowed model
+label. A green result is contract/integration evidence for the frozen interface only: no real
+machine, stability, N=20 or publishability claim is made or implied.
+
+S2 — `matrix 14a` drives the real study runner with slot one complete and slot two the frozen
+nested-exit failure, then reads the retained bytes back through the public `verifyStudyReport`.
+The retained evidence keeps the three process layers apart: the outer
+`study.invocations[N].exitCode` is the smoke batch child (1, failed), while the nested
+`slot-NN/batch.json.invocations[0]` is the individual live driver (0, completed,
+`full_success`, `comparable: false`, with the `provider.model` comparability issue), and the raw
+driver `attempt.json` independently retains the successful workflow together with its unknown
+model proof. The nested slot is the one deliberate exception to the complete observed-model
+proof, so its configuration carries the terminal provider identity the real driver derives from
+that proof — model `unknown`, source `unknown`, and the summary's own status and schema version —
+instead of a declared observed model the run never read. The configuration, its comparable
+fingerprint, the retained attempt/summary provider copies and the acceptance ledger's
+`provider.model` non-comparability verdict are therefore consistent by construction, and the
+ledger's own verdict is asserted rather than hand-written. The reader must verify this truthful
+failure as a **stopped** study with the outcome histogram one completed / one failed / seven
+unstarted and `strictN20Passed: false`, and
+must never require the two child exit codes to be equal. `matrix 14b` refuses a smoke report that
+claims `passed` while the outer slot retained a nonzero exit (the contradiction the contract
+names), and `matrix 14c` refuses a nested failure whose one-invocation non-comparable proof was
+dropped — its issues stripped and comparability asserted — while the raw driver artifacts still
+retain the unknown model proof, so the invented success can never stand. Both negatives build and
+verify their own complete stopped fixture on its own bytes first, then mutate exactly one field of
+that same fixture, and both prove the refusing reader rewrites no report or raw artifact byte.
+The twenty existing study cases (runtime items 1-8, study matrix items 9-13 including the eight
+drift sub-cases and the reader negatives, and the three spawn scenarios) are unchanged and keep
+their original invariants and fixtures.
+
 ## Model observation acceptance (hardware-free)
 
 `model-observation-test.mjs` and `model-observation-acceptance-test.mjs` are the

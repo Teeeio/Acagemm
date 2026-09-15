@@ -142,8 +142,9 @@ never trusts receipt counts:
   experience");
 - the retained per-slot smoke `batch.json`, which must record exactly one affine
   smoke invocation with exit code `0`, `full_success`, comparability and a run
-  root strictly inside that slot's own artifact directory (the independent record
-  of the real child exit);
+  root strictly inside that slot's own artifact directory (on this accepted path
+  the nested live-driver exit, the batch verdict and the study slot exit all
+  agree at zero; the failure path keeps the layers apart, see below);
 - the recomputed `verifyExperienceConditionAudit` receipt, which is compared to
   the driver's own `runRoot/study-audit.json`; that file is a sidecar and is never
   the authority.
@@ -245,6 +246,26 @@ model/source/design drift in one slot or a port failure keeps its recorded issue
 (and its non-zero exit must not be contradicted by a `batch.json` that claims
 `passed`); it is verified as a failure rather than being treated as unreadable or
 silently dropped from the denominator.
+
+Two nested exit codes are deliberately **not** compared, because they belong to
+two different process layers:
+
+| layer | meaning |
+| --- | --- |
+| `invocations[N].exitCode` (study `study.json`) | the smoke **batch** child exit; non-zero means the batch did not pass |
+| `slot-NN/batch.json.invocations[0].exitCode` | the nested **live driver** exit inside that batch |
+
+The real observed failure is exactly this: the driver exited `0` with a completed
+`full_success` workflow, the smoke batch is `failed` because the single invocation
+is `comparable: false` with its provider/model issues, and the outer slot exit is
+`1`/`failed`. That report is a verified stopped study (`1 completed + 1 failed +
+7 stopped`, `strictN20Passed: false`). A non-zero slot exit together with a
+`batch.json` that claims `passed` stays a contradiction. For a nested driver exit
+`0` under a failed batch, the reader requires the retained proof instead of a
+matching number: batch `status: "failed"`, `requestedRuns: 1`, exactly one
+invocation, invocation `status: "completed"`, `comparable: false` and its
+non-empty issues. An all-green nested record under a failed batch is an invented
+success and is refused.
 
 `ok: true` means "this retained report matches its originals", never "the study
 succeeded": `status`, `stopReason`, `slotCounts` and `strictN20Passed: false`
