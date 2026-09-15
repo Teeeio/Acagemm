@@ -1,0 +1,194 @@
+{
+  "schemaVersion": "acagemm.experience-study-status/v1",
+  "recordedAt": "2026-09-15T06:35:24.900Z",
+  "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+  "phase": "operator-p3-wiki",
+  "status": "blocked-platform-resource-release",
+  "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
+  "contract": {
+    "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
+    "sha256": "623cf1ffbe65f00f1d410147aa3d90102c084e1c99b1dd8431b18ea4685b1a96",
+    "conditions": [
+      "facts-only",
+      "local-only",
+      "local-and-wiki"
+    ],
+    "plannedInvocations": 9,
+    "executedInvocations": 0,
+    "strictN20": false
+  },
+  "tasks": [
+    {
+      "role": "runtime-condition",
+      "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
+      "attemptId": "run_868dd7a5d4cc4bf48ca2dc88441faee7",
+      "status": "submitted",
+      "artifactDigest": "7913a50454ea01f98cc00f66927e5372434d996dc1ce27e239b3b2ce447b2d9c",
+      "accepted": false,
+      "integrated": false,
+      "issueVersion": "86dd05483458289e4c1812df5d11dc9f",
+      "retention": "Platform submitted candidate retained; full diff read, independent combination not run."
+    },
+    {
+      "role": "study-driver-reader",
+      "taskId": "task_ed2e6151023e4e7d8f8467dd73e278fb",
+      "attemptId": "run_6e02611b89554bb0899de115abf90135",
+      "status": "failed",
+      "artifactDigest": null,
+      "accepted": false,
+      "integrated": false,
+      "issueVersion": "68e902c41a867e1074593e9ed2f78c6d",
+      "retention": "Platform reports retained interrupted workspace; no collected artifact digest."
+    },
+    {
+      "role": "independent-tests",
+      "taskId": "task_2087f6d10375435493b84dc3ae46e315",
+      "attemptId": "run_5fb0642ce71b43acb94e19e08f651285",
+      "status": "failed",
+      "artifactDigest": null,
+      "accepted": false,
+      "integrated": false,
+      "issueVersion": "84c7226e0852383d632845a7f6ee2256",
+      "retention": "Platform reports retained interrupted workspace; no collected artifact digest."
+    }
+  ],
+  "issues": [
+    {
+      "id": "service-interruption",
+      "fact": "Dedicated dispatch wait and normal capacity call returned unavailable; official CLI reported running=false. Official start returned exit 0 and started=true.",
+      "inference": "Service interruption interrupted two downstream implementation/test tasks.",
+      "unknown": "Exact cause of previous daemon exit.",
+      "evidence": {
+        "connectionProbe": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"error\": {\"code\": \"unavailable\", \"message\": \"无法连接LLM劳务市场 http://127.0.0.1:8765。可运行 start 或检查 daemon.log。\"}}"
+            }
+          ],
+          "isError": true
+        },
+        "officialStart": {
+          "chunk_id": "b1254a",
+          "wall_time_seconds": 4.9384471,
+          "exit_code": 0,
+          "original_token_count": 211,
+          "output": "{\r\n  \"started\": true,\r\n  \"url\": \"http://127.0.0.1:8765\",\r\n  \"pid\": 39704,\r\n  \"health\": {\r\n    \"service\": \"dispatch\",\r\n    \"version\": \"0.2.0\",\r\n    \"data_dir\": \"F:\\\\设计\\\\快速项目\\\\deepseek劳务派遣\\\\.dispatch-data\",\r\n    \"claude_available\": true,\r\n    \"credentials_available\": false,\r\n    \"credential_source\": null,\r\n    \"max_concurrency\": 5,\r\n    \"busy\": true,\r\n    \"busy_reason\": \"正在执行集成或持久化操作\",\r\n    \"scheduler\": {\r\n      \"alive\": true,\r\n      \"last_tick_at\": \"2026-09-15T06:27:47.254+00:00\",\r\n      \"active_workers\": 0,\r\n      \"issues\": [],\r\n      \"recent_issues\": [],\r\n      \"pending_finalizations\": 0,\r\n      \"pending_releases\": 0,\r\n      \"pending_cleanups\": 0,\r\n      \"owner_id\": \"39704-ae83eb626263486d9b507f854ae6da33\"\r\n    },\r\n    \"service_instance_id\": \"925182bcef7a45b1973c712e4c55a516\"\r\n  }\r\n}\r\n"
+        },
+        "events": [
+          {
+            "id": 148890,
+            "task_id": "task_420b1373fe2b402a8d0183e9a01cb1e5",
+            "kind": "task.submitted",
+            "summary": "执行器已提交，等待上游验收",
+            "created_at": "2026-09-15T06:24:30.346+00:00"
+          },
+          {
+            "id": 149058,
+            "task_id": "task_ed2e6151023e4e7d8f8467dd73e278fb",
+            "kind": "task.interrupted",
+            "summary": "服务中断，执行未完成。保留隔离目录，请检查后重试。",
+            "created_at": "2026-09-15T06:27:46.041+00:00"
+          },
+          {
+            "id": 149059,
+            "task_id": "task_ed2e6151023e4e7d8f8467dd73e278fb",
+            "kind": "runtime.issue",
+            "summary": "执行收尾未确认，资源保持占用：服务中断后未确认进程收尾",
+            "created_at": "2026-09-15T06:27:46.041+00:00"
+          },
+          {
+            "id": 149060,
+            "task_id": "task_2087f6d10375435493b84dc3ae46e315",
+            "kind": "task.interrupted",
+            "summary": "服务中断，执行未完成。保留隔离目录，请检查后重试。",
+            "created_at": "2026-09-15T06:27:46.041+00:00"
+          },
+          {
+            "id": 149061,
+            "task_id": "task_2087f6d10375435493b84dc3ae46e315",
+            "kind": "runtime.issue",
+            "summary": "执行收尾未确认，资源保持占用：服务中断后未确认进程收尾",
+            "created_at": "2026-09-15T06:27:46.042+00:00"
+          }
+        ]
+      },
+      "next_action": "Retain original failed attempts and investigate daemon exit separately if needed."
+    },
+    {
+      "id": "restart-resource-release",
+      "fact": "Retry of original B attempt was rejected with attempt_stopping. C retry was not called. Capacity reports zero active workers and no pending cleanup/release, while interruption events say process cleanup is unconfirmed.",
+      "inference": "The restart recovery and retry resource gate require positive cleanup confirmation not provided by the public capacity view.",
+      "unknown": "Whether the old worker process trees have actually exited; raw resource flags were not independently read.",
+      "evidence": {
+        "retry": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"error\": {\"code\": \"attempt_stopping\", \"message\": \"原执行仍在停止，请稍后重试\"}}"
+            }
+          ],
+          "isError": true
+        },
+        "capacity": {
+          "cursor": 149061,
+          "running": 0,
+          "resource_blockers": [],
+          "resource_cleanup_pending": [],
+          "scheduler": {
+            "alive": true,
+            "last_tick_at": "2026-09-15T06:29:11.405+00:00",
+            "active_workers": 0,
+            "issues": [],
+            "recent_issues": [],
+            "pending_finalizations": 0,
+            "pending_releases": 0,
+            "pending_cleanups": 0,
+            "owner_id": "39704-ae83eb626263486d9b507f854ae6da33"
+          }
+        },
+        "readOnlySourceRefs": [
+          "F:/设计/快速项目/deepseek劳务派遣/dispatch/store.py:2007 retry gate rejects running or resources_released=false",
+          "F:/设计/快速项目/deepseek劳务派遣/dispatch/store.py:2544 recover_running retains unconfirmed release; executor cleanup release_attempt_resources is required"
+        ]
+      },
+      "next_action": "Platform lifecycle owner must identify and confirm/reap the old process trees, then restore release facts and capacity visibility through supported lifecycle handling. Resume the same B/C tasks using current attempt and issue versions. Do not change database flags manually or submit replacement tasks to evade release gate."
+    },
+    {
+      "id": "acceptance-and-live-boundary",
+      "fact": "A is submitted only; B/C failed during interruption. No source was accepted or integrated, no combination or final gate was run, and no business GPU/Acagemm agent E2E was started in this batch.",
+      "inference": "The nine-invocation comparison is not ready to execute.",
+      "unknown": "Implementation correctness until independent tests and exact candidate combination complete.",
+      "evidence": {
+        "taskIds": [
+          "task_420b1373fe2b402a8d0183e9a01cb1e5",
+          "task_ed2e6151023e4e7d8f8467dd73e278fb",
+          "task_2087f6d10375435493b84dc3ae46e315"
+        ],
+        "priorAcceptedN20Source": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948"
+      },
+      "next_action": "Complete B/C, review A, run exact combination and required release/nonhardware gates, integrate/freeze source, then run the fixed nine-invocation study. Prior N20 does not validate the new source."
+    }
+  ],
+  "reviewFollowup": [
+    {
+      "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
+      "classification": "static-review",
+      "item": "Check new client-runtime/local-server.md architecture relative link."
+    },
+    {
+      "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
+      "classification": "unverified-concern",
+      "item": "Independently test missing/mismatched selection audit condition on fresh retrieval and same-round inflight reuse before acceptance."
+    }
+  ],
+  "scope": {
+    "platformSourceModified": false,
+    "platformDatabaseModified": false,
+    "globalConfigurationModified": false,
+    "unknownProcessesKilled": false,
+    "newBusinessE2E": 0,
+    "newN20": 0,
+    "authorization": "Existing user authorization remains valid; this blocker is technical, not a new permission request."
+  }
+}
