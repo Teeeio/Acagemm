@@ -20,11 +20,17 @@
 // No provider, model, network, Python or GPU work is contacted here. Every slot is filled
 // through the documented `invokeSmoke` fixture port, so no smoke child starts for a slot;
 // the default `readInvocation` port is left untouched wherever the frozen reader contract
-// is under test. matrix 13b is the single case that starts a real child: the production
-// driver CLI under a broken study environment whose provider CLI and Python executable are
-// pinned to absent paths, where only the preflight refusal is accepted (no run root, no
-// state, no report); the standard N20 mode is exercised through its documented injected-port
-// path and must refuse a study environment with zero spawns. The nine-slot schedule is
+// is under test. Two groups of cases do start real children, and every child is inert:
+// matrix 13b runs the production driver CLI under a broken study environment whose provider
+// CLI and Python executable are pinned to absent paths (only the preflight refusal is
+// accepted: no run root, no state, no report), while the three `spawn` cases at the end run
+// the real exported `createDefaultInvokeSmoke` default adapter against a temporary inert
+// local Node child to prove the frozen startup plumbing — where the raw log really lands,
+// that the child alone creates its report directory, that both streams survive in that one
+// log, that a success-looking marker cannot replace the real nonzero exit code and that a
+// pre-existing report directory is never overwritten. The standard N20 mode is exercised
+// through its documented injected-port path and must refuse a study environment with zero
+// spawns. The nine-slot schedule is
 // asserted from the retained study.json written before the first spawn. Every stop case in
 // the schedule matrix keeps the same retained nine-slot schedule: a released slot is never
 // replaced, resampled or completed silently. Each drifted field of that stop matrix is its own
@@ -51,7 +57,7 @@ import {
   buildStudySchedule, verifyExperienceConditionAudit,
 } from '../scripts/experience-condition-study.mjs';
 import {
-  parseStudyArguments, runExperienceStudy, verifyStudyReport,
+  parseStudyArguments, runExperienceStudy, verifyStudyReport, createDefaultInvokeSmoke,
 } from '../scripts/run-experience-condition-study.mjs';
 import {
   GPU_ATTEMPT_SCHEMA_VERSION, GPU_SUMMARY_SCHEMA_VERSION, ROUND_FACTS_SCHEMA_VERSION,
@@ -2065,6 +2071,183 @@ try {
         else process.env[key] = value;
       }
     }
+  });
+
+  // --- default smoke adapter: the three frozen real-child scenarios -------------------------
+  //
+  // EXPERIENCE_STUDY_SPAWN_CONTRACT.md freezes these three cases on the real exported default
+  // adapter (`createDefaultInvokeSmoke`), never on the injected `invokeSmoke` fixture port: each
+  // scenario starts one genuinely inert local Node child of its own, in its own temporary
+  // directory. The child validates the fixed smoke argv, the fixed affine family, the
+  // condition/snapshot environment and its own exclusive report-directory creation, then emits
+  // one distinct stdout marker and one distinct stderr marker. No provider, Python, network,
+  // Acagemm runtime or GPU is contacted. What is asserted is behavior — where the raw log lands,
+  // what it contains, which exit code survives and what happens to a pre-existing report
+  // directory — never implementation source text. Each child reports its own documented marker
+  // and exit code instead of relying on an uncaught assertion, so every scenario can prove which
+  // check really stopped it.
+
+  // The inert child is written outside the repository. It is a fixture, not a stand-in for the
+  // production smoke CLI: the adapter under test spawns it exactly the way it spawns the fixed
+  // production script (same executable, same argv shape, same environment propagation, same
+  // stream capture, same exit semantics).
+  const inertChildSource = (plan) => [
+    "'use strict';",
+    '// Inert local fixture child: no provider, Python, network, Acagemm runtime or GPU.',
+    "const fs = require('node:fs');",
+    "const path = require('node:path');",
+    `const plan = ${JSON.stringify(plan)};`,
+    // Synchronous fd writes, so a marker can never be truncated by an immediate process.exit.
+    "const fail = (code, marker) => { fs.writeSync(2, marker + '\\n'); process.exit(code); };",
+    'const argv = process.argv.slice(2);',
+    "if (JSON.stringify(argv) !== JSON.stringify(plan.argv)) fail(11, 'STUDY-CHILD-ARGV-MISMATCH: ' + JSON.stringify(argv));",
+    "if (process.env.E2E_EXPERIENCE_CONDITION !== plan.condition) fail(12, 'STUDY-CHILD-CONDITION-MISMATCH');",
+    "if (process.env.E2E_KERNEL_WIKI_SNAPSHOT !== plan.snapshot) fail(13, 'STUDY-CHILD-SNAPSHOT-MISMATCH');",
+    "if (!plan.preexisting && fs.existsSync(plan.reportDir)) fail(21, 'STUDY-CHILD-REPORT-EXISTS-BEFORE-CHILD');",
+    'try { fs.mkdirSync(plan.reportDir); }',
+    'catch (error) {',
+    "  if (plan.preexisting && error.code === 'EEXIST') fail(21, 'STUDY-CHILD-EXCLUSIVE-MKDIR-EEXIST');",
+    "  fail(22, 'STUDY-CHILD-MKDIR-FAILED: ' + error.code);",
+    '}',
+    'if (plan.receiptFile !== null) {',
+    '  fs.writeFileSync(path.join(plan.reportDir, plan.receiptFile), JSON.stringify({',
+    '    argv, reportDir: plan.reportDir, condition: process.env.E2E_EXPERIENCE_CONDITION,',
+    '    snapshot: process.env.E2E_KERNEL_WIKI_SNAPSHOT, exclusiveMkdir: true,',
+    '  }, null, 2));',
+    '}',
+    "fs.writeSync(1, plan.stdoutMarker + '\\n');",
+    "fs.writeSync(2, plan.stderrMarker + '\\n');",
+    'process.exit(plan.exitCode);',
+    '',
+  ].join('\n');
+
+  // One inert child, its own temporary artifact parent, report directory, snapshot file and
+  // Python placeholder, plus one unique pair of stream markers, so no case can be satisfied by
+  // another case's bytes and no case can inherit a cached result.
+  const spawnFixture = async ({ label, condition, index, preexistingReport = false, exitCode = 0 }) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), `operator-study-spawn-${label}-`));
+    roots.push(root);
+    const artifactDir = path.join(root, 'artifacts');
+    const reportDir = path.join(root, 'report');
+    const snapshot = path.join(root, 'wiki-snapshot.json');
+    const gpuPython = path.join(root, 'python.exe');
+    await mkdir(artifactDir, { recursive: true });
+    await writeFile(snapshot, '{"schemaVersion":"fixture"}\n', 'utf8');
+    await writeFile(gpuPython, '', 'utf8');
+    const token = sha256(`${label}:${index}:${Date.now()}:${Math.random()}`).slice(0, 16);
+    // A child planned to exit nonzero still claims success on stdout, as an explicit JSON
+    // declaration rather than a neutral token: the nonzero scenario only means something if the
+    // raw log really carries a marker that says success/complete next to the real failure. The
+    // green scenarios keep the plain token, so success-looking bytes exist exactly where a case
+    // asserts they cannot replace the real exit code.
+    const stdoutMarker = exitCode === 0
+      ? `STUDY-SMOKE-STDOUT ${token}`
+      : JSON.stringify({ success: true, status: 'completed', marker: `STUDY-SMOKE-SUCCESS ${token}` });
+    const stderrMarker = `STUDY-SMOKE-STDERR ${token}`;
+    // The frozen smoke argv: mode smoke, the affine family and the three explicit paths.
+    const argv = ['--mode', 'smoke', '--families', 'affine', '--artifact-dir', artifactDir,
+      '--report-dir', reportDir, '--gpu-python', gpuPython];
+    const script = path.join(root, `inert-smoke-child-${index}.cjs`);
+    await writeFile(script, inertChildSource({
+      argv, condition, snapshot, reportDir, preexisting: preexistingReport, exitCode,
+      receiptFile: exitCode === 0 ? 'child-receipt.json' : null, stdoutMarker, stderrMarker,
+    }), 'utf8');
+    const invoke = createDefaultInvokeSmoke({ cwd: root, script });
+    return {
+      root, artifactDir, reportDir, snapshot, gpuPython, argv, script, invoke, stdoutMarker,
+      stderrMarker,
+      portInput: { index, condition, artifactDir, reportDir, snapshot, gpuPython },
+      logPath: path.join(artifactDir, 'logs', `slot-${String(index).padStart(2, '0')}.log`),
+    };
+  };
+  const nonEmptyLines = (text) => text.split('\n').filter((line) => line !== '');
+
+  await test('spawn 1: the real default adapter starts an inert child that creates its report directory exclusively and both streams land in artifactDir/logs', async () => {
+    const fixture = await spawnFixture({ label: 'exclusive', condition: 'local-and-wiki', index: 1 });
+    const result = await fixture.invoke(fixture.portInput);
+    assert.equal(result.exitCode, 0, `the inert child must exit zero (issues: ${JSON.stringify(failureOf(result.issues))})`);
+    assert.equal(result.signal, null);
+    // The frozen layout: the parent's raw log lives under artifactDir/logs, exactly where the
+    // retained slot logPath points. The old defect opened reportDir/logs/slot-NN.log instead,
+    // which created reportDir and made the child's exclusive mkdir fail, so the old real log
+    // path fails this case on both counts (no log at the frozen path, nonzero child exit).
+    assert.equal(existsSync(fixture.logPath), true, 'the raw log is written under artifactDir/logs');
+    assert.equal(existsSync(path.join(fixture.reportDir, 'logs')), false,
+      'the parent creates no logs directory inside the child-owned report directory');
+    assert.deepEqual((await readdir(fixture.artifactDir)).sort(), ['logs'],
+      'the artifact parent carries only the raw log directory, never a report directory');
+    // Both streams really arrived in the one raw log: the child wrote exactly these two markers
+    // and nothing else, so an extra, missing, duplicated or substituted line is a failure.
+    const log = await readFile(fixture.logPath, 'utf8');
+    assert.deepEqual(nonEmptyLines(log).sort(), [fixture.stdoutMarker, fixture.stderrMarker].sort(),
+      'the raw log carries exactly the child\'s own stdout and stderr markers, both streams in one log');
+    // The child only reached its markers because its report directory did not exist before it
+    // started and because its own non-recursive mkdir succeeded. The parent created neither the
+    // report directory nor anything inside it.
+    assert.deepEqual(await readdir(fixture.reportDir), ['child-receipt.json'],
+      'the report directory holds only what the child itself wrote');
+    const receipt = JSON.parse(await readFile(path.join(fixture.reportDir, 'child-receipt.json'), 'utf8'));
+    assert.deepEqual(receipt.argv, fixture.argv, 'the child received the fixed smoke argv for the affine family');
+    assert.equal(receipt.condition, 'local-and-wiki', 'the fixed condition reached the child environment');
+    assert.equal(receipt.snapshot, fixture.snapshot, 'the fixed snapshot path reached the child environment');
+    assert.equal(receipt.exclusiveMkdir, true, 'the child created its report directory exclusively');
+  });
+
+  await test('spawn 2: a success-looking child marker never masks the real nonzero exit code or truncates the raw log', async () => {
+    const fixture = await spawnFixture({ label: 'nonzero', condition: 'facts-only', index: 2, exitCode: 3 });
+    const result = await fixture.invoke(fixture.portInput);
+    // The real child exit code is the authority; a self-reported success on stdout can never
+    // replace it, and no success-shaped field may be minted into the returned port value.
+    assert.equal(result.exitCode, 3, 'the real child exit code is preserved verbatim');
+    assert.equal(result.signal, null);
+    for (const key of ['success', 'fullSuccess', 'passed', 'ok', 'verified']) {
+      if (key in result) assert.notEqual(result[key], true, `the port must not report ${key}: true for a nonzero child`);
+    }
+    assert.equal(existsSync(fixture.logPath), true, 'the raw log of a failed child is still written under artifactDir/logs');
+    const log = await readFile(fixture.logPath, 'utf8');
+    // The complete raw log survives: the success-looking marker is retained as evidence, not
+    // dropped or rewritten, and the real failure marker sits next to it.
+    assert.equal(log.includes(fixture.stdoutMarker), true, 'the success-looking stdout marker is retained in full');
+    assert.equal(log.includes(fixture.stderrMarker), true, 'the real stderr marker is retained in full');
+    assert.deepEqual(nonEmptyLines(log).sort(), [fixture.stdoutMarker, fixture.stderrMarker].sort(),
+      'the complete raw log is preserved instead of being replaced by a synthetic receipt');
+    // The surviving stdout line is a real success-looking declaration, read back from the
+    // retained log rather than from this fixture's own variable: the case is only meaningful if
+    // the raw bytes themselves claim success next to the real nonzero exit code.
+    const claimed = JSON.parse(nonEmptyLines(log).find((line) => line !== fixture.stderrMarker));
+    assert.equal(claimed.success, true, 'the retained stdout marker really declares success');
+    assert.equal(claimed.status, 'completed', 'the retained stdout marker really declares a completed status');
+    assert.equal(typeof claimed.marker, 'string', 'the retained stdout marker keeps its own identity');
+    assert.equal(result.exitCode, 3, 'the declared success still does not replace the real child exit code');
+    assert.equal(existsSync(path.join(fixture.reportDir, 'logs')), false,
+      'no parent log directory appears inside the child report directory');
+    assert.deepEqual(await readdir(fixture.reportDir), [],
+      'the nonzero child writes no receipt into its report directory');
+    assert.deepEqual((await readdir(fixture.artifactDir)).sort(), ['logs']);
+  });
+
+  await test('spawn 3: a pre-existing report directory is never overwritten and the child exclusive mkdir fails nonzero', async () => {
+    const fixture = await spawnFixture({ label: 'preexisting', condition: 'local-only', index: 3, preexistingReport: true });
+    const sentinel = Buffer.from('pre-existing slot report: these bytes are never overwritten\n', 'utf8');
+    await mkdir(fixture.reportDir, { recursive: true });
+    await writeFile(path.join(fixture.reportDir, 'sentinel.txt'), sentinel);
+    const before = (await readdir(fixture.reportDir)).sort();
+    const result = await fixture.invoke(fixture.portInput);
+    // The child really attempted its exclusive mkdir against the existing directory, got EEXIST
+    // and refused with its own nonzero code; the parent preserves that code.
+    assert.equal(result.exitCode, 21, 'the child exclusive mkdir refuses a pre-existing report directory with a nonzero exit');
+    assert.equal(existsSync(fixture.logPath), true, 'the refusal is still retained in the raw log under artifactDir/logs');
+    const log = await readFile(fixture.logPath, 'utf8');
+    assert.equal(log.includes('STUDY-CHILD-EXCLUSIVE-MKDIR-EEXIST'), true,
+      'the retained raw log names the real exclusive-mkdir refusal');
+    assert.deepEqual((await readdir(fixture.reportDir)).sort(), before,
+      'the pre-existing report directory keeps exactly its original entries');
+    assert.deepEqual(await readFile(path.join(fixture.reportDir, 'sentinel.txt')), sentinel,
+      'the pre-existing sentinel keeps its exact bytes');
+    assert.equal(existsSync(path.join(fixture.reportDir, 'logs')), false,
+      'the parent never creates its log directory inside the pre-existing report directory');
+    assert.deepEqual((await readdir(fixture.artifactDir)).sort(), ['logs'],
+      'the parent log still lands under its own artifact parent, not in the child report directory');
   });
 } finally {
   for (const root of roots) await rm(root, { recursive: true, force: true }).catch(() => {});

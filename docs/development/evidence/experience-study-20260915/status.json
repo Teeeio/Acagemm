@@ -3,7 +3,7 @@
   "recordedAt": "2026-09-15T06:35:24.900Z",
   "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
   "phase": "operator-p3-wiki",
-  "status": "software-verified-integrated-live-pending",
+  "status": "spawn-repair-integrated-new-live-pending",
   "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
   "contract": {
     "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
@@ -278,7 +278,7 @@
     "currentAccepted": true,
     "currentIntegrated": true
   },
-  "updatedAt": "2026-09-15T10:08:45.873862+00:00",
+  "updatedAt": "2026-09-15T10:40:14.997259+00:00",
   "taskHistory": [
     {
       "role": "runtime-condition",
@@ -589,5 +589,106 @@
       ]
     },
     "liveInvocations": 0
+  },
+  "liveAttempts": [
+    {
+      "taskId": "task_6ef7969614b947309b9da8010aa68a27",
+      "attemptId": "run_53e7e26de266490ab3168fb9c70b1948",
+      "sourceCommit": "73e172c384fd183f2568910e8d554144f520a85c",
+      "status": "failed",
+      "plannedSlots": 9,
+      "spawnedSmokeSlots": 1,
+      "unstartedSlots": 8,
+      "completedSlots": 0,
+      "driverRunRoots": 0,
+      "businessModelInvocations": 0,
+      "businessGpuTests": 0,
+      "fact": "Actual default adapter precreated report/slot-01 via logPath; smoke exclusive mkdir failed EEXIST before driver. Platform later rejected that unexpected report log as outside allowed_paths.",
+      "inference": "Fixture invokeSmoke substitution left default subprocess path uncovered; upstream missed stale actual logPath despite corrected docs/retained slot field.",
+      "unknown": null,
+      "next_action": "Small separately dispatched implementation/test correction; new independent source freeze and nine-slot batch, old denominator retained.",
+      "archive": {
+        "path": "startup-failure-73e172c-originals.zip",
+        "sha256": "279dca433cf67906c149d32017a6ffb6ef7c19e608117b20bf04ad1edc376954",
+        "files": [
+          {
+            "path": "execution.jsonl",
+            "sha256": "a1221563126c778775a832ef62be2bba356a546b696deeee415699c92624fce1",
+            "bytes": 474
+          },
+          {
+            "path": "command.json",
+            "sha256": "c138055bbb8b8efaa17171e271b0aa38af7b637ee3b7e6c39041c005de00a960",
+            "bytes": 1665
+          },
+          {
+            "path": "workspace/.operator-studio-local/dispatch-study-73e172c/report/study.json",
+            "sha256": "5dc1ab2af0c6dcff21dc68f29547c0df9ce88c75de247e98a621f0eb4f7105d1",
+            "bytes": 13127
+          },
+          {
+            "path": "workspace/.operator-studio-local/dispatch-study-73e172c/report/slot-01/logs/slot-01.log",
+            "sha256": "2a9474787b964fd14312c45a8756ad17a0fde841262183858cf91aea6528fe30",
+            "bytes": 233
+          }
+        ]
+      }
+    }
+  ],
+  "spawnRepair": {
+    "taskIds": [
+      "task_5493ce3bc830493eb4de0c2cc5064e83",
+      "task_efa3ab21f828400d8bdbc4e00531213f"
+    ],
+    "accepted": true,
+    "integrated": true,
+    "validationTaskId": "task_ddf7ec52e38f4896a114d04a9dfa94b4",
+    "validationAttemptId": "run_ac81207aab4f487ab15f03a84ed42750",
+    "exitCode": 0,
+    "seconds": 456.015,
+    "releaseChecks": 149,
+    "runtimeCases": 12,
+    "studyCases": 20,
+    "realInertChildCases": 3,
+    "boundaryChecks": 2,
+    "nonHardwareRerun": false,
+    "priorNonHardwareChecks": 44,
+    "matchedFiles": 4,
+    "archive": {
+      "path": "spawn-repair-verification-originals.zip",
+      "sha256": "f756c2c18dbe25a5f3f322d93592d128c47cba07f0d92bd8944e1b43f354e045",
+      "files": [
+        {
+          "path": "execution.jsonl",
+          "sha256": "508948302e9c4a19de4158471834fa5a8aee074652d8dcac9bfae17661677728",
+          "bytes": 169092
+        },
+        {
+          "path": "verification.json",
+          "sha256": "3793388d262fa9fbf7d773d4bf5a044e190ac31e2c150f03ffd9453d4cb8790d",
+          "bytes": 987
+        },
+        {
+          "path": "verification.log",
+          "sha256": "c918e470a966bfefd178c77bcfa4ef7ce7a21bb6d28597dfb0681ebdc46e527c",
+          "bytes": 705
+        },
+        {
+          "path": "candidate-verification.json",
+          "sha256": "3f203ffae6b79caada0f081cdcfd168c74dd751fc8a000c74a358edc1966e31a",
+          "bytes": 3606
+        },
+        {
+          "path": "command.json",
+          "sha256": "fc47d2191985ff575a21291b33258124248723cba0983f7bc69050c2a2c122be",
+          "bytes": 1708
+        },
+        {
+          "path": "result.json",
+          "sha256": "23cc766bcf762f535e17587b8513ec2e1680573dc9bbeddfa4529165da7e4b50",
+          "bytes": 1748
+        }
+      ]
+    }
   }
 }

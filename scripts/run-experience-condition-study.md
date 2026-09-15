@@ -174,6 +174,38 @@ where `record` is the existing `readRunRecord` DTO. Both ports receive the
 slot's **own** `artifactDir`/`reportDir` pair. These ports exist **only** for
 hardware-free fixtures; the CLI can never enable mocks.
 
+## Default process adapter (exported)
+
+The production invocation port is exported so an independent test can drive the
+**real** child-process adapter instead of reimplementing or mocking it:
+
+```js
+import { createDefaultInvokeSmoke } from './scripts/run-experience-condition-study.mjs';
+const invokeSmoke = createDefaultInvokeSmoke({ cwd, script });
+```
+
+- **Parameters** `{cwd, script}`: the child's working directory and the absolute
+  path of the unchanged existing smoke batch CLI
+  (`scripts/run-shared-gpu-regression-batch.mjs`). The study CLI fixes both to the
+  repository root and that script; no flag, environment variable or alternate
+  script can change them.
+- **Returns** the async invocation port
+  `({index, condition, artifactDir, reportDir, snapshot, gpuPython}) =>
+  {exitCode, signal, issues, logPath}`. `artifactDir`/`reportDir` are the slot's own
+  exclusive pair, `condition` and `snapshot` are exported to the child as
+  `E2E_EXPERIENCE_CONDITION` / `E2E_KERNEL_WIKI_SNAPSHOT`, and `exitCode` is the
+  **real** child exit code (`null` when the child could not be started; `issues`
+  names such a failure) — a stdout claim never overrides it.
+- **Side effects**: it creates `<artifactDir>/logs` and appends the raw
+  stdout+stderr stream to `<artifactDir>/logs/slot-NN.log`, the exact `logPath` the
+  retained schedule records. It **never** creates or writes into `reportDir`: the
+  smoke child creates its own `--report-dir` non-recursively and refuses to inherit
+  an existing one, so the parent must not pre-create it.
+- The adapter keeps `shell: false`, the fixed argv (`--mode smoke --families affine`
+  plus this slot's `--artifact-dir`/`--report-dir`/`--gpu-python`) and the inherited
+  environment. It is the same port the CLI uses; the CLI gains no mock, alternate
+  script or new scheduler.
+
 ## `--verify-report` (read-only counterpart)
 
 `verifyStudyReport(reportPath)` re-reads the imported snapshot and, for every

@@ -201,13 +201,32 @@ const closeLogStream = (stream) => new Promise((resolve) => {
   stream.end(finish);
 });
 
-// Default invocation port. It spawns the unchanged existing smoke CLI with a fixed
-// argv and shell:false, streams stdout/stderr byte-exactly into one raw log, and
-// returns the REAL child exit code. A nonzero exit can never be masked by stdout.
-const createDefaultInvokeSmoke = ({ cwd, script }) => async ({
+/**
+ * Default invocation port (documented public process adapter).
+ *
+ * Parameters: `{cwd, script}` — the working directory of the child and the absolute
+ * path of the unchanged existing smoke batch CLI. Both are fixed by the study CLI
+ * (`projectRoot` and `scripts/run-shared-gpu-regression-batch.mjs`); the CLI exposes
+ * no flag, environment override or alternate script for either.
+ *
+ * Returns the async invocation port receiving `{index, condition, artifactDir,
+ * reportDir, snapshot, gpuPython}` — the slot's own exclusive directory pair plus the
+ * fixed condition and snapshot. It spawns the unchanged smoke CLI with a fixed argv
+ * and `shell:false`, streams stdout/stderr byte-exactly into one raw log, and returns
+ * `{exitCode, signal, issues, logPath}` with the REAL child exit code; a nonzero exit
+ * can never be masked by stdout.
+ *
+ * Side effects: it creates `<artifactDir>/logs` and appends `<artifactDir>/logs/
+ * slot-NN.log` — exactly the `logPath` the schedule retains. It NEVER creates or
+ * writes into `reportDir`: the smoke child creates its own `--report-dir`
+ * non-recursively and refuses an existing one.
+ */
+export const createDefaultInvokeSmoke = ({ cwd, script }) => async ({
   index, condition, artifactDir, reportDir, snapshot, gpuPython,
 }) => {
-  const logPath = path.join(reportDir, 'logs', `slot-${String(index).padStart(2, '0')}.log`);
+  // The retained slot log lives in the slot's own ARTIFACT directory, exactly matching
+  // slotDirectories().logPath; reportDir stays untouched for the child to create.
+  const logPath = path.join(artifactDir, 'logs', `slot-${String(index).padStart(2, '0')}.log`);
   await mkdir(path.dirname(logPath), { recursive: true });
   let stream;
   try { stream = await openLogStream(logPath); }

@@ -82,11 +82,35 @@ produces are read back by the runner's own default `readInvocation` port from fi
 in the frozen producer layout on disk (the real repository store plus the batch report,
 attempt/summary/state/prompt-audit/study-audit originals), and the public `verifyStudyReport`
 is exercised against those retained bytes rather than a mock reply.
-The one case that starts a real child is the production-driver guard, which runs the driver CLI
+One group of real-child cases is the production-driver guard, which runs the driver CLI
 under a broken study environment with `OPERATOR_CLAUDE_BIN` and `OPERATOR_GPU_PYTHON` pointing
 at absent paths, in an isolated temporary artifact parent, and accepts only the preflight
 refusal (non-zero exit, no run root, no state, no report). The standard N20 refusal is
 exercised in process through the batch runner's documented injected-port path.
+
+The other real-child group is the three frozen spawn scenarios of
+`EXPERIENCE_STUDY_SPAWN_CONTRACT.md`. They call the real exported `createDefaultInvokeSmoke`
+default adapter — never an injected `invokeSmoke` port — and the adapter spawns one temporary
+inert local Node child per scenario, each in its own temporary artifact parent, report
+directory and snapshot file, with a unique pair of stream markers so no case can be satisfied
+by another case's bytes. The child validates the fixed smoke argv (mode smoke, the affine
+family, the three explicit paths), the fixed condition and snapshot environment, and its own
+exclusive report-directory creation, and it reports its own marker together with its own exit
+code instead of relying on an uncaught assertion, so every scenario can prove which check
+really stopped it. The parent must find the raw log under `artifactDir/logs` — the layout the
+retained slot `logPath` names — carrying exactly the child's two distinct stdout and stderr
+markers in one log, and must prove that the parent created no `logs` directory inside the
+child-owned report directory and left the artifact parent holding only its own log directory.
+The second scenario lets the child print an explicit success declaration on stdout — a JSON
+marker carrying `success: true` and `status: "completed"` — and exit 3; the real exit code and
+that complete raw stdout line must both survive, with no success-shaped field minted into the
+port value and the retained declaration read back from the log itself; the third pre-creates the report directory with a sentinel, and the child's
+exclusive mkdir must refuse it with its own non-zero code while the sentinel keeps its exact
+bytes and every original entry stays in place. A broken default log path fails the positive
+scenario on both counts (no log at the frozen path, and the child's exclusive mkdir fails
+because the parent created its report directory first). No provider, model, Python, network,
+Acagemm runtime or GPU is contacted; a passing run is startup-plumbing evidence, never live
+hardware, selection or publishability evidence.
 
 Runtime matrix (items 1-8): the default retrieval and the retained strict continuation
 verifier are unchanged; all three conditions filter before rank/quota, `facts-only` records
@@ -151,7 +175,8 @@ and model drift stay visible.
 
 Both suites run in the release gate. Before the parallel runtime/driver candidates are
 combined they cannot pass: they exercise the explicit `experienceCondition` port and the new
-study modules, so a green run is evidence for the integrated interface only, never a
+study modules, and the spawn scenarios additionally link the runner's exported default adapter,
+so a green run is evidence for the integrated interface only, never a
 selection benefit, stability or any N20 claim (`strictN20Passed` stays false).
 
 ## Round feedback / pre-send prompt audit coverage
