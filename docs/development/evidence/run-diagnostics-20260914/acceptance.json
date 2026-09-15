@@ -1,6 +1,6 @@
 {
   "schemaVersion": "operator-studio.run-diagnostics-acceptance/v1",
-  "updatedAt": "2026-09-15T02:33:53.208541+00:00",
+  "updatedAt": "2026-09-15T02:52:01.711158+00:00",
   "implementation": {
     "state": "integrated",
     "sources": [
@@ -80,7 +80,7 @@
   "issues": [
     {
       "id": "diagnostics",
-      "fact": "恢复后affine smoke 2/2及新N20 44/44实际模型观测成功；N20全部diagnostics身份/计数/观测时间/close原件核验通过。旧无响应与取消记录保留。",
+      "fact": "恢复后affine smoke 2/2及新N20 44/44实际模型观测成功；N20全部diagnostics身份/计数/观测时间/close原件核验通过。旧无响应与取消记录保留。 同源reduction/normalization覆盖4/4实际模型与diagnostics也通过。",
       "inference": null,
       "unknown": "旧CLI/代理/上游无回答的精确根因仍未证明；当前已恢复。",
       "evidence": [
@@ -88,7 +88,8 @@
         "task_508330ccd8084fe687ade96396fa1b6f",
         "task_3d6075d0a32643eaa82ab91c36440d6b",
         "smoke-recovered-20260915/reader.json",
-        "n20-recovered-20260915/diagnostics.json"
+        "n20-recovered-20260915/diagnostics.json",
+        "coverage-recovered-20260915/diagnostics.json"
       ],
       "next_action": "无需新增诊断功能。"
     },
@@ -155,7 +156,7 @@
         "n20-recovered-20260915/batch.json",
         "n20-recovered-20260915/reader.json"
       ],
-      "next_action": "已完成affine N20；新版本额外reduction/normalization覆盖因宿主拒绝尚未启动，等待该独立范围明确批准。"
+      "next_action": "本批真实验收完成：affine严格N20及同冻结源reduction/normalization各两轮已独立验收归档；保留全部历史失败，不继续无变化重跑。"
     }
   ],
   "liveTwoRound": {
@@ -1018,7 +1019,7 @@
       "provenance": "Root copies of failed originals; failed platform task is not accepted/integrated as success"
     }
   ],
-  "latestLiveAttempt": "newN20",
+  "latestLiveAttempt": "additionalCoverage",
   "liveRecovery": {
     "state": "passed",
     "taskId": "task_aae9d7f36e174c1bb6d88d4770bdf060",
@@ -1054,15 +1055,57 @@
     }
   ],
   "additionalCoverage": {
-    "state": "not_started",
+    "state": "passed",
+    "platformState": "integrated",
+    "taskId": "task_a389dd25c6ce4cc59e55a8db8bde1588",
+    "attemptId": "run_1452e3c488ae4a59b6c1c77aa826f719",
+    "artifactDigest": "12f4dd51e852c139d614399368b984f2e7385873c858131f4c912fedb103a331",
+    "exitCode": 0,
+    "elapsedSeconds": 430.547,
     "families": [
       "reduction",
       "normalization"
     ],
-    "requestId": "21c6d78-coverage-recovered-20260915",
-    "hostResult": "auto_review_rejected",
-    "reason": "This launches additional reduction/normalization GPU runs that send project data to DeepSeek, but the trusted authorization explicitly covered affine and N20 only, not this separate coverage scope.",
-    "nextAction": "Ask explicit approval for this separate data-sending coverage scope; do not retry or bypass.",
-    "previousCoverage": "83b91d6 historical coverage remains valid for that earlier source only."
-  }
+    "roundsPerFamily": 2,
+    "distinctCompletedCandidates": 4,
+    "requiredModelRuns": 4,
+    "observedModelRuns": 4,
+    "actualModel": "deepseek-v4-flash",
+    "queueTasks": 6,
+    "allQueueTasksCompletedAndReleased": true,
+    "workflowWritesAfterStart": 0,
+    "failedCandidates": 0,
+    "independentReader": "coverage-recovered-20260915/reader.json",
+    "diagnostics": "coverage-recovered-20260915/diagnostics.json",
+    "archive": {
+      "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\coverage-recovered-originals.zip",
+      "sha256": "fe88c8f0a32674b75ab23b88d524b0e3b9eb4d33702f3f9d02a8830084a603d7",
+      "verified": true,
+      "files": 390,
+      "originalBytes": 7739309
+    },
+    "authorization": {
+      "question": "是否允许额外运行 reduction/normalization 各两轮，并将其代码、提示词和测试反馈经现有 Claude 渠道发送至 https://api.deepseek.com/anthropic？",
+      "userAnswer": "允许，继续",
+      "sourceLocation": "本轮用户消息，紧接该具体问题",
+      "source": "upstream_reported",
+      "authority": "none",
+      "hostSubmissionAllowed": true
+    },
+    "scope": "Separate two-family coverage on frozen21c6d78; not pooled into affine N20 and not a per-family N20 stability claim."
+  },
+  "additionalCoverageHistory": [
+    {
+      "state": "not_started",
+      "families": [
+        "reduction",
+        "normalization"
+      ],
+      "requestId": "21c6d78-coverage-recovered-20260915",
+      "hostResult": "auto_review_rejected",
+      "reason": "This launches additional reduction/normalization GPU runs that send project data to DeepSeek, but the trusted authorization explicitly covered affine and N20 only, not this separate coverage scope.",
+      "nextAction": "Ask explicit approval for this separate data-sending coverage scope; do not retry or bypass.",
+      "previousCoverage": "83b91d6 historical coverage remains valid for that earlier source only."
+    }
+  ]
 }

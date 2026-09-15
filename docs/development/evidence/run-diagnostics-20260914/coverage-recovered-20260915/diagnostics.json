@@ -1,0 +1,388 @@
+{
+  "result": "passed",
+  "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_1452e3c488ae4a59b6c1c77aa826f719\\scratch\\real-runs\\shared-gpu-QgcQww",
+  "families": [
+    {
+      "family": "reduction",
+      "outcome": "full_success",
+      "completedCandidates": 2,
+      "stopConfirmed": true,
+      "workflowWritesAfterStart": 0,
+      "rollbackCount": 1
+    },
+    {
+      "family": "normalization",
+      "outcome": "full_success",
+      "completedCandidates": 2,
+      "stopConfirmed": true,
+      "workflowWritesAfterStart": 0,
+      "rollbackCount": 1
+    }
+  ],
+  "modelRunCount": 4,
+  "queueStatuses": {
+    "completed": 6
+  },
+  "allResourcesReleased": true,
+  "records": [
+    {
+      "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_1452e3c488ae4a59b6c1c77aa826f719\\scratch\\real-runs\\shared-gpu-QgcQww\\bridge\\claude-runs\\claude_MU22HK2H_0C33E95F.json",
+      "sha256": "7bf5d86c6efd11ab5af8e20b9e78eb9bb73b061e71007501621eba77d494705b",
+      "status": "completed",
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU22HK2H_0C33E95F",
+        "missionId": "MIS_MU22GY1W",
+        "sessionId": "0bf76479-8d3d-4d46-a83f-366b239093b4",
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "source": "assistant.message.model",
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [
+          "claude-haiku-4-5",
+          "claude-opus-5[1m]"
+        ],
+        "observations": [
+          {
+            "eventIndex": 1,
+            "sessionId": "0bf76479-8d3d-4d46-a83f-366b239093b4",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 2,
+            "sessionId": "0bf76479-8d3d-4d46-a83f-366b239093b4",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 3,
+            "sessionId": "0bf76479-8d3d-4d46-a83f-366b239093b4",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 4,
+            "sessionId": "0bf76479-8d3d-4d46-a83f-366b239093b4",
+            "model": "deepseek-v4-flash"
+          }
+        ],
+        "reasons": []
+      },
+      "diagnostics": {
+        "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU22HK2H_0C33E95F",
+        "missionId": "MIS_MU22GY1W",
+        "stdout": {
+          "chunks": 2056,
+          "bytes": 570031,
+          "firstAt": "2026-09-15T02:43:13.303Z",
+          "lastAt": "2026-09-15T02:43:34.064Z"
+        },
+        "stderr": {
+          "chunks": 0,
+          "bytes": 0,
+          "firstAt": null,
+          "lastAt": null
+        },
+        "events": {
+          "systemInit": 1,
+          "thinkingTokens": 2763,
+          "assistant": 4,
+          "result": 1,
+          "other": 1,
+          "invalidJson": 0
+        },
+        "firstModelObservedAt": "2026-09-15T02:43:19.948Z",
+        "cancellation": null,
+        "close": {
+          "at": "2026-09-15T02:43:34.656Z",
+          "exitCode": 0,
+          "signal": null
+        }
+      }
+    },
+    {
+      "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_1452e3c488ae4a59b6c1c77aa826f719\\scratch\\real-runs\\shared-gpu-QgcQww\\bridge\\claude-runs\\claude_MU22JCXS_2C01968E.json",
+      "sha256": "983e745000bef87617324fd95ee49ee3940a5deb4f59e74c5baa145996c90a87",
+      "status": "completed",
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU22JCXS_2C01968E",
+        "missionId": "MIS_MU22GY1W",
+        "sessionId": "b28deb4a-89df-455f-8e6c-54832159a950",
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "source": "assistant.message.model",
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [
+          "claude-haiku-4-5",
+          "claude-opus-5[1m]"
+        ],
+        "observations": [
+          {
+            "eventIndex": 1,
+            "sessionId": "b28deb4a-89df-455f-8e6c-54832159a950",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 2,
+            "sessionId": "b28deb4a-89df-455f-8e6c-54832159a950",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 3,
+            "sessionId": "b28deb4a-89df-455f-8e6c-54832159a950",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 4,
+            "sessionId": "b28deb4a-89df-455f-8e6c-54832159a950",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 5,
+            "sessionId": "b28deb4a-89df-455f-8e6c-54832159a950",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 6,
+            "sessionId": "b28deb4a-89df-455f-8e6c-54832159a950",
+            "model": "deepseek-v4-flash"
+          }
+        ],
+        "reasons": []
+      },
+      "diagnostics": {
+        "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU22JCXS_2C01968E",
+        "missionId": "MIS_MU22GY1W",
+        "stdout": {
+          "chunks": 7441,
+          "bytes": 1851140,
+          "firstAt": "2026-09-15T02:44:37.449Z",
+          "lastAt": "2026-09-15T02:45:34.365Z"
+        },
+        "stderr": {
+          "chunks": 0,
+          "bytes": 0,
+          "firstAt": null,
+          "lastAt": null
+        },
+        "events": {
+          "systemInit": 1,
+          "thinkingTokens": 9184,
+          "assistant": 6,
+          "result": 1,
+          "other": 2,
+          "invalidJson": 0
+        },
+        "firstModelObservedAt": "2026-09-15T02:45:18.564Z",
+        "cancellation": null,
+        "close": {
+          "at": "2026-09-15T02:45:34.914Z",
+          "exitCode": 0,
+          "signal": null
+        }
+      }
+    },
+    {
+      "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_1452e3c488ae4a59b6c1c77aa826f719\\scratch\\real-runs\\shared-gpu-QgcQww\\bridge\\claude-runs\\claude_MU22M75Q_EF72F82C.json",
+      "sha256": "30633fd808516c00dfe95f8af93003cfa66134700ab31bab1f1f795396b8eaad",
+      "status": "completed",
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU22M75Q_EF72F82C",
+        "missionId": "MIS_MU22LLRC",
+        "sessionId": "edc90781-f8c8-45f9-9e02-c43a40bd8d51",
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "source": "assistant.message.model",
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [
+          "claude-haiku-4-5",
+          "claude-opus-5[1m]"
+        ],
+        "observations": [
+          {
+            "eventIndex": 1,
+            "sessionId": "edc90781-f8c8-45f9-9e02-c43a40bd8d51",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 2,
+            "sessionId": "edc90781-f8c8-45f9-9e02-c43a40bd8d51",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 3,
+            "sessionId": "edc90781-f8c8-45f9-9e02-c43a40bd8d51",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 4,
+            "sessionId": "edc90781-f8c8-45f9-9e02-c43a40bd8d51",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 5,
+            "sessionId": "edc90781-f8c8-45f9-9e02-c43a40bd8d51",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 6,
+            "sessionId": "edc90781-f8c8-45f9-9e02-c43a40bd8d51",
+            "model": "deepseek-v4-flash"
+          }
+        ],
+        "reasons": []
+      },
+      "diagnostics": {
+        "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU22M75Q_EF72F82C",
+        "missionId": "MIS_MU22LLRC",
+        "stdout": {
+          "chunks": 857,
+          "bytes": 211248,
+          "firstAt": "2026-09-15T02:46:49.861Z",
+          "lastAt": "2026-09-15T02:47:04.884Z"
+        },
+        "stderr": {
+          "chunks": 0,
+          "bytes": 0,
+          "firstAt": null,
+          "lastAt": null
+        },
+        "events": {
+          "systemInit": 1,
+          "thinkingTokens": 949,
+          "assistant": 6,
+          "result": 1,
+          "other": 2,
+          "invalidJson": 0
+        },
+        "firstModelObservedAt": "2026-09-15T02:46:54.095Z",
+        "cancellation": null,
+        "close": {
+          "at": "2026-09-15T02:47:05.492Z",
+          "exitCode": 0,
+          "signal": null
+        }
+      }
+    },
+    {
+      "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_1452e3c488ae4a59b6c1c77aa826f719\\scratch\\real-runs\\shared-gpu-QgcQww\\bridge\\claude-runs\\claude_MU22NWJL_8233F2BE.json",
+      "sha256": "00d2686c99a0b85caca5b3c786999322d48db9bdf8390159ff69ae8c6fd5d400",
+      "status": "completed",
+      "modelObservation": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU22NWJL_8233F2BE",
+        "missionId": "MIS_MU22LLRC",
+        "sessionId": "814571d7-1091-4da1-85a0-cb0e06504df3",
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "source": "assistant.message.model",
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "configuredModels": [
+          "claude-opus-5[1m]"
+        ],
+        "usageModels": [
+          "claude-haiku-4-5",
+          "claude-opus-5[1m]"
+        ],
+        "observations": [
+          {
+            "eventIndex": 1,
+            "sessionId": "814571d7-1091-4da1-85a0-cb0e06504df3",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 2,
+            "sessionId": "814571d7-1091-4da1-85a0-cb0e06504df3",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 3,
+            "sessionId": "814571d7-1091-4da1-85a0-cb0e06504df3",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 4,
+            "sessionId": "814571d7-1091-4da1-85a0-cb0e06504df3",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 5,
+            "sessionId": "814571d7-1091-4da1-85a0-cb0e06504df3",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 6,
+            "sessionId": "814571d7-1091-4da1-85a0-cb0e06504df3",
+            "model": "deepseek-v4-flash"
+          },
+          {
+            "eventIndex": 7,
+            "sessionId": "814571d7-1091-4da1-85a0-cb0e06504df3",
+            "model": "deepseek-v4-flash"
+          }
+        ],
+        "reasons": []
+      },
+      "diagnostics": {
+        "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+        "provider": "claude-code",
+        "runId": "claude_MU22NWJL_8233F2BE",
+        "missionId": "MIS_MU22LLRC",
+        "stdout": {
+          "chunks": 6739,
+          "bytes": 1695155,
+          "firstAt": "2026-09-15T02:48:09.401Z",
+          "lastAt": "2026-09-15T02:49:01.015Z"
+        },
+        "stderr": {
+          "chunks": 0,
+          "bytes": 0,
+          "firstAt": null,
+          "lastAt": null
+        },
+        "events": {
+          "systemInit": 1,
+          "thinkingTokens": 8368,
+          "assistant": 7,
+          "result": 1,
+          "other": 2,
+          "invalidJson": 0
+        },
+        "firstModelObservedAt": "2026-09-15T02:48:42.370Z",
+        "cancellation": null,
+        "close": {
+          "at": "2026-09-15T02:49:01.568Z",
+          "exitCode": 0,
+          "signal": null
+        }
+      }
+    }
+  ]
+}

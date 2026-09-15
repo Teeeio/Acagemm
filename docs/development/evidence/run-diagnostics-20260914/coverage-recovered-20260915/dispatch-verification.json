@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "recipe_name": "real-smoke-terminal-report",
+  "recipe_digest": "36072794d1b3f00e418c0d2c33e30dd0991ea899d01e1ee9fd4249df02c3a6ab",
+  "executed_at": "2026-09-15T02:49:43.826+00:00",
+  "passed": true,
+  "planned_checks": 1,
+  "interrupted": null,
+  "checks": [
+    {
+      "name": "smoke-report",
+      "argv": [
+        "node",
+        "-e",
+        "const fs=require('node:fs');const b=JSON.parse(fs.readFileSync('docs/development/evidence/run-diagnostics-20260914/coverage-recovered-20260915/batch.json','utf8'));const l=JSON.parse(fs.readFileSync('docs/development/evidence/run-diagnostics-20260914/coverage-recovered-20260915/ledger.json','utf8'));if(b.status!=='passed'||b.requestedRuns!==1||b.invocations.length!==1||b.invocations[0].outcome!=='full_success'||b.invocations[0].comparable!==true||b.stopReason!==null)throw Error('strict smoke failed');console.log('strict smoke terminal report passed');"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.203,
+      "passed": true,
+      "truncated": false,
+      "cancelled": false,
+      "timeout": false
+    }
+  ],
+  "log": "verification.log",
+  "log_truncated": false
+}

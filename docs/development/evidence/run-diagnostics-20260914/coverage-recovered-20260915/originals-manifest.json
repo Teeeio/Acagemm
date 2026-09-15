@@ -1,0 +1,1959 @@
+{
+  "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\coverage-recovered-originals.zip",
+  "sha256": "fe88c8f0a32674b75ab23b88d524b0e3b9eb4d33702f3f9d02a8830084a603d7",
+  "verified": true,
+  "files": 390,
+  "originalBytes": 7739309,
+  "entries": [
+    {
+      "path": "shared-gpu-QgcQww/attempt.json",
+      "bytes": 1586253,
+      "sha256": "6de80196a046e156866b6623cba261076dabce265268caeda2247e43936000a2"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-empty-mcp.json",
+      "bytes": 18,
+      "sha256": "e93fc8db2b1bd77107fe6c758bca9545fa864cf7cce8ab93a7b2b93a1d566a7b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-runs/claude_MU22HK2H_0C33E95F.json",
+      "bytes": 3439,
+      "sha256": "7bf5d86c6efd11ab5af8e20b9e78eb9bb73b061e71007501621eba77d494705b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-runs/claude_MU22HK2H_0C33E95F.jsonl",
+      "bytes": 21097,
+      "sha256": "208b53363d08bc250b91861586d14434542083d9e55ee05f6fd5ff70cbe61cd3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-runs/claude_MU22JCXS_2C01968E.json",
+      "bytes": 3720,
+      "sha256": "983e745000bef87617324fd95ee49ee3940a5deb4f59e74c5baa145996c90a87"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-runs/claude_MU22JCXS_2C01968E.jsonl",
+      "bytes": 24814,
+      "sha256": "6d4d37ac841fc52643beb66fa378057f7f7de3d9296631ee454a6c85a0ae409a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-runs/claude_MU22M75Q_EF72F82C.json",
+      "bytes": 3725,
+      "sha256": "30633fd808516c00dfe95f8af93003cfa66134700ab31bab1f1f795396b8eaad"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-runs/claude_MU22M75Q_EF72F82C.jsonl",
+      "bytes": 21797,
+      "sha256": "9624c28f3019b8f952975045924285c26abcbbe5cfc1082bf17ed30d30ac1416"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-runs/claude_MU22NWJL_8233F2BE.json",
+      "bytes": 3868,
+      "sha256": "00d2686c99a0b85caca5b3c786999322d48db9bdf8390159ff69ae8c6fd5d400"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/claude-runs/claude_MU22NWJL_8233F2BE.jsonl",
+      "bytes": 32404,
+      "sha256": "13ee3b212d5e15443baf394ab822bdc80a02c37f4025a95d64fd88dfe518f837"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/git-trust/a1c0106588e7531eef2b5cef.gitconfig",
+      "bytes": 425,
+      "sha256": "2c7f0bc73fad80366634cfab1373e0fc48df65a1850ae6d3436300cd4e921739"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/git-trust/c04fce538179f1ff95bef915.gitconfig",
+      "bytes": 421,
+      "sha256": "fe8ece59a4f27f58cdf6f5a95012950a337bf840597ab0bd2123934f8b55eb71"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/prompt-audits/claude_MU22HK2H_0C33E95F.json",
+      "bytes": 14220,
+      "sha256": "cd383ea7d67310b2595f01607179b675156b0bae40690c7d6b58a9ac10311a10"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/prompt-audits/claude_MU22JCXS_2C01968E.json",
+      "bytes": 34848,
+      "sha256": "e17f88b76a7ab9354b28e7370cffe861baecb352f0428a8eaeeab9e508960ad1"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/prompt-audits/claude_MU22M75Q_EF72F82C.json",
+      "bytes": 14595,
+      "sha256": "85795d46c5f4f8319459e017c536f02b3af634d174bcaffd9182b7d0fe5078ad"
+    },
+    {
+      "path": "shared-gpu-QgcQww/bridge/prompt-audits/claude_MU22NWJL_8233F2BE.json",
+      "bytes": 35018,
+      "sha256": "500416757a02f22e2b61743f797a06e7997059f592b4dc9b0c49d2f57849f8f5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/data/mock-db.json",
+      "bytes": 704200,
+      "sha256": "6a7e8bced5a54389e7f456f854dbba71b989ce3fce01cbca3f48581419857a82"
+    },
+    {
+      "path": "shared-gpu-QgcQww/normalization-state.json",
+      "bytes": 795238,
+      "sha256": "3447844557354fc83f01471ad5a891562216c6f5a3f5f5142cf7c9fd73f48156"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/artifacts/07ed7f1cfeab53cc04bbb700e78711696fc15f8dbdfc4ecbc8d70e705cd3678d.json",
+      "bytes": 1004,
+      "sha256": "3b4da0f61ec768cc70d97cfee57f05ef6ba8d4299fe7b1bbb3032f4b39fd69e6"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/artifacts/1a59b6b11d42fa41ceb51ede2da37c357bdbf7115c448734ff54e85096c243f4.json",
+      "bytes": 1004,
+      "sha256": "4fd3f23bbb7e5af6236e2089f6c5f0bd34ed1d7d24b98bb4d1ccdd8574297d51"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/artifacts/24bb869b2795598e443f2c5a93e41b6e8d560fad1bfd4ab319cc6e5c2cc3a54f.json",
+      "bytes": 1004,
+      "sha256": "b2a6c3b778244a6a163d8e96f0bca7cf47ae0837a6e5cd12fa25ef927d04b049"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/artifacts/3ca7dc78218bbea684c500de6a773a867efb2a776addecb4ac3ddc470f98f6b4.json",
+      "bytes": 1003,
+      "sha256": "2540851d0ef679d0f4e18ab8de4b57b28fd2c925f0542cc6ed042bae94c2d7d8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/artifacts/5803c69af5b7bd32022c57978fd7bb05a860292007dd0e23c48d1dc832ec998b.json",
+      "bytes": 1002,
+      "sha256": "c1d5c297dc525f2d38c9fe6424cc739b81581b60808d7723fa6b0ee9cd4959aa"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/artifacts/74fda7538d2a9f7d7840a78a26f50f1991d0c458ca1bbe7b548ab2be2d5c7c27.json",
+      "bytes": 1003,
+      "sha256": "0ecdce3e5d630938ce2cd314e2a48b73fc8066a3a22f9cdb528833744093b298"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/preparations/prepare_44699986-c377-4e4e-8f25-979959233d1d.json",
+      "bytes": 611,
+      "sha256": "a3f2880e93deb58946675f3f833550981898e2524742a68f96274002798ab427"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/preparations/prepare_587d9011-33ac-412d-af1e-f1f1a629f420.json",
+      "bytes": 611,
+      "sha256": "6e3f42cf1fe0ebe9d08b858e28d02de298a9ad09315ba4ff328b5897ce5ab330"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/preparations/prepare_593471b3-82a7-42bd-b826-ebc35ea0ea44.json",
+      "bytes": 611,
+      "sha256": "67757f08b3580bfcc5133b613a6b2b02a22edfb2c8fd77eed03ea4c816658f05"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/preparations/prepare_87db64e2-38dd-4a64-bbfc-a93f5e9f0349.json",
+      "bytes": 611,
+      "sha256": "e901fba057feaffc407173e3c117ba84ca0586db1502c5ae4acdd7826e4a92dd"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/preparations/prepare_c02c7e49-e740-4313-8b97-329176f3c38c.json",
+      "bytes": 611,
+      "sha256": "249a6c2afbdafd8fd33dfb7e05bb60b09cc7a63a98a1dc14964b25481dfa393e"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/preparations/prepare_df39ca41-9d4e-489d-85f6-7b9c01191142.json",
+      "bytes": 611,
+      "sha256": "4dcb302adef5610cc46193d12671a775c778a767d047ca5b42fbd6af1e91b563"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/25b8b541ca9171984d4aa32ddc64015b61d4f611a758e96d32afe633efa68f4a-prepare_df39ca41-9d4e-489d-85f6-7b9c01191142/oracle.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/25b8b541ca9171984d4aa32ddc64015b61d4f611a758e96d32afe633efa68f4a-prepare_df39ca41-9d4e-489d-85f6-7b9c01191142/run.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/94244ddb6db9be75bf82d1dfaf76071eb9c4d8877782823672282e5adeed4aba-prepare_44699986-c377-4e4e-8f25-979959233d1d/oracle.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/94244ddb6db9be75bf82d1dfaf76071eb9c4d8877782823672282e5adeed4aba-prepare_44699986-c377-4e4e-8f25-979959233d1d/run.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/bcd88452be44ec2ffa6446dbd977e3290b7a340037307120d4b6b6225cc3109e-prepare_587d9011-33ac-412d-af1e-f1f1a629f420/oracle.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/bcd88452be44ec2ffa6446dbd977e3290b7a340037307120d4b6b6225cc3109e-prepare_587d9011-33ac-412d-af1e-f1f1a629f420/run.py",
+      "bytes": 1290,
+      "sha256": "1c3f231b24efee74194f7f020c5983f598a2caeb1d6b3311d8c45847c56f6240"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/cbb0f64e9fbe47215ef38bc1c6062c5422e2e0b1cabb152a4da61b6eac572e82-prepare_87db64e2-38dd-4a64-bbfc-a93f5e9f0349/oracle.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/cbb0f64e9fbe47215ef38bc1c6062c5422e2e0b1cabb152a4da61b6eac572e82-prepare_87db64e2-38dd-4a64-bbfc-a93f5e9f0349/run.py",
+      "bytes": 1416,
+      "sha256": "71c1852b73ae82a0b2e93e04e935b2792d7524d6da000d82201f3c698c575f36"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/cbe12cd3e31d3ee194214fdc3a867caa6ed29b3da99a516ab767085476599fdf-prepare_c02c7e49-e740-4313-8b97-329176f3c38c/oracle.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/cbe12cd3e31d3ee194214fdc3a867caa6ed29b3da99a516ab767085476599fdf-prepare_c02c7e49-e740-4313-8b97-329176f3c38c/run.py",
+      "bytes": 2906,
+      "sha256": "3a91532b6ed9e5850f26187c9cbca8545fc336b86ed73d70ce874f98a6ac7812"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/ef65057eb1cfecb6b67bb9f54950b3d9c2003428ace07596d5064b5592daae6f-prepare_593471b3-82a7-42bd-b826-ebc35ea0ea44/oracle.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/adapter/prepared/ef65057eb1cfecb6b67bb9f54950b3d9c2003428ace07596d5064b5592daae6f-prepare_593471b3-82a7-42bd-b826-ebc35ea0ea44/run.py",
+      "bytes": 1356,
+      "sha256": "da15a88af5d1849bb0b88ed6137012c276202d9faf2dea24a9c0372aa9ef2fe9"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/admissions/097ad76c78150508792f519aea71b8650cd495f67dead2bf0e1495e75bb8fb6d.json",
+      "bytes": 752,
+      "sha256": "ea0d28ab8c74b05852524fc9c4334fca758a6532918f995c8a7f3550a12dae32"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/admissions/0c39b55d2ab7f1af27d0bca6588a463b3e9fa077c591c8b687698cee7be2acdd.json",
+      "bytes": 752,
+      "sha256": "c8e5f325a5a06acea12b5209eeee267a4c181ea3d7abff8eef242403149e4e2e"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/admissions/1c111c8ad4a832423a7746c0b805f99e93438f7638b31b7acee68b5a93d9b637.json",
+      "bytes": 752,
+      "sha256": "9044ba10b4dac9663163c9b6c107b983d28efd3e86776882e53bca028ec2a5a9"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/admissions/54f95a64fee158387730336b0c1eb3f47adac70c7a09738de8e86d4f3b569ab8.json",
+      "bytes": 752,
+      "sha256": "7d3b6bfcb3ec7c81f54bd5b165cc7c1bedf071071729b12e6c2e4000d5f64e54"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/admissions/55d65739a8833d04b5e74207902e7a2d9902b7d65429cda56e75f68e694d3d15.json",
+      "bytes": 752,
+      "sha256": "630c2879ab4303b0aeadb871aee783b6e47d6db6c478562a114c6279d81ff157"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/admissions/f59eee49118531d1ff2b855d0e3c863126e2fcd5512436e7daeedf00a9b4aef7.json",
+      "bytes": 752,
+      "sha256": "2413c67707add313ac61e655e82579d4f402647b526caf721d1418656b7770b1"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/blobs/1c3f231b24efee74194f7f020c5983f598a2caeb1d6b3311d8c45847c56f6240",
+      "bytes": 1290,
+      "sha256": "1c3f231b24efee74194f7f020c5983f598a2caeb1d6b3311d8c45847c56f6240"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/blobs/1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d",
+      "bytes": 312,
+      "sha256": "1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/blobs/3a91532b6ed9e5850f26187c9cbca8545fc336b86ed73d70ce874f98a6ac7812",
+      "bytes": 2906,
+      "sha256": "3a91532b6ed9e5850f26187c9cbca8545fc336b86ed73d70ce874f98a6ac7812"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/blobs/71c1852b73ae82a0b2e93e04e935b2792d7524d6da000d82201f3c698c575f36",
+      "bytes": 1416,
+      "sha256": "71c1852b73ae82a0b2e93e04e935b2792d7524d6da000d82201f3c698c575f36"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/blobs/80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/blobs/b06df1e21f4372172e60d419c29e88461557e3dd15320d1c436b47df30980089",
+      "bytes": 485,
+      "sha256": "b06df1e21f4372172e60d419c29e88461557e3dd15320d1c436b47df30980089"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/blobs/cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/blobs/da15a88af5d1849bb0b88ed6137012c276202d9faf2dea24a9c0372aa9ef2fe9",
+      "bytes": 1356,
+      "sha256": "da15a88af5d1849bb0b88ed6137012c276202d9faf2dea24a9c0372aa9ef2fe9"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/manifests/25b8b541ca9171984d4aa32ddc64015b61d4f611a758e96d32afe633efa68f4a.json",
+      "bytes": 1542,
+      "sha256": "8e5f5a758d453b55687426e95da0d952c90b46b9ac389b2e58855ba80557bad8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/manifests/94244ddb6db9be75bf82d1dfaf76071eb9c4d8877782823672282e5adeed4aba.json",
+      "bytes": 1540,
+      "sha256": "5b8d1a19d70209f09ecb726eb13336da9cd254167343d39e8d262e90a91840cd"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/manifests/bcd88452be44ec2ffa6446dbd977e3290b7a340037307120d4b6b6225cc3109e.json",
+      "bytes": 1537,
+      "sha256": "91f3904cfa0834b17e9bb42ba046bc2501f23f2cc687ed55ac0a35c8e351eb0f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/manifests/cbb0f64e9fbe47215ef38bc1c6062c5422e2e0b1cabb152a4da61b6eac572e82.json",
+      "bytes": 1536,
+      "sha256": "0e4e9bd521d2f6a19cc1b35a8462197ceafc5764be55a4b8a8be3089ae86402c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/manifests/cbe12cd3e31d3ee194214fdc3a867caa6ed29b3da99a516ab767085476599fdf.json",
+      "bytes": 1537,
+      "sha256": "439900f40f56ead7770d7cb3a771d437e11a51329808839ced0e42750959ecba"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/manifests/ef65057eb1cfecb6b67bb9f54950b3d9c2003428ace07596d5064b5592daae6f.json",
+      "bytes": 1536,
+      "sha256": "9123c9a4297772e283f55cdd1be9889bfb00e7300c2a603696eefb867b543705"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/preparations/25b8b541ca9171984d4aa32ddc64015b61d4f611a758e96d32afe633efa68f4a.json",
+      "bytes": 374,
+      "sha256": "cf1c51970311a09ae214226dfe88b0b7d887af047b9086df259df36eb54a0adc"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/preparations/94244ddb6db9be75bf82d1dfaf76071eb9c4d8877782823672282e5adeed4aba.json",
+      "bytes": 374,
+      "sha256": "67075c346e4dac120a7f063475f72ba6654eedc37a40db706d9818da019f5cac"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/preparations/bcd88452be44ec2ffa6446dbd977e3290b7a340037307120d4b6b6225cc3109e.json",
+      "bytes": 374,
+      "sha256": "845e14ae2eecb982077dcabcf86674ab9879a91542c22daa2f67a057b971acba"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/preparations/cbb0f64e9fbe47215ef38bc1c6062c5422e2e0b1cabb152a4da61b6eac572e82.json",
+      "bytes": 374,
+      "sha256": "c3a51d200f3193a9ed1de15d002c72f1baed25544111fcff069f458862eb4729"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/preparations/cbe12cd3e31d3ee194214fdc3a867caa6ed29b3da99a516ab767085476599fdf.json",
+      "bytes": 374,
+      "sha256": "cb3468cc1a8a3e6fe975b3bc832971d93ebc357a951a453623a61183f62a1f75"
+    },
+    {
+      "path": "shared-gpu-QgcQww/packages/store/preparations/ef65057eb1cfecb6b67bb9f54950b3d9c2003428ace07596d5064b5592daae6f.json",
+      "bytes": 374,
+      "sha256": "0ce14e5febfc7588ce5bc10cbb15e4e9f755a9357745dc3215ec3c7e7532ec7c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/artifacts/MIS_MU22LLRC/benchmark.json",
+      "bytes": 3587,
+      "sha256": "369966f59ce123068dc91b8fbbf21636f0632611eb1c5a231a6f4c49bdd53868"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/artifacts/MIS_MU22LLRC/candidate-01.manifest.json",
+      "bytes": 321,
+      "sha256": "7a8dc0122d7c93ea9e21701719897c3e0fae7b669e2da8cf421008b785480674"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/artifacts/MIS_MU22LLRC/candidate-01.patch",
+      "bytes": 862,
+      "sha256": "b1e30910b45dbd86c833c35e84dd289033c9f34eaf3e9be4c61a7213a7ffe530"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/artifacts/MIS_MU22LLRC/candidate-02.manifest.json",
+      "bytes": 321,
+      "sha256": "f74dfc6d8829f24e0bc67408a38eab731f8c7f166e0d7d40c7f7d5616bdf83ed"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/artifacts/MIS_MU22LLRC/candidate-02.patch",
+      "bytes": 2564,
+      "sha256": "db0aa0596e394dd9fc6a391f37a6a1b2029364bf74f91fd6b2481323110d14db"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/artifacts/MIS_MU22LLRC/profiler.json",
+      "bytes": 1482,
+      "sha256": "84932cbc84f64ab831281e54b09f14d408f9655d24f2160a2c046f907be773d8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/artifacts/MIS_MU22LLRC/test-result.json",
+      "bytes": 12871,
+      "sha256": "eca2108f88f7c6340db2b004009fc53541f12b9865a638449451a10741ab1f57"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/artifacts/MIS_MU22LLRC/tracer.json",
+      "bytes": 1469,
+      "sha256": "ee527a465addf5182564c6f404814c768ee09d3245b95008c45ffe21caf872ff"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/project.json",
+      "bytes": 914,
+      "sha256": "b151f05f28e1b34fcbd2454283102232baaf87df314e50852511f21ca907174e"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/source-registry.json",
+      "bytes": 42,
+      "sha256": "eafb5254efa23b2b36493b23f5bdad64dd371314c5e97c661ad5cb811429dfac"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/COMMIT_EDITMSG",
+      "bytes": 33,
+      "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/config",
+      "bytes": 218,
+      "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/index",
+      "bytes": 118,
+      "sha256": "00bb530984f1e7d909dc971f6068e5fad5967b560ae94a1d754fcaffb0456063"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/info/exclude",
+      "bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/logs/HEAD",
+      "bytes": 536,
+      "sha256": "441f9076bc788c5e8e246aab6ed1f6eea02c17faaf364c6735181b32e93df0da"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/logs/refs/heads/master",
+      "bytes": 198,
+      "sha256": "acd9f2b7f45f2c967d0bdaf1c42dac78fe76b9d99f48d23a8e1e2ed3923cc9c4"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/objects/9d/2f348bf769a7b49df37c2ef8be2d16f659aa17",
+      "bytes": 51,
+      "sha256": "e423f7f52bb55db55481798e22d1b876e8f211f6d5f7ef96092451afae55ccd9"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/objects/b7/612d4b3ad04b6dfbbf364aeaf967da5866fb07",
+      "bytes": 457,
+      "sha256": "dd90eb5538a0e4257e2c4584d4701da2619079c6099c7af6f65c42c714f24c42"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/objects/e2/0e59ec18c297184357b8addcdb82d501418673",
+      "bytes": 143,
+      "sha256": "28371c9e6294f8ff1533de460d947484b1527888dfea6e968c099de814d589e5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/objects/e6/9de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "bytes": 15,
+      "sha256": "164c5fa8067facf1a43f09ce3d0e35ebf53a7f5723ecbf15a8667cfc53c26f6c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/ORIG_HEAD",
+      "bytes": 41,
+      "sha256": "d1bf7c8dd3f911e7964d3653c939e3ae8844b52a2968247cb618157c551d9efc"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "d1bf7c8dd3f911e7964d3653c939e3ae8844b52a2968247cb618157c551d9efc"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/repository/run.py",
+      "bytes": 2906,
+      "sha256": "3a91532b6ed9e5850f26187c9cbca8545fc336b86ed73d70ce874f98a6ac7812"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/.operator-studio/workspaces/MIS_MU22LLRC/workspace.json",
+      "bytes": 762,
+      "sha256": "0653d378f5511da50d3284339b1e6ae1c8315be5518dd8ce3ab0fa9b648be4ef"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/COMMIT_EDITMSG",
+      "bytes": 29,
+      "sha256": "4e8a97fd1287be5b1892a807b2ccdce100f57e45ca6caee424d2d14b5e0fb148"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/config",
+      "bytes": 200,
+      "sha256": "d3df7bb7804fe3c142969ced24327de496239151ec0e2477b9f81823641d0044"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/index",
+      "bytes": 137,
+      "sha256": "ccb5205e9ff2b00830a127c0c8c8f5379f05689328afb4b9f0b6e84adec4870b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/info/exclude",
+      "bytes": 258,
+      "sha256": "aa88cbe1915b2447b118bc3ec2f0896a9bb19dc62e7f063f5011033a29d7c10a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/logs/HEAD",
+      "bytes": 378,
+      "sha256": "1d6fb707258e748028339e8ed5cd2f806c8b3bfec9188ca596dc416815286abe"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/logs/refs/heads/master",
+      "bytes": 378,
+      "sha256": "1d6fb707258e748028339e8ed5cd2f806c8b3bfec9188ca596dc416815286abe"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/objects/02/5a9d02c3e9e9daf719935e045a354c2771a749",
+      "bytes": 181,
+      "sha256": "c35266b73da710cf0c4fd3f6ec260009fb00c73023044d05fbf578249480cdcb"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/objects/07/f1731f982624cd05bd92cc00f941054955a157",
+      "bytes": 144,
+      "sha256": "c93e2006a7412c5c99b2d6e375e2c074d5fcd82586cd155572336d1903465d23"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/objects/4b/825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "bytes": 15,
+      "sha256": "e72602cad67ed061ec84b13e92568f873172efac19a512a1b561dbf54e2c8426"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/objects/9d/2f348bf769a7b49df37c2ef8be2d16f659aa17",
+      "bytes": 51,
+      "sha256": "e423f7f52bb55db55481798e22d1b876e8f211f6d5f7ef96092451afae55ccd9"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/objects/b7/612d4b3ad04b6dfbbf364aeaf967da5866fb07",
+      "bytes": 457,
+      "sha256": "dd90eb5538a0e4257e2c4584d4701da2619079c6099c7af6f65c42c714f24c42"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "29dc5e0b84a8b1cc4f68a693f54538d5c2bbc33e1ad900e11f6064da9ba6694d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/normalization/repository/run.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/artifacts/MIS_MU22GY1W/benchmark.json",
+      "bytes": 3511,
+      "sha256": "9c126313cc50c96ddbd542a715304ff41307157e7ae0141d68cdb7fc0dc272e0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/artifacts/MIS_MU22GY1W/candidate-01.manifest.json",
+      "bytes": 321,
+      "sha256": "efe43c9b958915c78e9c7d57304b836c335ab03ab8cd0d6cb3abb56841718de8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/artifacts/MIS_MU22GY1W/candidate-01.patch",
+      "bytes": 1518,
+      "sha256": "ab77fbe281584b1a1de52ef10aea6df56965a0436ab334d64360c91e510a261f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/artifacts/MIS_MU22GY1W/candidate-02.manifest.json",
+      "bytes": 321,
+      "sha256": "96b72d3621b2fa391791d7d6259af631f4fec4cf0f5b8ee41fb909967a6842c7"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/artifacts/MIS_MU22GY1W/candidate-02.patch",
+      "bytes": 1199,
+      "sha256": "742dd80c55b455f3dd571f095947ac1c4259e70efe7d1b9ac217ffd8502b4517"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/artifacts/MIS_MU22GY1W/profiler.json",
+      "bytes": 1482,
+      "sha256": "1d01fa0c900bd85b6a3003b5da37feae5fca1df649c2d2ecbb847b5555eee55f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/artifacts/MIS_MU22GY1W/test-result.json",
+      "bytes": 12758,
+      "sha256": "3c0221cadd5fc57438531c418f2173e51d326308c851afaa4346175fb91fc03e"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/artifacts/MIS_MU22GY1W/tracer.json",
+      "bytes": 1469,
+      "sha256": "a10e7b17e043edd707f48f6b922c2d54eb0d1d2ef1336c49896519acb6561018"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/project.json",
+      "bytes": 898,
+      "sha256": "de9d9c755f73d7ec62eb7ab4ee3c3583503975656b17b4f55a5525031de4e014"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/source-registry.json",
+      "bytes": 42,
+      "sha256": "eafb5254efa23b2b36493b23f5bdad64dd371314c5e97c661ad5cb811429dfac"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/COMMIT_EDITMSG",
+      "bytes": 33,
+      "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/config",
+      "bytes": 218,
+      "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/index",
+      "bytes": 118,
+      "sha256": "3d307fe773c007999c748dc212c0cf784aab1872f05c5329ec8e4631055d5d0d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/info/exclude",
+      "bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/logs/HEAD",
+      "bytes": 536,
+      "sha256": "e2df00712e882838589beac2452a7f36e5a8ac4ed54d8d03b38f9461b752bbc4"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/logs/refs/heads/master",
+      "bytes": 198,
+      "sha256": "ac71f778a3b875a6e86a5b6098eae7dc65a9dc65b565f58e4aa5316c966272b9"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/objects/10/024da482def1ab06cb42a39f8725ad0dd34344",
+      "bytes": 431,
+      "sha256": "4b2cef22584eca69ef8b10e417b71a16a987cf03f7235f223b44aa699b8d32d1"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/objects/85/a9669c8c45fc2201caf68ecc2acedc921cac64",
+      "bytes": 143,
+      "sha256": "d49e46a791fba7458077a42171f8ee65b6a7586cdf97489da1d11675bf31607b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/objects/91/2a2a953a1816534d385df2cc19d0d52280dd29",
+      "bytes": 51,
+      "sha256": "824ed3558357041450dfd88c919faefbcff72d76310553abd96f419831f83235"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/objects/e6/9de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "bytes": 15,
+      "sha256": "164c5fa8067facf1a43f09ce3d0e35ebf53a7f5723ecbf15a8667cfc53c26f6c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/ORIG_HEAD",
+      "bytes": 41,
+      "sha256": "475954af122c1bd1a63bfd0751ba0f4bb953c834fe5fb098ab0293e573b5423c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "475954af122c1bd1a63bfd0751ba0f4bb953c834fe5fb098ab0293e573b5423c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/repository/run.py",
+      "bytes": 1416,
+      "sha256": "71c1852b73ae82a0b2e93e04e935b2792d7524d6da000d82201f3c698c575f36"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/.operator-studio/workspaces/MIS_MU22GY1W/workspace.json",
+      "bytes": 750,
+      "sha256": "cf443b9ec0d974f3133902a30360d85c3c666d225ec2d78bd82082ee64ff4b98"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/COMMIT_EDITMSG",
+      "bytes": 29,
+      "sha256": "4e8a97fd1287be5b1892a807b2ccdce100f57e45ca6caee424d2d14b5e0fb148"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/config",
+      "bytes": 200,
+      "sha256": "d3df7bb7804fe3c142969ced24327de496239151ec0e2477b9f81823641d0044"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/index",
+      "bytes": 137,
+      "sha256": "1b1c3bd5897a97ea6eb8df1d5a300370ddc94c853af978086729069c8fc9fe48"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/info/exclude",
+      "bytes": 258,
+      "sha256": "aa88cbe1915b2447b118bc3ec2f0896a9bb19dc62e7f063f5011033a29d7c10a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/logs/HEAD",
+      "bytes": 378,
+      "sha256": "28d6f287955c4829e100c9ebaa46bc47153c3322a76f66a48ba6b87b4dcde9c8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/logs/refs/heads/master",
+      "bytes": 378,
+      "sha256": "28d6f287955c4829e100c9ebaa46bc47153c3322a76f66a48ba6b87b4dcde9c8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/objects/10/024da482def1ab06cb42a39f8725ad0dd34344",
+      "bytes": 431,
+      "sha256": "4b2cef22584eca69ef8b10e417b71a16a987cf03f7235f223b44aa699b8d32d1"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/objects/12/7cf76bb15672059f1de8d323980d5e1590b6fe",
+      "bytes": 143,
+      "sha256": "b075828b2e5d8b056df0af71d199448abbaf8c98072b56c3ac5fcd896dbf71ae"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/objects/31/a886325412cc0e5bb7ac29d47d2d806718cf85",
+      "bytes": 180,
+      "sha256": "56fd33b3369a50ca58e0d02c109c6c37b0910f8e6d8fa4c11278f436da08a702"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/objects/4b/825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "bytes": 15,
+      "sha256": "e72602cad67ed061ec84b13e92568f873172efac19a512a1b561dbf54e2c8426"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/objects/91/2a2a953a1816534d385df2cc19d0d52280dd29",
+      "bytes": 51,
+      "sha256": "824ed3558357041450dfd88c919faefbcff72d76310553abd96f419831f83235"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "0cd19e01f634c94e453d1add0b8e738d8742b8247f0810662acc7c04047a2f74"
+    },
+    {
+      "path": "shared-gpu-QgcQww/projects/reduction/repository/run.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/reduction-state.json",
+      "bytes": 539122,
+      "sha256": "f51524388cfe5d2220ba5423f4dbea8ffb18686d6e8fa9dbae114a101e33a34a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/checkpoints/MIS_MU22GY1W/cp_4413421D-214/run.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/checkpoints/MIS_MU22GY1W/cp_7D130CBF-159/run.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/checkpoints/MIS_MU22LLRC/cp_4242577D-2C5/run.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/checkpoints/MIS_MU22LLRC/cp_85AD6360-956/run.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/command-journal.jsonl",
+      "bytes": 104431,
+      "sha256": "ecc893595c539cce271fee1f211c4ba8db51ff2b503b046ca091ffe49b8a991c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/experiences/experiences.json",
+      "bytes": 6473,
+      "sha256": "c80ba5f8caf2e71a9c1de001bb4d4e1dd596f3a79eaf140aa8a878bf6fed77ac"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/git-trust/1434f63df548d11e17fb7a18.gitconfig",
+      "bytes": 391,
+      "sha256": "fedb87cc7ab24cc8fd450fe06978b24f2bb4f1b3cd7d8e0a332d61f2f467dd64"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/git-trust/2550751bf04b8208895df9cd.gitconfig",
+      "bytes": 384,
+      "sha256": "e579b0f77e6fa2bff4e731f1734934143698f1a08201a9366cbc343aec603075"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/git-trust/3f403977efe659b486dc0328.gitconfig",
+      "bytes": 380,
+      "sha256": "28976b937798474d40ef2fa03b1fbd07047b762dcefb881caae1e4403de9ef9c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/git-trust/a1c0106588e7531eef2b5cef.gitconfig",
+      "bytes": 425,
+      "sha256": "2c7f0bc73fad80366634cfab1373e0fc48df65a1850ae6d3436300cd4e921739"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/git-trust/c04fce538179f1ff95bef915.gitconfig",
+      "bytes": 421,
+      "sha256": "fe8ece59a4f27f58cdf6f5a95012950a337bf840597ab0bd2123934f8b55eb71"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/operator-studio.pid",
+      "bytes": 7,
+      "sha256": "c1819b13a96a8d0b6c2751a0a22872bec452c2abbce6e558bc055005170fd93e"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/operator-test-queue.jsonl",
+      "bytes": 85324,
+      "sha256": "9e85d7591e5cdcb65ffd4a1576baa3dc135752a315c294e3774f067cbcedf088"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/COMMIT_EDITMSG",
+      "bytes": 33,
+      "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/config",
+      "bytes": 218,
+      "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/index",
+      "bytes": 530,
+      "sha256": "bb9dfe5c1e3e1440868f6a0c13c2497fab653064958f272329725806ed546ded"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/info/exclude",
+      "bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/logs/HEAD",
+      "bytes": 198,
+      "sha256": "ba73fad0389a7fc6c51623dcd8b1a41cba7567e12387e274815dfac6a48c8549"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/logs/refs/heads/master",
+      "bytes": 198,
+      "sha256": "ba73fad0389a7fc6c51623dcd8b1a41cba7567e12387e274815dfac6a48c8549"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/14/1ac3d21a60f5b445d546ef829bddb347cbc61a",
+      "bytes": 214,
+      "sha256": "07beb84b64ba0f80f723cd14b88e6dc7ba20e0010f41032de5704537898d82e8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/50/eafdbcac67334eb0f142a3b469965371254ce9",
+      "bytes": 144,
+      "sha256": "641190517af63be361eaed33c0d04c9df8e324874a4c0f9126023c05d9604d50"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/68/a8c18407e44135c00f5b19911f819198c0e6af",
+      "bytes": 63,
+      "sha256": "50039b3a221b510ec6317b720ba68e54da3cb1c7d5653457c72e244fbd9686fe"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/7c/dfcc064fb32cc5620f2a20c37cfe0d2060825c",
+      "bytes": 69,
+      "sha256": "77acb078b6ca87745fca278ea59fa3e1fd0181b79ef61b201f2f183b495fe355"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/a3/c0c71572e0ab4740a1146fb4e19fa31290f23f",
+      "bytes": 226,
+      "sha256": "79f3a5bc38c8a918a87b0085d4b2a0282582a517eaa015559e7f1c20217d7577"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/cf/2ab6ee5cf260ac816248ebeec979670ec1d9ac",
+      "bytes": 71,
+      "sha256": "5dc0355c57866875a91922b8e34129bf7ea841ed0a6d12b7a69f7862d13ebb4c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/d2/874deabe85a0c334b276e9a72d0f9117ae3ed4",
+      "bytes": 103,
+      "sha256": "f63addbb38f481796b86edec842f322adf0f7a44673d6b154e3b47a0420c4d62"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/e6/95f13fb5c02b2b2434582d5e5524a229de7c57",
+      "bytes": 152,
+      "sha256": "4d62d2407692a1af3d38ba93461b930fd375f4f433ad4a9bb8fb569cd8726ddd"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/objects/ff/546476bdd4d3153ab96b3e77e0d603a028d43d",
+      "bytes": 128,
+      "sha256": "eb7f0454fce551a69b664a8087f5edd2dbf7a542d1e39a7221a6f67676355c82"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "01bf674a2d849737d9b390ce327d565b4be85311a4eca7a249bfe2421d663be0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/benchmarks/mla_paged_attention.yaml",
+      "bytes": 108,
+      "sha256": "16fcb324cd3c9d4e3bd90a894db3a13b510e0ec0806d925dbbc1a02daa87933b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/kernels/paged_attention.cu",
+      "bytes": 331,
+      "sha256": "86188a7116efccc54ee2fa62f90ba26c18d17079a0e0ca39156fc5a6a9667c97"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/README.md",
+      "bytes": 300,
+      "sha256": "0295269a56165924f94e2b67f25c927af2cd214f65ead65d14402997bffcd139"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/repository/tests/paged_attention_cases.yaml",
+      "bytes": 129,
+      "sha256": "09b47ff2d469bdb0eef74d3cdba3ea319a5884c15e3074baf620fd0c6ddbd454"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime/workspaces/MIS_01JH7R/workspace.json",
+      "bytes": 499,
+      "sha256": "2f8e1ddb4f033c22a3f5a614e7dd39726528ad7dd13c19194e5a3de181ea62d3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/runtime.log",
+      "bytes": 1967,
+      "sha256": "326ab5c56a9acdb30f39429530960347383cfb20fb47d55ed6db12799d0d033b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/summary.json",
+      "bytes": 3003021,
+      "sha256": "2667bf874c8d055ab272696ff9aa1169faa9d577ddc1fbafadc3e0ef2037fc52"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2009,
+      "sha256": "5d99d28a0a5f38b2be57999563c67eab199b34df1b75f51fcef01520bdf938e7"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/__pycache__/run.cpython-312.pyc",
+      "bytes": 2267,
+      "sha256": "a2deff666ca854edbfb94c8cb9b030d6c9faf57772f40950b4fc3a649f5366fe"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/correctness.json",
+      "bytes": 1272,
+      "sha256": "e3492ac52f84bfc9a9f99aa9d30a967ecf7861bf41b211495755b0977db7e391"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/execution-claim.json",
+      "bytes": 343,
+      "sha256": "7ce7e8001a6873c884f4eddc0592d2df614ddb7104c776b923e44cffb06e23b6"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/execution-config.json",
+      "bytes": 280,
+      "sha256": "d8ecf1909830dd230a2550107017a66c22d82314481ea1ffdf311274c5a97e98"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/execution-exit.json",
+      "bytes": 607,
+      "sha256": "384526fe6534f0280adc100d00bcc7fe5ff2e1da8968fab299f83b1d661eb546"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/oracle.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/result.json",
+      "bytes": 12178,
+      "sha256": "c4bf4bc85985dbcae2b0d5610bd9a8c2c08fccfe2fab05d1d9cff7b4a53bb9ad"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/run.py",
+      "bytes": 1416,
+      "sha256": "71c1852b73ae82a0b2e93e04e935b2792d7524d6da000d82201f3c698c575f36"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/runner-status.json",
+      "bytes": 124,
+      "sha256": "db893f82197de6c9f68e8e8873539df40fd863d4075cffaee8137e2e94732b6c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_19BA82663152F83987BCB76B41945A24/task.json",
+      "bytes": 26001,
+      "sha256": "2f49cf6cd981b92bb0320eaaeb2e45b8d5766b5d4fc42871ffa76117c1ff2494"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2217,
+      "sha256": "7384422c79a1fd85ba5433fe35a43e2952881549481f089f5b9c9d31ddbaf52d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/__pycache__/run.cpython-312.pyc",
+      "bytes": 5238,
+      "sha256": "01dfd0ef3df13dde711324f7e65079f59245895bbd86c88d44506ae096833ce0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/correctness.json",
+      "bytes": 1307,
+      "sha256": "b284dd569de8f7c0425d6f93623d02ecb3b577247918c796ea25108037a6ede2"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/execution-claim.json",
+      "bytes": 344,
+      "sha256": "cdf81c65fc7bd6954bb45833f075524297345a705eee7793eefbcfe703898a60"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/execution-config.json",
+      "bytes": 280,
+      "sha256": "b3d43a5ff4d3936b8e8c88d1c801c2a0376d14de2a84e6eb70ee3c882d823371"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/execution-exit.json",
+      "bytes": 608,
+      "sha256": "0f4210e10b732f1cb4c3721db34225af8e0a00878f4a706ca2b3045032b629ae"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/oracle.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/result.json",
+      "bytes": 12285,
+      "sha256": "87c4b1f2920c81f6faaf2f06124c30d98fd3c323e09ca34ef37233d775d1296b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/run.py",
+      "bytes": 2906,
+      "sha256": "3a91532b6ed9e5850f26187c9cbca8545fc336b86ed73d70ce874f98a6ac7812"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/runner-status.json",
+      "bytes": 124,
+      "sha256": "43c47b27c772cb744853797f969231bb5dcba91221b5976fefde9dc31bbec9e8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_46F8E848BAFA752870BD1B8EBAC97EAD/task.json",
+      "bytes": 29411,
+      "sha256": "49185ba0fa75ba83a0c936fda6dc5d830b500f5052c66a12d3709e0d6a848ca0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2009,
+      "sha256": "922d3f39c5e1c5e6d1a0aef7fa412558022f394027d145db4fd2531b8632d4f4"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/__pycache__/run.cpython-312.pyc",
+      "bytes": 1991,
+      "sha256": "10d1709f524b57f23c548e6a70ebc385caa847276997eeb3762c69dcfbdf7da7"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/correctness.json",
+      "bytes": 1272,
+      "sha256": "e398671fb0082325f310f94db53bf1d0763addcc6d7c066cc13d2f020c17c53c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/execution-claim.json",
+      "bytes": 343,
+      "sha256": "92fe51dc6ea7f8be82656e46e9e16125371736bd85d906a9d21819410cb13f2e"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/execution-config.json",
+      "bytes": 280,
+      "sha256": "9122b13948f54e60d2a6eb707382f9f3b14437cb56cedef11168e943d657792c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/execution-exit.json",
+      "bytes": 607,
+      "sha256": "218e1f3cd8487a997eb9da802763f2bebe2b77629c6b80ce128210fc6429c16f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/oracle.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/result.json",
+      "bytes": 12177,
+      "sha256": "836ae5614c6a6504b6c6657b70d9828ed03eb3f3cb3812c329cc5a446bf39b1a"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/run.py",
+      "bytes": 1356,
+      "sha256": "da15a88af5d1849bb0b88ed6137012c276202d9faf2dea24a9c0372aa9ef2fe9"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/runner-status.json",
+      "bytes": 124,
+      "sha256": "4d2d062ff5972334db001b376697a18437fc79edb5bb0b8570147921d2919361"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_573CBEE969D6F90258F046AF846565A4/task.json",
+      "bytes": 26030,
+      "sha256": "fdce3f33667a22484726a1750c15e87b51876de4d980725feab31540863774e8"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2217,
+      "sha256": "4f305a03a9e12d0d3777cb358ec67d3fd374381326e26dee942b8a14135f1192"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/__pycache__/run.cpython-312.pyc",
+      "bytes": 2180,
+      "sha256": "651d796e8ba7b844f4a8d0361f136da5c177ca93b9895fd1d88702dec93bbb93"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/correctness.json",
+      "bytes": 1308,
+      "sha256": "cf6472f23e91011316b90d6d277ebc841cb2d59fc0fb24fff1d208a90599e8e0"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/execution-claim.json",
+      "bytes": 343,
+      "sha256": "dc17a7972186be7be5eb63a805a3da74d4c74b0bf61b089d68cc6f66dd37cf67"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/execution-config.json",
+      "bytes": 280,
+      "sha256": "7742a85235842fabcaf8fd2060fedf0a61b6a434d85de144f33466d3e315173c"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/execution-exit.json",
+      "bytes": 607,
+      "sha256": "f4b4c6f3fca590dd4835982c14d0ba9900a0b2c4f94c2cc181eea83a821ef380"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/oracle.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/result.json",
+      "bytes": 12288,
+      "sha256": "b51e5a86b1ffb03fe42412aa6901c77dc7c682aa4dee1ae9c85176cc131eb549"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/run.py",
+      "bytes": 1290,
+      "sha256": "1c3f231b24efee74194f7f020c5983f598a2caeb1d6b3311d8c45847c56f6240"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/runner-status.json",
+      "bytes": 124,
+      "sha256": "7debd71f25862326ea4a5b73b37f6af0b2da05a2311aa6f67234f5389cb43fd1"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_61B438A63DF04DEA870317902BCB915C/task.json",
+      "bytes": 26057,
+      "sha256": "95ce57423eba0f63a53167601a11c9d41c7ddc926f429a74b49f726273752231"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2217,
+      "sha256": "acd1a244e4041905430d581246bdc73b227955d473cf51f9217b7aff7d569bfa"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/__pycache__/run.cpython-312.pyc",
+      "bytes": 2214,
+      "sha256": "9d556423adbe03598add753de1be57f5a1cc6e845829b6683e908f247baa0833"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/correctness.json",
+      "bytes": 1309,
+      "sha256": "8d1fc0f5acc5e5eea49dbb44e8a0edc7e52ce41ab943b215f794c8fd945130a5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/execution-claim.json",
+      "bytes": 343,
+      "sha256": "74cd978bf0085a799aefa8643ea0f2b278cc572ccfd0c5332fb636cc32082095"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/execution-config.json",
+      "bytes": 280,
+      "sha256": "85e9170bca183f51af571f9c3d3c178165273167430d30ea3b9e46eb9dbe7db3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/execution-exit.json",
+      "bytes": 607,
+      "sha256": "8a537c6f6cea0d2f090651419d0349f5224aa5e00c10be222f76608caca66028"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/oracle.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/result.json",
+      "bytes": 12256,
+      "sha256": "15328c8bb61ac7e0b1326b0b18d95bb236d1ad038250033e55b0c6e063ba8014"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/run.py",
+      "bytes": 1084,
+      "sha256": "80b79c9d3eb0df53cf3e508639664a712807dc6aed61ed30aa542a0bdfa3f909"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/runner-status.json",
+      "bytes": 124,
+      "sha256": "dd61f6532380386a93ecc0c89a584a5828b6081ac889553f4ad3456dd6070f09"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B868C015095662DC499015D66048F026/task.json",
+      "bytes": 25270,
+      "sha256": "762e416b39596d4893eb1cb730ec9cd297485a70787cfa6ffacad8c6ec5e9ca6"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2009,
+      "sha256": "b8e01dc169711c68d67c99c79c837da9d093243131293fdf3a6db9814a614590"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/__pycache__/run.cpython-312.pyc",
+      "bytes": 2006,
+      "sha256": "779a8792f9ac8b6c58c1f38b953cf35f888b5af3db655b8f1a60b9575738000f"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/correctness.json",
+      "bytes": 1271,
+      "sha256": "bacf595416944e2c271ab002291afe1bb5132d18d519f71865a4661307f4e211"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/execution-claim.json",
+      "bytes": 343,
+      "sha256": "230c074a97a3148c1b656e7ce5772ccfa254e1e48b6bb09cef58773afbadad51"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/execution-config.json",
+      "bytes": 280,
+      "sha256": "9287c935ed03c6bb477d45684a9487d2f8d0bdec81995150911e441ae75ff180"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/execution-exit.json",
+      "bytes": 607,
+      "sha256": "58686677dce2fcc78452c53c0986f78b74c52b6f2302e018e6df9d52da913651"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/oracle.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/result.json",
+      "bytes": 12146,
+      "sha256": "66e4f93d0271f8796508ed8377f74ad802b3dd23578ebf0d0c890e3b2a02abc2"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/run.py",
+      "bytes": 986,
+      "sha256": "cf5b9c6d27b2a0244cf666daf6b1b0b8ab6f96c3716a7e9c877ff95cf46aa5b3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/runner-status.json",
+      "bytes": 124,
+      "sha256": "1fbdb6b35829535ea7a2655670e049ae04107aa13b630d3e57e8ccaa73512b52"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/local_c500_B8809D280A57A2522D855A8FFBAAFD19/task.json",
+      "bytes": 24884,
+      "sha256": "ab38efbe52c585128f1edda5c7c1fbf3cde18e9eb89a25ca4b96eee649847fa5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/12/12a565a8886823a9490a6fe77e8d436adbdbd608aebb5d6bb3cb9a8b0bc322a3.pt",
+      "bytes": 33948,
+      "sha256": "6132be8c2ca71a00614ae5c0d3e401461e7a3d842b6a21003f5e487a802c3c5b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/1e/1e899fd20c235567f1665ac261d3bc11d3dd5696d0a4d7995258f0f4c924acb7.pt",
+      "bytes": 1372,
+      "sha256": "7849e97644f34d2b74affacaf9f80db0a40ef01a7b41f0356bbc3f1bf6d4bf4d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/33/336e34b2181e2020ebd6d41cb3a2aab3ce6dd752b1e9bbb4008b1c5df4071dac.pt",
+      "bytes": 1308,
+      "sha256": "86929cba2f0455d7d505a633520ed979e50afa5e54525c6a6a8155fbb7ce0d73"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/35/3516d62c353ffb66252908cb67aff4af176ae6832e864d2ba7672b3c5f480cda.pt",
+      "bytes": 1308,
+      "sha256": "86929cba2f0455d7d505a633520ed979e50afa5e54525c6a6a8155fbb7ce0d73"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/35/35ccbd5a43122e5367a4460b08f617b98573b99957ca85742317b3627ff8e7ba.pt",
+      "bytes": 1180,
+      "sha256": "e6435ef23441ef648ecc6fdad087197a600ad559bf221ac9054855903ae5faa3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/4f/4fee30080dd353e2bf57c46759075135a1ba2ca6d945d0e1c1c74b37d6c0bdc4.pt",
+      "bytes": 1180,
+      "sha256": "b8a071c032db6edf9b1c40480bff145923dc9222228f9229dd84485042b5db4e"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/52/52c514a56e07639b21bd5c35f60b63acc1c59e00ecbf9244614cfee3fd829f04.pt",
+      "bytes": 1180,
+      "sha256": "96c5cba83642c41fbe4f59fc67b050e037b304dddc183a10f5652458cbee5ea5"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/7d/7da5f9cee7a46a91ec6eabcdcf6fc1f3c0f3344df182427a950d8891e5eddfc5.pt",
+      "bytes": 1180,
+      "sha256": "e1342127b2ca13c8147409de311bf21b81e76c3b496e74dd25992b68b9af7841"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/87/8726ad483ab3b6d30aa08fc2f8df55c482a8596423df96bd6c4a245fab84b6e3.pt",
+      "bytes": 1436,
+      "sha256": "da6843619aa858db133dd48001f0958fe590921e7f352e31e3e2b5b038d38f88"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/a5/a5503dff47e587f93b6382a24c953941e85d2c1101025590798096a6b94ea1da.pt",
+      "bytes": 1180,
+      "sha256": "e6435ef23441ef648ecc6fdad087197a600ad559bf221ac9054855903ae5faa3"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/a9/a9b8440c48d3d7f13496fd403597867f8a418a07eb002eb6af1ac32012582475.pt",
+      "bytes": 1180,
+      "sha256": "b8a071c032db6edf9b1c40480bff145923dc9222228f9229dd84485042b5db4e"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/ac/ac24626f2ce9c121df5eb7240d1756782125b9033027ff5964e3e35bdca2e4db.pt",
+      "bytes": 1180,
+      "sha256": "e1342127b2ca13c8147409de311bf21b81e76c3b496e74dd25992b68b9af7841"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/ea/ea1e745daeb2b03d8952085a0b2826966a814834f166cea299a4095eaca4cd6f.pt",
+      "bytes": 1436,
+      "sha256": "da6843619aa858db133dd48001f0958fe590921e7f352e31e3e2b5b038d38f88"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/ef/ef3380ef1c4e44da037c48f984e9a857cd866e529b0c8644c949b15bf3dda375.pt",
+      "bytes": 33948,
+      "sha256": "6132be8c2ca71a00614ae5c0d3e401461e7a3d842b6a21003f5e487a802c3c5b"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/fd/fd4c087f82d390aab72181f97be0bc0adb5a89a1b1ce86917e7d5867937f6eb0.pt",
+      "bytes": 1372,
+      "sha256": "7849e97644f34d2b74affacaf9f80db0a40ef01a7b41f0356bbc3f1bf6d4bf4d"
+    },
+    {
+      "path": "shared-gpu-QgcQww/tasks/reference-cache/ff/ff0b89c5198150ef1e5ed117da9a6c8ae1e58158f90f5da1c5c52f59f86e86f8.pt",
+      "bytes": 1180,
+      "sha256": "96c5cba83642c41fbe4f59fc67b050e037b304dddc183a10f5652458cbee5ea5"
+    }
+  ]
+}
