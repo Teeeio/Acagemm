@@ -1,6 +1,30 @@
 # Generic Operator Iteration Goal
 
-> **Current status entry (2026-09-12)**: the 2026-09-07 / 2026-09-09 checkpoints below are
+> **Current acceptance entry (2026-09-15 UTC, latest)**: on frozen production source
+> `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948` (git clean), the real regression was independently
+> accepted on the local shared NVIDIA GPU (`sm86`, `publishable=false`): affine smoke 1 run /
+> 2 candidates / 2 observed model calls; **strict N20 20/20 `full_success`, 20/20 independently
+> verified and comparable, 44/44 observed model calls (`deepseek-v4-flash`), 40 distinct
+> candidates**, all queue tasks terminal and released, `workflowWritesAfterStart=0`; a **separate**
+> reduction/normalization coverage (two rounds per family) reached 4 distinct candidates and 4/4
+> observed model calls and is not pooled into the affine N20. Canonical truth:
+> [`evidence/run-diagnostics-20260914/acceptance.json`](evidence/run-diagnostics-20260914/acceptance.json);
+> original reader/diagnostics:
+> [`n20-recovered-20260915`](evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json),
+> [`coverage-recovered-20260915`](evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json).
+> Scope and frozen inputs: [`evidence/closeout-20260915/ACCEPTANCE.md`](evidence/closeout-20260915/ACCEPTANCE.md);
+> delivery status and offline re-verification results use
+> [`evidence/closeout-20260915/closeout.json`](evidence/closeout-20260915/closeout.json) as the single
+> source of truth, and portable-bundle operation is documented in
+> [`evidence/closeout-20260915/PORTABLE.md`](evidence/closeout-20260915/PORTABLE.md). The claim is limited to this frozen source, this
+> local shared GPU and the fixed matrices; historical failures/unknowns (the old `83b91d6` strict
+> N20 with 19 comparable + 1 unknown, the no-response/proxy retries, the rejected extra dispatch)
+> remain failures in the original evidence. **Phase 3 (KernelWiki importer + deterministic
+> selector) has not started.** No production-code change and no remote push in this batch; the
+> term "downstream" refers only to dispatch platform agents, not to the Acagemm runtime agent.
+> Everything below dated 2026-09-12 or earlier is historical.
+>
+> **Historical status entry (2026-09-12, superseded by the 2026-09-15 entry above)**: the 2026-09-07 / 2026-09-09 checkpoints below are
 > historical records; their dates and boundaries are preserved. The currently accepted baseline
 > is the P1 round-feedback loop (`TEAM_HANDOFF.md` §14 items 1–5): experience feedback,
 > frozen round facts, pre-send prompt/selection audit, and one real two-round run. Acceptance:
@@ -17,7 +41,7 @@
 > used a read-only observer replay; it did not re-run the whole driver live. A single two-round run is
 > **not** an N=20 stability result.
 >
-> **Phase 2 current entry (2026-09-12, appended)**: the diagnostic qualification and versioned
+> **Phase 2 historical entry (2026-09-12, appended; latest state in the 2026-09-15 entry above)**: the diagnostic qualification and versioned
 > single-decision/governance work (`TEAM_HANDOFF.md` §14 item 6) is integrated per the frozen
 > contract [`P2_EVIDENCE_ACCEPTANCE.md`](P2_EVIDENCE_ACCEPTANCE.md); the current evidence index and
 > boundaries are in

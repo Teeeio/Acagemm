@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "acagemm.closeout-inputs/v1",
+  "sourceCommit": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948",
+  "reader": {
+    "path": "docs/development/evidence/live-regression-20260913/verify-retained-runs.mjs",
+    "sha256": "07a0c9b24b548b4e7461435f4881892eb7cf2e67d5224c72826ed06c33a984ee"
+  },
+  "helpers": [
+    {
+      "path": "scripts/shared-gpu-acceptance.mjs",
+      "sha256": "242d3fe2562bd9dbd59762721402591d146d3a22259e58597b099a3712767955"
+    },
+    {
+      "path": "scripts/summarize-gpu-agent-runs.mjs",
+      "sha256": "91bbab8a3437bb819fcc688c285a701f5b93e6103a19e07e5cba5757bc0c2aa1"
+    },
+    {
+      "path": "client-runtime/model-observation.mjs",
+      "sha256": "2625f6fb7958d6064770c9c7919ce43d272574be050e8f0e20a8e46e6c95143d"
+    },
+    {
+      "path": "client-runtime/cancellation-contract.mjs",
+      "sha256": "ba49589bd210208081e0a9065668f99cd6418d1053930f271605b392b6e2f2d3"
+    }
+  ],
+  "archives": [
+    {
+      "path": "run-diagnostics-20260914/coverage-recovered-originals.zip",
+      "sha256": "fe88c8f0a32674b75ab23b88d524b0e3b9eb4d33702f3f9d02a8830084a603d7",
+      "replay": "coverage"
+    },
+    {
+      "path": "run-diagnostics-20260914/failed-smoke-originals.zip",
+      "sha256": "c50b7de215cbb73339b6cd4e5dcd58e221810bf127b584ab083f9eefdf606c6d",
+      "replay": null
+    },
+    {
+      "path": "run-diagnostics-20260914/n20-recovered-originals.zip",
+      "sha256": "ccd79f9354f9f82bde76b4d8242b56b72505568c27be360b38d0fa8be2f92aca",
+      "replay": "n20"
+    },
+    {
+      "path": "run-diagnostics-20260914/proxy-repair-retry-originals.zip",
+      "sha256": "988dec3b7cbc4f4fb1a28867a81bb6c6b212ceef7d92a40ddd3230b5747dca95",
+      "replay": null
+    },
+    {
+      "path": "run-diagnostics-20260914/smoke-recovered-originals.zip",
+      "sha256": "f519a0ccc79bdcb274022c0a8de052fb156c5deb1a8ec3e20d4098d01ebca045",
+      "replay": "smoke"
+    },
+    {
+      "path": "live-regression-83b91d6-20260914/coverage-originals.zip",
+      "sha256": "8f6a9c278380f658ea2cecf067f3382ecf8c2c54f82bc318b84ef5616c27cc09",
+      "replay": null
+    },
+    {
+      "path": "live-regression-83b91d6-20260914/n20-originals.zip",
+      "sha256": "8e8b53d9a58bf27da3a18c867dae89f7e2d4eb6737aed562cb7dc4ae929957a4",
+      "replay": null
+    },
+    {
+      "path": "live-regression-83b91d6-20260914/smoke-originals.zip",
+      "sha256": "2340cb0beb2fc77ca92d1ab6ea26d9a8134981a6484a7cd5cfec8bf905b09ee3",
+      "replay": null
+    }
+  ],
+  "expectations": {
+    "smoke": {
+      "runs": 1,
+      "candidates": 2,
+      "modelRuns": 2,
+      "strictN20": false
+    },
+    "n20": {
+      "runs": 20,
+      "candidates": 40,
+      "modelRuns": 44,
+      "strictN20": true
+    },
+    "coverage": {
+      "runs": 1,
+      "candidates": 4,
+      "modelRuns": 4,
+      "strictN20": false
+    }
+  },
+  "sourceReport": "docs/development/evidence/run-diagnostics-20260914/acceptance.json"
+}

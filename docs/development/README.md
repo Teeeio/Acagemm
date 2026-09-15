@@ -1,6 +1,27 @@
 # 开发文档入口
 
-> **当前状态入口（2026-09-12）**：交接分支 `handoff/codex-job-supervisor-p1`；实际执行后端是
+> **当前入口（2026-09-15 UTC，最新真实验收）**：冻结生产源码
+> `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`（git clean）。affine smoke 1 次运行 / 2 候选 /
+> 2 次实际模型观测；**严格 N20 20/20 `full_success`、20/20 独立验证且可比、44/44 实际模型观测
+> （`deepseek-v4-flash`）、40 个不同候选**；另做**单独** reduction / normalization 两家族覆盖
+> （每族两轮）4 个不同候选、4/4 实际模型观测，不计入 N20。权威事实见
+> [`evidence/run-diagnostics-20260914/acceptance.json`](evidence/run-diagnostics-20260914/acceptance.json)，
+> 原件 reader/diagnostics 见
+> [`n20-recovered-20260915/reader.json`](evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json)、
+> [`coverage-recovered-20260915/reader.json`](evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json)；
+> 范围与冻结输入见 [`evidence/closeout-20260915/ACCEPTANCE.md`](evidence/closeout-20260915/ACCEPTANCE.md)；
+> 交付状态与离线复核结果以
+> [`evidence/closeout-20260915/closeout.json`](evidence/closeout-20260915/closeout.json) 为单一事实源，
+> 便携交付包的操作说明见
+> [`evidence/closeout-20260915/PORTABLE.md`](evidence/closeout-20260915/PORTABLE.md)。
+> 结论限定该冻结源码、本机共享 GPU 与既定矩阵，
+> `publishable=false`；历史失败/unknown 原样保留；Phase 3（KernelWiki 导入器 + 确定性选择器）
+> **尚未开始**；本批无生产代码变更、未推送远端。术语：「下游」仅指 dispatch 平台 agent，
+> 被测的 Acagemm 运行 agent 不是下游。
+>
+> 下方 2026-09-12 的「当前状态入口」「Phase 2 当前入口」**均为历史**，最新状态以上方入口为准。
+
+> **历史状态入口（2026-09-12，已被上方 2026-09-15 入口取代）**：交接分支 `handoff/codex-job-supervisor-p1`；实际执行后端是
 > 本地共享 NVIDIA GPU（真实本地开发测量、不可发布）与 CPU E2E；Claude Code 是 TUI 默认 Agent
 > Runtime，Codex CLI 走显式路径，当前共享 GPU 真实 E2E 入口须显式 `E2E_AGENT_RUNTIME=claude-code`
 > 。P1 轮次反馈闭环（`TEAM_HANDOFF.md` §14 第 1–5 项）已验收，
@@ -10,7 +31,7 @@
 > `TEAM_HANDOFF.md` §3 指出的 README / GOAL / 旧 handoff 反向描述已按本节口径订正（即 §14 第 8 项），
 > 历史运行记录（含 C500/C550 历史身份）保持原样。
 >
-> **Phase 2 当前入口（2026-09-12）**：诊断资格 → 版本化统一决策与治理已按劳务任务集成
+> **Phase 2 历史入口（2026-09-12，最新状态见上方 2026-09-15 入口）**：诊断资格 → 版本化统一决策与治理已按劳务任务集成
 > （diagnostic predicate + versionedGate + production/adoption/governance/facts/prompt/UI +
 > unknown/binding），对应冻结契约 [`P2_EVIDENCE_ACCEPTANCE.md`](P2_EVIDENCE_ACCEPTANCE.md)；
 > **Phase 2 无硬件验收通过：release 136 / non-hardware 38，exit 0**；485 个代码与测试文件

@@ -3,6 +3,31 @@
 Operator Studio 是面向异构算子优化的本地 Agent 工作台。当前生产客户端是 TUI；后续 GUI
 将复用同一个 HTTP API、应用编排、工作区、测试队列、Gate 和经验库，不再建立第二套流程。
 
+> **当前入口（2026-09-15 UTC，最新真实验收）**：冻结生产源码
+> `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`（git clean）。本批真实回归在本机共享 NVIDIA GPU
+> （`sm86`、`publishable=false`）上完成并通过独立验收：
+> affine smoke 1 次运行 / 2 候选 / 2 次实际模型观测；**严格 N20 20/20 `full_success`、
+> 20/20 独立验证且可比、44/44 实际模型观测（`deepseek-v4-flash`）、40 个不同候选**，
+> 队列任务全部终态释放、`workflowWritesAfterStart=0`；另做**单独** reduction / normalization
+> 两家族覆盖（每族两轮）4 个不同候选、4/4 实际模型观测，不计入 N20。
+> 权威事实：[canonical 验收 JSON](docs/development/evidence/run-diagnostics-20260914/acceptance.json)；
+> 原件 reader/diagnostics 见
+> [n20-recovered-20260915](docs/development/evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json)
+> 与 [coverage-recovered-20260915](docs/development/evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json)；
+> smoke / N20 / coverage 原件归档 SHA-256 分别为 `f519a0cc…ca045`、`ccd79f93…92aca`、`fe88c8f0…603d7`
+> （逐项核验，索引见同目录 `originals-manifest.json`）。本轮范围与冻结输入见
+> [closeout 验收](docs/development/evidence/closeout-20260915/ACCEPTANCE.md)；交付状态与离线复核
+> 结果以 [closeout.json](docs/development/evidence/closeout-20260915/closeout.json) 为单一事实源，
+> 便携交付包的操作说明见
+> [PORTABLE.md](docs/development/evidence/closeout-20260915/PORTABLE.md)。**边界**：结论只覆盖该冻结源码、本机共享 GPU 与既定矩阵，`publishable=false`，
+> 不外推为所有场景、所有 provider 或发布级硬件结论；历史失败/unknown（旧 `83b91d6` 严格 N20
+> 19 可比 + 1 unknown、无响应与代理重试失败、被拒绝的外发请求等）在原证据中**原样保留**，
+> 未回填、未替换样本。Phase 3（KernelWiki 导入器 + 确定性选择器）**尚未开始**；
+> 本批无生产代码变更、未推送远端。术语：**「下游」只指 dispatch 平台 agent**，
+> 被测的 Acagemm 运行 agent 不是下游。
+>
+> 以下交接分支 / P1 / Phase 2 条目（2026-09-12）**均为历史记录**，最新状态以上方入口为准。
+
 - 交接分支：`handoff/codex-job-supervisor-p1`；P1 §14.1–§14.5 已验收，基线与原件见
   [P1 轮次反馈闭环验收](docs/development/P1_FEEDBACK_ACCEPTANCE.md)（2026-09-12）。
 - Phase 2（`§14.6`）诊断资格 + 版本化统一决策与治理已按劳务任务集成，对应冻结契约
@@ -17,7 +42,7 @@ Operator Studio 是面向异构算子优化的本地 Agent 工作台。当前生
 - 实际执行后端：本地共享 NVIDIA GPU（`OPERATOR_TEST_BACKEND=local-shared-gpu`，真实本地开发测量、
   `publishable=false`）与 CPU E2E；`C500` / `C550` 是保留的兼容/历史标识，**不是当前唯一目标真机**
 
-## 当前状态
+## 当前状态（2026-09-12 历史，最新见顶部入口）
 
 - TUI 已接入生产 HTTP API，不直接修改持久化状态。
 - Claude Code 是 TUI 默认 Agent Runtime；Codex CLI 可显式选择。

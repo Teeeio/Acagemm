@@ -4,7 +4,32 @@
 > 交接对象：下一位开发者、代码审查者或负责恢复 Goal 的 Agent  
 > 交接时状态（已由下方当前状态入口取代）：P0 已提交到 main；Job supervisor P1 的 Windows Job Object/观测改动已作为 WIP 推送到专用交接分支，但尚未合并 main、尚未完成本轮总门禁。
 
-> **当前状态入口（2026-09-12）**：本文档主体是 2026-09-10/09-11 的 Job supervisor 交接，属历史记录，
+> **当前入口（2026-09-15 UTC，最新真实验收）**：冻结生产源码
+> `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`（git clean）。本批真实回归在本机共享 NVIDIA GPU
+> （`sm86`、`publishable=false`）上完成并通过独立验收：affine smoke 1 次运行 / 2 候选 /
+> 2 次实际模型观测；**严格 N20 20/20 `full_success`、20/20 独立验证且可比、44/44 实际模型观测
+> （`deepseek-v4-flash`）、40 个不同候选**，队列任务全部终态释放、`workflowWritesAfterStart=0`；
+> 另做**单独** reduction / normalization 两家族覆盖（每族两轮）4 个不同候选、4/4 实际模型观测，
+> 不计入 N20。权威事实见
+> [`evidence/run-diagnostics-20260914/acceptance.json`](evidence/run-diagnostics-20260914/acceptance.json)，
+> 原件 reader/diagnostics 见
+> [`n20-recovered-20260915/reader.json`](evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json)、
+> [`coverage-recovered-20260915/reader.json`](evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json)；
+> 范围与冻结输入见 [`evidence/closeout-20260915/ACCEPTANCE.md`](evidence/closeout-20260915/ACCEPTANCE.md)；
+> 交付状态与离线复核结果以
+> [`evidence/closeout-20260915/closeout.json`](evidence/closeout-20260915/closeout.json) 为单一事实源，
+> 便携交付包的操作说明见
+> [`evidence/closeout-20260915/PORTABLE.md`](evidence/closeout-20260915/PORTABLE.md)。
+> 结论限定该冻结源码、本机共享 GPU 与既定矩阵，
+> `publishable=false`；历史失败/unknown（旧 `83b91d6` 严格 N20 19 可比 + 1 unknown、无响应与
+> 代理重试失败、被拒绝的外发请求等）原样保留；Phase 3（KernelWiki 导入器 + 确定性选择器）
+> **尚未开始**；本批无生产代码变更、未推送远端。术语：「下游」仅指 dispatch 平台 agent，
+> 被测的 Acagemm 运行 agent 不是下游。
+>
+> 以下 2026-09-12 的当前状态入口、Phase 2 入口以及 §1–§16 的交接主体**均为历史记录**
+> （2026-09-10/09-11 状态），最新状态以上方入口为准。
+
+> **历史状态入口（2026-09-12，已被上方 2026-09-15 入口取代）**：本文档主体是 2026-09-10/09-11 的 Job supervisor 交接，属历史记录，
 > 保留原时间与边界。当前已验收基线是轮次反馈 P1（`TEAM_HANDOFF.md` §14 第 1–5 项），验收见
 > [`P1_FEEDBACK_ACCEPTANCE.md`](P1_FEEDBACK_ACCEPTANCE.md)，原件与边界见
 > [`evidence/p1-feedback-20260912/README.md`](evidence/p1-feedback-20260912/README.md)。
@@ -16,7 +41,7 @@
 > 当时 §14 第 6–7 项（Phase 2/3）未完成；其最新状态见下一段。第 8 项文档订正已完成。下文 S3、§10.1 等处的
 > "Codex" 应按 provider-neutral 的真实 Agent 路径阅读。
 >
-> **Phase 2 当前入口（2026-09-12 追加）**：诊断资格 + 版本化统一决策与治理（§14 第 6 项）
+> **Phase 2 历史入口（2026-09-12 追加，最新状态见上方 2026-09-15 入口）**：诊断资格 + 版本化统一决策与治理（§14 第 6 项）
 > 已按劳务任务集成，对应冻结契约 [`P2_EVIDENCE_ACCEPTANCE.md`](P2_EVIDENCE_ACCEPTANCE.md)，
 > 当前证据索引与边界见
 > [`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md)，

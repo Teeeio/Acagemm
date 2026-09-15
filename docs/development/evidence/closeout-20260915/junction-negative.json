@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "acagemm.portable-evidence-report/v1",
+  "mode": "offline-portable-verify",
+  "ok": false,
+  "sourceCommit": null,
+  "manifestEntries": null,
+  "node": null,
+  "groups": {},
+  "readerInvocations": [],
+  "archiveIntegrity": [],
+  "failures": [
+    "--report must not be inside --bundle: C:\\Users\\\u68c9\u88ab\u6696~3\\AppData\\Local\\Temp\\acagemm-closeout-sd8j_b9p\\bundle-alias\\forbidden-report.json is inside C:\\Users\\\u68c9\u88ab\u6696~3\\AppData\\Local\\Temp\\acagemm-closeout-sd8j_b9p\\evidence"
+  ],
+  "checks": [
+    {
+      "name": "path_safety",
+      "passed": false,
+      "evidence": "--report must not be inside --bundle: C:\\Users\\\u68c9\u88ab\u6696~3\\AppData\\Local\\Temp\\acagemm-closeout-sd8j_b9p\\bundle-alias\\forbidden-report.json is inside C:\\Users\\\u68c9\u88ab\u6696~3\\AppData\\Local\\Temp\\acagemm-closeout-sd8j_b9p\\evidence"
+    }
+  ]
+}

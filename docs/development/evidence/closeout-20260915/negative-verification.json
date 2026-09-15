@@ -1,0 +1,112 @@
+{
+  "ok": true,
+  "base": "C:\\Users\\\u68c9\u88ab\u6696~3\\AppData\\Local\\Temp\\acagemm-negative-gxlt4pqy",
+  "checks": [
+    {
+      "id": "existing_report",
+      "exitCode": 1,
+      "readerInvocations": [],
+      "checks": [
+        {
+          "name": "path_safety",
+          "passed": false,
+          "evidence": "--report must be a NEW file, it already exists: C:\\Users\\\u68c9\u88ab\u6696~3\\AppData\\Local\\Temp\\acagemm-negative-gxlt4pqy\\sentinel.txt"
+        }
+      ],
+      "failures": [
+        "--report must be a NEW file, it already exists: C:\\Users\\\u68c9\u88ab\u6696~3\\AppData\\Local\\Temp\\acagemm-negative-gxlt4pqy\\sentinel.txt"
+      ]
+    },
+    {
+      "id": "report_inside_bundle",
+      "exitCode": 1,
+      "readerInvocations": [],
+      "checks": [
+        {
+          "name": "path_safety",
+          "passed": false,
+          "evidence": "--report must be a NEW file, it already exists: F:\\\u8bbe\u8ba1\\\u5feb\u901f\u9879\u76ee\\acagemm\u539f\u578b\\.operator-studio-local\\closeout-20260915\\final-evidence\\MANIFEST.sha256"
+        }
+      ],
+      "failures": [
+        "--report must be a NEW file, it already exists: F:\\\u8bbe\u8ba1\\\u5feb\u901f\u9879\u76ee\\acagemm\u539f\u578b\\.operator-studio-local\\closeout-20260915\\final-evidence\\MANIFEST.sha256",
+        "--report must not be inside --bundle: F:\\\u8bbe\u8ba1\\\u5feb\u901f\u9879\u76ee\\acagemm\u539f\u578b\\.operator-studio-local\\closeout-20260915\\final-evidence\\MANIFEST.sha256 is inside F:\\\u8bbe\u8ba1\\\u5feb\u901f\u9879\u76ee\\acagemm\u539f\u578b\\.operator-studio-local\\closeout-20260915\\final-evidence"
+      ]
+    },
+    {
+      "id": "scratch_inside_bundle",
+      "exitCode": 1,
+      "readerInvocations": [],
+      "checks": [
+        {
+          "name": "path_safety",
+          "passed": false,
+          "evidence": "--scratch must not be inside --bundle: F:\\\u8bbe\u8ba1\\\u5feb\u901f\u9879\u76ee\\acagemm\u539f\u578b\\.operator-studio-local\\closeout-20260915\\final-evidence\\forbidden-scratch is inside F:\\\u8bbe\u8ba1\\\u5feb\u901f\u9879\u76ee\\acagemm\u539f\u578b\\.operator-studio-local\\closeout-20260915\\final-evidence"
+        }
+      ],
+      "failures": [
+        "--scratch must not be inside --bundle: F:\\\u8bbe\u8ba1\\\u5feb\u901f\u9879\u76ee\\acagemm\u539f\u578b\\.operator-studio-local\\closeout-20260915\\final-evidence\\forbidden-scratch is inside F:\\\u8bbe\u8ba1\\\u5feb\u901f\u9879\u76ee\\acagemm\u539f\u578b\\.operator-studio-local\\closeout-20260915\\final-evidence"
+      ]
+    },
+    {
+      "id": "corrupt_archive",
+      "exitCode": 1,
+      "readerInvocations": [],
+      "checks": [
+        {
+          "name": "path_safety",
+          "passed": true,
+          "evidence": "--report is a new file outside --bundle and --scratch, and --scratch does not overlap --bundle"
+        },
+        {
+          "name": "payload_manifest",
+          "passed": false,
+          "evidence": "payload file bytes differ from the manifest SHA256: archives/live-regression-83b91d6-20260914/coverage-originals.zip"
+        },
+        {
+          "name": "verify",
+          "passed": false,
+          "evidence": "payload manifest check failed (1 problem(s))"
+        }
+      ],
+      "failures": [
+        "payload manifest check failed (1 problem(s))"
+      ]
+    },
+    {
+      "id": "archive_traversal",
+      "exitCode": 1,
+      "readerInvocations": [],
+      "checks": [
+        {
+          "name": "path_safety",
+          "passed": true,
+          "evidence": "--report is a new file outside --bundle and --scratch, and --scratch does not overlap --bundle"
+        },
+        {
+          "name": "payload_manifest",
+          "passed": true,
+          "evidence": "15 payload file(s) match MANIFEST.sha256"
+        },
+        {
+          "name": "inputs_sha256",
+          "passed": true,
+          "evidence": "reader + 4 helper(s) + 8 archive(s) match the SHA256 declared in inputs.json"
+        },
+        {
+          "name": "archive_integrity",
+          "passed": false,
+          "evidence": "run-diagnostics-20260914/failed-smoke-originals.zip: archive member has an invalid segment '..': '../escape.txt'"
+        },
+        {
+          "name": "verify",
+          "passed": false,
+          "evidence": "archive entry integrity failed for 1 archive(s); nothing was extracted"
+        }
+      ],
+      "failures": [
+        "archive entry integrity failed for 1 archive(s); nothing was extracted"
+      ]
+    }
+  ]
+}
