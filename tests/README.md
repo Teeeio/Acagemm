@@ -67,6 +67,93 @@ while `publishable` stays false. Temporary scripts live under the ignored
 `.operator-studio-local/` and only that directory is removed in `finally`. It runs in both
 verification gates.
 
+## Experience condition study acceptance (hardware-free)
+
+`experience-condition-runtime-test.mjs` and `experience-condition-study-test.mjs` are the
+independent 13-item matrix for the study condition contract
+(`docs/development/EXPERIENCE_STUDY_CONTRACT.md`). Both suites were written by a separate
+author against the frozen interface, use only documented public entry points and ports, and
+build their fixtures from the real production path — the experience repository, the HTTP
+application service, the KernelWiki importer, the round-experience service, the context
+formatter and the candidate-prompt builder. No assertion matches implementation source text
+and no provider/model/network/Python/GPU work is contacted: the study runner cases inject only
+the documented `invokeSmoke` fixture port, so no smoke child starts for a slot. The slots it
+produces are read back by the runner's own default `readInvocation` port from fixtures written
+in the frozen producer layout on disk (the real repository store plus the batch report,
+attempt/summary/state/prompt-audit/study-audit originals), and the public `verifyStudyReport`
+is exercised against those retained bytes rather than a mock reply.
+The one case that starts a real child is the production-driver guard, which runs the driver CLI
+under a broken study environment with `OPERATOR_CLAUDE_BIN` and `OPERATOR_GPU_PYTHON` pointing
+at absent paths, in an isolated temporary artifact parent, and accepts only the preflight
+refusal (non-zero exit, no run root, no state, no report). The standard N20 refusal is
+exercised in process through the batch runner's documented injected-port path.
+
+Runtime matrix (items 1-8): the default retrieval and the retained strict continuation
+verifier are unchanged; all three conditions filter before rank/quota, `facts-only` records
+zero selected entries while `local-only` keeps the bound execution record and excludes every
+kernel-wiki unit; zero-experience mode still collects execution observations and mandatory
+round facts; invalid, null, empty and non-string conditions fail with `EXPERIENCE_INVALID`
+before any state change and unsupported legacy retrieval fails; a frozen same-round context
+cannot switch condition while a new round uses the configured one; unauthorized IDs stay
+hidden and scope/hardware checks are never bypassed; and the exact condition plus policy
+version enter both the persisted selection sidecar and the pre-send prompt audit.
+
+Study matrix (items 9-13): `facts-only` accepts a really empty injection with complete
+matching facts and durably collected source-round experience, and rejects lost facts,
+tampered prompt digests and sidecar mismatch; `local-only` rejects Wiki contamination in the
+actual prompt, while `local-and-wiki` requires at least one reviewed sm86 unit with exact
+full prompt content, refusing unreviewed units, wrong content, a fully dressed but never
+imported unit, a duplicated unit and a sidecar-only selection that the prompt never carried,
+and a snapshot from another source commit — every prompt tamper arrives with its prompt SHA
+recomputed, so the targeted rule is what rejects it; the frozen nine-slot balanced schedule is
+asserted literally and the retained `study.json` must already carry it before the first spawn.
+A complete valid nine-slot positive is built first — nine explicit `invokeSmoke` calls, nine
+completed exit-0 slots each retaining the seven frozen originals with their real sha256 and byte
+length, and a `verifyStudyReport` receipt with `ok: true` and all nine slots verified — and
+every drift case starts from it: slot one must be a real comparable `full_success`, slot two is
+that same invocation with exactly one documented field changed (source, budget, model, snapshot,
+condition, selection policy, unknown observation or a non-full-success release), slot one must
+still be retained as completed, and the remaining seven slots must stay stopped, so release/
+unknown/model/source/config/snapshot/condition mismatches never replace or resample a slot and a
+genuinely drifted report must still verify as `stopped`. Every drifted field is reported as its
+own independent sub-case with its own name and fixture, so one failing branch can never hide the
+later ones while any failure still makes the whole run exit non-zero, and the exit code each
+branch expects is stated per scenario rather than assumed: a configuration or observation drift
+keeps the green zero, the non-full-success release requires its real non-zero exit together with
+that exact `smoke_exit_code` verdict, and the released slot's own retained smoke report is read
+back from disk to prove the actual exit code, failed status and non-full-success outcome were
+kept instead of being minted into a pass. The receipt keeps the actual outcome
+histogram (`slotCounts`, one completed / one failed / seven stopped) apart from its per-slot
+verification coverage (`verifiedSlots` covers every retained slot, completed, failed or
+stopped, so its length is never read as a count of successes and `ok: true` only means the
+report was faithfully verified); invalid CLI arguments, alias
+spellings, overlaps and pre-existing directories are rejected without side effects, and the
+read-only report reader is proven to start no invocation, to leave every retained byte
+untouched and to refuse a hand-written report that no producer ever wrote. Every reader negative
+builds and verifies its own complete green fixture on its own bytes first — the retained
+`schedule` and `invocations` are read from those two frozen keys and asserted slot-by-slot, never
+found by a shape-recursive search — and then mutates exactly one documented field or one raw
+original of that same fixture in place: a recorded original sha256 or byte length, the raw
+artifact bytes behind an original, the schedule, a slot's condition, order, index, exit code,
+status, metrics or run root, the compared design identity, model and source, and a comparison
+that claims significance or flips its descriptive-only flag. Nothing is
+copied or repointed, so a negative can never be judged on a layout the copy itself broke. The
+slot fixtures themselves carry the real producer shapes — the Mission-bound
+`attempt.familyOutcomes[0]`/`summary.summaries[0]` identities with the observed-model proof, the
+live-hardware candidate rows with their unit/value/correctness receipts, the two distinct
+candidates that identify one archived round and the reviewed-unit snapshot metadata — and that
+completeness is asserted before any case-specific mutation. The production
+driver and the standard N20 mode must both refuse a study environment before any effect, and
+the standard fingerprint keeps the current D selection policy — read from the production
+export and asserted on the retained artifacts — plus the study condition, snapshot digest and
+goal policy, while only the condition may differ inside the shared design identity, so source
+and model drift stay visible.
+
+Both suites run in the release gate. Before the parallel runtime/driver candidates are
+combined they cannot pass: they exercise the explicit `experienceCondition` port and the new
+study modules, so a green run is evidence for the integrated interface only, never a
+selection benefit, stability or any N20 claim (`strictN20Passed` stays false).
+
 ## Round feedback / pre-send prompt audit coverage
 
 `round-feedback-integration-test.mjs` is the independent two-round production-path

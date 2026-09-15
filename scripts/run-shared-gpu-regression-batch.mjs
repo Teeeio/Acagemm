@@ -252,7 +252,13 @@ const emptyRecord = (reason) => ({ runDir: null, attemptPath: null, summaryPath:
 // the attempt and the summary must be present, schema-valid, terminal and
 // outcome-compatible; only the existing driver stop-receipt fields are read, and
 // no release proof is invented: an absent cleanup block is never treated as safe.
-const continuationSafety = (record) => {
+//
+// Exported so the experience-condition study verifies a retained slot with the
+// EXACT same smoke release/observation semantics instead of a weaker copy: every
+// required stop receipt AND the teardown stop AND the runtime exit must be real,
+// and a missing field stays unknown (= unsafe) rather than being masked by
+// whichever other field happens to be confirmed.
+export const continuationSafety = (record) => {
   const attempt = record?.attempt || null;
   const summary = record?.summary || null;
   const cleanup = attempt?.cleanup || null;
@@ -348,6 +354,15 @@ export const runRegressionBatch = async (options, ports = {}) => {
   const reportDir = assertExternalDirectory(parsed.reportDir, '--report-dir');
   if (artifactDir === reportDir) throw new Error('--artifact-dir and --report-dir must differ');
   if (!path.isAbsolute(parsed.gpuPython)) throw new Error('--gpu-python must be an absolute path');
+
+  // A controlled experiment condition must never be silently labeled as a strict
+  // N=20 regression observation. This is checked before any directory is created or
+  // any driver is spawned; the study runs through its own smoke-only runner.
+  const studyEnvPresent = isNonBlank(process.env.E2E_EXPERIENCE_CONDITION)
+    || isNonBlank(process.env.E2E_KERNEL_WIKI_SNAPSHOT);
+  if (mode === 'n20' && studyEnvPresent) {
+    throw new Error('n20 rejects the experience-condition study environment: study results are never strict N20 evidence');
+  }
 
   const invokeDriver = typeof ports.invokeDriver === 'function'
     ? ports.invokeDriver : createDefaultInvokeDriver({ cwd: projectRoot, script: driverScript });

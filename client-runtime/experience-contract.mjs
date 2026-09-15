@@ -8,6 +8,9 @@ export const EXPERIENCE_LIMITS = Object.freeze({ content: 8000, title: 160, refs
 // 不是 Phase 3 的动态选择器。
 export const EXPERIENCE_SELECTION_SCHEMA_VERSION = 'operator-studio.experience-selection/v1';
 export const EXPERIENCE_SELECTION_POLICY_VERSION = 'operator-studio.experience-selection/v1+scope-match+updatedAt-desc-id-asc';
+// 受控经验条件（冻结契约 A）：只作为额外的资格过滤，不是第二套选择器。顺序固定，
+// 由调用方（研究 driver / 生产组合根）显式选择；省略即保持既有方案 D 行为不变。
+export const EXPERIENCE_CONDITIONS = Object.freeze(['facts-only', 'local-only', 'local-and-wiki']);
 const SELECTION_EXCLUSION_LIMIT = 50;
 // 方案 D 默认配额：本地经验 ≤4、KernelWiki ≤6（症状 ≤2、手法 ≤3、兜底指导 ≤1），
 // 软预算 24 KiB 按 formatter 实际 UTF-8 输出计算。都是上限，不为凑满而补齐。
@@ -296,8 +299,13 @@ const scopeMatches = (scope, target) => (!scope.operator || scope.operator === t
 // 选取、按 ID+版本取回并重新校验，最后用既有 formatter 渲染。排序不能授予访问权。
 function selectExperienceByPolicy(store, query, access, base) {
   const selection = query.selection;
-  plain(selection, ['policyVersion', 'features', 'target', 'preferredIds', 'repeatedAttempts'], 'query.selection');
+  plain(selection, ['policyVersion', 'features', 'target', 'preferredIds', 'repeatedAttempts', 'experienceCondition'], 'query.selection');
   if (selection.policyVersion !== WIKI_SELECTION_POLICY_VERSION) invalid('unsupported experience selection policyVersion');
+  // 显式条件必须是三个冻结枚举之一；未知/null/空串/非字符串一律 EXPERIENCE_INVALID，
+  // 绝不回退到默认 D 行为。省略（undefined）表示不启用条件。
+  const experienceCondition = selection.experienceCondition === undefined
+    ? undefined
+    : choice(selection.experienceCondition, EXPERIENCE_CONDITIONS, 'query.selection.experienceCondition');
   plain(selection.target, ['hardware', 'architecture', 'capabilities', 'software'], 'query.selection.target');
   const dimension = (value, label) => list(value ?? [], label, 32, (item) => string(item, label).toLowerCase());
   const target = {
@@ -317,6 +325,15 @@ function selectExperienceByPolicy(store, query, access, base) {
     if (excluded.length >= SELECTION_EXCLUSION_LIMIT) { excludedOmitted += 1; return; }
     excluded.push({ id: record.id, version: record.version, reason });
   };
+  // 显式条件只是资格过滤：只影响「哪些已授权记录有机会进入排序」，不改排序算法、不改配额、
+  // 不改 formatter 与字节预算。facts-only 不选任何可选经验（本地与 Wiki 都不选），但采集与
+  // 轮次必需事实不在本函数范围内，不受影响。local-only 只排除带 kernel-wiki 元数据的单元，
+  // 本地人工/执行记录仍走不变的 D 排序。local-and-wiki 完全不改变 D 选择。
+  const conditionAllows = (record) => {
+    if (experienceCondition === undefined || experienceCondition === 'local-and-wiki') return true;
+    if (experienceCondition === 'facts-only') return false;
+    return record.selectionMetadata?.source !== 'kernel-wiki';
+  };
   const heads = [...latestRecords(store)].sort((left, right) => left.id.localeCompare(right.id) || left.version - right.version);
   const eligible = [];
   for (const record of heads) {
@@ -325,6 +342,9 @@ function selectExperienceByPolicy(store, query, access, base) {
     if (record.expiresAt && record.expiresAt <= base.asOf) { pushExcluded(record, 'expired'); continue; }
     if (Object.hasOwn(base.versions, record.id) && base.versions[record.id] !== record.version) { pushExcluded(record, 'version-pinned'); continue; }
     if (!scopeMatches(record.scope, base.scope)) { pushExcluded(record, 'scope'); continue; }
+    // 条件过滤排在授权/状态/过期/版本/作用域校验之后、排序与配额之前；被排除的已授权记录只记
+    // 原因，未授权记录依旧只累计计数、绝不披露 ID/版本。
+    if (!conditionAllows(record)) { pushExcluded(record, 'experience-condition'); continue; }
     eligible.push(record);
   }
 
@@ -404,6 +424,8 @@ function selectExperienceByPolicy(store, query, access, base) {
   const audit = {
     schemaVersion: EXPERIENCE_SELECTION_SCHEMA_VERSION,
     policyVersion: WIKI_SELECTION_POLICY_VERSION,
+    // 只在显式条件时出现：省略模式不需要新字段，旧 context/store/审计零迁移。
+    ...(experienceCondition === undefined ? {} : { experienceCondition }),
     projectId: access.projectId,
     missionId: base.missionId,
     roundId: base.roundId,

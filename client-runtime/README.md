@@ -391,10 +391,25 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 | [kernel-wiki-import](kernel-wiki-import.md) | 纯解析/构建/原子导入：`parseKernelWikiPage`、`buildKernelWikiSnapshot`、`applyKernelWikiSnapshot`；来源固定为 Git blob，绝不解释上游性能声明 |
 | [experience-repository](experience-repository.md) | 私有原子存储、同进程事务、不可变历史 |
 | [experience-service](application/experience-service.md) | 注入端口的人工经验、观察记录、KernelWiki 快照导入、冻结检索上下文与审计选择清单 |
-| [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；保存同轮选择 sidecar；完整可信凭据才记录执行观察 |
+| [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；保存同轮选择 sidecar；完整可信凭据才记录执行观察；可用显式 `experienceCondition` 研究条件准备同一冻结上下文 |
 | [round-budget-contract](round-budget-contract.md) | 主 Agent、测试与同轮重试共享 15 分钟墙钟；暂停/恢复不刷新 |
 | [cancellation-contract](cancellation-contract.md) | 资源释放真相、只读 barrier 与显式推进中的确认收敛 |
 | [model-observation](model-observation.md) | 无 I/O 的响应模型观测 DTO、按原始字节精确匹配的 provider/run/mission/session 绑定与必需 run 汇总；仅 `assistant.message.model` 是响应身份，unknown/conflict 不阻 workflow 也不可比 |
+
+研究条件（facts-only / local-only / local-and-wiki）是同一冻结上下文的三种可选经验
+注入：显式条件经 `createRoundExperienceService({...,experienceCondition})` 传入，
+`local-server.mjs` 另外读取环境变量 `OPERATOR_EXPERIENCE_CONDITION`。条件在检索排序与
+配额之前生效：`facts-only` 注入零条可选经验，`local-only` 排除全部 kernel-wiki 单元，
+`local-and-wiki` 保持既有选择不变；未知/空/非字符串条件在改变任何状态之前以
+`EXPERIENCE_INVALID` 失败，同一 round 的冻结上下文不得改换条件。实际使用的条件与策略
+版本写入持久化的选择 sidecar 与发送前 prompt audit；`local-and-wiki` 记录的
+`policyVersion` 仍是当前 D 的 `WIKI_SELECTION_POLICY_VERSION`，绝不回退到旧
+retrieve-only 常量。研究编排侧（九槽位调度、条件收据、只读报告复核）位于
+`scripts/experience-condition-study.mjs` 与 `scripts/run-experience-condition-study.mjs`，
+接口与验收矩阵见 `docs/development/EXPERIENCE_STUDY_CONTRACT.md`；条件矩阵的独立验收
+分别在 `tests/experience-condition-runtime-test.mjs` 与
+`tests/experience-condition-study-test.mjs`。研究结果只作探索性对照，报告恒为
+`strictN20Passed=false`，不得标注为 N20、稳定性或发布证据。
 
 执行包是 Candidate 文件、离线直接/传递依赖、精确锁定环境层和独立冻结验收包的
 逻辑整体。内容层按摘要复用；不要求每轮重复上传解释器/编译器/大型库。

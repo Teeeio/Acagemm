@@ -3,7 +3,7 @@
   "recordedAt": "2026-09-15T06:35:24.900Z",
   "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
   "phase": "operator-p3-wiki",
-  "status": "blocked-combination-snapshot-disk-full",
+  "status": "software-verified-integrated-live-pending",
   "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
   "contract": {
     "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
@@ -18,6 +18,268 @@
     "strictN20": false
   },
   "tasks": [
+    {
+      "role": "runtime-condition",
+      "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
+      "attemptId": "run_a021400f255d4f5d8b3e1539372518b2",
+      "artifactDigest": "fc25f1b0725f195c89cd1c97c8b59a3fbc36d9fac7b4bc747fda7cc35b0f32b5",
+      "status": "integrated",
+      "accepted": true,
+      "integrated": true
+    },
+    {
+      "role": "study-driver-reader",
+      "taskId": "task_ed2e6151023e4e7d8f8467dd73e278fb",
+      "attemptId": "run_ffad05c3d8e24e9c83ed9c8809153c2b",
+      "artifactDigest": "0df5e9bfba33d817e48a45909f570c0c40de442be971a0d080d4d3732400abd4",
+      "status": "integrated",
+      "accepted": true,
+      "integrated": true
+    },
+    {
+      "role": "independent-tests",
+      "taskId": "task_2087f6d10375435493b84dc3ae46e315",
+      "attemptId": "run_04f8d149d5ba4b26b256bc4a7696cd05",
+      "artifactDigest": "b80dff2820052268b4e1b78570e8dd26922a90c7273dee88d7dc1bc5806e8eff",
+      "status": "integrated",
+      "accepted": true,
+      "integrated": true
+    }
+  ],
+  "issues": [
+    {
+      "id": "restart-resource-release",
+      "fact": "Platform positive orphan recovery events 151006/151007 released both old attempts; original failure history retained.",
+      "inference": "Restart resource barrier is resolved.",
+      "unknown": null,
+      "evidence": [
+        "recovery.verifiedEvents"
+      ],
+      "status": "resolved",
+      "next_action": "No platform changes by Acagemm upstream."
+    },
+    {
+      "id": "combination-snapshot-disk-full",
+      "fact": "User cleared disk; old failed command cancelled after retry_source_unavailable. Replacement exact combination and final gate both passed.",
+      "inference": "Snapshot capacity barrier is resolved for completed software gates.",
+      "unknown": "Future disk consumption depends on live artifacts.",
+      "evidence": [
+        "task_00875fd9834845bfbf59a495f4cde6fb cancelled with reason",
+        "task_0575b9985bfd461e9b8464915655af69 integrated",
+        "task_df9a403c08ea448ea59b3ff5d400581b integrated"
+      ],
+      "status": "resolved",
+      "next_action": "Preserve failed attempts; run fixed nine-slot study after source freeze."
+    },
+    {
+      "id": "acceptance-and-live-boundary",
+      "fact": "All 24 source files match final candidate-verification SHA256; A/B/C accepted and integrated. Targeted runtime12/study17 and old modules pass; release149/NH44/two boundaries pass.",
+      "inference": "Software is ready for controlled live study.",
+      "unknown": "Live effect of the three experience conditions; no significance or new N20 claim.",
+      "evidence": [
+        "softwareVerification"
+      ],
+      "status": "live-pending",
+      "next_action": "Freeze exact verified source, execute nine slots, independently read all originals."
+    }
+  ],
+  "reviewFollowup": [
+    {
+      "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
+      "classification": "static-review",
+      "item": "Check new client-runtime/local-server.md architecture relative link.",
+      "status": "resolved",
+      "resolution": "A corrected link/strict fresh/pending identity; independent 12-case runtime suite and final gate passed."
+    },
+    {
+      "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
+      "classification": "unverified-concern",
+      "item": "Independently test missing/mismatched selection audit condition on fresh retrieval and same-round inflight reuse before acceptance.",
+      "status": "resolved",
+      "resolution": "A corrected link/strict fresh/pending identity; independent 12-case runtime suite and final gate passed."
+    }
+  ],
+  "scope": {
+    "platformSourceModified": false,
+    "platformDatabaseModified": false,
+    "globalConfigurationModified": false,
+    "unknownProcessesKilled": false,
+    "newBusinessE2E": 0,
+    "newN20": 0,
+    "authorization": "Existing user authorization remains valid; this blocker is technical, not a new permission request."
+  },
+  "restartRechecks": [
+    {
+      "checkedAt": "2026-09-15T06:44:03.816Z",
+      "result": "blocked-platform-resource-release",
+      "service": {
+        "running": true,
+        "pid": 39704,
+        "startedAt": "2026-09-15T06:27:45.3726316Z",
+        "serviceInstanceId": "925182bcef7a45b1973c712e4c55a516",
+        "sameInstanceAsPreviousCheck": true,
+        "schedulerAlive": true,
+        "credentialsAvailable": true
+      },
+      "attempts": [
+        {
+          "taskId": "task_ed2e6151023e4e7d8f8467dd73e278fb",
+          "attemptId": "run_6e02611b89554bb0899de115abf90135",
+          "status": "failed",
+          "resourcesReleased": false,
+          "resourceCleanupPending": true,
+          "resourceCleanupReason": "服务中断后未确认进程收尾",
+          "recordedPid": 94112
+        },
+        {
+          "taskId": "task_2087f6d10375435493b84dc3ae46e315",
+          "attemptId": "run_5fb0642ce71b43acb94e19e08f651285",
+          "status": "failed",
+          "resourcesReleased": false,
+          "resourceCleanupPending": true,
+          "resourceCleanupReason": "服务中断后未确认进程收尾",
+          "recordedPid": 52252
+        }
+      ],
+      "issues": [
+        {
+          "id": "restart-resource-release",
+          "fact": "Both original attempts still expose resources_released=false and resource_cleanup_pending=true. Scheduler capacity still lists zero pending releases/cleanups.",
+          "inference": "Normal retry remains blocked by the recorded release prerequisite; a repeat retry is unnecessary while its rejecting condition is explicitly visible.",
+          "unknown": "Whether all original descendant processes have terminated.",
+          "evidence": {
+            "capacityCursor": 149064,
+            "pidProbe": [
+              {
+                "pid": 94112,
+                "present": false
+              },
+              {
+                "pid": 52252,
+                "present": true,
+                "name": "ChatGPT",
+                "startTime": "2026-09-15T06:39:50.4447264Z"
+              }
+            ]
+          },
+          "next_action": "Platform must reconcile original execution identities and complete supported resource cleanup/release. PID 52252 has been reused after the original task ended; do not terminate it based solely on the stale PID."
+        }
+      ],
+      "actions": {
+        "retried": false,
+        "startedBusinessE2E": false,
+        "modifiedPlatform": false,
+        "killedProcesses": false
+      }
+    }
+  ],
+  "recovery": {
+    "recordedAt": "2026-09-15T08:00:49.238Z",
+    "platformReportedRootCause": "用户报告：重启未恢复持久化清理队列，状态展示漏算。",
+    "verifiedEvents": [
+      {
+        "id": 151007,
+        "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+        "task_id": "task_ed2e6151023e4e7d8f8467dd73e278fb",
+        "attempt_id": "run_6e02611b89554bb0899de115abf90135",
+        "kind": "runtime.orphan_recovered",
+        "summary": "已用可验证证据确认旧执行身份消失，资源已释放",
+        "details": {
+          "attempt_id": "run_6e02611b89554bb0899de115abf90135",
+          "task_id": "task_ed2e6151023e4e7d8f8467dd73e278fb",
+          "code": "released",
+          "resources_released": true,
+          "source": "restart_orphan_recovery",
+          "evidence": {
+            "attempt_id": "run_6e02611b89554bb0899de115abf90135",
+            "status": "failed",
+            "source": "legacy_started_event",
+            "policy_version": "2026-09-14.5:4f53cda18c2b",
+            "event_id": 148252,
+            "event_created_at": "2026-09-15T06:19:16.115+00:00",
+            "event_summary": "下游执行器已启动",
+            "pid": 94112,
+            "owner_id": "101344-8850ca4cd979422fb3af57d8e69508cc",
+            "owner_pid": 101344,
+            "reason": "该来源先成功建立非继承 kill-on-close Job 才持久化 PID 与 started 事件",
+            "owner_probe": {
+              "state": "absent",
+              "reason": "process_not_found"
+            },
+            "worker_probe": {
+              "state": "absent",
+              "reason": "process_not_found"
+            }
+          }
+        },
+        "created_at": "2026-09-15T07:38:11.131+00:00"
+      },
+      {
+        "id": 151006,
+        "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+        "task_id": "task_2087f6d10375435493b84dc3ae46e315",
+        "attempt_id": "run_5fb0642ce71b43acb94e19e08f651285",
+        "kind": "runtime.orphan_recovered",
+        "summary": "已用可验证证据确认旧执行身份消失，资源已释放",
+        "details": {
+          "attempt_id": "run_5fb0642ce71b43acb94e19e08f651285",
+          "task_id": "task_2087f6d10375435493b84dc3ae46e315",
+          "code": "released",
+          "resources_released": true,
+          "source": "restart_orphan_recovery",
+          "evidence": {
+            "attempt_id": "run_5fb0642ce71b43acb94e19e08f651285",
+            "status": "failed",
+            "source": "legacy_started_event",
+            "policy_version": "2026-09-14.5:4f53cda18c2b",
+            "event_id": 148250,
+            "event_created_at": "2026-09-15T06:19:16.080+00:00",
+            "event_summary": "下游执行器已启动",
+            "pid": 52252,
+            "owner_id": "101344-8850ca4cd979422fb3af57d8e69508cc",
+            "owner_pid": 101344,
+            "reason": "该来源先成功建立非继承 kill-on-close Job 才持久化 PID 与 started 事件",
+            "owner_probe": {
+              "state": "absent",
+              "reason": "process_not_found"
+            },
+            "worker_probe": {
+              "state": "present",
+              "created_at": "2026-09-15T06:39:50.444+00:00"
+            }
+          }
+        },
+        "created_at": "2026-09-15T07:38:11.117+00:00"
+      }
+    ],
+    "newCandidates": [
+      {
+        "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
+        "attemptId": "run_868dd7a5d4cc4bf48ca2dc88441faee7",
+        "status": "submitted",
+        "artifactDigest": "7913a50454ea01f98cc00f66927e5372434d996dc1ce27e239b3b2ce447b2d9c"
+      },
+      {
+        "taskId": "task_ed2e6151023e4e7d8f8467dd73e278fb",
+        "attemptId": "run_43adacc4c5c241bca65ea7994cf9a8f5",
+        "status": "submitted",
+        "artifactDigest": "34df0611dd920d9ad8ae182162909654ff27d5f04215d7fff1ebde3e7f0edccc"
+      },
+      {
+        "taskId": "task_2087f6d10375435493b84dc3ae46e315",
+        "attemptId": "run_475058a9564b428e8897b3f2f2a7140b",
+        "status": "submitted",
+        "artifactDigest": "e5db8bab1fa74bc4576e113d2e1ee8b2ed3cbb7eca500bc84e04734eb14ff007"
+      }
+    ],
+    "accepted": false,
+    "integrated": false,
+    "newBusinessE2E": 0,
+    "currentAccepted": true,
+    "currentIntegrated": true
+  },
+  "updatedAt": "2026-09-15T10:08:45.873862+00:00",
+  "taskHistory": [
     {
       "role": "runtime-condition",
       "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
@@ -52,7 +314,7 @@
       "retention": "Platform reports retained interrupted workspace; no collected artifact digest."
     }
   ],
-  "issues": [
+  "issueHistory": [
     {
       "id": "service-interruption",
       "fact": "Dedicated dispatch wait and normal capacity call returned unavailable; official CLI reported running=false. Official start returned exit 0 and started=true.",
@@ -238,193 +500,94 @@
       "next_action": "Release or expand disk space through platform-supported retention/cleanup or storage migration while preserving original attempts and evidence. Once capacity is sufficient, retry this same combination task with current attempt/issue identities; do not automatically retry on ENOSPC."
     }
   ],
-  "reviewFollowup": [
-    {
-      "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
-      "classification": "static-review",
-      "item": "Check new client-runtime/local-server.md architecture relative link."
+  "softwareVerification": {
+    "targeted": {
+      "taskId": "task_0575b9985bfd461e9b8464915655af69",
+      "attemptId": "run_e0e195e4d3654d09b0768a40b8674b06",
+      "artifactDigest": "3855a55ac9b132e8dfc442ac587031909700ce55b8755e79069147d254e17fe6",
+      "exitCode": 0,
+      "seconds": 48.86,
+      "runtimeCases": 12,
+      "studyCases": 17
     },
-    {
-      "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
-      "classification": "unverified-concern",
-      "item": "Independently test missing/mismatched selection audit condition on fresh retrieval and same-round inflight reuse before acceptance."
-    }
-  ],
-  "scope": {
-    "platformSourceModified": false,
-    "platformDatabaseModified": false,
-    "globalConfigurationModified": false,
-    "unknownProcessesKilled": false,
-    "newBusinessE2E": 0,
-    "newN20": 0,
-    "authorization": "Existing user authorization remains valid; this blocker is technical, not a new permission request."
-  },
-  "restartRechecks": [
-    {
-      "checkedAt": "2026-09-15T06:44:03.816Z",
-      "result": "blocked-platform-resource-release",
-      "service": {
-        "running": true,
-        "pid": 39704,
-        "startedAt": "2026-09-15T06:27:45.3726316Z",
-        "serviceInstanceId": "925182bcef7a45b1973c712e4c55a516",
-        "sameInstanceAsPreviousCheck": true,
-        "schedulerAlive": true,
-        "credentialsAvailable": true
-      },
-      "attempts": [
+    "final": {
+      "taskId": "task_df9a403c08ea448ea59b3ff5d400581b",
+      "attemptId": "run_3b0a3ec910024df9a2f11ed0a43dd69a",
+      "artifactDigest": "4a8ee6f158d55a22af40b253f5932e7628184e428e8ffc67423c50aba5d1c8ea",
+      "exitCode": 0,
+      "seconds": 1115.984,
+      "releaseChecks": 149,
+      "nonHardwareChecks": 44,
+      "releaseRanAgainInsideNonHardware": true,
+      "boundaryChecks": 2,
+      "integratedSourceHashMatches": 24
+    },
+    "rawArchive": {
+      "path": "software-verification-originals.zip",
+      "sha256": "a0920b4b944497a1fba710939e7d9814fe6a266ed9f6d19c5e758b943ae50e7b",
+      "files": [
         {
-          "taskId": "task_ed2e6151023e4e7d8f8467dd73e278fb",
-          "attemptId": "run_6e02611b89554bb0899de115abf90135",
-          "status": "failed",
-          "resourcesReleased": false,
-          "resourceCleanupPending": true,
-          "resourceCleanupReason": "服务中断后未确认进程收尾",
-          "recordedPid": 94112
+          "path": "run_e0e195e4d3654d09b0768a40b8674b06/execution.jsonl",
+          "sha256": "ae0f348f467c9599d1c39ef938e4f7c87e03a9d97ab286dec3f34ba8c2d2d53f",
+          "bytes": 64855
         },
         {
-          "taskId": "task_2087f6d10375435493b84dc3ae46e315",
-          "attemptId": "run_5fb0642ce71b43acb94e19e08f651285",
-          "status": "failed",
-          "resourcesReleased": false,
-          "resourceCleanupPending": true,
-          "resourceCleanupReason": "服务中断后未确认进程收尾",
-          "recordedPid": 52252
+          "path": "run_e0e195e4d3654d09b0768a40b8674b06/verification.json",
+          "sha256": "1c60ff6b2b671cabf529ea4bd36049bb6f147f0d8a27f183f5644befe093c927",
+          "bytes": 987
+        },
+        {
+          "path": "run_e0e195e4d3654d09b0768a40b8674b06/verification.log",
+          "sha256": "30d89300a9bba2ac15fc37fc84fe0380c7525556de304cef05354cef5c310a99",
+          "bytes": 705
+        },
+        {
+          "path": "run_e0e195e4d3654d09b0768a40b8674b06/candidate-verification.json",
+          "sha256": "b8a8ce27072440e370c938e4110f1f73b355025bc8b4bb70d6f3bb99f0d6366e",
+          "bytes": 14195
+        },
+        {
+          "path": "run_e0e195e4d3654d09b0768a40b8674b06/command.json",
+          "sha256": "a3ea268dd10c97ca51dae6ac33877774781519f03ecdaefa02a2f086ddd69a5f",
+          "bytes": 1816
+        },
+        {
+          "path": "run_e0e195e4d3654d09b0768a40b8674b06/result.json",
+          "sha256": "07d5c288977873cda6bc8bb84d316fc75d66e8f58a2790107928cbfa125fa805",
+          "bytes": 1744
+        },
+        {
+          "path": "run_3b0a3ec910024df9a2f11ed0a43dd69a/execution.jsonl",
+          "sha256": "e7a7327359bf768df6df23a4dcbd1e415c7bac0124450f5589953041f89ec959",
+          "bytes": 400355
+        },
+        {
+          "path": "run_3b0a3ec910024df9a2f11ed0a43dd69a/verification.json",
+          "sha256": "5457f9b6f4aef99cc4066bd662aa3b9f4fa517ae5a1b5c01a503475a2b11be1a",
+          "bytes": 987
+        },
+        {
+          "path": "run_3b0a3ec910024df9a2f11ed0a43dd69a/verification.log",
+          "sha256": "322ccd3c948dcab0c0b5ee5cb622175479e1beba5d0161be0c2e2a45ffc4edb7",
+          "bytes": 706
+        },
+        {
+          "path": "run_3b0a3ec910024df9a2f11ed0a43dd69a/candidate-verification.json",
+          "sha256": "52c3592aee45c5abe5977b103a83c1ae4f1714f5801aaa688e4d670349ebea1e",
+          "bytes": 14195
+        },
+        {
+          "path": "run_3b0a3ec910024df9a2f11ed0a43dd69a/command.json",
+          "sha256": "1484d201f3902fbe202400883babb954d872b6e90880523314ec7372fc0f17ed",
+          "bytes": 1756
+        },
+        {
+          "path": "run_3b0a3ec910024df9a2f11ed0a43dd69a/result.json",
+          "sha256": "0de48512a78729b67c6db7470bd5f6d8235a370834d0074fcbb62ae9e0c26935",
+          "bytes": 1750
         }
-      ],
-      "issues": [
-        {
-          "id": "restart-resource-release",
-          "fact": "Both original attempts still expose resources_released=false and resource_cleanup_pending=true. Scheduler capacity still lists zero pending releases/cleanups.",
-          "inference": "Normal retry remains blocked by the recorded release prerequisite; a repeat retry is unnecessary while its rejecting condition is explicitly visible.",
-          "unknown": "Whether all original descendant processes have terminated.",
-          "evidence": {
-            "capacityCursor": 149064,
-            "pidProbe": [
-              {
-                "pid": 94112,
-                "present": false
-              },
-              {
-                "pid": 52252,
-                "present": true,
-                "name": "ChatGPT",
-                "startTime": "2026-09-15T06:39:50.4447264Z"
-              }
-            ]
-          },
-          "next_action": "Platform must reconcile original execution identities and complete supported resource cleanup/release. PID 52252 has been reused after the original task ended; do not terminate it based solely on the stale PID."
-        }
-      ],
-      "actions": {
-        "retried": false,
-        "startedBusinessE2E": false,
-        "modifiedPlatform": false,
-        "killedProcesses": false
-      }
-    }
-  ],
-  "recovery": {
-    "recordedAt": "2026-09-15T08:00:49.238Z",
-    "platformReportedRootCause": "用户报告：重启未恢复持久化清理队列，状态展示漏算。",
-    "verifiedEvents": [
-      {
-        "id": 151007,
-        "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
-        "task_id": "task_ed2e6151023e4e7d8f8467dd73e278fb",
-        "attempt_id": "run_6e02611b89554bb0899de115abf90135",
-        "kind": "runtime.orphan_recovered",
-        "summary": "已用可验证证据确认旧执行身份消失，资源已释放",
-        "details": {
-          "attempt_id": "run_6e02611b89554bb0899de115abf90135",
-          "task_id": "task_ed2e6151023e4e7d8f8467dd73e278fb",
-          "code": "released",
-          "resources_released": true,
-          "source": "restart_orphan_recovery",
-          "evidence": {
-            "attempt_id": "run_6e02611b89554bb0899de115abf90135",
-            "status": "failed",
-            "source": "legacy_started_event",
-            "policy_version": "2026-09-14.5:4f53cda18c2b",
-            "event_id": 148252,
-            "event_created_at": "2026-09-15T06:19:16.115+00:00",
-            "event_summary": "下游执行器已启动",
-            "pid": 94112,
-            "owner_id": "101344-8850ca4cd979422fb3af57d8e69508cc",
-            "owner_pid": 101344,
-            "reason": "该来源先成功建立非继承 kill-on-close Job 才持久化 PID 与 started 事件",
-            "owner_probe": {
-              "state": "absent",
-              "reason": "process_not_found"
-            },
-            "worker_probe": {
-              "state": "absent",
-              "reason": "process_not_found"
-            }
-          }
-        },
-        "created_at": "2026-09-15T07:38:11.131+00:00"
-      },
-      {
-        "id": 151006,
-        "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
-        "task_id": "task_2087f6d10375435493b84dc3ae46e315",
-        "attempt_id": "run_5fb0642ce71b43acb94e19e08f651285",
-        "kind": "runtime.orphan_recovered",
-        "summary": "已用可验证证据确认旧执行身份消失，资源已释放",
-        "details": {
-          "attempt_id": "run_5fb0642ce71b43acb94e19e08f651285",
-          "task_id": "task_2087f6d10375435493b84dc3ae46e315",
-          "code": "released",
-          "resources_released": true,
-          "source": "restart_orphan_recovery",
-          "evidence": {
-            "attempt_id": "run_5fb0642ce71b43acb94e19e08f651285",
-            "status": "failed",
-            "source": "legacy_started_event",
-            "policy_version": "2026-09-14.5:4f53cda18c2b",
-            "event_id": 148250,
-            "event_created_at": "2026-09-15T06:19:16.080+00:00",
-            "event_summary": "下游执行器已启动",
-            "pid": 52252,
-            "owner_id": "101344-8850ca4cd979422fb3af57d8e69508cc",
-            "owner_pid": 101344,
-            "reason": "该来源先成功建立非继承 kill-on-close Job 才持久化 PID 与 started 事件",
-            "owner_probe": {
-              "state": "absent",
-              "reason": "process_not_found"
-            },
-            "worker_probe": {
-              "state": "present",
-              "created_at": "2026-09-15T06:39:50.444+00:00"
-            }
-          }
-        },
-        "created_at": "2026-09-15T07:38:11.117+00:00"
-      }
-    ],
-    "newCandidates": [
-      {
-        "taskId": "task_420b1373fe2b402a8d0183e9a01cb1e5",
-        "attemptId": "run_868dd7a5d4cc4bf48ca2dc88441faee7",
-        "status": "submitted",
-        "artifactDigest": "7913a50454ea01f98cc00f66927e5372434d996dc1ce27e239b3b2ce447b2d9c"
-      },
-      {
-        "taskId": "task_ed2e6151023e4e7d8f8467dd73e278fb",
-        "attemptId": "run_43adacc4c5c241bca65ea7994cf9a8f5",
-        "status": "submitted",
-        "artifactDigest": "34df0611dd920d9ad8ae182162909654ff27d5f04215d7fff1ebde3e7f0edccc"
-      },
-      {
-        "taskId": "task_2087f6d10375435493b84dc3ae46e315",
-        "attemptId": "run_475058a9564b428e8897b3f2f2a7140b",
-        "status": "submitted",
-        "artifactDigest": "e5db8bab1fa74bc4576e113d2e1ee8b2ed3cbb7eca500bc84e04734eb14ff007"
-      }
-    ],
-    "accepted": false,
-    "integrated": false,
-    "newBusinessE2E": 0
+      ]
+    },
+    "liveInvocations": 0
   }
 }

@@ -41,7 +41,12 @@ node scripts/run-shared-gpu-regression-batch.mjs \
 - `--mode smoke` runs exactly **1** two-round attempt.
 - `--mode n20` runs exactly **20** independent attempts and only accepts
   `--families affine` (a coverage family set can never enter the affine N20
-  denominator).
+  denominator). `n20` additionally **rejects the controlled-study environment**
+  (`E2E_EXPERIENCE_CONDITION` / `E2E_KERNEL_WIKI_SNAPSHOT`) with a non-zero exit
+  **before any directory is created or any driver is spawned**, so a
+  three-per-condition study result can never be silently labeled strict N20
+  evidence. The study has its own smoke-only runner
+  (`scripts/run-experience-condition-study.md`).
 - `--artifact-dir` receives the large raw per-run directories and the raw
   merged driver logs (`<artifact-dir>/logs/run-NN.log`). It may be created.
 - `--report-dir` receives only the small `batch.json` / `ledger.json` reports.
@@ -130,7 +135,9 @@ spawned:
   spawned runtime must have exited (`runtime_exit_missing` otherwise). An absent
   cleanup block is never treated as confirmed. Release proof may only be skipped
   when the driver never spawned a runtime — `stopReason: unsafe_continuation:
-  ...`;
+  ...`. An existing `teardownStop` that is *not* confirmed is reported separately
+  (`teardown_stop_unconfirmed`), so one confirmed proof never hides the other
+  unconfirmed one and a missing field stays unknown (unsafe);
 - the model-independent configuration (including the code commit and content
   digest) of every invocation must match the first one —
   `stopReason: config_or_source_drift`;
@@ -144,6 +151,16 @@ A retained comparable failure (or an `unknown` model) with a terminal,
 summary-backed and release-confirmed record does **not** stop an `n20` batch: it
 is kept in the original denominator and the remaining original invocations
 continue. Only the conditions above stop the batch early.
+
+`continuationSafety(record)` is exported so the controlled experience-condition
+study checks a retained slot with the **exact same** smoke release/observation
+semantics (`{safe, issues}`) instead of a weaker copy of them; it is pure and
+reads only the existing driver DTOs.
+
+Before any directory is created or driver spawned, an `n20` batch **refuses** the
+study environment (`E2E_EXPERIENCE_CONDITION` / `E2E_KERNEL_WIKI_SNAPSHOT` set):
+a controlled study result is never strict N20 evidence. `smoke` is the only mode
+that may run with a study condition, and it is the mode the study runner uses.
 
 ### `strictN20Passed`
 

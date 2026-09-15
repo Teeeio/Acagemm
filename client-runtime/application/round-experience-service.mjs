@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { appendExperience, emptyExperienceStore, experienceError, formatExperienceContext, validateExperienceContext, EXPERIENCE_LIMITS, EXPERIENCE_SELECTION_POLICY_VERSION, EXPERIENCE_SELECTION_SCHEMA_VERSION } from '../experience-contract.mjs';
+import { appendExperience, emptyExperienceStore, experienceError, formatExperienceContext, validateExperienceContext, EXPERIENCE_CONDITIONS, EXPERIENCE_LIMITS, EXPERIENCE_SELECTION_POLICY_VERSION, EXPERIENCE_SELECTION_SCHEMA_VERSION } from '../experience-contract.mjs';
 import { isBackendTargetName, isInfrastructureTestFailure } from '../operator-test-evidence.mjs';
 // 方案 D 的冻结策略版本来自纯选择模块：静态导入保证未组合/缺失时直接失败，
 // 依赖该轮知识的新 Agent 不会被静默放行（不设按需加载或空知识回退）。
@@ -444,12 +444,25 @@ const selectionQueryFor = (state, mission, scope) => {
   };
 };
 
-export const createRoundExperienceService = ({ experienceService, resolveAccess, verifyObservationEvidence, timers, timeoutMs = 3000 } = {}) => {
+// 显式经验条件是构造期配置，不是每轮参数：一旦确定就不能在轮内切换，也不能静默回退。
+// 未知/空/null/非字符串值必须在任何有副作用操作之前同步失败。
+const invalidCondition = (message) => { throw Object.assign(new TypeError(message), { code: 'EXPERIENCE_INVALID', status: 400 }); };
+
+export const createRoundExperienceService = ({ experienceService, resolveAccess, verifyObservationEvidence, timers, timeoutMs = 3000, experienceCondition } = {}) => {
   if (typeof experienceService?.retrieve !== 'function' || typeof experienceService?.recordObservation !== 'function') throw new TypeError('experienceService.retrieve and recordObservation are required');
   if (typeof resolveAccess !== 'function') throw new TypeError('resolveAccess is a required trusted synchronous authority port');
   if (typeof verifyObservationEvidence !== 'function') throw new TypeError('verifyObservationEvidence is a required trusted evidence port');
   if (typeof timers?.setTimeout !== 'function' || typeof timers?.clearTimeout !== 'function') throw new TypeError('timers.setTimeout and timers.clearTimeout are required');
   timeoutValue(timeoutMs);
+  if (experienceCondition !== undefined && !EXPERIENCE_CONDITIONS.includes(experienceCondition)) {
+    invalidCondition(`experienceCondition must be one of ${EXPERIENCE_CONDITIONS.join(', ')} when it is provided`);
+  }
+  // 显式条件必须由真正的方案 D 端口承载：旧 retrieve-only 注入无法表达条件，必须显式失败，
+  // 绝不静默搜出一份看起来正常、实际未按条件过滤的经验。
+  if (experienceCondition !== undefined && typeof experienceService?.retrieveWithSelection !== 'function') {
+    invalidCondition('experienceService.retrieveWithSelection is required when experienceCondition is explicit');
+  }
+  const condition = experienceCondition;
   const pending = preparingRounds;
   const accessFor = ({ state, mission }) => {
     if (!state || !mission || !safeId(mission.id) || !safeId(mission.projectId) || state.activeMissionId !== mission.id) throw fail('ROUND_EXPERIENCE_ACCESS_INVALID', 'Experience use requires the active Mission and its owning Project');
@@ -492,27 +505,39 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
       if (existing.projectId !== access.projectId || existing.missionId !== mission.id) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'A round context cannot change owning Project or Mission');
       const frozen = validateExperienceContext(existing, expected);
       const existingSelection = state.iterationStats?.roundExperienceSelection;
-      if (!existingSelection || existingSelection.roundId !== roundId || existingSelection.missionId !== mission.id
-        || existingSelection.projectId !== access.projectId || existingSelection.contextId !== frozen.contextId) {
+      const frozenSelection = existingSelection && existingSelection.roundId === roundId && existingSelection.missionId === mission.id
+        && existingSelection.projectId === access.projectId && existingSelection.contextId === frozen.contextId ? existingSelection : null;
+      // 同轮冻结同时冻结条件：配置的显式条件必须与冻结审计里记录的条件完全一致。冻结审计缺条件
+      // （旧清单、context-derived 清单或已被换掉的清单）与条件不同一样是冲突，绝不静默重选、
+      // 也不给旧清单补写一个它从未使用过的条件。
+      if (frozenSelection?.experienceCondition !== condition) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'A frozen round experience condition cannot be added, changed or dropped within the same round');
+      if (!frozenSelection) {
         state.iterationStats = { ...state.iterationStats, roundExperienceSelection: contextDerivedSelection(frozen, identity) };
       } else {
-        auditSelection(existingSelection, frozen, identity);
+        auditSelection(frozenSelection, frozen, identity);
       }
       return frozen;
     }
     const inflight = pending.get(state);
     if (inflight) {
       if (inflight.roundId !== roundId) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'Another round is still retrieving its experience context');
+      // 模块级 pending 按 state 共享，可能被不同条件的 service 实例共用：同轮去重只对同一冻结
+      // 条件成立，复用前必须严格比对，否则会把另一条件的冻结 context 静默当成本轮结果。
+      if (inflight.condition !== condition) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'A concurrent retrieval of this round uses a different experience condition');
       return validateExperienceContext(await inflight.promise, expected);
     }
     state.iterationStats = { ...(state.iterationStats || {}), roundExperienceStatus: { status: 'preparing', projectId: access.projectId, missionId: mission.id, roundId } };
-    const claim = { roundId, promise: null };
+    const claim = { roundId, condition, promise: null };
     const operation = (async () => {
       try {
         const query = { ...access, missionId: mission.id, roundId, scope: resolvedScope };
         // 真实 retrieveWithSelection 端口带方案 D 选择输入；旧 retrieve-only 注入
         // 不传任何新参数，保持既有顺序与行为。
-        if (typeof experienceService.retrieveWithSelection === 'function') query.selection = selectionQueryFor(state, mission, resolvedScope);
+        if (typeof experienceService.retrieveWithSelection === 'function') {
+          query.selection = selectionQueryFor(state, mission, resolvedScope);
+          // 只有显式配置条件时才加这个键；省略模式的选择输入与旧 schema 完全一致。
+          if (condition !== undefined) query.selection.experienceCondition = condition;
+        }
         // 一次仓库读取同时取得冻结内容和选注清单；旧 retrieve-only 注入按原端口运行。
         const retrieved = await bounded('retrieve', async (signal) => {
           if (typeof experienceService.retrieveWithSelection === 'function') {
@@ -526,6 +551,10 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
         validateExperienceContext(context, expected);
         if (state.activeMissionId !== mission.id || (state.iterationStats.roundBudget && state.iterationStats.roundBudget.roundId !== roundId)) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'Mission or round changed while experience retrieval was pending');
         const selection = auditSelection(retrieved.rawSelection, context, identity);
+        // fresh 检索与同轮复用一样冻结条件：返回审计里的条件必须严格等于构造期配置。清单漏条件
+        // 或条件不同，都在写 ready/context 之前拒绝，绝不落盘一份与配置不符、看起来正常的冻结
+        // 上下文。省略模式（undefined）保持兼容：清单本来就不带该字段时严格相等成立。
+        if (selection.experienceCondition !== condition) throw fail('ROUND_EXPERIENCE_SELECTION_CONFLICT', 'Audited retrieval did not apply the configured experience condition');
         state.iterationStats = {
           ...state.iterationStats,
           roundExperience: context,

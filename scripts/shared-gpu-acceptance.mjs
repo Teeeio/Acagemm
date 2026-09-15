@@ -55,6 +55,21 @@ export const CONTINUATION_AUDIT_ASSERTIONS = Object.freeze([
   'this observation reads the prepared-before-send artifact only; it does not observe the live provider',
 ]);
 
+// The condition-independent half of the continuation observation. Every mode of
+// the controlled experience study runs these exact checks; the study module only
+// adds the condition-specific selection assertions on top. Both the default strict
+// verifier and the study verifier call this, so a facts-only candidate can never
+// pass with lost or tampered mandatory facts.
+export const ROUND_FACTS_AUDIT_ASSERTIONS = Object.freeze([
+  'pre-send audit file present for the actual round following the verified candidate source round',
+  'audited prompt SHA-256 (UTF-8) recomputed independently and matched',
+  'audited prompt UTF-8 byte length recomputed independently and matched',
+  'audited roundFacts equal the frozen source archive and retain candidate, correctness, gate, rollback and currentBest facts',
+  'audited MISSION ITERATION CONTEXT parsed out of the actual prompt equals the audit sidecar',
+  'audited selection bound by missionId/candidateId/patchDigest/queueRequestId (no baseline or human fallback)',
+  'this observation reads the prepared-before-send artifact only; it does not observe the live provider',
+]);
+
 const sha256 = (value) => createHash('sha256').update(value, 'utf8').digest('hex');
 const utf8 = (value) => Buffer.byteLength(value, 'utf8');
 
@@ -207,7 +222,10 @@ export const buildConfigFingerprint = (config, { code = undefined } = {}) => {
 // Continuation audit (P1 §14.4/§14.5 observation)
 // ---------------------------------------------------------------------------
 
-const promptSection = (prompt, label) => {
+// Parse one `----- BEGIN <label> -----` JSON block out of an audited prompt. A
+// missing, unterminated or non-JSON block throws: the actual prompt is the only
+// authority for what the round was prepared with, never a sidecar claim.
+export const promptSection = (prompt, label) => {
   const begin = `----- BEGIN ${label} -----\n`;
   const end = `\n----- END ${label} -----`;
   const start = prompt.indexOf(begin);
@@ -216,23 +234,41 @@ const promptSection = (prompt, label) => {
   return JSON.parse(prompt.slice(start + begin.length, stop));
 };
 
-// Verify the prepared-before-send audit artifact that the production Runtime wrote
-// before sending the round that FOLLOWS the verified candidate's own archived
-// round. The caller must have selected `audit` by the frozen
-// `sourceRound.roundFacts.target.roundId` (never by "the latest agent.runId"):
-// a third round or a same-round recovery attempt must not be compared against the
-// first round's facts.
+// The single authority for "which execution experience records are the verified
+// source-round candidate's own". Bound by mission, candidate id, patch digest and
+// the durable queue request id, so a baseline observation, a human note or another
+// candidate can never satisfy it. Returns the matches; callers decide whether they
+// require exactly one.
+export const bindSourceRoundExecutionExperience = ({ experiences, sourceRound, missionId } = {}) => {
+  assert.ok(sourceRound && typeof sourceRound === 'object' && !Array.isArray(sourceRound),
+    'sourceRound archive is required');
+  const expectedCandidateDigest = hexDigest(sourceRound.candidateDigest);
+  assert.ok(expectedCandidateDigest && sourceRound.candidateId && sourceRound.queueRequestId,
+    'archived source round is missing its candidate/queue binding');
+  return (Array.isArray(experiences) ? experiences : []).filter((item) => item.source === 'execution'
+    && item.evidence?.missionId === missionId
+    && item.evidence?.candidateId === sourceRound.candidateId
+    && hexDigest(item.evidence?.patchDigest) === expectedCandidateDigest
+    && item.evidence?.runId === sourceRound.queueRequestId);
+};
+
+// Verify the condition-independent facts of the prepared-before-send audit
+// artifact that the production Runtime wrote for the round following the verified
+// candidate's own archived round. The caller must have selected `audit` by the
+// frozen `sourceRound.roundFacts.target.roundId` (never by "the latest
+// agent.runId"): a third round or a same-round recovery attempt must not be
+// compared against the first round's facts.
 //
 // `sourceRound` is the runHistory archive matched by the first verified candidate
 // task's candidate digest AND queue request id (payload.requestId). Its
 // `runId`/`candidateSourceRunId` are the actual producing run, so same-round
 // recovery attribution does not fall back to a fixed first Agent ID.
 //
-// All P1 assertions are retained: digest/bytes recomputation, id/version/full
-// content, frozen round facts equality and the candidate/queue-bound experience
-// selection (no baseline or human fallback). Missing evidence throws; nothing is
-// synthesized.
-export const verifyContinuationAudit = ({ audit, sourceRound, experiences, missionId, projectId } = {}) => {
+// Everything here is shared by the strict continuation verifier and by every
+// condition of the controlled study: digest/bytes recomputation, frozen round
+// facts equality, the prompt's own MISSION ITERATION CONTEXT parse and the
+// candidate/queue-bound identity. Missing evidence throws; nothing is synthesized.
+export const verifyRoundFactsAudit = ({ audit, sourceRound, missionId, projectId } = {}) => {
   assert.ok(audit && typeof audit === 'object' && !Array.isArray(audit), 'continuation audit artifact is required');
   assert.ok(sourceRound && typeof sourceRound === 'object' && !Array.isArray(sourceRound), 'sourceRound archive is required');
   assert.equal(audit.deliveryStage, 'prepared-before-send');
@@ -284,29 +320,7 @@ export const verifyContinuationAudit = ({ audit, sourceRound, experiences, missi
       'frozen facts must retain the actual candidate source run (recovery attempts are not re-attributed)');
   }
 
-  // Exact evidence binding: only the source round's own execution experience may
-  // satisfy this. A baseline observation, a human note or another candidate fails.
-  const boundExperiences = (Array.isArray(experiences) ? experiences : []).filter((item) => item.source === 'execution'
-    && item.evidence?.missionId === missionId
-    && item.evidence?.candidateId === sourceRound.candidateId
-    && hexDigest(item.evidence?.patchDigest) === expectedCandidateDigest
-    && item.evidence?.runId === sourceRound.queueRequestId);
-  assert.equal(boundExperiences.length, 1,
-    `source-round candidate execution experience not uniquely bound (found ${boundExperiences.length})`);
-  const continuationExperience = boundExperiences[0];
-  const selected = (audit.selection?.selected || []).find((item) => item.id === continuationExperience.id
-    && item.version === continuationExperience.version);
-  assert.ok(selected, 'audited selection must contain the source-round candidate execution experience');
-  assert.equal(selected.source, 'execution');
-
-  const promptExperience = promptSection(audit.prompt, 'UNTRUSTED EXPERIENCE DATA');
-  const promptItems = promptExperience.items.filter((item) => item.id === continuationExperience.id
-    && item.version === continuationExperience.version);
-  assert.equal(promptItems.length, 1, 'actual prompt must contain the bound experience ID and version exactly once');
-  assert.equal(promptItems[0].content, continuationExperience.content,
-    'actual prompt must carry the complete, unchanged experience content');
-  assert.equal(promptExperience.versions[continuationExperience.id], continuationExperience.version);
-  assert.equal(promptExperience.contextId, audit.selection.contextId);
+  // The actual prompt is the authority for the facts the round was prepared with.
   assert.deepEqual(promptSection(audit.prompt, 'MISSION ITERATION CONTEXT'), facts,
     'actual prompt facts must equal the audit sidecar');
 
@@ -325,13 +339,12 @@ export const verifyContinuationAudit = ({ audit, sourceRound, experiences, missi
     roundId: audit.roundId,
     promptDigest: audit.promptDigest,
     promptBytes: audit.promptBytes,
-    selectedExperience: {
-      id: continuationExperience.id,
-      version: continuationExperience.version,
-      source: continuationExperience.source,
-      evidenceCandidateId: continuationExperience.evidence.candidateId,
-      evidencePatchDigest: continuationExperience.evidence.patchDigest,
-      evidenceRunId: continuationExperience.evidence.runId,
+    sourceRound: {
+      roundId: sourceRoundId,
+      runId: sourceRound.runId,
+      candidateId: sourceRound.candidateId,
+      candidateDigest: expectedCandidateDigest,
+      queueRequestId: sourceRound.queueRequestId,
     },
     facts: {
       previousRunId: facts.previous?.runId,
@@ -342,6 +355,63 @@ export const verifyContinuationAudit = ({ audit, sourceRound, experiences, missi
       rollbackPerformed: facts.rollback?.performed ?? null,
       currentBestCandidateId: facts.currentBest?.candidateId ?? null,
     },
+    assertions: [...ROUND_FACTS_AUDIT_ASSERTIONS],
+  };
+};
+
+// Verify the prepared-before-send audit artifact that the production Runtime wrote
+// before sending the round that FOLLOWS the verified candidate's own archived
+// round. The caller must have selected `audit` by the frozen
+// `sourceRound.roundFacts.target.roundId` (never by "the latest agent.runId"):
+// a third round or a same-round recovery attempt must not be compared against the
+// first round's facts.
+//
+// `sourceRound` is the runHistory archive matched by the first verified candidate
+// task's candidate digest AND queue request id (payload.requestId). Its
+// `runId`/`candidateSourceRunId` are the actual producing run, so same-round
+// recovery attribution does not fall back to a fixed first Agent ID.
+//
+// All P1 assertions are retained: digest/bytes recomputation, id/version/full
+// content, frozen round facts equality and the candidate/queue-bound experience
+// selection (no baseline or human fallback). Missing evidence throws; nothing is
+// synthesized.
+export const verifyContinuationAudit = ({ audit, sourceRound, experiences, missionId, projectId } = {}) => {
+  const receipt = verifyRoundFactsAudit({ audit, sourceRound, missionId, projectId });
+
+  // Exact evidence binding: only the source round's own execution experience may
+  // satisfy this. A baseline observation, a human note or another candidate fails.
+  const boundExperiences = bindSourceRoundExecutionExperience({ experiences, sourceRound, missionId });
+  assert.equal(boundExperiences.length, 1,
+    `source-round candidate execution experience not uniquely bound (found ${boundExperiences.length})`);
+  const continuationExperience = boundExperiences[0];
+  const selected = (audit.selection?.selected || []).find((item) => item.id === continuationExperience.id
+    && item.version === continuationExperience.version);
+  assert.ok(selected, 'audited selection must contain the source-round candidate execution experience');
+  assert.equal(selected.source, 'execution');
+
+  const promptExperience = promptSection(audit.prompt, 'UNTRUSTED EXPERIENCE DATA');
+  const promptItems = promptExperience.items.filter((item) => item.id === continuationExperience.id
+    && item.version === continuationExperience.version);
+  assert.equal(promptItems.length, 1, 'actual prompt must contain the bound experience ID and version exactly once');
+  assert.equal(promptItems[0].content, continuationExperience.content,
+    'actual prompt must carry the complete, unchanged experience content');
+  assert.equal(promptExperience.versions[continuationExperience.id], continuationExperience.version);
+  assert.equal(promptExperience.contextId, audit.selection.contextId);
+
+  return {
+    runId: receipt.runId,
+    roundId: receipt.roundId,
+    promptDigest: receipt.promptDigest,
+    promptBytes: receipt.promptBytes,
+    selectedExperience: {
+      id: continuationExperience.id,
+      version: continuationExperience.version,
+      source: continuationExperience.source,
+      evidenceCandidateId: continuationExperience.evidence.candidateId,
+      evidencePatchDigest: continuationExperience.evidence.patchDigest,
+      evidenceRunId: continuationExperience.evidence.runId,
+    },
+    facts: receipt.facts,
     assertions: [...CONTINUATION_AUDIT_ASSERTIONS],
   };
 };

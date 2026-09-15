@@ -34,13 +34,12 @@ files or an unavailable Git inventory leave contentDigest unknown.
   See `scripts/run-shared-gpu-regression-batch.md`; it defines no second driver,
   scheduler or acceptance threshold.
 
-## `verifyContinuationAudit({ audit, sourceRound, experiences, missionId, projectId })`
+## `verifyRoundFactsAudit({ audit, sourceRound, missionId, projectId })`
 
-Verifies the production prepared-before-send prompt audit that was written for the
-round following the **verified candidate's own archived round**. Returns a
-serializable summary (digest, bytes, bound experience, frozen facts, assertion
-list) and throws on any mismatch. It never synthesizes facts or falls back to a
-baseline/human record.
+The condition-independent half of the continuation contract, extracted so the
+controlled experience-condition study can run the **same** strict facts checks in
+every mode. It is not a weaker verifier: `verifyContinuationAudit` is now exactly
+this function plus the strict experience binding below.
 
 `sourceRound` must be the `runHistory` archive matched by the first verified
 completed candidate task on **candidate digest AND the durable queue request id**
@@ -54,7 +53,8 @@ same-round recovery attempt is attributed to the persisted
 third round or a later recovery attempt) is not allowed; the driver scans retained
 `bridge/prompt-audits/*.json` and selects by the frozen target round id.
 
-Retained P1 invariants:
+It returns `{runId, roundId, promptDigest, promptBytes, sourceRound, facts,
+assertions}` and throws on any mismatch; nothing is synthesized. Verified here:
 
 1. `deliveryStage === 'prepared-before-send'`, mission/project match.
 2. Audit round equals the frozen next round of `sourceRound` and is strictly later
@@ -64,17 +64,40 @@ Retained P1 invariants:
    `target.missionId/projectId/roundId` bind to mission/project/audit.
 5. `previous.runId/roundId/candidateId/candidateDigest/queueRequestId` bind to the
    verified candidate; `candidateSourceRunId` is retained when present.
-6. The source-round candidate execution experience is uniquely bound by
-   missionId + candidateId + patchDigest + queueRequestId (`runId`) and is present
-   in `selection.selected` with the same id/version.
-7. The audited prompt contains that experience id/version exactly once with the
-   complete unchanged content, the selection contextId matches, and the prompt's
-   `MISSION ITERATION CONTEXT` section equals the audit sidecar.
-8. `candidate` / `correctness` / `gate` / `rollback` / `currentBest` facts exist and
+6. The prompt's own `MISSION ITERATION CONTEXT` section deep-equals the audit
+   sidecar (the actual prompt is the authority, never the sidecar).
+7. `candidate` / `correctness` / `gate` / `rollback` / `currentBest` facts exist and
    `gate.result` equals the source round's resolved outcome (`reference`/`reject`).
 
-This observes the pre-send artifact only. It does not claim what a live provider
-process received or obeyed.
+Two lower-level helpers are exported for the same reason:
+`promptSection(prompt, label)` parses one `----- BEGIN <label> -----` JSON block
+out of an audited prompt (a missing/unterminated/non-JSON block throws), and
+`bindSourceRoundExecutionExperience({experiences, sourceRound, missionId})`
+returns the execution records bound to the source round by mission + candidate id +
+patch digest + queue request id (callers decide whether they require exactly one).
+
+## `verifyContinuationAudit({ audit, sourceRound, experiences, missionId, projectId })`
+
+Verifies the production prepared-before-send prompt audit that was written for the
+round following the **verified candidate's own archived round**. Returns a
+serializable summary (digest, bytes, bound experience, frozen facts, assertion
+list) and throws on any mismatch. It never synthesizes facts or falls back to a
+baseline/human record.
+
+It runs `verifyRoundFactsAudit` first (all seven checks above) and then adds the
+two strict experience invariants. These stay mandatory in the default mode:
+
+8. The source-round candidate execution experience is **uniquely** bound by
+   missionId + candidateId + patchDigest + queueRequestId (`runId`) — exactly one
+   match — and is present in `selection.selected` with the same id/version and
+   `source: 'execution'`.
+9. The audited prompt contains that experience id/version exactly once with the
+   complete unchanged content, the selection contextId matches, and the prompt's
+   version map carries the bound version.
+
+A zero-experience (`facts-only`) prompt can therefore never satisfy this verifier,
+whatever its condition audit says. This observes the pre-send artifact only. It
+does not claim what a live provider process received or obeyed.
 
 ## Budget-safe terminal
 

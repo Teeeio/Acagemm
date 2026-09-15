@@ -6,9 +6,10 @@
 
 ## Public API / Inputs
 
-`createRoundExperienceService({experienceService,resolveAccess,verifyObservationEvidence,timers,timeoutMs=3000})` 返回冻结的 `{prepare,collect,record}`。
+`createRoundExperienceService({experienceService,resolveAccess,verifyObservationEvidence,timers,timeoutMs=3000,experienceCondition?})` 返回冻结的 `{prepare,collect,record}`。
 
 - experienceService：注入公开 retrieve/recordObservation API，不默认导入 repository。存在可选 `retrieveWithSelection` 时一次调用取得内容和审计清单；仅缺少该端口时用原 retrieve 并派生明确标记的清单。旧 retrieve-only 注入行为不变。
+- experienceCondition（可选，构造期）：受控经验条件，只能是 [经验契约](../experience-contract.md) 的冻结枚举 `EXPERIENCE_CONDITIONS` 之一（`facts-only`/`local-only`/`local-and-wiki`）。**省略即当前行为**，不新增任何查询键。显式给出时构造期同步校验：未知/`null`/空串/非字符串值、或注入的 experienceService 没有 `retrieveWithSelection`（旧 retrieve-only 注入无法表达条件），都在任何有副作用操作之前以 `TypeError`+`EXPERIENCE_INVALID` 失败，绝不静默退回未过滤的经验。显式条件在每**新**轮作为 `query.selection.experienceCondition` 原样下发，绝不改 rank/配额/预算。
 - resolveAccess({state,mission})：可信同步授权端口，返回 `{projectId,allowedProjectIds:[]}`；必须与 activeMissionId、mission.id/projectId 一致。组合根负责确认本地 Project 存在，不从正文推断权限。
 - verifyObservationEvidence({state,mission,observation,signal})：只读可信验证，返回 `{verified:true,evidence,summary?}` 或 `{verified:false,code?}`。true 必须建立真实执行回执与完整凭据绑定；不能只是转发调用者 verified 字段。
 - timers：显式 setTimeout/clearTimeout。timeoutMs 为正有限值，最大 120000 ms；方法可指定更短 deadline。
@@ -29,7 +30,9 @@ execution observations may report a mismatch, but cannot rewrite its provenance.
 
 context 只存 `state.iterationStats.roundExperience`，利用既有 Mission 投影/恢复保留；无顶层 context。来源、versions、scopeDigest、contextId 均可核查。同轮已有 context 只校验/冻结/复用，不重新查询人工更新；不同轮才取得新快照。恢复对象也必须摘要有效，不能用当前最新经验悄悄替换。进程内同一 state 对象的并发准备共享 Promise。
 
-同轮冻结的审计清单保存在 `state.iterationStats.roundExperienceSelection`（与 `roundExperience` 同 round 的 sidecar）：含选中/排除记录的 ID/version/source/reason、策略版本、repositoryRevision/contextId、`contextBytes` 与 `renderedBytes`（均按 UTF-8 `Buffer.byteLength` 实测）。内容和清单来自同一次仓库读取，严格核对 contextId/revision/scopeDigest、身份、选中记录的顺序/版本/来源；审计端口返回不一致时以 `ROUND_EXPERIENCE_SELECTION_CONFLICT` 阻止本轮准备，存储错误不吞掉。旧结构/旧 retrieve-only 注入仍可读，其清单标记 `auditSource:context-derived`、`exclusionReasonsRecorded:false`、原因 `frozen-context`，不编造排除原因。同轮恢复不重查、不刷新清单。
+同轮冻结的审计清单保存在 `state.iterationStats.roundExperienceSelection`（与 `roundExperience` 同 round 的 sidecar）：含选中/排除记录的 ID/version/source/reason、策略版本、repositoryRevision/contextId、`contextBytes` 与 `renderedBytes`（均按 UTF-8 `Buffer.byteLength` 实测）。内容和清单来自同一次仓库读取，严格核对 contextId/revision/scopeDigest、身份、选中记录的顺序/版本/来源；审计端口返回不一致时以 `ROUND_EXPERIENCE_SELECTION_CONFLICT` 阻止本轮准备，存储错误不吞掉。旧结构/旧 retrieve-only 注入仍可读，其清单标记 `auditSource:context-derived`、`exclusionReasonsRecorded:false`、原因 `frozen-context`，不编造排除原因。同轮恢复不重查、不刷新清单。显式条件时清单按检索端口原样保留 `experienceCondition`；省略模式不写该字段（旧清单零迁移）。全新轮的检索同样受条件冻结约束：返回审计里的条件必须**严格等于**构造期配置，清单漏条件或条件不同都在写回 ready/冻结 context 之前按 `ROUND_EXPERIENCE_SELECTION_CONFLICT` 拒绝，绝不落盘一份与配置不符、看起来正常的冻结上下文；省略模式（`undefined`）保持兼容——清单本来就不带该字段时严格相等成立，不要求补写新字段。
+
+同轮冻结同时冻结条件：以同一 roundId 复用既有冻结 context 时，配置的 `experienceCondition` 必须与冻结清单记录的条件**完全一致**；冻结清单缺该条件（旧清单、`context-derived` 清单或被换掉的清单）与条件不同一样按 `ROUND_EXPERIENCE_CONTEXT_CONFLICT` 拒绝——绝不重新选择、不给旧清单补写它从未使用过的条件、也不改标签。只有全新逻辑轮才按配置条件选择。校验发生在写回任何状态之前。进程内同一 state 对象的并发准备共享 Promise（模块级 pending），但去重只对**同一冻结条件**成立：claim 携带构造期条件，复用前严格比对，不同条件的实例并发准备同一轮按 `ROUND_EXPERIENCE_CONTEXT_CONFLICT` 拒绝，绝不把先到条件的 context 当成本轮结果；同条件仍照旧去重。
 
 存在真实 `retrieveWithSelection` 端口时，prepare 传 `query.selection={policyVersion,features,target,preferredIds?,repeatedAttempts?}`（方案 D 选择）：策略版本静态取自 [experience-selection](../experience-selection.md) 的冻结导出 `WIKI_SELECTION_POLICY_VERSION`，模块缺失即加载失败并阻止依赖该轮知识的新 Agent 启动，不静默退回无知识。
 
@@ -53,7 +56,7 @@ CPU/仿真保持 development-record，所有写回观察必须 publishable=false
 
 ## Error Contract
 
-ROUND_EXPERIENCE_ACCESS_INVALID、CONTEXT_CONFLICT、EVIDENCE_CONFLICT、LIMIT_EXCEEDED、TARGET_INVALID 为 409；ROUND_EXPERIENCE_TIMEOUT 为 504，带 stage/effectUnknown。TARGET_INVALID 覆盖：未解析 hardware 位置出现 backend 名、显式 scope 与已绑定执行目标冲突、显式 scope 非普通对象。领域及存储错误原样传播。缺端口/非法时间为 TypeError。失败必须阻止依赖该步骤的新 Agent 启动，不回退为空上下文。
+ROUND_EXPERIENCE_ACCESS_INVALID、CONTEXT_CONFLICT、EVIDENCE_CONFLICT、LIMIT_EXCEEDED、TARGET_INVALID 为 409；ROUND_EXPERIENCE_TIMEOUT 为 504，带 stage/effectUnknown。TARGET_INVALID 覆盖：未解析 hardware 位置出现 backend 名、显式 scope 与已绑定执行目标冲突、显式 scope 非普通对象。领域及存储错误原样传播。缺端口/非法时间为 TypeError；非法 `experienceCondition`、或显式条件缺少 `retrieveWithSelection` 端口，为构造期 `TypeError` + `EXPERIENCE_INVALID`（400），在任何副作用之前同步失败。失败必须阻止依赖该步骤的新 Agent 启动，不回退为空上下文。
 
 ## Example / Verification
 
@@ -67,4 +70,4 @@ const context = await roundExperience.prepare({ state, mission, roundId });
 
 ## Change Checklist / Known Limitations
 
-字段/端口变化同步此契约、AgentRound、经验纯契约及测试。context 64 KiB/20 项上限沿用领域。默认检索不猜 dtype/shape；未接完整包验证的旧结果不会自动成为观察。状态跨对象/进程的串行持久化由既有 Repository/command journal 负责；本服务不提供第二套事务恢复。
+字段/端口变化同步此契约、AgentRound、经验纯契约及测试。`experienceCondition` 是冻结的可选构造参数：默认省略，仅在受控实验里显式给出；显式条件与冻结清单的一致性检查不得放宽，也不得把条件写进冻结 context、轮次必需事实或任何 Agent/GPU 端口。context 64 KiB/20 项上限沿用领域。默认检索不猜 dtype/shape；未接完整包验证的旧结果不会自动成为观察。状态跨对象/进程的串行持久化由既有 Repository/command journal 负责；本服务不提供第二套事务恢复。

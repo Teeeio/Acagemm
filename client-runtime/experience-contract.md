@@ -23,6 +23,7 @@
 | `retrieveExperienceContext(store,query,{now})` | 递归冻结的轮次快照（无 `query.selection` 时返回契约不变）；带 `query.selection` 时走方案 D 选择 |
 | `retrieveExperienceSelection(store,query,{now})` | `{context,selection}`：同一次遍历产出的冻结 context 与审计选择清单 |
 | `EXPERIENCE_SELECTION_SCHEMA_VERSION` / `EXPERIENCE_SELECTION_POLICY_VERSION` | 旧审计选择清单 schema 与策略版本常量 |
+| `EXPERIENCE_CONDITIONS` | 冻结的只读受控条件枚举，顺序为 `facts-only`、`local-only`、`local-and-wiki` |
 | [experience-selection.mjs](experience-selection.mjs) | 方案 D 纯选择器：`WIKI_SELECTION_POLICY_VERSION`、`normalizeSelectionMetadata`、`rankExperienceCandidates` |
 | `validateExperienceContext(context,expected={})` | 校验绑定/来源/版本/摘要，原地递归冻结并返回同一对象 |
 | `formatExperienceContext(context,{projectId,missionId,roundId})` | 校验后生成有界不可信 JSON 数据提示词片段 |
@@ -41,7 +42,9 @@ update options 必填 `{projectId,expectedVersion}`；人工可更新内容、�
 
 read options 必填 projectId，可选 allowedProjectIds/version。query 必填 projectId/missionId/roundId，可选 scope、allowedProjectIds、limit（最大 20；默认值：无 `selection` 的旧检索 8，带 `selection` 的方案 D 为 10 = 本地 ≤4 + Wiki ≤6，否则默认上限会先于配额把建议名额截断）、versions（id → 当前版本约束）、`selection`（方案 D，见下）。跨项目读取要求记录 shared 且其 projectId 在调用者显式白名单；共享不授予更新权。
 
-`query.selection={policyVersion,features,target,preferredIds?,repeatedAttempts?}`（形状与规则见 [experience-selection.md](experience-selection.md)）。提供时必须匹配 `WIKI_SELECTION_POLICY_VERSION`，`target.hardware/architecture` 必须与规范 scope 一致（target 不能声明 scope 之外的目标来放宽准入）。选择流程：先对**全部**候选（不做「最近 N 条」预截断）校验授权、最新状态/过期/版本与 scope，再交给纯选择器排序，然后按 **ID+版本**取回并重新校验 scope/状态/版本后渲染。**排序不能授予访问权**；未授权记录只累计 `excludedUnauthorized` 计数，绝不在排除详情里泄露其 ID/版本/内容。默认配额：本地 ≤4、Wiki ≤6（其中症状 ≤2、手法 ≤3、兜底指导 ≤1），都是上限、不补齐；提供既往尝试时最多再引入一个未尝试过的手法。保留既有 20 项 / 64 KiB / 单条 8000 字符硬上限，`query.limit` 仍是进一步上限；软预算 **24 KiB** 按 formatter **实际 UTF-8 输出**计算（轮次必需事实在该预算之外）；超预算的可选记录跳过并继续考虑后续更小的候选。选择清单审计：策略版本、`features`、规范化 `target`、配额、实际 context/渲染字节、选中原因与有界排除原因、快照身份（`repositoryRevision` 加选中 Wiki 单元的 `sourceCommit/sourceDigest/unitDigest`）。快照身份按**每个选中记录**逐条列出：`sources[{recordId,version,pageId,sourceCommit,sourcePath,sourceDigest,unitDigest}]`，同一 `pageId` 的原始单元与 `reviewed-transfer` 单元各有自己的 ID/版本/`unitDigest`，不得按 `pageId` 合并而互相覆盖。**不得**把旧策略版本盖到 D 选择上。无 `selection` 时行为与旧版本完全一致。
+`query.selection={policyVersion,features,target,preferredIds?,repeatedAttempts?,experienceCondition?}`（形状与规则见 [experience-selection.md](experience-selection.md)）。提供时必须匹配 `WIKI_SELECTION_POLICY_VERSION`，`target.hardware/architecture` 必须与规范 scope 一致（target 不能声明 scope 之外的目标来放宽准入）。选择流程：先对**全部**候选（不做「最近 N 条」预截断）校验授权、最新状态/过期/版本与 scope，再交给纯选择器排序，然后按 **ID+版本**取回并重新校验 scope/状态/版本后渲染。**排序不能授予访问权**；未授权记录只累计 `excludedUnauthorized` 计数，绝不在排除详情里泄露其 ID/版本/内容。默认配额：本地 ≤4、Wiki ≤6（其中症状 ≤2、手法 ≤3、兜底指导 ≤1），都是上限、不补齐；提供既往尝试时最多再引入一个未尝试过的手法。保留既有 20 项 / 64 KiB / 单条 8000 字符硬上限，`query.limit` 仍是进一步上限；软预算 **24 KiB** 按 formatter **实际 UTF-8 输出**计算（轮次必需事实在该预算之外）；超预算的可选记录跳过并继续考虑后续更小的候选。选择清单审计：策略版本、`features`、规范化 `target`、配额、实际 context/渲染字节、选中原因与有界排除原因、快照身份（`repositoryRevision` 加选中 Wiki 单元的 `sourceCommit/sourceDigest/unitDigest`）。快照身份按**每个选中记录**逐条列出：`sources[{recordId,version,pageId,sourceCommit,sourcePath,sourceDigest,unitDigest}]`，同一 `pageId` 的原始单元与 `reviewed-transfer` 单元各有自己的 ID/版本/`unitDigest`，不得按 `pageId` 合并而互相覆盖。**不得**把旧策略版本盖到 D 选择上。无 `selection` 时行为与旧版本完全一致。
+
+`query.selection.experienceCondition` 是**可选**的受控研究条件，取值只能是冻结枚举 `facts-only | local-only | local-and-wiki`（导出常量 `EXPERIENCE_CONDITIONS`）：未知、`null`、空串或非字符串的**显式**值一律 `EXPERIENCE_INVALID`，绝不回退成默认选择；省略该键时保持既有方案 D 行为，旧调用方无需改动。条件是**额外资格过滤**，位置固定在授权/状态/过期/版本/作用域校验**之后**、排序与配额**之前**，不改排序算法、不改配额、不改 formatter 与字节预算：`facts-only` 不选任何可选经验（本地与 Wiki 都不选，仍产出合法但为空的冻结 context/审计）；`local-only` 排除 `selectionMetadata.source=kernel-wiki` 的记录，其余适用的本地人工/执行记录仍走不变的 D 排序；`local-and-wiki` 使用不变的 D 选择。被条件排除的**已授权**记录只记原因 `experience-condition`（仍受 50 条上限与 `excludedOmitted` 约束）；未授权记录依旧只累计 `excludedUnauthorized`，绝不披露 ID/版本。显式条件时审计带 `experienceCondition`（原样记录）；省略时不加该字段，旧 context/store/审计零迁移。条件**不进入**冻结 context 的字段集或摘要算法，也不影响采集、轮次必需事实、正确性/Gate/恢复与任何预算。
 
 ## Outputs / Invariants
 
@@ -69,4 +72,4 @@ validate 的 expected 可提供 projectId/missionId/roundId/scope/allowedProject
 
 ## Change Checklist / Known Limitations
 
-API/schema 变更同步此契约、`experience-selection.md`、应用契约、测试及调用者。最多 2048 条历史、8 MiB store、32 KiB 单记录（含可选 `selectionMetadata`）、8000 字符正文、64 KiB context；shape 深度 4、256 节点。达到上限明确失败，不自动删除历史。`selectionMetadata` 只描述出处与相关性，不提升证据等级、不改变 scope 语义、不授予访问或发布权。无向量检索、授权推断、签名验证或自动冲突合并；冻结 context 的每轮持有/复用由调用者负责，同一轮重试/恢复复用既有冻结选择，全新逻辑轮才重新选择。
+API/schema 变更同步此契约、`experience-selection.md`、应用契约、测试及调用者。受控条件 `experienceCondition` 的枚举与过滤位置属于冻结接口：新增/改序必须同时更新此契约与 [轮次集成](application/round-experience-service.md)，且不得改变省略模式下的默认 D 选择、排序、配额与字节预算。最多 2048 条历史、8 MiB store、32 KiB 单记录（含可选 `selectionMetadata`）、8000 字符正文、64 KiB context；shape 深度 4、256 节点。达到上限明确失败，不自动删除历史。`selectionMetadata` 只描述出处与相关性，不提升证据等级、不改变 scope 语义、不授予访问或发布权。无向量检索、授权推断、签名验证或自动冲突合并；冻结 context 的每轮持有/复用由调用者负责，同一轮重试/恢复复用既有冻结选择，全新逻辑轮才重新选择。

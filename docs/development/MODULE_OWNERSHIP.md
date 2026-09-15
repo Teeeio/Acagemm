@@ -186,6 +186,8 @@ TUI / GUI
 | [`experience-selection.mjs`](../../client-runtime/experience-selection.md) | Domain / Experience Selection | 选择元数据规范化、确定性优化假设排序（`WIKI_SELECTION_POLICY_VERSION`）、配额与选择清单 | I/O、Provider、硬件执行、发布授权 |
 | [`kernel-wiki-import.mjs`](../../client-runtime/kernel-wiki-import.md) | Domain / Experience Import | KernelWiki 页面解析、确定性快照构建、原子经验导入 | 网络/模型调用、直接写 Runtime 存储 |
 | [`scripts/import-kernel-wiki.mjs`](../../scripts/import-kernel-wiki.md) | Dev Tool / Import CLI | 固定 commit 的只读 Git blob 导入为快照文件（`--source/--commit/--out/--reviews`） | 检出/修改来源、写 live Runtime 存储、实现 workflow |
+| `scripts/experience-condition-study.mjs` | Domain / Experience Condition Study | 纯九槽位平衡调度（facts-only/local-only/local-and-wiki）、条件枚举与 `verifyExperienceConditionAudit` 条件收据 | 启动 Provider/GPU/子进程、写 Runtime 存储、把研究结果升级为 N20 或发布证据 |
+| `scripts/run-experience-condition-study.mjs` | Dev Tool / Study CLI | 严格参数解析、九槽位编排（每个槽位只经既有 smoke CLI 子进程）、先于副作用落盘九槽位 study.json、只读 `verifyStudyReport` 报告复核 | 复刻 smoke workflow/分类/发布屏障、允许 CLI 启用 mock、复核模式启动 model/GPU/进程、改写原始工件 |
 | [`experience-repository.mjs`](../../client-runtime/experience-repository.md) | Experience Adapter | 原子版本存储 | Mission 决策 |
 | [`execution-package-store.mjs`](../../client-runtime/execution-package-store.md) | Package Adapter | CAS、受信准入与准备恢复 | 另建测试队列、假定宿主机隔离 |
 | [`execution-package-import.mjs`](../../client-runtime/execution-package-import.md) | Package Import Adapter | 目录/归档读取、依赖闭包与路径安全 | 安装依赖、执行源码、绕过准入 |
@@ -231,3 +233,8 @@ TUI / GUI
 - 最近的模块测试通过。
 - 跨模块变更通过 `npm run verify:local-c500-release`。
 - 无硬件变更在条件允许时通过 `npm run verify:non-hardware-robustness`。
+- 研究条件（`facts-only`/`local-only`/`local-and-wiki`）与九槽位编排的独立验收是
+  `tests/experience-condition-runtime-test.mjs` 与 `tests/experience-condition-study-test.mjs`
+  （已注册进 release 门禁各一次）；两者只面向公开入口/端口与真实生产路径 fixture，
+  不得以实现文本匹配代替契约验收。研究结果恒为 `strictN20Passed=false`，任何槽位、
+  条件或报告都不得被表述为 N20、稳定性或发布证据。

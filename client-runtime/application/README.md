@@ -39,7 +39,7 @@
 | `execution-package-import-service.mjs` | source import and trusted preparation through injected ports | immutable manifest and admission DTO |
 | `mission-control-service.mjs` | Agent cancellation, human feedback, and Mission stop | persisted state and control result |
 | `experience-api-service.mjs` | Project-scoped human experience CRUD plus KernelWiki snapshot import (`{snapshot,author}` only, owning Project checked first) | versioned guidance DTOs, import result, and conflicts |
-| `round-experience-service.mjs` | Frozen per-round experience, selection-audit sidecar, and verified observations | frozen context, selection sidecar, and record status through injected ports |
+| `round-experience-service.mjs` | Frozen per-round experience, selection-audit sidecar, verified observations, and the explicit `experienceCondition` study input applied before ranking/quota | frozen context, selection sidecar, and record status through injected ports |
 | `shared-gpu-experience-verifier.mjs` | Revalidate shared-GPU package receipts at the composition boundary, including the strict released failed-candidate correctness path (real shared-GPU environment/probe, queue payload target/build/adapter and whole result agreement) | trusted verified observation (success or bounded failed summary) or explicit skip |
 | `knowledge-service.mjs` | Knowledge draft editing, asset references, and retired manual publication | persisted state or governance response |
 | `runtime-query-service.mjs` | Runtime state, preflight, and active workspace queries | state/workspace query | transport-neutral query DTOs |
@@ -139,6 +139,23 @@ human Experience API. Agent commands and automatic rounds persist one frozen
 context; the Provider receives it as untrusted, attributed data. Terminal
 collection requires a trusted package-execution verification receipt: the current
 legacy backend has none, so it is explicitly skipped, not upgraded into evidence.
+
+The explicit study condition is a frozen per-round input: `createRoundExperienceService({
+..., experienceCondition })` accepts exactly `facts-only`, `local-only` or
+`local-and-wiki` and applies it before ranking and quota, and the Runtime composition root
+reads `OPERATOR_EXPERIENCE_CONDITION`. `facts-only` injects zero optional records while still
+collecting the round's execution observation and mandatory round facts; `local-only` keeps
+applicable local and execution records and excludes every
+`selectionMetadata.source=kernel-wiki` unit; `local-and-wiki` keeps the unchanged D
+selection. Unknown, null, empty or non-string values fail with `EXPERIENCE_INVALID` before any
+state change, and a frozen same-round context cannot switch condition. The exact condition and
+policy version are recorded in the persisted selection sidecar and the pre-send prompt audit,
+so a receipt can be verified from retained originals. The study orchestration contract lives in
+`scripts/experience-condition-study.mjs` and `scripts/run-experience-condition-study.mjs`
+(nine-slot schedule, condition receipts, read-only report reader); the condition matrix has
+independent acceptance in `tests/experience-condition-runtime-test.mjs` and
+`tests/experience-condition-study-test.mjs`, registered once each in the release gate. Study results are exploratory only and are never
+N20 — the report always states `strictN20Passed=false`.
 Mutation/resume paths enforce [resource-release barriers](../cancellation-contract.md).
 Runtime advancement checks budget guards before Autopilot and uses the injected
 Mission control releaseResources port for budget shutdown. A pending release

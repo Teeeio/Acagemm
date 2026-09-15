@@ -7,12 +7,16 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { resolvePythonExecutable } from '../client-runtime/platform-runtime.mjs';
-import { EXPERIENCE_SELECTION_POLICY_VERSION } from '../client-runtime/experience-contract.mjs';
+import { WIKI_SELECTION_POLICY_VERSION } from '../client-runtime/experience-selection.mjs';
 import {
   GPU_ATTEMPT_SCHEMA_VERSION, GPU_SUMMARY_SCHEMA_VERSION, ROUND_FACTS_SCHEMA_VERSION,
   budgetTerminalEvidence, buildConfigFingerprint, collectModelObservationEvidence, combineAttemptOutcome, digestJson,
   evaluateFamilyOutcome, evaluateMissionStopReceipt, hexDigest, verifyContinuationAudit,
 } from './shared-gpu-acceptance.mjs';
+import {
+  EXPERIENCE_CONDITIONS, EXPERIENCE_STUDY_GOAL_POLICY_VERSION, EXPERIENCE_STUDY_GOAL_SUFFIX,
+  EXPERIENCE_STUDY_SCHEMA_VERSION, studySnapshotIdentity, verifyExperienceConditionAudit,
+} from './experience-condition-study.mjs';
 
 // Acceptance driver only: setup commands, then read-only observation of the
 // production autopilot. No candidate injection, fake provider, Gate override,
@@ -41,6 +45,45 @@ assert.ok(Number.isFinite(limit) && limit >= 30_000 && limit <= 30 * 60_000);
 assert.ok(Number.isInteger(desiredTasks) && desiredTasks >= 1 && desiredTasks <= 3);
 const mainAgentBudgetMs = Number(process.env.OPERATOR_MAIN_AGENT_BUDGET_MS || 180_000);
 const logicalCleanupMs = Number(process.env.OPERATOR_CODEX_LOGICAL_CLEANUP_MS || 60_000);
+
+// --- opt-in controlled experience study ------------------------------------
+// E2E_EXPERIENCE_CONDITION turns this driver into an explicit study invocation:
+// the condition is passed to the Runtime, one fixed KernelWiki snapshot is imported
+// through the production HTTP API before the Mission/baseline can start, and the
+// condition verifier replaces the strict continuation verifier. Unset means the
+// unchanged default driver: no condition env, default goal, strict verifier.
+//
+// An explicit but unknown/empty condition is invalid and NEVER falls back to the
+// default, and a snapshot without a condition is rejected: a study result must
+// never be silently produced (or labeled) as an ordinary run. Validation happens
+// here, before any CLI/model/GPU/runtime process is spawned.
+const studyConditionRaw = process.env.E2E_EXPERIENCE_CONDITION;
+const studyCondition = studyConditionRaw === undefined ? null : studyConditionRaw;
+const studySnapshotRaw = String(process.env.E2E_KERNEL_WIKI_SNAPSHOT || '').trim();
+if (studyCondition !== null && !EXPERIENCE_CONDITIONS.includes(studyCondition)) {
+  throw new Error(`E2E_EXPERIENCE_CONDITION must be exactly one of: ${EXPERIENCE_CONDITIONS.join(', ')}`);
+}
+if (studyCondition === null && studySnapshotRaw) {
+  throw new Error('E2E_KERNEL_WIKI_SNAPSHOT requires an explicit E2E_EXPERIENCE_CONDITION');
+}
+if (studyCondition !== null && !studySnapshotRaw) {
+  throw new Error('E2E_KERNEL_WIKI_SNAPSHOT is required for a study condition');
+}
+const studyEnabled = studyCondition !== null;
+let studySnapshotPath = null;
+let studySnapshot = null;
+let studySnapshotIdentityValue = null;
+if (studyEnabled) {
+  if (!path.isAbsolute(studySnapshotRaw)) throw new Error('E2E_KERNEL_WIKI_SNAPSHOT must be an absolute path');
+  studySnapshotPath = path.resolve(studySnapshotRaw);
+  // A missing, unreadable, invalid or digest-mismatched snapshot aborts the whole
+  // invocation before any process starts.
+  studySnapshot = JSON.parse(await readFile(studySnapshotPath, 'utf8'));
+  studySnapshotIdentityValue = studySnapshotIdentity(studySnapshot);
+}
+// The study goal suffix is appended only when the explicit condition is set; the
+// unconfigured default goal stays byte-identical.
+const studyGoal = (goal) => (studyEnabled ? `${goal} ${EXPERIENCE_STUDY_GOAL_SUFFIX}` : goal);
 
 const matrix = {
   environments: ['local-shared-gpu'], stages: ['Correctness', 'Full Benchmark'], correctnessCases: 4, warmup: 3, repeats: 10,
@@ -216,12 +259,16 @@ const probeCliVersion = async (runtime) => {
 const SOURCE_DIGEST_FILES = [
   'scripts/e2e-shared-gpu-agent-iteration.mjs',
   'scripts/shared-gpu-acceptance.mjs',
+  'scripts/experience-condition-study.mjs',
   'scripts/summarize-gpu-agent-runs.mjs',
   'client-runtime/agent-runtime.mjs',
   'client-runtime/mission-project-state.mjs',
   'client-runtime/application/agent-round-service.mjs',
   'client-runtime/application/round-experience-service.mjs',
   'client-runtime/experience-contract.mjs',
+  // The module that implements the recorded D selection policy participates in the
+  // content digest exactly like the contract that wraps it.
+  'client-runtime/experience-selection.mjs',
   'client-runtime/application/benchmark-command.mjs',
 ];
 const collectCodeManifest = async () => {
@@ -273,8 +320,19 @@ const config = {
   candidateTasks: desiredTasks,
   matrix: structuredClone(matrix),
   promptPolicy: {
-    experienceSelectionPolicyVersion: EXPERIENCE_SELECTION_POLICY_VERSION,
+    // The policy that actually governed this round's selection is the production D
+    // selection policy, not the obsolete retrieve-only constant. It is recorded in
+    // every mode so a fingerprint can never describe a policy that did not run.
+    experienceSelectionPolicyVersion: WIKI_SELECTION_POLICY_VERSION,
     roundFactsSchemaVersion: ROUND_FACTS_SCHEMA_VERSION,
+    // Study-only fields. All three conditions import the SAME snapshot and use the
+    // SAME goal policy, so only experienceCondition distinguishes them; these fields
+    // still enter the standard fingerprint like every other configuration value.
+    ...(studyEnabled ? {
+      experienceCondition: studyCondition,
+      wikiSnapshotDigest: studySnapshotIdentityValue.snapshotDigest,
+      studyGoalPolicyVersion: EXPERIENCE_STUDY_GOAL_POLICY_VERSION,
+    } : {}),
   },
   budgets: { missionBudgetMs: limit, mainAgentBudgetMs, logicalCleanupMs, taskTimeoutSeconds: 120 },
   code: codeManifest,
@@ -369,20 +427,25 @@ const stopMissionNow = async (ownedMissionId) => {
 };
 
 try {
+const runtimeEnv = { ...process.env, API_PORT: String(port), SERVE_WEB: 'false', OPERATOR_RUNTIME_MODE: mode,
+  OPERATOR_CODEX_MODEL: codexModel,
+  OPERATOR_AUTO_TICK: '1', OPERATOR_AUTO_TICK_INTERVAL_MS: '5000',
+  OPERATOR_CODEX_LOGICAL_CLEANUP_MS: String(logicalCleanupMs),
+  OPERATOR_MAIN_AGENT_BUDGET_MS: String(mainAgentBudgetMs), OPERATOR_TEST_BACKEND: 'local-shared-gpu',
+  OPERATOR_GPU_PYTHON: resolvePythonExecutable({ rootDir: root }),
+  OPERATOR_LOCAL_CPU: '0', OPERATOR_LOCAL_C500_MOCK: '0', OPERATOR_LOCAL_C500_SIMULATION: '0',
+  OPERATOR_LOCAL_C500_COMMAND: '', OPERATOR_LOCAL_C500_TIMEOUT_SECONDS: '120',
+  OPERATOR_DATA_DIR: path.join(runRoot, 'data'), OPERATOR_RUNTIME_DIR: path.join(runRoot, 'runtime'),
+  OPERATOR_LOCAL_C500_DIR: path.join(runRoot, 'tasks'), OPERATOR_EXECUTION_PACKAGE_DIR: path.join(runRoot, 'packages'),
+  OPERATOR_BRIDGE_DIR: path.join(runRoot, 'bridge'),
+};
+// The explicit study condition is the ONLY condition this invocation may run with.
+// In default mode the ambient variable is removed instead of inherited, so an
+// operator shell can never silently change the strict oracle's selection.
+if (studyEnabled) runtimeEnv.OPERATOR_EXPERIENCE_CONDITION = studyCondition;
+else delete runtimeEnv.OPERATOR_EXPERIENCE_CONDITION;
 child = spawn(process.execPath, ['client-runtime/local-server.mjs'], {
-  cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...process.env, API_PORT: String(port), SERVE_WEB: 'false', OPERATOR_RUNTIME_MODE: mode,
-    OPERATOR_CODEX_MODEL: codexModel,
-    OPERATOR_AUTO_TICK: '1', OPERATOR_AUTO_TICK_INTERVAL_MS: '5000',
-    OPERATOR_CODEX_LOGICAL_CLEANUP_MS: String(logicalCleanupMs),
-    OPERATOR_MAIN_AGENT_BUDGET_MS: String(mainAgentBudgetMs), OPERATOR_TEST_BACKEND: 'local-shared-gpu',
-    OPERATOR_GPU_PYTHON: resolvePythonExecutable({ rootDir: root }),
-    OPERATOR_LOCAL_CPU: '0', OPERATOR_LOCAL_C500_MOCK: '0', OPERATOR_LOCAL_C500_SIMULATION: '0',
-    OPERATOR_LOCAL_C500_COMMAND: '', OPERATOR_LOCAL_C500_TIMEOUT_SECONDS: '120',
-    OPERATOR_DATA_DIR: path.join(runRoot, 'data'), OPERATOR_RUNTIME_DIR: path.join(runRoot, 'runtime'),
-    OPERATOR_LOCAL_C500_DIR: path.join(runRoot, 'tasks'), OPERATOR_EXECUTION_PACKAGE_DIR: path.join(runRoot, 'packages'),
-    OPERATOR_BRIDGE_DIR: path.join(runRoot, 'bridge'),
-  },
+  cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: runtimeEnv,
 });
 runtimeSpawned = true;
 child.stdout.on('data', (value) => logs.push(String(value)));
@@ -455,7 +518,24 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
     await writeFile(path.join(project.repository, 'run.py'), source, 'utf8');
     await exec('git', ['add', 'run.py'], { cwd: project.repository, windowsHide: true });
     await exec('git', ['-c', 'user.name=Operator Studio E2E', '-c', 'user.email=e2e@operator.studio', 'commit', '-m', 'Add independent GPU baseline'], { cwd: project.repository, windowsHide: true });
-    const goal = `优化 ${family} GPU 算子 run.py 的 run(inputs)，FP32，shape=32x256，latency p50 相对 baseline 提升至少 99.9999%，通过 4/4 Correctness 和 Full Benchmark。只修改 run.py 中的实现，不改 reference/get_test_cases/get_benchmark_inputs，不改测试矩阵；禁止本地跑测试、安装依赖、使用网络、修改工作区外文件。候选必须是有界真实 Diff，立即完成一个小优化（例如消除冗余 copy），由系统统一 GPU 队列验证。后续轮次根据真实反馈尝试另一个不同 Diff，不能只给分析。`;
+    // Study mode imports the one fixed snapshot through the existing production HTTP
+    // API immediately after project creation and BEFORE the Mission exists or any
+    // baseline can auto-start, so all three conditions share one identical source and
+    // the import can never race a round. The import result is retained verbatim; the
+    // default driver does not touch experiences at all.
+    let studyImport = null;
+    if (studyEnabled) {
+      const imported = await request(`/api/projects/${project.id}/experiences/import-kernel-wiki`, {
+        snapshot: studySnapshot, author: `experience-condition-study/${studyCondition}`,
+      });
+      studyImport = {
+        requested: { projectId: project.id, sourceCommit: studySnapshotIdentityValue.sourceCommit,
+          snapshotDigest: studySnapshotIdentityValue.snapshotDigest, unitCount: studySnapshotIdentityValue.unitCount },
+        result: imported?.result ?? null,
+        changed: imported?.changed ?? null,
+      };
+    }
+    const goal = studyGoal(`优化 ${family} GPU 算子 run.py 的 run(inputs)，FP32，shape=32x256，latency p50 相对 baseline 提升至少 99.9999%，通过 4/4 Correctness 和 Full Benchmark。只修改 run.py 中的实现，不改 reference/get_test_cases/get_benchmark_inputs，不改测试矩阵；禁止本地跑测试、安装依赖、使用网络、修改工作区外文件。候选必须是有界真实 Diff，立即完成一个小优化（例如消除冗余 copy），由系统统一 GPU 队列验证。后续轮次根据真实反馈尝试另一个不同 Diff，不能只给分析。`);
     const created = await request('/api/missions', { projectId: project.id, title: `${family} generic GPU iteration`, operator: `generic_${family}`, goal,
       hardware: ['local-shared-gpu'], implementation: 'pytorch-python', metric: 'latency p50', testMatrix: matrix, missionBudgetMs: limit,
       objective: { mode: 'threshold', metric: 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.999999 } });
@@ -610,12 +690,39 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
       assert.ok(targetRoundId, 'verified candidate archive has no frozen target roundId');
       const auditScan = await findRetainedAudit({ auditDir: promptAuditDir, missionId, roundId: targetRoundId, sourceRunId: sourceRound.runId });
       if (auditScan.audit) {
+        // Explicit study mode uses the condition verifier; every other mode keeps the
+        // original strict continuation verifier unchanged.
+        const studyReceipt = studyEnabled
+          ? verifyExperienceConditionAudit({ condition: studyCondition, audit: auditScan.audit, sourceRound,
+            experiences, missionId, projectId: project.id, snapshot: studySnapshot })
+          : null;
         continuationAudit = {
           path: auditScan.path,
           matchedAuditsForTargetRound: auditScan.matched.map((item) => item.runId),
           selectedBy: 'sourceRound.roundFacts.target.roundId',
-          ...verifyContinuationAudit({ audit: auditScan.audit, sourceRound, experiences, missionId, projectId: project.id }),
+          ...(studyReceipt ?? verifyContinuationAudit({ audit: auditScan.audit, sourceRound, experiences, missionId, projectId: project.id })),
         };
+        // Per-invocation study audit: the explicit condition, the fixed snapshot
+        // identity, the candidate-bound continuation audit and the ACTUAL selected
+        // Wiki identities (as parsed back out of the real prompt).
+        if (studyEnabled) {
+          await writeFile(path.join(runRoot, 'study-audit.json'), JSON.stringify({
+            schemaVersion: EXPERIENCE_STUDY_SCHEMA_VERSION,
+            condition: studyCondition,
+            snapshot: { path: studySnapshotPath, ...studySnapshotIdentityValue },
+            projectId: project.id,
+            missionId,
+            family,
+            candidate: {
+              taskId: verifiedTask.taskId,
+              candidateId: verifiedTask.payload.candidate.id,
+              candidateDigest: candidateDigestOf(verifiedTask),
+              queueRequestId: verifiedTask.payload.requestId,
+            },
+            import: studyImport,
+            continuationAudit: studyReceipt,
+          }, null, 2));
+        }
       } else {
         // A budget-safe terminal may stop before the continuation audit exists;
         // full two-round success can never pass without it.
@@ -651,6 +758,13 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
       completed: completed.map((task) => ({ taskId: task.taskId, candidateDigest: task.payload.candidate.digest,
         candidateSourceRunId: candidateSourceRunIdOf(task), queueRequestId: queueRequestIdOf(task), packageDigest: task.payload.packageDigest })),
       workflowWritesAfterStart: writes.length - writesAtStart, experienceCount: experiences.length,
+      // Study provenance is retained verbatim (condition, fixed snapshot identity and
+      // the real production import outcome). Null for a default invocation.
+      study: studyEnabled ? {
+        condition: studyCondition,
+        snapshot: { path: studySnapshotPath, ...studySnapshotIdentityValue },
+        import: studyImport,
+      } : null,
       observedTarget: observedTarget ? { hardware: observedTarget.hardware || [], architecture: observedTarget.architecture || [],
         device: observedTarget.device || null, driverVersion: observedTarget.driverVersion || null, backend: observedTarget.backend || null } : null,
     });
@@ -785,6 +899,14 @@ finally {
       budgetTerminalAccepted: item.budgetTerminalAccepted, completedCandidates: item.completed.length,
     })),
     failure: failure ? { message: failure.message, code: failure.code || null } : null,
+    // Explicit study provenance: the condition, the fixed snapshot identity and the
+    // real import outcome per family. Null for the unchanged default driver.
+    study: studyEnabled ? {
+      condition: studyCondition,
+      goalPolicyVersion: EXPERIENCE_STUDY_GOAL_POLICY_VERSION,
+      snapshot: { path: studySnapshotPath, ...studySnapshotIdentityValue },
+      imports: summaries.map((item) => ({ family: item.family, import: item.study?.import ?? null })),
+    } : null,
     cleanup: { runtimeSpawned, runtimeExit: exit, artifactsRetained: true, artifactsRoot: runRoot,
       // Teardown evidence: per-family confirmed stop receipts plus the finally
       // stop of a still-owned Mission after an error/timeout. Separate from
@@ -822,6 +944,13 @@ finally {
     modelObservationSweep: modelSweep,
     declaredModel,
     declaredModelSource,
+    // Same explicit study provenance as the terminal attempt.
+    study: studyEnabled ? {
+      condition: studyCondition,
+      goalPolicyVersion: EXPERIENCE_STUDY_GOAL_POLICY_VERSION,
+      snapshot: { path: studySnapshotPath, ...studySnapshotIdentityValue },
+      imports: summaries.map((item) => ({ family: item.family, import: item.study?.import ?? null })),
+    } : null,
     // Teardown evidence retained in every branch (success/budget_terminal/
     // failure/timeout), separate from workflow writes.
     stopReceipts: familyStopReceipts,

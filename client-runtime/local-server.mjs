@@ -145,6 +145,12 @@ const serverPidPath = path.join(runtimeDir, 'operator-studio.pid');
 const port = Number(process.env.API_PORT || process.env.PORT || 4173);
 const serveWeb = process.env.SERVE_WEB !== 'false';
 const runtimeOwnerPid = Number(process.env.OPERATOR_RUNTIME_OWNER_PID || 0);
+// 受控经验研究条件：只在环境变量确实存在时才传给组合出的轮次服务。空串或未知值由服务构造期
+// 同步拒绝，因此在监听端口、写 PID、启动 Agent/GPU 之前就失败；未配置部署行为完全不变。
+// 这不是新的 Mission 设置或 API：唯一的开关就是部署环境变量本身。
+const experienceCondition = Object.hasOwn(process.env, 'OPERATOR_EXPERIENCE_CONDITION')
+  ? process.env.OPERATOR_EXPERIENCE_CONDITION
+  : undefined;
 const processAlive = (pid) => {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; }
@@ -213,6 +219,8 @@ const sharedGpuExperienceVerifier = executionPackageStore && sharedGpuPackageAda
   ? createSharedGpuExperienceVerifier({ executionPackageStore, packageAdapter: sharedGpuPackageAdapter, readTask: (taskId) => operatorTestQueue.readTask(taskId) }) : null;
 const roundExperienceService = createRoundExperienceService({
   experienceService, timers: { setTimeout, clearTimeout },
+  // 未配置时完全不传该键，保持默认部署的构造参数与行为不变。
+  ...(experienceCondition === undefined ? {} : { experienceCondition }),
   resolveAccess: ({ state, mission }) => {
     if (!state.projects?.some((project) => project.id === mission.projectId)) throw Object.assign(new Error('The Mission owning Project is unavailable for experience retrieval.'), { code: 'ROUND_EXPERIENCE_ACCESS_INVALID', status: 409 });
     return { projectId: mission.projectId, allowedProjectIds: [] };

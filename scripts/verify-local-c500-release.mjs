@@ -28,6 +28,8 @@ const checks = [
   'test:round-experience-service',
   'test:shared-gpu-experience-verifier',
   'test:experience-architecture',
+  'test:experience-condition-runtime',
+  'test:experience-condition-study',
   'test:shared-gpu-target-probe',
   'test:shared-gpu-acceptance',
   'test:model-observation',

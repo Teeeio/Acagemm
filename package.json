@@ -29,6 +29,8 @@
     "test:round-experience-service": "node tests/round-experience-service-test.mjs",
     "test:shared-gpu-experience-verifier": "node tests/shared-gpu-experience-verifier-test.mjs",
     "test:experience-architecture": "node tests/experience-architecture-test.mjs",
+    "test:experience-condition-runtime": "node tests/experience-condition-runtime-test.mjs",
+    "test:experience-condition-study": "node tests/experience-condition-study-test.mjs",
     "test:shared-gpu-target-probe": "node tests/shared-gpu-target-probe-test.mjs",
     "test:shared-gpu-acceptance": "node tests/shared-gpu-acceptance-test.mjs",
     "test:model-observation": "node tests/model-observation-test.mjs",
