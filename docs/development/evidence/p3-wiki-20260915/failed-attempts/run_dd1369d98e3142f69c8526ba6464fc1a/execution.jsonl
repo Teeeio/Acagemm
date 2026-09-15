@@ -1,0 +1,80 @@
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-import-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "PASS real source-like frontmatter parses, including quoted colons, block lists and ignored nested blocks"}
+{"type": "output", "text": "PASS malformed pages and oversized sources fail explicitly instead of importing a partial unit"}
+{"type": "output", "text": "PASS the snapshot builder is deterministic, digest-pinned and sensitive to source changes"}
+{"type": "output", "text": "PASS applying a snapshot writes real repository records with the pinned identity, and reviews keep the raw unit"}
+{"type": "output", "text": "PASS re-importing identical source is a revision-preserving no-op while changed source appends a version"}
+{"type": "output", "text": "PASS the same source is isolated per project, unrelated IDs conflict and malformed snapshots roll back"}
+{"type": "output", "text": "PASS a review lifecycle advances one stable page unit, a new review gets its own ID, and illegal unit combinations roll back"}
+{"type": "stderr", "text": "FAIL the pinned CLI reads only committed blobs, refuses to overwrite and never touches a live store"}
+{"type": "stderr", "text": "AssertionError [ERR_ASSERTION]: the license text is the committed blob verbatim, never summarized or substituted"}
+{"type": "stderr", "text": "+ actual - expected"}
+{"type": "stderr", "text": "... Skipped lines"}
+{"type": "stderr", "text": "'MIT License\\n' +"}
+{"type": "stderr", "text": "'\\n' +"}
+{"type": "stderr", "text": "'Copyright (c) 2026 KernelWiki authors\\n' +"}
+{"type": "stderr", "text": "'\\n' +"}
+{"type": "stderr", "text": "'Permission is hereby granted, free of charge, to any person obtaining a copy\\n' +"}
+{"type": "stderr", "text": "..."}
+{"type": "stderr", "text": "'\\n' +"}
+{"type": "stderr", "text": "+   'THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND.'"}
+{"type": "stderr", "text": "-   'THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND.\\n'"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_dd1369d98e3142f69c8526ba6464fc1a/workspace/tests/kernel-wiki-import-test.mjs:699:12"}
+{"type": "stderr", "text": "at async test (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_dd1369d98e3142f69c8526ba6464fc1a/workspace/tests/kernel-wiki-import-test.mjs:65:5)"}
+{"type": "stderr", "text": "at async file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_dd1369d98e3142f69c8526ba6464fc1a/workspace/tests/kernel-wiki-import-test.mjs:639:3"}
+{"type": "stderr", "text": "Kernel wiki import: 1 of 8 independent checks FAILED."}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-import-test.mjs\",\"exitCode\":1}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-selection-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "PASS the D selection policy version is the frozen value"}
+{"type": "output", "text": "PASS selection metadata is canonical, bounded, and rejects malformed or unsafe values"}
+{"type": "output", "text": "PASS generic create/update reject selectionMetadata and schema-1 records stay byte-compatible"}
+{"type": "output", "text": "PASS a query without selection keeps legacy ordering, policy version and frozen-context validity"}
+{"type": "output", "text": "PASS selection retrieval ranks local experience first and enforces the default D quotas without padding"}
+{"type": "output", "text": "PASS metadata recall is not truncated by the legacy top-20 window"}
+{"type": "output", "text": "PASS sm100/NVIDIA units never satisfy an sm86/nvidia target and a missing dimension fails applicability"}
+{"type": "output", "text": "PASS a pattern-typed unit is a symptom source, never a technique or guidance unit"}
+{"type": "output", "text": "PASS symptom candidateTechniques expand exactly one hop, only to techniques, and never duplicate"}
+{"type": "output", "text": "PASS only the exact previously attempted identity is demoted, for local and Wiki units alike"}
+{"type": "output", "text": "PASS retrieval uses the latest same-project version and never leaks another project"}
+{"type": "output", "text": "PASS raw Wiki units and their reviewed transfers stay separate, audited records"}
+{"type": "output", "text": "PASS exact-ID selection revalidates status and expiry and never leaks inaccessible records"}
+{"type": "output", "text": "PASS the 24 KiB soft budget is measured on rendered UTF-8 bytes and skips an oversized optional record"}
+{"type": "output", "text": "PASS Wiki provenance is never diagnostic evidence"}
+{"type": "output", "text": "PASS selection options are bounded and ranking is deterministic"}
+{"type": "output", "text": "Experience selection: 16 independent checks passed."}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-selection-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-runtime-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[kernel-wiki-runtime] HTTP import: bytes after change 3539"}
+{"type": "output", "text": "PASS the production HTTP route imports a snapshot into an isolated Runtime exactly once"}
+{"type": "output", "text": "PASS production prepare freezes a D selection and the FINAL prompt carries complete mandatory facts"}
+{"type": "output", "text": "PASS all-Wiki-zero keeps the complete mandatory facts in the FINAL assembled prompt"}
+{"type": "output", "text": "PASS an infrastructure failure never becomes an operator symptom and a backend target is rejected"}
+{"type": "output", "text": "PASS a retrieve-only legacy port still prepares, and a selection error blocks the dependent start"}
+{"type": "output", "text": "PASS prepare follows the latest committed facts and ignores stale, foreign or identity-less ones"}
+{"type": "output", "text": "PASS an exact completed attempt demotes only its own bound experience and nothing else"}
+{"type": "output", "text": "Kernel wiki runtime: 7 independent checks passed."}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-runtime-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-api-service-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[experience-api-service] local project scope, human-only writes, history, conflicts and route mapping passed"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-api-service-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/round-experience-service-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "PASS all effect and authority ports are explicit"}
+{"type": "output", "text": "PASS one round freezes source/version/scope; updates are visible only in the next round"}
+{"type": "output", "text": "PASS restored contexts are validated and frozen without re-querying or crossing projects"}
+{"type": "output", "text": "PASS domain prompt formatter checks identities, digest and source limitations once"}
+{"type": "output", "text": "PASS concurrent same-round retrieval is deduplicated and ordinary advice reads start no Agent"}
+{"type": "output", "text": "PASS retrieval errors/timeouts are explicit and late results cannot mutate the round"}
+{"type": "output", "text": "PASS legacy evidence is explicitly skipped and cannot self-claim verification"}
+{"type": "output", "text": "PASS only matching verified complete evidence is written, idempotently and never publishable"}
+{"type": "output", "text": "PASS observation collection is bounded and storage uncertainty is not silently ignored"}
+{"type": "output", "text": "PASS batch cancellation reaches a slow second verifier and prevents a late repository write"}
+{"type": "output", "text": "Round experience service: 10 checks passed."}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/round-experience-service-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node --experimental-vm-modules tests/state-domain-boundary-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[state-domain-boundary] 34 domain nodes, 80 application closure nodes, explicit ports, pure factories, and compatibility passed"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node --experimental-vm-modules tests/state-domain-boundary-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/module-boundary-test.mjs\",\"state\":\"start\"}"}
+{"type": "stderr", "text": "(node:43864) ExperimentalWarning: VM Modules is an experimental feature and might change at any time"}
+{"type": "stderr", "text": "(Use `node --trace-warnings ...` to show where the warning was created)"}
+{"type": "output", "text": "[module-boundary] production path, dependency direction, and local contracts passed"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/module-boundary-test.mjs\",\"exitCode\":0}"}

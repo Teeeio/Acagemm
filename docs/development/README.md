@@ -1,6 +1,19 @@
 # 开发文档入口
 
-> **当前入口（2026-09-15 UTC，最新真实验收）**：冻结生产源码
+> **最新入口（2026-09-15，Phase 3 软件批次）**：Phase 3（KernelWiki 导入器 + 确定性选择 +
+> 现有生产 API/prepare 集成）的**软件实现**已独立验收并集成，生产实现提交
+> `bb3ddd5dfbe9285ec982c795ede04595edcf69cf`（其后仅由 Root 补充 review 主题词，生产代码未再改动，
+> `status.json` 已锁定）：新增 31 个用例（import 8 / selection 16 / runtime 7）通过，
+> `release 147 / non-hardware 44`，exit 0；固定源 KernelWiki `b6b4301f…369e6` 实际 52 页 / 54 单元，
+> 幂等导入 54/54（第二次 `unchanged`），两条 sm86 已审查建议进入最终 prompt，其中经验注入区块
+> `renderedBytes` 为 6 383 UTF-8 字节（**不是**完整 prompt 长度），
+> `publishable=false`。**本批无新的实机模型/GPU 运行**：新生产版本没有新增实机 E2E 或 N20，
+> 三条件（无经验 / 仅本地经验 / 本地+已审查 Wiki）收益**仍待验证**，本批不宣称性能或发布能力。
+> 读者说明与必要 CLI/HTTP 用法见
+> [`PHASE3_WIKI_ACCEPTANCE.md`](PHASE3_WIKI_ACCEPTANCE.md)；单一事实源、全部计数与失败细节见
+> [`evidence/p3-wiki-20260915/status.json`](evidence/p3-wiki-20260915/status.json)。
+>
+> **此前的实机验收入口（2026-09-15 UTC，仅对冻结源 `21c6d78` 有效，不适用于当前 HEAD）**：冻结生产源码
 > `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`（git clean）。affine smoke 1 次运行 / 2 候选 /
 > 2 次实际模型观测；**严格 N20 20/20 `full_success`、20/20 独立验证且可比、44/44 实际模型观测
 > （`deepseek-v4-flash`）、40 个不同候选**；另做**单独** reduction / normalization 两家族覆盖
@@ -15,8 +28,9 @@
 > 便携交付包的操作说明见
 > [`evidence/closeout-20260915/PORTABLE.md`](evidence/closeout-20260915/PORTABLE.md)。
 > 结论限定该冻结源码、本机共享 GPU 与既定矩阵，
-> `publishable=false`；历史失败/unknown 原样保留；Phase 3（KernelWiki 导入器 + 确定性选择器）
-> **尚未开始**；本批无生产代码变更、未推送远端。术语：「下游」仅指 dispatch 平台 agent，
+> `publishable=false`；历史失败/unknown 原样保留；该批止于上述实机回归，未涉及 Phase 3，
+> Phase 3 的最新状态见上方入口；旧实机结论不能因为工作树 git clean 或后续无生产变更就当成
+> 新 HEAD 的实机证据。本批无生产代码变更、未推送远端。术语：「下游」仅指 dispatch 平台 agent，
 > 被测的 Acagemm 运行 agent 不是下游。
 >
 > 下方 2026-09-12 的「当前状态入口」「Phase 2 当前入口」**均为历史**，最新状态以上方入口为准。
@@ -38,7 +52,7 @@
 > 运行前后哈希一致。没有新实机运行，**不构成 N=20 或真实发布**。当前证据索引与边界见
 > [`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md)；
 > 实机回归的观察/台账规则见 [`REAL_GPU_REGRESSION.md`](REAL_GPU_REGRESSION.md)。
-> Phase 3（KernelWiki 导入器 + 确定性选择器）**尚未开始**。
+> Phase 3（KernelWiki 导入器 + 确定性选择器）**当时尚未开始**（最新状态见上方 2026-09-15 入口）。
 
 本目录是多人开发时的文档入口。开始修改代码前，按以下顺序阅读：
 

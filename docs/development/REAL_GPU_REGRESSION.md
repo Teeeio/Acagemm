@@ -1,11 +1,34 @@
 # Real shared-GPU Agent regression and sample ledger
 
-Status: procedure/contract for the real shared-GPU regression plus the current
-retained live-run status. This document embeds no hardware result of its own — the
-originals are archived byte-exact and linked below — and it still does not certify
-N=20 and does not claim publishability.
+Latest entry (2026-09-15, Phase 3 software batch — no live run): the **software**
+implementation of Phase 3 (KernelWiki importer + deterministic selection + existing
+production API/prepare integration) was independently accepted and integrated at
+production commit `bb3ddd5dfbe9285ec982c795ede04595edcf69cf`; the 31 new cases pass
+(import 8 / selection 16 / runtime 7) with gates **release 147 / non-hardware 44,
+exit 0**. **This batch contributed no GPU sample at all**: no new live model call,
+no new real E2E and no new N20 were run, so nothing here changes any fingerprint,
+denominator or ledgers rule below, and the three-condition benefit study (no
+experience / local experience only / local plus reviewed Wiki) is still pending
+under identical workload budgets and profiles — the sample size and the decision to
+launch stay with the upstream owner. The previous live N20 result remains valid
+**only** for its own frozen source `21c6d78`; a git-clean tree or a later batch that
+changed no production code never makes it evidence for a new HEAD. Reader notes and
+the required CLI/HTTP usage are in
+[`PHASE3_WIKI_ACCEPTANCE.md`](PHASE3_WIKI_ACCEPTANCE.md); the single source of truth
+for counts, limits and failure details is
+[`evidence/p3-wiki-20260915/status.json`](evidence/p3-wiki-20260915/status.json).
 
-Current state (2026-09-13, after the user's explicit recovery authorization): the
+Historical document-status note (the original opening paragraph, 2026-09-13 status —
+**history**, superseded by the 2026-09-15 entry above): this file is the
+procedure/contract for the real shared-GPU regression plus the retained live-run
+status as it stood then. It embeds no hardware result of its own — the originals are
+archived byte-exact and linked below — and that wording still does not certify N=20
+and does not claim publishability. It is kept as the historical frame of the ledger
+rules that follow; it is not a statement about the current HEAD or the Phase 3
+software batch.
+
+Historical state (2026-09-13, after the user's explicit recovery authorization; superseded by the
+2026-09-15 entry above, kept for the retained live-run record): the
 response-model observation implementation is complete and the upgraded hardware-free
 gates pass — **release 139 / non-hardware 41, exit 0** (UTC 19:18:55–19:29:01, log
 SHA256 `c4205aa44917708dff15aaa3d2d2996d95b9f9e5fd4a6aa83a12d7ba7a0b3c46`), with the

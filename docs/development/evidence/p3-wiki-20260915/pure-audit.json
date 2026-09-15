@@ -1,0 +1,50 @@
+{
+  "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+  "pages": 52,
+  "units": 54,
+  "snapshotDigest": "d33ce58a833b00b3ed78555e7cf84346b7a2a5d6479d050ab3739d4439859f91",
+  "requestBytes": 167467,
+  "sourceOrderDeterministic": true,
+  "licenseVerbatim": true,
+  "created": 54,
+  "sm86": [
+    {
+      "id": "kw-08338d21f987299b-technique-kernel-fusion-transfer-sm86-principles-v1",
+      "version": 1,
+      "source": "human",
+      "useAs": "suggestion",
+      "reason": "technique-match",
+      "bucket": "technique"
+    },
+    {
+      "id": "kw-08338d21f987299b-technique-vectorized-loads-transfer-sm86-principles-v1",
+      "version": 1,
+      "source": "human",
+      "useAs": "suggestion",
+      "reason": "technique-match",
+      "bucket": "technique"
+    }
+  ],
+  "sm100Count": 0,
+  "renderedBytes": 6323,
+  "audit": [
+    {
+      "recordId": "kw-08338d21f987299b-technique-kernel-fusion-transfer-sm86-principles-v1",
+      "version": 1,
+      "pageId": "technique-kernel-fusion",
+      "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+      "sourcePath": "wiki/techniques/kernel-fusion.md",
+      "sourceDigest": "53897ff4557d6c3e0b94e531b87aa53bc8866ce73b99e0606b32ddaf705d8b7a",
+      "unitDigest": "b3ea6986fc8b88e825373d8936df895797404afd67e7ece7c7c267ab28c9e939"
+    },
+    {
+      "recordId": "kw-08338d21f987299b-technique-vectorized-loads-transfer-sm86-principles-v1",
+      "version": 1,
+      "pageId": "technique-vectorized-loads",
+      "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+      "sourcePath": "wiki/techniques/vectorized-loads.md",
+      "sourceDigest": "c6dab2b80866c9821ad539ac36b2b407b219a7a045d1b01324506c10602abe08",
+      "unitDigest": "8bca9450d1c23b535758d705577df62f97cc012b83a0b28b6d09d645422acc4a"
+    }
+  ]
+}

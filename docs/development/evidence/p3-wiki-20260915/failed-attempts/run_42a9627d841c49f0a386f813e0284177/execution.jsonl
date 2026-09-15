@@ -1,0 +1,84 @@
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-import-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "PASS real source-like frontmatter parses, including quoted colons, block lists and ignored nested blocks"}
+{"type": "stderr", "text": "file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/kernel-wiki-import-test.mjs:235"}
+{"type": "stderr", "text": "assert.ok(['Heading derived title', 'tail-handling'].includes(headed.title), `a missing title falls back to the heading or the page id, saw ${heded.title}`);"}
+{"type": "stderr", "text": "^"}
+{"type": "stderr", "text": "ReferenceError: heded is not defined"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/kernel-wiki-import-test.mjs:235:147"}
+{"type": "stderr", "text": "at test (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/kernel-wiki-import-test.mjs:56:43)"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/kernel-wiki-import-test.mjs:210:9"}
+{"type": "stderr", "text": "Node.js v22.23.2"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-import-test.mjs\",\"exitCode\":1}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-selection-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "PASS the D selection policy version is the frozen value"}
+{"type": "output", "text": "PASS selection metadata is canonical, bounded, and rejects malformed or unsafe values"}
+{"type": "output", "text": "PASS generic create/update reject selectionMetadata and schema-1 records stay byte-compatible"}
+{"type": "output", "text": "PASS a query without selection keeps legacy ordering, policy version and frozen-context validity"}
+{"type": "output", "text": "PASS selection retrieval ranks local experience first and enforces the default D quotas without padding"}
+{"type": "output", "text": "PASS metadata recall is not truncated by the legacy top-20 window"}
+{"type": "stderr", "text": "file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/client-runtime/experience-contract.mjs:22"}
+{"type": "stderr", "text": "return Object.assign(new Error(message), { code, status });"}
+{"type": "stderr", "text": "^"}
+{"type": "stderr", "text": "Error: query.selection target does not agree with the canonical scope"}
+{"type": "stderr", "text": "at experienceError (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/client-runtime/experience-contract.mjs:22:24)"}
+{"type": "stderr", "text": "at invalid (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/client-runtime/experience-contract.mjs:25:38)"}
+{"type": "stderr", "text": "at selectExperienceByPolicy (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/client-runtime/experience-contract.mjs:311:117)"}
+{"type": "stderr", "text": "at selectExperience (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/client-runtime/experience-contract.mjs:446:45)"}
+{"type": "stderr", "text": "at retrieveExperienceSelection (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/client-runtime/experience-contract.mjs:510:10)"}
+{"type": "stderr", "text": "at Object.retrieveWithSelection (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/client-runtime/application/experience-service.mjs:29:45)"}
+{"type": "stderr", "text": "at async file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/experience-selection-test.mjs:434:25"}
+{"type": "stderr", "text": "at async test (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/experience-selection-test.mjs:41:37)"}
+{"type": "stderr", "text": "at async file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/experience-selection-test.mjs:404:3 {"}
+{"type": "stderr", "text": "code: 'EXPERIENCE_INVALID',"}
+{"type": "stderr", "text": "status: 400"}
+{"type": "stderr", "text": "}"}
+{"type": "stderr", "text": "Node.js v22.23.2"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-selection-test.mjs\",\"exitCode\":1}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-runtime-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[kernel-wiki-runtime] HTTP import: bytes after change 3539"}
+{"type": "output", "text": "PASS the production HTTP route imports a snapshot into an isolated Runtime exactly once"}
+{"type": "output", "text": "PASS production prepare freezes a D selection and the FINAL prompt carries complete mandatory facts"}
+{"type": "output", "text": "PASS all-Wiki-zero keeps the complete mandatory facts in the FINAL assembled prompt"}
+{"type": "output", "text": "PASS an infrastructure failure never becomes an operator symptom and a backend target is rejected"}
+{"type": "output", "text": "PASS a retrieve-only legacy port still prepares, and a selection error blocks the dependent start"}
+{"type": "stderr", "text": "node:internal/modules/run_main:123"}
+{"type": "stderr", "text": "triggerUncaughtException("}
+{"type": "stderr", "text": "^"}
+{"type": "stderr", "text": "AssertionError [ERR_ASSERTION]: STALE-COMMITTED-TOKEN must never become a selection feature"}
+{"type": "stderr", "text": "true !== false"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/kernel-wiki-runtime-test.mjs:589:14"}
+{"type": "stderr", "text": "at async test (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/kernel-wiki-runtime-test.mjs:53:37)"}
+{"type": "stderr", "text": "at async file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_42a9627d841c49f0a386f813e0284177/workspace/tests/kernel-wiki-runtime-test.mjs:542:3 {"}
+{"type": "stderr", "text": "generatedMessage: false,"}
+{"type": "stderr", "text": "code: 'ERR_ASSERTION',"}
+{"type": "stderr", "text": "actual: true,"}
+{"type": "stderr", "text": "expected: false,"}
+{"type": "stderr", "text": "operator: 'strictEqual',"}
+{"type": "stderr", "text": "diff: 'simple'"}
+{"type": "stderr", "text": "}"}
+{"type": "stderr", "text": "Node.js v22.23.2"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-runtime-test.mjs\",\"exitCode\":1}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-api-service-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[experience-api-service] local project scope, human-only writes, history, conflicts and route mapping passed"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-api-service-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/round-experience-service-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "PASS all effect and authority ports are explicit"}
+{"type": "output", "text": "PASS one round freezes source/version/scope; updates are visible only in the next round"}
+{"type": "output", "text": "PASS restored contexts are validated and frozen without re-querying or crossing projects"}
+{"type": "output", "text": "PASS domain prompt formatter checks identities, digest and source limitations once"}
+{"type": "output", "text": "PASS concurrent same-round retrieval is deduplicated and ordinary advice reads start no Agent"}
+{"type": "output", "text": "PASS retrieval errors/timeouts are explicit and late results cannot mutate the round"}
+{"type": "output", "text": "PASS legacy evidence is explicitly skipped and cannot self-claim verification"}
+{"type": "output", "text": "PASS only matching verified complete evidence is written, idempotently and never publishable"}
+{"type": "output", "text": "PASS observation collection is bounded and storage uncertainty is not silently ignored"}
+{"type": "output", "text": "PASS batch cancellation reaches a slow second verifier and prevents a late repository write"}
+{"type": "output", "text": "Round experience service: 10 checks passed."}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/round-experience-service-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node --experimental-vm-modules tests/state-domain-boundary-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[state-domain-boundary] 34 domain nodes, 80 application closure nodes, explicit ports, pure factories, and compatibility passed"}
+{"type": "stderr", "text": "(node:111916) ExperimentalWarning: VM Modules is an experimental feature and might change at any time"}
+{"type": "stderr", "text": "(Use `node --trace-warnings ...` to show where the warning was created)"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node --experimental-vm-modules tests/state-domain-boundary-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/module-boundary-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[module-boundary] production path, dependency direction, and local contracts passed"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/module-boundary-test.mjs\",\"exitCode\":0}"}

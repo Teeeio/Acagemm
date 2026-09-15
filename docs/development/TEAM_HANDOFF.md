@@ -5,7 +5,21 @@
 > 稳定基线：`main` = `9b80437`
 > 本文档替代口头交接。**第 3 节（文档与代码不一致）必须先读**，否则会照着过时描述做错方向。
 
-> **当前入口（2026-09-15 UTC，最新真实验收）**：冻结生产源码
+> **最新入口（2026-09-15，Phase 3 软件批次）**：Phase 3（KernelWiki 导入器 + 确定性选择 +
+> 现有生产 API/prepare 集成）的**软件实现**已独立验收并集成，生产实现提交
+> `bb3ddd5dfbe9285ec982c795ede04595edcf69cf`（其后仅由 Root 补充 review 主题词，生产代码未再改动，
+> `status.json` 已锁定）：新增 31 个用例（import 8 / selection 16 / runtime 7）通过，
+> `release 147 / non-hardware 44`，exit 0；固定源 KernelWiki `b6b4301f…369e6` 实际 52 页 / 54 单元，
+> 幂等导入 54/54（第二次 `unchanged`），两条 sm86 已审查建议进入最终 prompt，其中经验注入区块
+> `renderedBytes` 为 6 383 UTF-8 字节（**不是**完整 prompt 长度），
+> `publishable=false`。**本批无新的实机模型/GPU 运行**：新生产版本没有新增实机 E2E 或 N20，
+> 三条件（无经验 / 仅本地经验 / 本地+已审查 Wiki）收益**仍待验证**（同任务预算与同 Profile，
+> 样本量与是否启动由上游决定），本批不宣称性能或发布能力。
+> 读者说明与必要 CLI/HTTP 用法见
+> [`PHASE3_WIKI_ACCEPTANCE.md`](PHASE3_WIKI_ACCEPTANCE.md)；单一事实源、全部计数与失败细节见
+> [`evidence/p3-wiki-20260915/status.json`](evidence/p3-wiki-20260915/status.json)。
+>
+> **此前的实机验收入口（2026-09-15 UTC，仅对冻结源 `21c6d78` 有效，不适用于当前 HEAD）**：冻结生产源码
 > `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`（git clean）。本批真实回归在本机共享 NVIDIA GPU
 > （`sm86`、`publishable=false`）上完成并通过独立验收：affine smoke 1 次运行 / 2 候选 /
 > 2 次实际模型观测；**严格 N20 20/20 `full_success`、20/20 独立验证且可比、44/44 实际模型观测
@@ -29,8 +43,9 @@
 > 实施/待办状态**——§3 的过时描述、§4 提交状态、§7 实施状态、§12 未验证假设、§14「立即下一步」
 > 第 0–8 项，它们记录的是 2026-09-11/12 的状态，**旧 §14 状态已过期**，不得再当作当前结论或
 > 当前下一步引用。历史失败/unknown（旧 `83b91d6` 严格 N20 19 可比 + 1 unknown、无响应与代理
-> 重试失败、被拒绝的外发请求等）在原证据中**原样保留**；Phase 3（KernelWiki 导入器 + 确定性
-> 选择器）**尚未开始**；本批无生产代码变更、未推送远端。术语：**「下游」仅指
+> 重试失败、被拒绝的外发请求等）在原证据中**原样保留**；该实机批次止于上述回归、未涉及 Phase 3，
+> Phase 3 的最新状态见上方入口；旧实机结论不能因为工作树 git clean 或后续无生产变更就当成新 HEAD
+> 的实机证据。该批无生产代码变更、未推送远端。术语：**「下游」仅指
 > dispatch 平台 agent**；被测的 Acagemm 运行 agent 不是下游。
 
 ---
@@ -810,8 +825,8 @@ node .operator-studio-local/probe/kernel-wiki-coverage.mjs         # 第 8.2 节
 - **没有一个真实 Codex 端到端**：本次真实 Agent 验证走的是 Claude Code。Codex 的事件形状（`file_change`）、Job Object / sandbox 路径、TLS 认证失败分类**仍待验**。兼容层让「换 provider 跑」成立，但不让「跑了一个就等于两个都验过」成立
 - **没有 C550 / 真机 liveHardware 证据**：全部证据是 `source=local-shared-gpu` / `publishable=false`
 - **Profiler / Tracer 不存在**：所有真实结果里都是 `status: "unavailable"`
-- **KernelWiki 尚未接入任何内容**：只完成了覆盖分析，导入器与选择器未开始
-- **专家 6.13 的 8 条最低验收用例**：**一条都还没有落地为测试**
+- **KernelWiki 当时尚未接入任何内容**：只完成了覆盖分析，导入器与选择器未开始（2026-09-11 状态；Phase 3 软件批次现已验收并集成，见顶部 2026-09-15 入口）
+- **专家 6.13 的 8 条最低验收用例**：**一条都还没有落地为测试**（2026-09-11 历史状态；当前状态见顶部 2026-09-15 入口与 `evidence/p3-wiki-20260915/status.json`，本节不在此处做覆盖映射）
 
 ### 12.2 需要澄清的架构问题
 

@@ -4,7 +4,20 @@
 > 交接对象：下一位开发者、代码审查者或负责恢复 Goal 的 Agent  
 > 交接时状态（已由下方当前状态入口取代）：P0 已提交到 main；Job supervisor P1 的 Windows Job Object/观测改动已作为 WIP 推送到专用交接分支，但尚未合并 main、尚未完成本轮总门禁。
 
-> **当前入口（2026-09-15 UTC，最新真实验收）**：冻结生产源码
+> **最新入口（2026-09-15，Phase 3 软件批次）**：Phase 3（KernelWiki 导入器 + 确定性选择 +
+> 现有生产 API/prepare 集成）的**软件实现**已独立验收并集成，生产实现提交
+> `bb3ddd5dfbe9285ec982c795ede04595edcf69cf`（其后仅由 Root 补充 review 主题词，生产代码未再改动，
+> `status.json` 已锁定）：新增 31 个用例（import 8 / selection 16 / runtime 7）通过，
+> `release 147 / non-hardware 44`，exit 0；固定源 KernelWiki `b6b4301f…369e6` 实际 52 页 / 54 单元，
+> 幂等导入 54/54（第二次 `unchanged`），两条 sm86 已审查建议进入最终 prompt，其中经验注入区块
+> `renderedBytes` 为 6 383 UTF-8 字节（**不是**完整 prompt 长度），
+> `publishable=false`。**本批无新的实机模型/GPU 运行**：新生产版本没有新增实机 E2E 或 N20，
+> 三条件（无经验 / 仅本地经验 / 本地+已审查 Wiki）收益**仍待验证**，本批不宣称性能或发布能力。
+> 读者说明与必要 CLI/HTTP 用法见
+> [`PHASE3_WIKI_ACCEPTANCE.md`](PHASE3_WIKI_ACCEPTANCE.md)；单一事实源、全部计数与失败细节见
+> [`evidence/p3-wiki-20260915/status.json`](evidence/p3-wiki-20260915/status.json)。
+>
+> **此前的实机验收入口（2026-09-15 UTC，仅对冻结源 `21c6d78` 有效，不适用于当前 HEAD）**：冻结生产源码
 > `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`（git clean）。本批真实回归在本机共享 NVIDIA GPU
 > （`sm86`、`publishable=false`）上完成并通过独立验收：affine smoke 1 次运行 / 2 候选 /
 > 2 次实际模型观测；**严格 N20 20/20 `full_success`、20/20 独立验证且可比、44/44 实际模型观测
@@ -22,8 +35,9 @@
 > [`evidence/closeout-20260915/PORTABLE.md`](evidence/closeout-20260915/PORTABLE.md)。
 > 结论限定该冻结源码、本机共享 GPU 与既定矩阵，
 > `publishable=false`；历史失败/unknown（旧 `83b91d6` 严格 N20 19 可比 + 1 unknown、无响应与
-> 代理重试失败、被拒绝的外发请求等）原样保留；Phase 3（KernelWiki 导入器 + 确定性选择器）
-> **尚未开始**；本批无生产代码变更、未推送远端。术语：「下游」仅指 dispatch 平台 agent，
+> 代理重试失败、被拒绝的外发请求等）原样保留；该批止于上述实机回归，未涉及 Phase 3，
+> Phase 3 的最新状态见上方入口；旧实机结论不能因为工作树 git clean 或后续无生产变更就当成
+> 新 HEAD 的实机证据。本批无生产代码变更、未推送远端。术语：「下游」仅指 dispatch 平台 agent，
 > 被测的 Acagemm 运行 agent 不是下游。
 >
 > 以下 2026-09-12 的当前状态入口、Phase 2 入口以及 §1–§16 的交接主体**均为历史记录**
@@ -47,7 +61,8 @@
 > [`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md)，
 > 实机观察/台账规则见 [`REAL_GPU_REGRESSION.md`](REAL_GPU_REGRESSION.md)。**Phase 2 无硬件验收通过：
 > release 136 / non-hardware 38，exit 0**；485 个代码与测试文件运行前后哈希一致。
-> 没有新实机运行，也不构成 N=20 或真实发布；§14 第 7 项（KernelWiki，Phase 3）**尚未开始**。上文关于 Job
+> 没有新实机运行，也不构成 N=20 或真实发布；§14 第 7 项（KernelWiki，Phase 3）**当时尚未开始**（最新状态见上方
+> 2026-09-15 入口）。上文关于 Job
 > supervisor 的主体内容与 P1 结论保持历史原样。
 
 本文件不是历史设计草稿，而是接手当前工作树后可以直接执行的操作清单。若本文件与代码冲突，以代码中的测试、模块合同和最近一次已确认的持久化状态为准；若本文件与用户的新指令冲突，以用户新指令为准。

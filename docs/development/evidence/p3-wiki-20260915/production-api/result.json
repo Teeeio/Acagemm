@@ -1,0 +1,509 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+  "snapshotDigest": "c849536ce799c7de4ac88fc770fb5f66ebad72350a92af42a8acb96d83557cd4",
+  "projectId": "PRJ_463A5CE8AEBEE8AE",
+  "pages": 52,
+  "units": 54,
+  "first": {
+    "created": 54,
+    "updated": 0,
+    "unchanged": 0,
+    "records": [
+      {
+        "id": "kw-6841863c567027ec-hw-2sm-cooperative",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-clc",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-mbarrier",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-nvfp4",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-pdl-gdc",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-tcgen05-mma",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-tma",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-tmem",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-deepgemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-flash-attention-4",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-flash-attention-sm100-mla-topk",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-flashmla",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-fp8-block-scale-gemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-fused-moe",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-gated-delta-net",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-gated-dual-gemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-grouped-gemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-nsa",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-nvfp4-gemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-nvfp4-gemv",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-sparse-mla",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-tensorrt-llm-blackwell-indexer",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-lang-cuda-cpp",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-lang-cute-dsl",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-lang-ptx",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-lang-triton",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-migration-register-to-tmem",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-migration-wgmma-to-tcgen05",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-compute-bound",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-low-sm-utilization",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-memory-bound",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-moe-load-imbalance",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-pipeline-stalls",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-register-pressure",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-tail-effect",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-cache-policy",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-cccl-memory-primitives",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-chunk-parallelism",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-double-buffering",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-epilogue-fusion",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-external-source-map-research",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-fine-grained-quantization",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-kernel-fusion",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-kernel-fusion-transfer-sm86-principles-v1",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-persistent-kernels",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-ping-pong-scheduling",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-pipeline-stages",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-register-budgeting",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-software-exp",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-swizzling",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-tile-scheduling",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-vectorized-loads",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-vectorized-loads-transfer-sm86-principles-v1",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-warp-specialization",
+        "version": 1
+      }
+    ],
+    "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+    "snapshotDigest": "c849536ce799c7de4ac88fc770fb5f66ebad72350a92af42a8acb96d83557cd4",
+    "__bridge": {
+      "schemaVersion": 1,
+      "service": "operator-studio-client-runtime",
+      "pid": 40304,
+      "port": 61811,
+      "apiUrl": "http://127.0.0.1:61811",
+      "serveWeb": false,
+      "dataDir": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p3-wiki-20260915\\live-api-audit-v2\\data",
+      "runtimeDir": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p3-wiki-20260915\\live-api-audit-v2\\runtime",
+      "runtimeContractVersion": 9,
+      "ownerPid": 20156,
+      "startedAt": "2026-09-15T05:39:49.704Z"
+    }
+  },
+  "second": {
+    "created": 0,
+    "updated": 0,
+    "unchanged": 54,
+    "records": [
+      {
+        "id": "kw-6841863c567027ec-hw-2sm-cooperative",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-clc",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-mbarrier",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-nvfp4",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-pdl-gdc",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-tcgen05-mma",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-tma",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-hw-tmem",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-deepgemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-flash-attention-4",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-flash-attention-sm100-mla-topk",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-flashmla",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-fp8-block-scale-gemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-fused-moe",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-gated-delta-net",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-gated-dual-gemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-grouped-gemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-nsa",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-nvfp4-gemm",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-nvfp4-gemv",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-sparse-mla",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-kernel-tensorrt-llm-blackwell-indexer",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-lang-cuda-cpp",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-lang-cute-dsl",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-lang-ptx",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-lang-triton",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-migration-register-to-tmem",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-migration-wgmma-to-tcgen05",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-compute-bound",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-low-sm-utilization",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-memory-bound",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-moe-load-imbalance",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-pipeline-stalls",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-register-pressure",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-pattern-tail-effect",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-cache-policy",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-cccl-memory-primitives",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-chunk-parallelism",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-double-buffering",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-epilogue-fusion",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-external-source-map-research",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-fine-grained-quantization",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-kernel-fusion",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-kernel-fusion-transfer-sm86-principles-v1",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-persistent-kernels",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-ping-pong-scheduling",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-pipeline-stages",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-register-budgeting",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-software-exp",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-swizzling",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-tile-scheduling",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-vectorized-loads",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-vectorized-loads-transfer-sm86-principles-v1",
+        "version": 1
+      },
+      {
+        "id": "kw-6841863c567027ec-technique-warp-specialization",
+        "version": 1
+      }
+    ],
+    "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+    "snapshotDigest": "c849536ce799c7de4ac88fc770fb5f66ebad72350a92af42a8acb96d83557cd4",
+    "__bridge": {
+      "schemaVersion": 1,
+      "service": "operator-studio-client-runtime",
+      "pid": 40304,
+      "port": 61811,
+      "apiUrl": "http://127.0.0.1:61811",
+      "serveWeb": false,
+      "dataDir": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p3-wiki-20260915\\live-api-audit-v2\\data",
+      "runtimeDir": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p3-wiki-20260915\\live-api-audit-v2\\runtime",
+      "runtimeContractVersion": 9,
+      "ownerPid": 20156,
+      "startedAt": "2026-09-15T05:39:49.704Z"
+    }
+  },
+  "repositoryRevision": 1,
+  "storeByteStable": true,
+  "runtimeStateUnchanged": true,
+  "preparePolicy": "operator-studio.optimization-hypothesis-selection/v1",
+  "selected": [
+    {
+      "id": "kw-6841863c567027ec-technique-kernel-fusion-transfer-sm86-principles-v1",
+      "version": 1,
+      "pageId": "technique-kernel-fusion",
+      "mode": "reviewed-transfer",
+      "publishable": false
+    },
+    {
+      "id": "kw-6841863c567027ec-technique-vectorized-loads-transfer-sm86-principles-v1",
+      "version": 1,
+      "pageId": "technique-vectorized-loads",
+      "mode": "reviewed-transfer",
+      "publishable": false
+    }
+  ],
+  "renderedBytes": 6383,
+  "promptContextBound": true,
+  "modelRequests": 0,
+  "gpuExecutions": 0,
+  "runtimeStopped": true
+}

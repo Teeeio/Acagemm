@@ -1,0 +1,56 @@
+{
+  "summary": "命令任务完成：node（退出码 0，耗时 916.578s）",
+  "checks": [
+    {
+      "name": "命令退出码",
+      "passed": true,
+      "evidence": "exit_code=0 · 916.578s",
+      "source": "platform_command"
+    },
+    {
+      "name": "state-domain-boundary",
+      "passed": true,
+      "evidence": "exit_code=0 · 0.391s",
+      "source": "platform_verification"
+    },
+    {
+      "name": "module-boundary",
+      "passed": true,
+      "evidence": "exit_code=0 · 0.234s",
+      "source": "platform_verification"
+    }
+  ],
+  "unresolved": [],
+  "context_suggestions": [],
+  "execution_kind": "command",
+  "checks_are_worker_reported": false,
+  "checks_are_platform_verified": true,
+  "verification": {
+    "recipe_name": "phase3-final-existing-gates",
+    "recipe_digest": "6f689b2a77ef8ae284c97a076d585fef44a81d150c52e7d585eecef4a7e7956f",
+    "passed": true,
+    "checks": 2,
+    "worker_checks": 0,
+    "interrupted": null,
+    "log": "verification.log",
+    "json": "verification.json"
+  },
+  "usage": {
+    "usage_source": "not_applicable",
+    "billing_verified": false,
+    "input_tokens": null,
+    "output_tokens": null,
+    "total_tokens": null,
+    "provider_completed_requests": 0,
+    "provider_usage_reported_requests": 0,
+    "harness_reported_usage": null,
+    "note": "command 任务由用户指定程序执行；平台不自动启动 worker 模型，token 未知且不计入 worker 模型用量。"
+  },
+  "validation": {
+    "structure": "not_applicable",
+    "scope": "passed",
+    "artifact_digest": "28a7cbda57329b1cf72b7d49e34774764a15e3490f1ae2c3034b26eccbabc22c",
+    "exit_code": 0,
+    "execution_kind": "command"
+  }
+}

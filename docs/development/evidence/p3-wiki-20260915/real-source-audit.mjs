@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import {createServer} from 'node:net';
+import {setTimeout as delay} from 'node:timers/promises';
+import {pathToFileURL} from 'node:url';
+import path from 'node:path';
+const root=path.resolve(process.argv[2]), dir=path.resolve(process.argv[3]), snapshotPath=path.resolve(process.argv[4]);
+await mkdir(dir,{recursive:true});
+const dataDir=path.join(dir,'data'),runtimeDir=path.join(dir,'runtime');
+Object.assign(process.env,{OPERATOR_DATA_DIR:dataDir,OPERATOR_RUNTIME_DIR:runtimeDir,OPERATOR_RUNTIME_MODE:'reference-fixture'});
+const mod=(p)=>import(pathToFileURL(path.join(root,p)));
+const {createSeedState,createProject,saveState}=await mod('client-runtime/state-store.mjs');
+const state=createSeedState();const project=createProject(state,{name:'Phase3 fixed-source import audit',repository:root,root});await saveState(state);
+const socket=createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const port=socket.address().port;await new Promise(r=>socket.close(r));
+const env={...process.env,API_PORT:String(port),SERVE_WEB:'false',OPERATOR_AUTO_TICK:'0',OPERATOR_RUNTIME_OWNER_PID:String(process.pid),OPERATOR_HARDWARE_DISABLED:'1',OPERATOR_TEST_BACKEND:'local-c500',OPERATOR_LOCAL_C500_MOCK:'1',OPERATOR_LOCAL_C500_SIMULATION:'1',OPERATOR_LOCAL_C500_DIR:path.join(dir,'tasks')};
+const child=spawn(process.execPath,['client-runtime/local-server.mjs'],{cwd:root,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+let output='';child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>output+=b);
+const base='http://127.0.0.1:'+port;
+const get=async(route,options={})=>{const response=await fetch(base+route,{...options,signal:AbortSignal.timeout(10000)});return{status:response.status,body:await response.json()};};
+let report;
+try{
+ let healthy=false;for(let i=0;i<100;i++){if(child.exitCode!==null)throw Error(output);try{const r=await get('/api/health');if(r.status===200){healthy=true;break;}}catch{}await delay(100);}assert.ok(healthy,output);
+ const snapshot=JSON.parse(await readFile(snapshotPath,'utf8'));assert.equal(snapshot.units.length,54);
+ const stateFile=path.join(dataDir,'mock-db.json'),storeFile=path.join(runtimeDir,'experiences','experiences.json');
+ const beforeState=await readFile(stateFile,'utf8');const route='/api/projects/'+encodeURIComponent(project.id)+'/experiences';
+ const post=()=>get(route+'/import-kernel-wiki',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshot,author:'Root fixed-source audit'})});
+ const first=await post();assert.equal(first.status,200,JSON.stringify(first));assert.equal(first.body.created,54);assert.equal(first.body.updated,0);
+ const storeBefore=await readFile(storeFile,'utf8');const second=await post();assert.equal(second.status,200);assert.equal(second.body.unchanged,54);assert.equal(second.body.updated,0);assert.equal(second.body.created,0);assert.equal(await readFile(storeFile,'utf8'),storeBefore);
+ const listed=await get(route);assert.equal(listed.status,200);assert.equal(listed.body.experiences.length,54);assert.ok(listed.body.experiences.every(x=>x.verification.publishable===false&&x.source==='human'));
+ assert.equal(await readFile(stateFile,'utf8'),beforeState);
+ const {createExperienceRepository}=await mod('client-runtime/experience-repository.mjs');const{createExperienceService}=await mod('client-runtime/application/experience-service.mjs');const{createRoundExperienceService}=await mod('client-runtime/application/round-experience-service.mjs');const{formatExperienceContext}=await mod('client-runtime/experience-contract.mjs');const{buildCandidateGenerationPrompt}=await mod('client-runtime/candidate-generation/prompt.mjs');
+ const repo=createExperienceRepository({rootDir:path.dirname(storeFile)});const experiences=createExperienceService({repository:repo,now:()=>new Date().toISOString(),createId:()=>{throw Error('unexpected create')}});
+ const mission={id:'mission-p3-source',projectId:project.id,goal:'Explore kernel fusion and vectorized loads for explicitly contiguous producer consumer operations.',hardware:['nvidia-gpu'],architecture:['sm86'],operator:'affine',tags:[]};
+ const local={activeMissionId:mission.id,missions:[mission],iterationStats:{resolvedTarget:{missionId:mission.id,hardware:['nvidia-gpu'],architecture:['sm86']}},runHistory:[],benchmark:{status:'idle'},currentBest:{}};
+ const round=createRoundExperienceService({experienceService:experiences,resolveAccess:()=>({projectId:project.id,allowedProjectIds:[]}),verifyObservationEvidence:async()=>({verified:false}),timers:{setTimeout,clearTimeout}});
+ const context=await round.prepare({state:local,mission,roundId:'p3-round-1'});assert.equal(context.items.length,2);assert.ok(context.items.every(i=>i.selectionMetadata.applicability.mode==='reviewed-transfer'));
+ const instruction=formatExperienceContext(context,{projectId:project.id,missionId:mission.id,roundId:'p3-round-1'});
+ const prompt=buildCandidateGenerationPrompt({mission,goal:mission.goal,workspace:path.join(dir,'mission'),baseline:{},testMatrix:{},workspaceInventory:['run.py'],experienceInstruction:instruction,boundaryInstruction:''});
+ assert.ok(prompt.includes(context.contextId));for(const item of context.items)assert.ok(prompt.includes(item.id));
+ await writeFile(path.join(dir,'final-prompt.txt'),prompt,{flag:'wx'});
+ report={schemaVersion:1,sourceCommit:snapshot.sourceCommit,snapshotDigest:snapshot.snapshotDigest,projectId:project.id,pages:52,units:54,first:first.body,second:second.body,repositoryRevision:JSON.parse(storeBefore).revision,storeByteStable:true,runtimeStateUnchanged:true,preparePolicy:local.iterationStats.roundExperienceSelection.policyVersion,selected:context.items.map(i=>({id:i.id,version:i.version,pageId:i.selectionMetadata.pageId,mode:i.selectionMetadata.applicability.mode,publishable:i.verification.publishable})),renderedBytes:Buffer.byteLength(instruction),promptContextBound:true,modelRequests:0,gpuExecutions:0};
+}finally{if(child.exitCode===null){const exit=new Promise(r=>child.once('exit',r));child.kill();await Promise.race([exit,delay(5000).then(()=>{if(child.exitCode===null)throw Error('runtime did not stop')})]);}await writeFile(path.join(dir,'runtime.log'),output,{flag:'wx'});}
+report.runtimeStopped=true;await writeFile(path.join(dir,'result.json'),JSON.stringify(report,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({ok:true,firstCreated:report.first.created,secondUnchanged:report.second.unchanged,selected:report.selected,renderedBytes:report.renderedBytes,runtimeStopped:true}));
+

@@ -1,0 +1,1219 @@
+{
+  "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+  "items": [
+    {
+      "id": "task_8bf4bd055e804c829b5e82ba9ec6f2f3",
+      "title": "Phase3 A：版本绑定元数据与方案D确定性选择",
+      "status": "integrated",
+      "current_attempt_id": "run_38d0dfdd66914c0eab52c7293f839b93",
+      "artifact_digest": "96eb9d75937cc2718c0037fc0b191cd245449b4083ae711a5c02c0a768cd75e2",
+      "execution_kind": "model",
+      "task_type": "implementation",
+      "priority": 0,
+      "milestone_id": "operator-p3-wiki",
+      "work_item": "Phase3 A：版本绑定元数据与方案D确定性选择",
+      "updated_at": "2026-09-15T05:36:16.939+00:00",
+      "changed_files": [
+        {
+          "path": "client-runtime/experience-contract.md",
+          "status": "modified",
+          "sha256": "98655233d50daccdbc3c828b8c55b4fcf8f65886d441bde273c471967e8c68cb"
+        },
+        {
+          "path": "client-runtime/experience-contract.mjs",
+          "status": "modified",
+          "sha256": "0a2075b0e75d07c28beb58b3b2d13d34aca7a556b7a7686b7586609b6dc56e2f"
+        },
+        {
+          "path": "client-runtime/experience-selection.md",
+          "status": "added",
+          "sha256": "f9ea26150ac123bddc25775b61882d3ed84e066e09fb72cb3f79d4949a1359d8"
+        },
+        {
+          "path": "client-runtime/experience-selection.mjs",
+          "status": "added",
+          "sha256": "fdbf766cee8e101f8b915f7da224f098cb8d9376faaa3c56512befd4167a0172"
+        }
+      ],
+      "changed_files_omitted": 0,
+      "reported_summary": "Phase3 A 范围修复：把 experience-selection.mjs 的症状页 candidateTechniques 一跳展开从『topical 共享词』改为『精确边』——条目 trim+小写后必须恰好等于目标 pageId 或目标 topics 之一；目标自身的 candidateTechniques 不再参与身份匹配（出边不是身份），并保持目标必须是 type technique 与适用性重筛。同步更新 experience-selection.md 对应契约段。未改 experience-contract.mjs/.md（契约文本无该细节，保持最小改动），未改任何冻结验收基准。",
+      "reported_summary_truncated": false,
+      "reported_by": "worker",
+      "platform_verification": {
+        "source": "platform_records",
+        "state": "passed",
+        "attempt_id": "run_38d0dfdd66914c0eab52c7293f839b93",
+        "bound_to_current_attempt": true,
+        "attempt_status": "submitted",
+        "state_reason": null,
+        "program_evidence": [
+          "platform_verification"
+        ],
+        "checks_omitted": 0,
+        "exit_code": null,
+        "artifact_digest": "96eb9d75937cc2718c0037fc0b191cd245449b4083ae711a5c02c0a768cd75e2",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "selection-0",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.141,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "selection-1",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.14,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "selection-2",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.891,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          }
+        ],
+        "checks_passed": true,
+        "worker_reported_checks": 7,
+        "checks_are_platform_verified": true,
+        "worker_report_only": false,
+        "recipe": {
+          "recipe_name": "selection-targeted",
+          "recipe_digest": "5fb64293b90ee08aeeaae53659f354afed7fd711fcb51eb869a8cdbd8a8002de",
+          "passed": true,
+          "planned_checks": 3,
+          "check_count": 3,
+          "checks_omitted": 0,
+          "interrupted": null,
+          "log_truncated": false,
+          "checks": [
+            {
+              "name": "selection-0",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.141,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "client-runtime/experience-contract.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "selection-1",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.14,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "client-runtime/experience-selection.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "selection-2",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.891,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "tests/experience-service-test.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            }
+          ]
+        },
+        "candidate_verification": null
+      },
+      "review_wait_seconds": 2185.014,
+      "rework_count": 2,
+      "repeated_failure": false,
+      "repeated_failure_signature": null,
+      "rework_summary": "历史返工 2 次；最近根因 implementation；第四组合run_a7935993cd2d4280a8d44dc98777228e selection 15/16PASS，唯一真实失败one-hop：symptom candidateTechniques=['tech-hop']，technique A topics=['tech-hop'] candidateTechniques=['tech-deep']，technique B topics=['tech-deep'] 被错误引入。根因topical(any shared token)把tech-hop与tech-deep共同tech当边，且目标candidateTechniques是出边不应当身份。仅一跳关联改为：candidateTechniques引用精确匹配目标pageId或目标topics之一（可trim/lowercase，不能分词模糊匹配），目标必须type techn",
+      "review_depends_on": [
+        "task_0ba61014ca1e41858b2a481a5e691b97"
+      ],
+      "candidate_inputs": [],
+      "delivery_gate": null,
+      "next_action": "无需操作。",
+      "artifact_url": "/api/artifacts/run_38d0dfdd66914c0eab52c7293f839b93/"
+    },
+    {
+      "id": "task_1699bbedbfc343ae9b2e6027520e8f65",
+      "title": "Phase3 B：固定commit的Wiki快照导入器",
+      "status": "integrated",
+      "current_attempt_id": "run_120c9d92c5a243c5b6b1b454d6aa2977",
+      "artifact_digest": "08c52bde0a75a800eabce3d86a5f61490a4b9afc215a402c1ae6709756db0009",
+      "execution_kind": "model",
+      "task_type": "implementation",
+      "priority": 0,
+      "milestone_id": "operator-p3-wiki",
+      "work_item": "Phase3 B：固定commit的Wiki快照导入器",
+      "updated_at": "2026-09-15T05:36:33.654+00:00",
+      "changed_files": [
+        {
+          "path": "client-runtime/kernel-wiki-import.md",
+          "status": "added",
+          "sha256": "0285cd6be7b6a638b169a86cde5d542ddef4711241571afc771d013d8cb2e74b"
+        },
+        {
+          "path": "client-runtime/kernel-wiki-import.mjs",
+          "status": "added",
+          "sha256": "ee7ccb4dbc77c1d238653e129198811cf3fc16104862d05f5e6a0475e5246f6a"
+        },
+        {
+          "path": "scripts/import-kernel-wiki.md",
+          "status": "added",
+          "sha256": "1b33df90f85f57ca298fbfbb4a97dddadd5ab3074dc28e3511cbb268602f358d"
+        },
+        {
+          "path": "scripts/import-kernel-wiki.mjs",
+          "status": "added",
+          "sha256": "5b8fd5367b705e4e9099d23c0b6860636d9af19604df5bace67adbc15c38700b"
+        }
+      ],
+      "changed_files_omitted": 0,
+      "reported_summary": "Fixed the one remaining retry defect: license.text is now carried verbatim from the pinned LICENSE blob. client-runtime/kernel-wiki-import.mjs adds licenseTextValue(), a validation-only checker (string, nonempty text, existing 8000-char bound, no control characters other than LF/CR/tab) that never trims or rewrites; normalizeLicense and validateKernelWikiSnapshot both use it, so leading/trailing whitespace, CRLF/LF and the trailing newline survive and snapshotDigest covers the actual original text. scripts/import-kernel-wiki.mjs now stores the blob text as decoded and derives the MIT assertion plus the copyright line from a read-only normalized probe that is never stored. Body/unit content normalization and all other validators are untouched; both .md docs now state the license original-te",
+      "reported_summary_truncated": true,
+      "reported_by": "worker",
+      "platform_verification": {
+        "source": "platform_records",
+        "state": "passed",
+        "attempt_id": "run_120c9d92c5a243c5b6b1b454d6aa2977",
+        "bound_to_current_attempt": true,
+        "attempt_status": "submitted",
+        "state_reason": null,
+        "program_evidence": [
+          "platform_verification"
+        ],
+        "checks_omitted": 0,
+        "exit_code": null,
+        "artifact_digest": "08c52bde0a75a800eabce3d86a5f61490a4b9afc215a402c1ae6709756db0009",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "importer-0",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.188,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "importer-1",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.141,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          }
+        ],
+        "checks_passed": true,
+        "worker_reported_checks": 4,
+        "checks_are_platform_verified": true,
+        "worker_report_only": false,
+        "recipe": {
+          "recipe_name": "importer-targeted",
+          "recipe_digest": "641e0faef187f316562ac05588edb133623f9a12d6a4ae1042c874cf8d56e181",
+          "passed": true,
+          "planned_checks": 2,
+          "check_count": 2,
+          "checks_omitted": 0,
+          "interrupted": null,
+          "log_truncated": false,
+          "checks": [
+            {
+              "name": "importer-0",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.188,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "client-runtime/kernel-wiki-import.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "importer-1",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.141,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "scripts/import-kernel-wiki.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            }
+          ]
+        },
+        "candidate_verification": null
+      },
+      "review_wait_seconds": 1883.382,
+      "rework_count": 3,
+      "repeated_failure": false,
+      "repeated_failure_signature": null,
+      "rework_summary": "历史返工 3 次；最近根因 implementation；第五组合run_dd1369d98e3142f69c8526ba6464fc1a：selector16/16与runtime7/7全部通过，import7/8唯一失败是CLI许可证原文末尾换行被normalizeLicense→multilineString.trim()删掉。请只为license.text使用原文保留校验（string、有非空文本、既有长度上限；校验不改写），完整保留LICENSE blob的首尾空白/CRLF/LF，让snapshotDigest覆盖实际原文。不要改用于正文的其他规范化，不改测试断言。同步kernel-wiki-import.md许可证原文契约。原B范围与syntax作者检查，禁止扩功能。",
+      "review_depends_on": [
+        "task_8bf4bd055e804c829b5e82ba9ec6f2f3",
+        "task_0ba61014ca1e41858b2a481a5e691b97"
+      ],
+      "candidate_inputs": [],
+      "delivery_gate": null,
+      "next_action": "无需操作。",
+      "artifact_url": "/api/artifacts/run_120c9d92c5a243c5b6b1b454d6aa2977/"
+    },
+    {
+      "id": "task_299f33bf1a5849ccb2a1519f773b4853",
+      "title": "Phase3 C：生产导入API与每轮prepare选注",
+      "status": "integrated",
+      "current_attempt_id": "run_b93fcb0ae0d240669a625f0e9bdc0447",
+      "artifact_digest": "bdc4972e0c6f340c3b22ddfa50ebe45de03257eebe79ba076595014f25407eda",
+      "execution_kind": "model",
+      "task_type": "implementation",
+      "priority": 0,
+      "milestone_id": "operator-p3-wiki",
+      "work_item": "Phase3 C：生产导入API与每轮prepare选注",
+      "updated_at": "2026-09-15T05:36:50.018+00:00",
+      "changed_files": [
+        {
+          "path": "client-runtime/application/experience-api-service.md",
+          "status": "modified",
+          "sha256": "6faa1c350317d11c06c977736622cc3ded694e98eec0fb44ffe823eaf94456cb"
+        },
+        {
+          "path": "client-runtime/application/experience-api-service.mjs",
+          "status": "modified",
+          "sha256": "cb374a7027760676ad9d1f0c6ff47b9510c4119f397a12b9f5a4d9bfc31af0c4"
+        },
+        {
+          "path": "client-runtime/application/experience-service.md",
+          "status": "modified",
+          "sha256": "717c8949beace66b6f303a48e8fe54fe83c8db3f27a607014ca0a42355577ba4"
+        },
+        {
+          "path": "client-runtime/application/experience-service.mjs",
+          "status": "modified",
+          "sha256": "68ff2370ef3827e99e215ce269972760dfe677ea327f931751d9735c88e7f8dd"
+        },
+        {
+          "path": "client-runtime/application/round-experience-service.md",
+          "status": "modified",
+          "sha256": "ea6edd5470b79cc69b695c89c637bda308603553f4f83f4b209781f810a6f243"
+        },
+        {
+          "path": "client-runtime/application/round-experience-service.mjs",
+          "status": "modified",
+          "sha256": "2d47713c7de88892c91fbf1c769591b9faa8638db55393593459449de12fb65c"
+        },
+        {
+          "path": "client-runtime/server/experience-routes.md",
+          "status": "modified",
+          "sha256": "ecc9ef5aac663e1f671f803662c983be09e23cad252ee49382fae1876e805188"
+        },
+        {
+          "path": "client-runtime/server/experience-routes.mjs",
+          "status": "modified",
+          "sha256": "cccc7f3f4fd0322ab559e6ccb9e4b40359e44a55268a5b19367e38aae55156f1"
+        }
+      ],
+      "changed_files_omitted": 0,
+      "reported_summary": "Phase3 C（既有 application/HTTP 集成）在本轮按 Root 复核意见收紧 prepare 的选择输入派生，只改原 C 文件 client-runtime/application/round-experience-service.mjs 与其契约 .md。1) committedFacts：事实必须 previous.missionId 与 target.missionId 同时等于本 Mission，且 previous.projectId 与 target.projectId 都已知并都等于本 Mission 的 Project；Mission 无已知 projectId、owner 缺失或两字段矛盾一律排除（不再取其一、不再放行空 owner）。2) attemptBinding：missionId/runId/candidateId 三者必须非空（完整来源身份），否则不构成尝试；currentAttempt 与 archivedAttempts 只接受终态 benchmark（沿用既有生产集合 complete/failed/cancelled），running/idle 缓存 experienceEvidence 不再构成重复；归档条目在 roundFacts 已给出且矛盾的项目归属时排除。3) preferredIdsFor：候选身份优先取真实字段 facts.candidate.id，previous.candidateId 仅作缺失回退；当前最佳取 state.currentBest.candidateId；每条冻结执行记录必须 evidence.missionId 等于本 Mission、projectId 等于本 Mission 的 Project。4) repeatedAttemptsFor：降权只作用于同 Mission 同 P",
+      "reported_summary_truncated": true,
+      "reported_by": "worker",
+      "platform_verification": {
+        "source": "platform_records",
+        "state": "passed",
+        "attempt_id": "run_b93fcb0ae0d240669a625f0e9bdc0447",
+        "bound_to_current_attempt": true,
+        "attempt_status": "submitted",
+        "state_reason": null,
+        "program_evidence": [
+          "platform_verification"
+        ],
+        "checks_omitted": 0,
+        "exit_code": null,
+        "artifact_digest": "bdc4972e0c6f340c3b22ddfa50ebe45de03257eebe79ba076595014f25407eda",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "integration-0",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.203,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "integration-1",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.25,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "integration-2",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.157,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "integration-3",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.187,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          }
+        ],
+        "checks_passed": true,
+        "worker_reported_checks": 6,
+        "checks_are_platform_verified": true,
+        "worker_report_only": false,
+        "recipe": {
+          "recipe_name": "integration-targeted",
+          "recipe_digest": "0fb86bc96da6e544e79f524d1938b88fdf39ab0148fca9308d4ca4c6229d5215",
+          "passed": true,
+          "planned_checks": 4,
+          "check_count": 4,
+          "checks_omitted": 0,
+          "interrupted": null,
+          "log_truncated": false,
+          "checks": [
+            {
+              "name": "integration-0",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.203,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "client-runtime/application/experience-service.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "integration-1",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.25,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "client-runtime/application/experience-api-service.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "integration-2",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.157,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "client-runtime/application/round-experience-service.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "integration-3",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.187,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "client-runtime/server/experience-routes.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            }
+          ]
+        },
+        "candidate_verification": null
+      },
+      "review_wait_seconds": 3741.65,
+      "rework_count": 2,
+      "repeated_failure": false,
+      "repeated_failure_signature": null,
+      "rework_summary": "历史返工 2 次；最近根因 implementation；Root复核第二候选：1 committedFacts当前owner空仍放行，previous.projectId与target.projectId矛盾也只取其一，target.missionId未核对；严格仅使用已知同Project且同Mission事实，缺失owner/矛盾排除，不能补造。2 attemptBinding只需4digest与hardware等，missionId/runId/candidateId可空；currentAttempt/archive没有terminal status约束，故带缓存experienceEvidence的running/idle记录可能构成重复。要求完整来源ID、正确Mission、已提交terminal benchmark；依据现有生产status（例如complete）而非猜枚举。3 preferredIdsFor只对candidateId",
+      "review_depends_on": [
+        "task_8bf4bd055e804c829b5e82ba9ec6f2f3",
+        "task_1699bbedbfc343ae9b2e6027520e8f65",
+        "task_0ba61014ca1e41858b2a481a5e691b97"
+      ],
+      "candidate_inputs": [],
+      "delivery_gate": null,
+      "next_action": "无需操作。",
+      "artifact_url": "/api/artifacts/run_b93fcb0ae0d240669a625f0e9bdc0447/"
+    },
+    {
+      "id": "task_0ba61014ca1e41858b2a481a5e691b97",
+      "title": "Phase3 D：独立导入与最终prompt验收",
+      "status": "integrated",
+      "current_attempt_id": "run_77909e45dee94127b2f54f3a012c8fb7",
+      "artifact_digest": "cd78510fac100a28d699f4ddb82340092dc42814d1e6505cf594c77b3d18d255",
+      "execution_kind": "model",
+      "task_type": "test",
+      "priority": 0,
+      "milestone_id": "operator-p3-wiki",
+      "work_item": "Phase3 D：独立导入与最终prompt验收",
+      "updated_at": "2026-09-15T05:35:58.783+00:00",
+      "changed_files": [
+        {
+          "path": "client-runtime/README.md",
+          "status": "modified",
+          "sha256": "5dcbe3d3bbb3e6b135ff7a137dc82c30fa2b311ec077cec326ac3741cc7e16ec"
+        },
+        {
+          "path": "client-runtime/application/README.md",
+          "status": "modified",
+          "sha256": "ad77977ff7bb653696aca80f0501013f4f01d38bdbafdf23aa2b826e7a63d1f7"
+        },
+        {
+          "path": "docs/development/MODULE_OWNERSHIP.md",
+          "status": "modified",
+          "sha256": "8e69f814363d3500eb702b7eb4488df41dd990e714056b21e55d5de5f074295e"
+        },
+        {
+          "path": "package.json",
+          "status": "modified",
+          "sha256": "b41914491d67d85ff9604d5104e2dfc2215db40f28ecad078e9079be2cdd834f"
+        },
+        {
+          "path": "scripts/verify-local-c500-release.mjs",
+          "status": "modified",
+          "sha256": "69b7accf2baa0702382b79df96edd1515d061757f4197a423f0276f03736899a"
+        },
+        {
+          "path": "tests/README.md",
+          "status": "modified",
+          "sha256": "851732692f6bde97a016b602c26e28cb19f2d92927c8dd85856189c06374c7cb"
+        },
+        {
+          "path": "tests/experience-selection-test.mjs",
+          "status": "added",
+          "sha256": "a74fa2f5c5d357587cdfd324f080004efa4355fe964fbef9e980dfa66269cb1f"
+        },
+        {
+          "path": "tests/kernel-wiki-import-test.mjs",
+          "status": "added",
+          "sha256": "9caf3a590955aaf65e96199d4ed08f1e500d987fd68a505808ff6389ea7bce6c"
+        },
+        {
+          "path": "tests/kernel-wiki-runtime-test.mjs",
+          "status": "added",
+          "sha256": "87a844e4120c441a38c06db8dc783df83f481c2174e8012bfe53d6786eb75f71"
+        }
+      ],
+      "changed_files_omitted": 0,
+      "reported_summary": "Phase3 D retry: fixed exactly the two test-DTO-shape defects named in review_feedback/retry_plan for tests/kernel-wiki-import-test.mjs, plus the matching tests/README.md notes. (1) Raw snapshot unit scope is the pre-domain envelope shape, so the builder case now asserts `(unit.scope.tags ?? [])` deep-equals [] and additionally that the raw scope never contains a source topic token; the normalized store assertion `record.scope.tags` === [] is left unchanged. (2) CLI `snapshot.license` is the structured envelope {spdx,path,copyright,text}; the case now validates spdx='MIT', path='LICENSE' and a nonempty string copyright separately, then requires `license.text` to strictly equal the committed MIT_LICENSE blob, instead of `typeof envelope.license === 'string'`. The sourceCommit content asserti",
+      "reported_summary_truncated": true,
+      "reported_by": "worker",
+      "platform_verification": {
+        "source": "platform_records",
+        "state": "passed",
+        "attempt_id": "run_77909e45dee94127b2f54f3a012c8fb7",
+        "bound_to_current_attempt": true,
+        "attempt_status": "submitted",
+        "state_reason": null,
+        "program_evidence": [
+          "platform_verification"
+        ],
+        "checks_omitted": 0,
+        "exit_code": null,
+        "artifact_digest": "cd78510fac100a28d699f4ddb82340092dc42814d1e6505cf594c77b3d18d255",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "tests-0",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.14,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "tests-1",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.141,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "tests-2",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.141,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          }
+        ],
+        "checks_passed": true,
+        "worker_reported_checks": 6,
+        "checks_are_platform_verified": true,
+        "worker_report_only": false,
+        "recipe": {
+          "recipe_name": "tests-targeted",
+          "recipe_digest": "d29ecc0bd144a6b289723fa273112c0ed0d0589b63b94b4829722adbf43aa1d4",
+          "passed": true,
+          "planned_checks": 3,
+          "check_count": 3,
+          "checks_omitted": 0,
+          "interrupted": null,
+          "log_truncated": false,
+          "checks": [
+            {
+              "name": "tests-0",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.14,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "tests/kernel-wiki-import-test.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "tests-1",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.141,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "tests/experience-selection-test.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "tests-2",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.141,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--check",
+                "tests/kernel-wiki-runtime-test.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            }
+          ]
+        },
+        "candidate_verification": null
+      },
+      "review_wait_seconds": 2155.45,
+      "rework_count": 4,
+      "repeated_failure": false,
+      "repeated_failure_signature": null,
+      "rework_summary": "历史返工 4 次；最近根因 verification；第四组合run_a7935993cd2d4280a8d44dc98777228e：runtime7/7PASS，selection15/16PASS（one-hop是真实A缺陷已交A修，严禁改弱相关断言），import6/8PASS仅两处测试DTO形状：1 snapshot.units.scope为尚未domain规范化的{}，没有tags等同未copytopics，断言(unit.scope.tags??[])深等[]并确保不是source topics；入库record.scope.tags规范化[]现有断言保持。2 CLI snapshot.license为{spdx:'MIT',path:'LICENSE',copyright,text}，读取license.text严格等于MIT_LICENSE，spdx/path/copyright分别校验，不要对整个license typeo",
+      "review_depends_on": [],
+      "candidate_inputs": [],
+      "delivery_gate": null,
+      "next_action": "无需操作。",
+      "artifact_url": "/api/artifacts/run_77909e45dee94127b2f54f3a012c8fb7/"
+    },
+    {
+      "id": "task_226c0200327c4e30869c15bff7940d45",
+      "title": "Phase3：四候选首次组合接口核验",
+      "status": "cancelled",
+      "current_attempt_id": "run_dd1369d98e3142f69c8526ba6464fc1a",
+      "artifact_digest": "b560b9627d9f8b999bd1063ca2e2fc14ecf542fa7ee6ddb0af0ecda3e47e84e0",
+      "execution_kind": "command",
+      "task_type": "verification",
+      "priority": 0,
+      "milestone_id": "operator-p3-wiki",
+      "work_item": "组合接口验收",
+      "updated_at": "2026-09-15T05:43:35.902+00:00",
+      "changed_files": [],
+      "changed_files_omitted": 0,
+      "reported_summary": "命令任务失败：node（退出码 1，耗时 13.937s）",
+      "reported_summary_truncated": false,
+      "reported_by": "worker",
+      "platform_verification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_dd1369d98e3142f69c8526ba6464fc1a",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "b560b9627d9f8b999bd1063ca2e2fc14ecf542fa7ee6ddb0af0ecda3e47e84e0",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": {
+          "version": 1,
+          "source": "platform",
+          "state": "failed",
+          "input_digest": "7668eda1352358e03402e8c2e868a2f408cbb8f6fc4f58be6d09a181df69ca5f",
+          "command_spec_digest": "2b4da998ec4a8738735aa96d5e396824ce5ea9e07c8a142a4d7ef65bcf4f7e1c",
+          "recipe_digest": null,
+          "exit_code": 1,
+          "checks_passed": false,
+          "error": "命令退出码 1；不得作为通过证据"
+        }
+      },
+      "review_wait_seconds": 3226.733,
+      "rework_count": 0,
+      "repeated_failure": true,
+      "repeated_failure_signature": "87d40918e6302bd9770a75fd7b3a94b387d8dc0bb61f30486e9eecb3591f70ec",
+      "rework_summary": null,
+      "review_depends_on": [],
+      "candidate_inputs": [
+        {
+          "task_id": "task_8bf4bd055e804c829b5e82ba9ec6f2f3",
+          "attempt_id": "run_38d0dfdd66914c0eab52c7293f839b93",
+          "artifact_digest": "96eb9d75937cc2718c0037fc0b191cd245449b4083ae711a5c02c0a768cd75e2"
+        },
+        {
+          "task_id": "task_1699bbedbfc343ae9b2e6027520e8f65",
+          "attempt_id": "run_fd12c6629c184e2487fe10daa61f9b25",
+          "artifact_digest": "768b37cbaf03f3522129871c7173edfa083db86db9b6a2f683114e052715430f"
+        },
+        {
+          "task_id": "task_299f33bf1a5849ccb2a1519f773b4853",
+          "attempt_id": "run_b93fcb0ae0d240669a625f0e9bdc0447",
+          "artifact_digest": "bdc4972e0c6f340c3b22ddfa50ebe45de03257eebe79ba076595014f25407eda"
+        },
+        {
+          "task_id": "task_0ba61014ca1e41858b2a481a5e691b97",
+          "attempt_id": "run_77909e45dee94127b2f54f3a012c8fb7",
+          "artifact_digest": "cd78510fac100a28d699f4ddb82340092dc42814d1e6505cf594c77b3d18d255"
+        }
+      ],
+      "delivery_gate": {
+        "kind": "candidate_source",
+        "task_ids": [
+          "task_8bf4bd055e804c829b5e82ba9ec6f2f3",
+          "task_1699bbedbfc343ae9b2e6027520e8f65",
+          "task_299f33bf1a5849ccb2a1519f773b4853",
+          "task_0ba61014ca1e41858b2a481a5e691b97"
+        ],
+        "message": "候选来源不是其当前尝试：task_1699bbedbfc343ae9b2e6027520e8f65；候选来源摘要与当前产物不一致：task_1699bbedbfc343ae9b2e6027520e8f65",
+        "live_verification": "not_checked",
+        "needs_attention": true,
+        "note": "本条只核对已存记录（任务/尝试身份、状态、存储绑定），未读取当前文件内容；文件将在验收/集成前由完整门禁复核。"
+      },
+      "next_action": "最终验收门禁未通过，先处理：候选来源不是其当前尝试：task_1699bbedbfc343ae9b2e6027520e8f65；候选来源摘要与当前产物不一致：task_1699bbedbfc343ae9b2e6027520e8f65",
+      "artifact_url": "/api/artifacts/run_dd1369d98e3142f69c8526ba6464fc1a/"
+    },
+    {
+      "id": "task_50ceadc7a4644f389bc49131d5514481",
+      "title": "Phase3 最终候选项目门禁",
+      "status": "cancelled",
+      "current_attempt_id": "run_f48b9d9c32f84da0a37b414f1c259671",
+      "artifact_digest": null,
+      "execution_kind": "command",
+      "task_type": "verification",
+      "priority": 0,
+      "milestone_id": "operator-p3-wiki",
+      "work_item": "最终组合项目门禁",
+      "updated_at": "2026-09-15T05:43:41.126+00:00",
+      "changed_files": [],
+      "changed_files_omitted": 0,
+      "reported_summary": "Change outside allowed_paths: .operator-studio-local/runtime/agent-bridge/prompt-audits/claude_MU27OQ16_3907F180.json",
+      "reported_summary_truncated": false,
+      "reported_by": "worker",
+      "platform_verification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_f48b9d9c32f84da0a37b414f1c259671",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "组合验证记录为失败",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": null,
+        "artifact_digest": null,
+        "digest_matches_task": false,
+        "checks": [],
+        "checks_passed": null,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": {
+          "version": 1,
+          "source": "platform",
+          "state": "failed",
+          "input_digest": "91d24ae791d6c040899f5bbd2575cb021df6a4c907e5ad490a5273ca5e202702",
+          "command_spec_digest": "1397a5fa30a3b78532b82e24f2653bef151abc30abc9697d2b6538c01ff0a802",
+          "recipe_digest": "6f689b2a77ef8ae284c97a076d585fef44a81d150c52e7d585eecef4a7e7956f",
+          "exit_code": 1,
+          "checks_passed": false,
+          "error": "命令退出码 1；不得作为通过证据；配置了固定配方但没有真实检查证据；不得作为通过证据"
+        }
+      },
+      "review_wait_seconds": 2605.927,
+      "rework_count": 0,
+      "repeated_failure": false,
+      "repeated_failure_signature": null,
+      "rework_summary": null,
+      "review_depends_on": [],
+      "candidate_inputs": [
+        {
+          "task_id": "task_8bf4bd055e804c829b5e82ba9ec6f2f3",
+          "attempt_id": "run_38d0dfdd66914c0eab52c7293f839b93",
+          "artifact_digest": "96eb9d75937cc2718c0037fc0b191cd245449b4083ae711a5c02c0a768cd75e2"
+        },
+        {
+          "task_id": "task_1699bbedbfc343ae9b2e6027520e8f65",
+          "attempt_id": "run_120c9d92c5a243c5b6b1b454d6aa2977",
+          "artifact_digest": "08c52bde0a75a800eabce3d86a5f61490a4b9afc215a402c1ae6709756db0009"
+        },
+        {
+          "task_id": "task_299f33bf1a5849ccb2a1519f773b4853",
+          "attempt_id": "run_b93fcb0ae0d240669a625f0e9bdc0447",
+          "artifact_digest": "bdc4972e0c6f340c3b22ddfa50ebe45de03257eebe79ba076595014f25407eda"
+        },
+        {
+          "task_id": "task_0ba61014ca1e41858b2a481a5e691b97",
+          "attempt_id": "run_77909e45dee94127b2f54f3a012c8fb7",
+          "artifact_digest": "cd78510fac100a28d699f4ddb82340092dc42814d1e6505cf594c77b3d18d255"
+        }
+      ],
+      "delivery_gate": null,
+      "next_action": "无需操作。",
+      "artifact_url": "/api/artifacts/run_f48b9d9c32f84da0a37b414f1c259671/"
+    },
+    {
+      "id": "task_7729ea36e63649129589285921c37adf",
+      "title": "Phase3 最终项目门禁（复用既有离线环境）",
+      "status": "integrated",
+      "current_attempt_id": "run_a487306cd131495ca3b80e9689d07363",
+      "artifact_digest": "28a7cbda57329b1cf72b7d49e34774764a15e3490f1ae2c3034b26eccbabc22c",
+      "execution_kind": "command",
+      "task_type": "verification",
+      "priority": 0,
+      "milestone_id": "operator-p3-wiki",
+      "work_item": "最终组合项目门禁",
+      "updated_at": "2026-09-15T05:35:54.133+00:00",
+      "changed_files": [],
+      "changed_files_omitted": 0,
+      "reported_summary": "命令任务完成：node（退出码 0，耗时 916.578s）",
+      "reported_summary_truncated": false,
+      "reported_by": "worker",
+      "platform_verification": {
+        "source": "platform_records",
+        "state": "passed",
+        "attempt_id": "run_a487306cd131495ca3b80e9689d07363",
+        "bound_to_current_attempt": true,
+        "attempt_status": "submitted",
+        "state_reason": null,
+        "program_evidence": [
+          "platform_verification",
+          "platform_command",
+          "candidate_verification"
+        ],
+        "checks_omitted": 0,
+        "exit_code": 0,
+        "artifact_digest": "28a7cbda57329b1cf72b7d49e34774764a15e3490f1ae2c3034b26eccbabc22c",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "state-domain-boundary",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.391,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "module-boundary",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.234,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          },
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 0,
+            "elapsed_seconds": null,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": true,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": true,
+        "worker_report_only": false,
+        "recipe": {
+          "recipe_name": "phase3-final-existing-gates",
+          "recipe_digest": "6f689b2a77ef8ae284c97a076d585fef44a81d150c52e7d585eecef4a7e7956f",
+          "passed": true,
+          "planned_checks": 2,
+          "check_count": 2,
+          "checks_omitted": 0,
+          "interrupted": null,
+          "log_truncated": false,
+          "checks": [
+            {
+              "name": "state-domain-boundary",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.391,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "--experimental-vm-modules",
+                "tests/state-domain-boundary-test.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            },
+            {
+              "name": "module-boundary",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.234,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "tests/module-boundary-test.mjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            }
+          ]
+        },
+        "candidate_verification": {
+          "version": 1,
+          "source": "platform",
+          "state": "passed",
+          "input_digest": "91d24ae791d6c040899f5bbd2575cb021df6a4c907e5ad490a5273ca5e202702",
+          "command_spec_digest": "12a8720b574671d0a47916abcaf007d92f2a65e34ec9cfbe47526785b03b2baf",
+          "recipe_digest": "6f689b2a77ef8ae284c97a076d585fef44a81d150c52e7d585eecef4a7e7956f",
+          "exit_code": 0,
+          "checks_passed": true,
+          "error": null
+        }
+      },
+      "review_wait_seconds": 267.483,
+      "rework_count": 0,
+      "repeated_failure": false,
+      "repeated_failure_signature": null,
+      "rework_summary": null,
+      "review_depends_on": [],
+      "candidate_inputs": [
+        {
+          "task_id": "task_8bf4bd055e804c829b5e82ba9ec6f2f3",
+          "attempt_id": "run_38d0dfdd66914c0eab52c7293f839b93",
+          "artifact_digest": "96eb9d75937cc2718c0037fc0b191cd245449b4083ae711a5c02c0a768cd75e2"
+        },
+        {
+          "task_id": "task_1699bbedbfc343ae9b2e6027520e8f65",
+          "attempt_id": "run_120c9d92c5a243c5b6b1b454d6aa2977",
+          "artifact_digest": "08c52bde0a75a800eabce3d86a5f61490a4b9afc215a402c1ae6709756db0009"
+        },
+        {
+          "task_id": "task_299f33bf1a5849ccb2a1519f773b4853",
+          "attempt_id": "run_b93fcb0ae0d240669a625f0e9bdc0447",
+          "artifact_digest": "bdc4972e0c6f340c3b22ddfa50ebe45de03257eebe79ba076595014f25407eda"
+        },
+        {
+          "task_id": "task_0ba61014ca1e41858b2a481a5e691b97",
+          "attempt_id": "run_77909e45dee94127b2f54f3a012c8fb7",
+          "artifact_digest": "cd78510fac100a28d699f4ddb82340092dc42814d1e6505cf594c77b3d18d255"
+        }
+      ],
+      "delivery_gate": null,
+      "next_action": "无需操作。",
+      "artifact_url": "/api/artifacts/run_a487306cd131495ca3b80e9689d07363/"
+    },
+    {
+      "id": "task_485ecc972ced4a59b75a01f9e945a9a9",
+      "title": "Phase3 当前入口与验收使用说明",
+      "status": "integrated",
+      "current_attempt_id": "run_2a16f0a42b0d4d9dba35241e4e66dc3f",
+      "artifact_digest": "16885a49aad10ea155ec40dff602d3c3b06aa3d3c9cd58d5a9ef4b8e3782e9c0",
+      "execution_kind": "model",
+      "task_type": "documentation",
+      "priority": 0,
+      "milestone_id": "operator-p3-wiki",
+      "work_item": "当前入口与交接",
+      "updated_at": "2026-09-15T05:53:34.549+00:00",
+      "changed_files": [
+        {
+          "path": "README.md",
+          "status": "modified",
+          "sha256": "9af756429ee1817e45ec4ad4b826f593761de1cf112edfb49c97587a2f426969"
+        },
+        {
+          "path": "docs/development/CURRENT_TASK_HANDOFF.md",
+          "status": "modified",
+          "sha256": "6e00ee4bf8d1d265d2c896e20fc01e357cda68a988a5fb4d4be4b453941d9a1d"
+        },
+        {
+          "path": "docs/development/GENERIC_OPERATOR_GOAL.md",
+          "status": "modified",
+          "sha256": "8a91a1c664886f85f5864e149e5cf921dfefebf8ac8d7b4ea3a56710eae0fe84"
+        },
+        {
+          "path": "docs/development/PHASE3_WIKI_ACCEPTANCE.md",
+          "status": "added",
+          "sha256": "435f1bf5f8caa578df19afc64f99deca809e9f3db4a8f877efd8a335086e4cf5"
+        },
+        {
+          "path": "docs/development/README.md",
+          "status": "modified",
+          "sha256": "6a141ae6acfadfa74c06837f84589c4d1fd399eccc0538d31d2dd2acc08a77be"
+        },
+        {
+          "path": "docs/development/REAL_GPU_REGRESSION.md",
+          "status": "modified",
+          "sha256": "4060730901fa478fbad54165198eb5eeaa8de8c7e8d0413ec97f56eb74322995"
+        },
+        {
+          "path": "docs/development/TEAM_HANDOFF.md",
+          "status": "modified",
+          "sha256": "a5b4e4105040b9b58d05ee7d14e86d410888a8440f19f93024d6e2c47c8d4300"
+        }
+      ],
+      "changed_files_omitted": 0,
+      "reported_summary": "按上游文档语义复核（6 项）修正七个读者入口，只改 allowed_paths 内 7 个文件，生产代码/验收 JSON/脚本未动。1) 6 383 字节在 README、docs/development/README、GENERIC_OPERATOR_GOAL、CURRENT_TASK_HANDOFF、TEAM_HANDOFF 顶部入口与 PHASE3_WIKI_ACCEPTANCE §2 统一改述为『两条建议进入最终 prompt，其中经验注入区块 renderedBytes 为 6 383 UTF-8 字节（不是完整 prompt 长度）』。2) REAL_GPU_REGRESSION.md 把最新入口移到标题之后，原首段『still does not certify N=20』改写为『Historical document-status note』并明确标为历史、说明其不适用于当前 HEAD 与 Phase 3 软件批次。3) PHASE3_WIKI_ACCEPTANCE §4.2 改为：线上成功响应是 HTTP 200、JSON body 直接为 {created,updated,unchanged,records,sourceCommit,snapshotDigest}；{statusCode,payload} 仅为内部应用服务封装。4) 删除 CLI『失败不留半成品文件』的绝对承诺，改为输出用独占 wx 标志、不覆盖或截断既有文件，读取/解析/构建失败不产出可用 snapshot 因而不会导入存储；请求体上限写作 1 MiB。5) §3 去掉对 performance_claims 具体存储形态的断言，只保留『不作为选择或测量依据』。6) TEAM_HANDOFF §12 仅保留历史标签与顶部入口链接，删除『新增 import/selection/runtim",
+      "reported_summary_truncated": true,
+      "reported_by": "worker",
+      "platform_verification": {
+        "source": "platform_records",
+        "state": "passed",
+        "attempt_id": "run_2a16f0a42b0d4d9dba35241e4e66dc3f",
+        "bound_to_current_attempt": true,
+        "attempt_status": "submitted",
+        "state_reason": null,
+        "program_evidence": [
+          "platform_verification"
+        ],
+        "checks_omitted": 0,
+        "exit_code": null,
+        "artifact_digest": "16885a49aad10ea155ec40dff602d3c3b06aa3d3c9cd58d5a9ef4b8e3782e9c0",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "current-doc-links-and-expert-authority",
+            "source": "platform_verification",
+            "exit_code": 0,
+            "elapsed_seconds": 0.25,
+            "passed": true,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null
+          }
+        ],
+        "checks_passed": true,
+        "worker_reported_checks": 4,
+        "checks_are_platform_verified": true,
+        "worker_report_only": false,
+        "recipe": {
+          "recipe_name": "p3-current-docs",
+          "recipe_digest": "4092fa02d8dac9e5905be3358e286ecbb5e4eb59ce98fa4d51e225a7ff230ced",
+          "passed": true,
+          "planned_checks": 1,
+          "check_count": 1,
+          "checks_omitted": 0,
+          "interrupted": null,
+          "log_truncated": false,
+          "checks": [
+            {
+              "name": "current-doc-links-and-expert-authority",
+              "source": "platform_verification",
+              "exit_code": 0,
+              "elapsed_seconds": 0.25,
+              "passed": true,
+              "timeout": false,
+              "cancelled": false,
+              "truncated": false,
+              "launch_error": null,
+              "argv": [
+                "node",
+                "docs/development/evidence/p3-wiki-20260915/verify-docs.cjs"
+              ],
+              "argv_omitted": 0,
+              "args_truncated": false
+            }
+          ]
+        },
+        "candidate_verification": null
+      },
+      "review_wait_seconds": 56.729,
+      "rework_count": 1,
+      "repeated_failure": false,
+      "repeated_failure_signature": null,
+      "rework_summary": "历史返工 1 次；最近根因 verification；上游文档语义复核，原配方不变，一次修完：1所有入口6383字节是经验注入区块renderedBytes，不是完整prompt长度；写两条建议进入最终prompt，其中经验区块6383 UTF-8字节。2 REAL_GPU_REGRESSION原第一段still does not certify N20也明确历史，把最新入口放标题后。3 HTTP线上是HTTP200且JSON body为{created,...}；{statusCode,payload}仅内部应用服务。4删除CLI失败不留半成品文件绝对承诺，写wx不覆盖既有文件、解析构建失败不导入存储；请求上限1 MiB。5 performance_claims不作选择/测量依据即可，不断言其具体存储形态。6 TEAM§12只加历史标签/顶部链接，去掉追加8场景全部覆盖映射声称。保持七文件范围、TEAM§6、全部验收JSON/脚本及生产代码",
+      "review_depends_on": [],
+      "candidate_inputs": [],
+      "delivery_gate": null,
+      "next_action": "无需操作。",
+      "artifact_url": "/api/artifacts/run_2a16f0a42b0d4d9dba35241e4e66dc3f/"
+    }
+  ],
+  "total": 8,
+  "has_more": false,
+  "limit": 20,
+  "generated_at": "2026-09-15T05:54:02.407+00:00"
+}

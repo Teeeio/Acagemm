@@ -1,6 +1,23 @@
 # Generic Operator Iteration Goal
 
-> **Current acceptance entry (2026-09-15 UTC, latest)**: on frozen production source
+> **Latest entry (2026-09-15, Phase 3 software batch)**: the **software** implementation of Phase 3
+> (KernelWiki importer + deterministic selection + existing production API/prepare integration) was
+> independently accepted and integrated; the production implementation commit is
+> `bb3ddd5dfbe9285ec982c795ede04595edcf69cf` (only the Root review topic was added afterwards, no
+> further production-code change, and `status.json` is locked). The 31 new cases pass (import 8 /
+> selection 16 / runtime 7) with gates **release 147 / non-hardware 44, exit 0**; the pinned source
+> KernelWiki `b6b4301f…369e6` actually produced 52 pages / 54 units, a second import is a 54/54
+> `unchanged` no-op, and two reviewed sm86 suggestions reached the final prompt, where the injected
+> experience block's `renderedBytes` is 6 383 UTF-8 bytes (**not** the full prompt length),
+> `publishable=false`. **No new live model or GPU business run happened in this batch**: the new
+> production revision has no new live E2E or N20, and the three-condition benefit study (no
+> experience / local experience only / local plus reviewed Wiki) is still **pending** — no
+> performance and no publication claim is made here. Reader notes and the required CLI/HTTP usage:
+> [`PHASE3_WIKI_ACCEPTANCE.md`](PHASE3_WIKI_ACCEPTANCE.md); the single source of truth for every count
+> and failure detail:
+> [`evidence/p3-wiki-20260915/status.json`](evidence/p3-wiki-20260915/status.json).
+>
+> **Previous live-acceptance entry (2026-09-15 UTC, valid only for frozen source `21c6d78`, not for the current HEAD)**: on frozen production source
 > `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948` (git clean), the real regression was independently
 > accepted on the local shared NVIDIA GPU (`sm86`, `publishable=false`): affine smoke 1 run /
 > 2 candidates / 2 observed model calls; **strict N20 20/20 `full_success`, 20/20 independently
@@ -19,8 +36,10 @@
 > [`evidence/closeout-20260915/PORTABLE.md`](evidence/closeout-20260915/PORTABLE.md). The claim is limited to this frozen source, this
 > local shared GPU and the fixed matrices; historical failures/unknowns (the old `83b91d6` strict
 > N20 with 19 comparable + 1 unknown, the no-response/proxy retries, the rejected extra dispatch)
-> remain failures in the original evidence. **Phase 3 (KernelWiki importer + deterministic
-> selector) has not started.** No production-code change and no remote push in this batch; the
+> remain failures in the original evidence. That batch ended at the live regression above and did not
+> touch Phase 3; Phase 3's latest state is the entry above, and the old live result must not be read as
+> evidence for a new HEAD merely because the tree is git clean or later work changed no production
+> code. No production-code change and no remote push in that batch; the
 > term "downstream" refers only to dispatch platform agents, not to the Acagemm runtime agent.
 > Everything below dated 2026-09-12 or earlier is historical.
 >
@@ -49,8 +68,9 @@
 > real-run observation/ledger rules are in [`REAL_GPU_REGRESSION.md`](REAL_GPU_REGRESSION.md).
 > **Phase 2 hardware-free acceptance passed:** release 136 and non-hardware 38 checks, exit 0;
 > all 485 recorded source/test files retained their pre-run hashes. There was no new live run,
-> N=20 result or publication claim. **Phase 3 (KernelWiki importer + deterministic selector, §14 item 7) has not
-> started.** The historical 2026-09-07/09-09 checkpoints above keep their original wording.
+> N=20 result or publication claim. **Phase 3 (KernelWiki importer + deterministic selector, §14 item 7) had not
+> started at that time** — its latest state is the 2026-09-15 entry at the top. The historical 2026-09-07/09-09
+> checkpoints above keep their original wording.
 
 ## Consensus (2026-09-07, resumed after explicit user confirmation)
 

@@ -1,0 +1,7 @@
+{
+  "chunk_id": "5ae0f1",
+  "wall_time_seconds": 0.0000019,
+  "exit_code": 1,
+  "original_token_count": 269,
+  "output": "[import-kernel-wiki] source F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\kernel-wiki @ b6b4301f15e8ce6955a56776690643ce5db369e6\n[import-kernel-wiki] pages 52, units 54, snapshotDigest d33ce58a833b00b3ed78555e7cf84346b7a2a5d6479d050ab3739d4439859f91\n[import-kernel-wiki] wrote F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p3-wiki-20260915\\snapshot-2.json\n[import-kernel-wiki] snapshot only: no live Runtime storage was written; import it through the production HTTP API.\nCLI byte-identical SHA256=854EB00BCB383ABC26627EF90EFC1DA54E05D7CBBB562BBF214FDF68663DBAA0\r\nnode:internal/modules/run_main:123\r\n    triggerUncaughtException(\r\n    ^\r\n\r\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\r\n\r\n1 !== 2\r\n\r\n    at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/acagemm%E5%8E%9F%E5%9E%8B/.operator-studio-local/p3-wiki-20260915/real-source-audit.mjs:37:87 {\r\n  generatedMessage: true,\r\n  code: 'ERR_ASSERTION',\r\n  actual: 1,\r\n  expected: 2,\r\n  operator: 'strictEqual',\r\n  diff: 'simple'\r\n}\r\n\r\nNode.js v22.23.2\r\n"
+}

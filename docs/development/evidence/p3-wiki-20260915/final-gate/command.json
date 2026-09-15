@@ -1,0 +1,19 @@
+{
+  "execution_kind": "command",
+  "argv": [
+    "node",
+    "-e",
+    "const{spawnSync}=require('node:child_process');process.env.OPERATOR_RUNTIME_DIR=process.argv[1];process.env.OPERATOR_BRIDGE_DIR=process.argv[2];process.env.OPERATOR_DATA_DIR=process.argv[3];process.env.OPERATOR_AUTO_TICK='0';process.env.npm_execpath='F:/Node/node_modules/npm/bin/npm-cli.js';const checks=[['docs/development/run-diagnostics-offline-deps.cjs'],['tests/kernel-wiki-import-test.mjs'],['tests/experience-selection-test.mjs'],['tests/kernel-wiki-runtime-test.mjs'],['scripts/verify-local-c500-release.mjs'],['scripts/verify-non-hardware-robustness.mjs']];for(const args of checks){console.log('DISPATCH_PROGRESS '+JSON.stringify({check:['node',...args],state:'start'}));const r=spawnSync(process.execPath,args,{stdio:'inherit',windowsHide:true,timeout:1800000});console.log('DISPATCH_PROGRESS '+JSON.stringify({check:['node',...args],exitCode:r.status,error:r.error?.message}));if(r.status!==0)process.exit(r.status||1);}",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_a487306cd131495ca3b80e9689d07363\\scratch/runtime",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_a487306cd131495ca3b80e9689d07363\\scratch/bridge",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_a487306cd131495ca3b80e9689d07363\\scratch/data"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 916.578,
+  "cancelled": false,
+  "timeout": false,
+  "progress": null,
+  "log_truncated": false,
+  "started_at": "2026-09-15T05:13:28.173+00:00",
+  "ended_at": "2026-09-15T05:28:44.752+00:00"
+}

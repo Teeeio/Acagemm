@@ -1,0 +1,2125 @@
+{
+  "schemaVersion": "operator-studio.kernel-wiki-snapshot/v1",
+  "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+  "units": [
+    {
+      "unitId": "hw-2sm-cooperative",
+      "title": "Two-CTA Cooperative MMA",
+      "content": "# Two-CTA cooperative MMA\n\n`tcgen05` operations with `cta_group::2` act on a CTA pair. One thread from the pair can initiate an MMA while the peer CTA is active; the operation touches TMEM belonging to both CTAs. NVIDIA uses **TPC** to mean **Texture Processing Cluster**, not “Two Processing Clusters.”\n\n```ptx\ntcgen05.mma.cta_group::2.kind::f16\n    [d_tmem], a_desc, b_desc, idesc, enable_input_d;\n```\n\n## Correctness constraints\n\n- The CTAs must form a valid CTA pair and the peer must remain active when the operation is issued.\n- All `tcgen05` instructions in the kernel must use the same CTA-group value.\n- Allocation management for `cta_group::2` is collective across one fully active warp in each peer CTA; the first warp may block until its peer executes the matching operation.\n- Paired TMEM and shared-memory operands must follow the selected instruction’s addressing and layout tables.\n- Cross-CTA synchronization and lifetime rules must be satisfied before a peer exits or its memory is reused.\n\nWhether the paired form is faster is workload- and configuration-dependent. Compare it with a one-CTA form using the same datatype, problem, layout, clock conditions, and reporting convention.\n\n---\nSource: KernelWiki wiki/hardware/2sm-cooperative.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/2sm-cooperative.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/hardware/2sm-cooperative.md",
+        "pageId": "hw-2sm-cooperative",
+        "sourceDigest": "165461cd3978e4709441c7509715ac15dab44ebf86d5000bce56f412958a3cd3",
+        "unitDigest": "978bdecddeb5f789c6a57b50cf1db43693c0e6bf026c3a49e608f4b0344cdb44",
+        "type": "hardware",
+        "topics": [
+          "2sm-cooperative",
+          "tcgen05",
+          "cluster"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/2sm-cooperative.md"
+      ]
+    },
+    {
+      "unitId": "hw-clc",
+      "title": "Cluster Launch Control (CLC)",
+      "content": "# Cluster Launch Control (CLC)\n\nCluster Launch Control lets a running CTA request cancellation of a cluster from the same grid that has not launched yet. The request is atomic and asynchronous. If it succeeds, the response contains the CTA ID of the first CTA in the canceled cluster; a persistent scheduler can map that ID to the work that the running CTA or cluster will execute next.\n\nThe current PTX ISA says `clusterlaunchcontrol.try_cancel` requires an\n`sm_100` target or higher. Product support and performance should still be\nchecked with the toolkit and device actually used.\n\nThis is work acquisition, not cancellation of a chosen output tile. The instruction does not take a tile coordinate and does not discard completed or unwanted results.\n\n## PTX protocol\n\nThe PTX ISA defines the request shape as:\n\n```ptx\nclusterlaunchcontrol.try_cancel.async{.shared::cta}\n    .mbarrier::complete_tx::bytes{.multicast::cluster::all}.b128\n    [response_addr], [mbarrier_addr];\n```\n\nThe operation writes an opaque 16-byte response to shared memory and completes through an mbarrier transaction. After waiting for completion, code loads the response and uses:\n\n```ptx\nclusterlaunchcontrol.query_cancel.is_canceled.pred.b128 p, response;\n@p clusterlaunchcontrol.query_cancel.get_first_ctaid.v4.b32.b128\n    {x, y, z, ignored}, response;\n```\n\n`get_first_ctaid` is valid only after a successful request. After a CTA observes a failed request, issuing another `try_cancel` from that CTA has undefined behavior.\n\n## Scheduling consequences\n\n- The original grid still defines the available cluster IDs and work domain.\n- Successful cancellation prevents one not-yet-launched cluster from running and transfers its identity to already-running work.\n- This can reduce replacement-launch overhead and help a persistent scheduler redistribute uneven work, but it cannot create parallelism after fewer independent work items remain than resident SMs.\n- Cluster dimensions, response storage, mbarrier accounting, and proxy ordering are correctness requirements, not optional tuning details.\n\nSee PTX ISA §9.7.14.18 for [`clusterlaunchcontrol.try_cancel`](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol-try-cancel) and §9.7.14.19 for [`clusterlaunchcontrol.query_cancel`](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol-query-cancel), including the complete sequence and qualifiers.\n\n---\nSource: KernelWiki wiki/hardware/clc.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/clc.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/hardware/clc.md",
+        "pageId": "hw-clc",
+        "sourceDigest": "473bc5f52fd287da2a13d8d0b14019fe2f5eb059eb7a02e52cf017f87396861e",
+        "unitDigest": "dec3b1bad27c315ba6bce247fb5c136d6d485029c6e612344324166542ee2e3e",
+        "type": "hardware",
+        "topics": [
+          "clc",
+          "persistent-kernel",
+          "tile-scheduling"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm103",
+          "sm110",
+          "sm120",
+          "sm121"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/clc.md"
+      ]
+    },
+    {
+      "unitId": "hw-mbarrier",
+      "title": "mbarrier (Memory Barrier Primitives)",
+      "content": "# mbarrier\n\nAn mbarrier is a shared-memory barrier object with phase tracking. The primitive was introduced for `sm_80` in PTX ISA 7.0. Hopper-era PTX added transaction-count operations used by asynchronous bulk copies; Blackwell operations such as CLC and `tcgen05.commit` also use mbarrier completion mechanisms.\n\n## Two accounting dimensions\n\n- **Arrival count:** participating threads or agents arrive until the pending count reaches zero.\n- **Transaction count:** `expect_tx` adds expected asynchronous bytes; a completing asynchronous operation reduces that count.\n\nThe phase completes only when both forms of pending work satisfy the instruction’s rules. Reusing an object requires tracking its phase/parity and respecting invalidation and memory-ordering requirements.\n\n```ptx\nmbarrier.init.shared::cta.b64 [bar], arrivals;\nmbarrier.arrive.expect_tx.shared::cta.b64 state, [bar], expected_bytes;\n// issue the asynchronous operation that names [bar]\nwait:\nmbarrier.try_wait.parity.shared::cta.b64 ready, [bar], phase;\n@!ready bra wait;\n```\n\nExact qualifiers vary with scope and PTX version. An asynchronous engine’s completion transaction must not be replaced by an extra manual arrival. Likewise, an `expect_tx` call is not itself proof that the associated copy was issued or completed.\n\n---\nSource: KernelWiki wiki/hardware/mbarrier.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/mbarrier.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/hardware/mbarrier.md",
+        "pageId": "hw-mbarrier",
+        "sourceDigest": "7430a29687bb72e4ad4ab362cc0b9bc2421bd6950bc2f9cb64e4668d08d5ea33",
+        "unitDigest": "4f234012f57fd17d57201a8a6517c1c11938799233bbf6ab03855bb3b60a8d4d",
+        "type": "hardware",
+        "topics": [
+          "mbarrier",
+          "tma"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a",
+          "sm90",
+          "sm90a",
+          "sm80"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/mbarrier.md"
+      ]
+    },
+    {
+      "unitId": "hw-nvfp4",
+      "title": "NVFP4 and block-scaled narrow precision",
+      "content": "# NVFP4 and block-scaled narrow precision\n\nNVFP4 stores signed E2M1 values and supplies finer-grained scale metadata. The\nGPU Mode task prose labels each per-16 scale `fp8(e4m3fnuz)`, while the\norganizer's executable reference constructs the same scale tensors as\n`torch.float8_e4m3fn`. Both contest input tuples expose only those per-16 scale\ntensors (plus permuted views for the executable path); they do not expose a\nseparate tensor-level scale input. The organizer artifacts disagree on the\nsigned FP8 encoding name. Neither name is a synonym for PTX `ue4m3`, which PTX\n9.3 defines as a 7-bit unsigned format, and the contest's per-16 scaling is\nalso distinct from MXFP4's block-32 UE8M0 scaling.\n\nSM100 PTX exposes separate block-scale MMA kinds rather than one generic FP4\nform:\n\n- `kind::mxf8f6f4.block_scale` for MX FP8/FP6/FP4 combinations;\n- `kind::mxf4.block_scale` for MXFP4;\n- `kind::mxf4nvf4.block_scale` for the supported MXFP4/NVFP4 combinations.\n\nThe instruction descriptor, operand descriptors, scale-factor descriptor, and\nscale layouts must all agree with the chosen kind. An NVFP4 scale must not be\nsilently renamed or rounded to another encoding and then described as\nequivalent NVFP4 arithmetic.\n\nThe former per-opcode “4× versus Hopper” table was removed. Product-level peak\nthroughput comparisons do not establish the throughput of every instruction\nshape or an application speedup.\n\n---\nSource: KernelWiki wiki/hardware/nvfp4.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/nvfp4.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/hardware/nvfp4.md",
+        "pageId": "hw-nvfp4",
+        "sourceDigest": "4ec17b698f4affd08fe57c3d594c6f0360d444e8b3b2edffdc48d64c7f7f0477",
+        "unitDigest": "49b8565877a78bf556cd91800993260ba7fcbe74299ea0f235316f8301b91e29",
+        "type": "hardware",
+        "topics": [
+          "nvfp4",
+          "fp4",
+          "block-scale",
+          "fp8",
+          "fp6"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/nvfp4.md"
+      ]
+    },
+    {
+      "unitId": "hw-pdl-gdc",
+      "title": "Programmatic Dependent Launch / Grid Dependency Control",
+      "content": "## Overview\n\nProgrammatic Dependent Launch (PDL), also called Grid Dependency Control in\nsome libraries, can let a dependent kernel begin its independent prologue before\nthe preceding kernel in the same stream has finished. The CUDA Programming\nGuide makes the feature available starting at compute capability 9.0; it is not\na Blackwell-only mechanism.\n\n## Required protocol\n\n1. Every block of the primary kernel calls\n   `cudaTriggerProgrammaticLaunchCompletion()` after producing everything\n   needed to permit the secondary launch.\n2. The host submits the secondary with\n   `cudaLaunchAttributeProgrammaticStreamSerialization` enabled through the\n   extensible launch API.\n3. The secondary may perform work that does not consume the primary's results,\n   then calls `cudaGridDependencySynchronize()` before dependent work.\n\nIf a primary block does not call the trigger, its trigger occurs implicitly\nwhen that block exits. The secondary may start before the primary's writes are\nvisible, which is why the secondary-side dependency synchronization (or another\ndocumented way to verify availability) is required.\n\n## Limits\n\n- The runtime is permitted, but not required, to overlap the launches.\n- Ordinary back-to-back launches do not opt into PDL by themselves.\n- Correctness and progress must not depend on concurrent execution; resource\n  pressure may serialize the kernels.\n- A speedup requires useful independent secondary work and enough resources for\n  overlap. Measure the actual kernel pair rather than assuming that PDL reduces\n  wall-clock time.\n\n## Related\n- [persistent-kernels](../techniques/persistent-kernels.md) — Alternative approach to reducing launch overhead\n- [clc](clc.md) — A distinct same-grid cluster-cancellation mechanism\n\n---\nSource: KernelWiki wiki/hardware/pdl-gdc.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/pdl-gdc.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/hardware/pdl-gdc.md",
+        "pageId": "hw-pdl-gdc",
+        "sourceDigest": "265261be982b22a5624faeb295094f03e0c0d1bc9270010db9b17d8c86afef65",
+        "unitDigest": "ce7a49645799258caa32488da79bacbcec9a54496308366fd3ace9220d3f27ed",
+        "type": "hardware",
+        "topics": [
+          "pdl",
+          "gdc"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm90",
+          "sm100",
+          "sm120"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/pdl-gdc.md"
+      ]
+    },
+    {
+      "unitId": "hw-tcgen05-mma",
+      "title": "tcgen05.mma — Fifth-Generation Tensor Core MMA",
+      "content": "# tcgen05.mma\n\n`tcgen05.mma` starts an asynchronous fifth-generation Tensor Core matrix multiply-accumulate. Its operation is `D = A × B + D`; an input predicate can instead select `D = A × B`.\n\n## Operand and issue model\n\n| Matrix | Permitted storage |\n| --- | --- |\n| A | Shared memory descriptor or TMEM address |\n| B | Shared memory descriptor |\n| D / accumulator | TMEM address |\n\nFor `cta_group::1`, one thread in the CTA issues the whole MMA. For `cta_group::2`, one thread from the CTA pair issues it while the peer CTA is active. This single-thread issue rule is specific to MMA-like operations; TMEM allocation, deallocation, loads, and stores have warp-collective rules.\n\nThe 32-bit `idesc` operand is mandatory. It encodes matrix dimensions, exact types, sparsity, and other operation details; it is not an optional scale descriptor. A representative unscaled form is:\n\n```ptx\ntcgen05.mma.cta_group::1.kind::f16\n    [d_tmem], a_desc, b_desc, idesc, enable_input_d;\ntcgen05.commit.cta_group::1.mbarrier::arrive::one.b64 [mma_done];\n```\n\nThe commit instruction provides an mbarrier-based completion path for earlier asynchronous `tcgen05.mma` operations issued by the same thread.\n\n## Instruction kinds\n\nThe PTX ISA lists unscaled kinds `f16`, `tf32`, `f8f6f4`, and `i8`. Block-scaled forms use `mxf8f6f4`, `mxf4`, or `mxf4nvf4` with the `.block_scale` syntax and explicit TMEM scale-factor matrices. There is no standalone `kind::mxf8`. `mxf4nvf4` denotes support for MXFP4 and NVIDIA’s scaled 4-bit format; it does not prescribe MXFP4 for one operand and NVFP4 for the other.\n\n## Shared-memory layouts\n\nMatrix descriptors describe both addressing and swizzling. Supported layouts include non-swizzled and several swizzled forms, subject to each instruction’s shape and alignment constraints. Correctness requires the descriptor to match the physical shared-memory layout; 128-byte swizzling is a common high-throughput choice, not a universal requirement.\n\nExact shapes, packing, scale-vector sizes, sparse forms, and architecture targets vary by instruction kind and PTX version. Consult the PTX tables instead of extrapolating a single GEMM configuration.\n\n## Performance evidence\n\nThe separate [tcgen05 tutorial source page](../../sources/blogs/tcgen05-tutorial.md) records one author’s staged B200 GEMM results. Those numbers characterize that implementation and benchmark, not the instruction in general.\n\n---\nSource: KernelWiki wiki/hardware/tcgen05-mma.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/tcgen05-mma.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/hardware/tcgen05-mma.md",
+        "pageId": "hw-tcgen05-mma",
+        "sourceDigest": "6bf66b0713b9203a04a2261b7812a0213382315731a9c3d7673c82901c42c5a9",
+        "unitDigest": "2d610c400d859314b63515efa31c4a0528dd9e20d6e6f63a4ef7c0f4298afe14",
+        "type": "hardware",
+        "topics": [
+          "tcgen05",
+          "tmem",
+          "mbarrier"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/tcgen05-mma.md"
+      ]
+    },
+    {
+      "unitId": "hw-tma",
+      "title": "Tensor Memory Accelerator (TMA)",
+      "content": "# Tensor Memory Accelerator (TMA)\n\nTMA is the descriptor-driven asynchronous bulk-copy path introduced with Hopper and retained on Blackwell. A thread issues a tensor copy; hardware performs multidimensional address generation and the transfer without a per-element load/store loop in the issuing thread.\n\n## Programming contract\n\n- A tensor-map descriptor supplies global shape, strides, element format, bounds behavior, and any shared-memory swizzle.\n- Global-to-shared tensor copies complete through an mbarrier transaction-count mechanism. Consumers must wait for that completion before reading the destination.\n- Shared-to-global copies have their own completion and ordering rules; do not reuse a global-to-shared barrier recipe by analogy.\n- Cluster multicast targets shared memory in multiple CTAs and requires a valid cluster configuration and mask.\n- Descriptor base-address, stride, box-size, and alignment constraints depend on rank, element type, swizzle, and instruction form.\n\nA representative global-to-shared form is:\n\n```ptx\ncp.async.bulk.tensor.2d.shared::cluster.global.tile\n    .mbarrier::complete_tx::bytes\n    [smem_dst], [tensor_map, {x, y}], [mbarrier_addr];\n```\n\n## Swizzling\n\nTMA supports multiple swizzle modes. The shared-memory layout constructed by the program must match the mode encoded in the descriptor. A 128-byte swizzle can be effective for a particular tile, but `tcgen05.mma` does not universally require it: non-swizzled, 32-byte, and 64-byte layouts are also represented by supported descriptor/layout forms when their shape constraints are satisfied.\n\nUse the CUDA Driver API tensor-map documentation and the PTX ISA for exact encoding constraints. CUTLASS and CuTe helpers are preferable when they cover the intended layout because they construct matching tensor maps and shared-memory views together.\n\n---\nSource: KernelWiki wiki/hardware/tma.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/tma.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/hardware/tma.md",
+        "pageId": "hw-tma",
+        "sourceDigest": "4b2091655caf54171c5ec914bfe79a8c5fff42505ec6553c723db07e14faea03",
+        "unitDigest": "f8dc5b807d81cb5261e8bae0d4ab10c595fe70e9a7eeb58b3ab8b0e3164886f5",
+        "type": "hardware",
+        "topics": [
+          "tma",
+          "mbarrier"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a",
+          "sm90",
+          "sm90a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/tma.md"
+      ]
+    },
+    {
+      "unitId": "hw-tmem",
+      "title": "Tensor Memory (TMEM)",
+      "content": "# Tensor Memory (TMEM)\n\nTensor Memory is dedicated on-chip storage used by fifth-generation Tensor Core operations. For `sm_100a`/`sm_100f`, the PTX ISA exposes a CTA-visible two-dimensional view with 512 columns, 128 lanes, and 32-bit cells. That view contains 262,144 bytes of cells, but the ISA defines it per CTA and does not specify a physical “bytes per SM” capacity.\n\nA TMEM address encodes a lane index and a column index; it is not a generic-memory pointer. `tcgen05.mma` writes its D matrix to TMEM. Depending on the instruction form, A may come from shared memory or TMEM, while B comes from shared memory.\n\n## Allocation contract\n\n- Allocation and deallocation are in columns. The unit is 32 columns; the count must be a power of two in the inclusive range 32–512.\n- `tcgen05.alloc` and `tcgen05.dealloc` are warp-collective `.sync.aligned` instructions. Every active lane in the selected warp must execute with the same operands; a single-lane `threadIdx.x == 0` guard is invalid.\n- `tcgen05.alloc` writes the allocated address to a shared-memory destination. Code must make that weak shared-memory store visible before other threads consume it.\n- Every allocation must be explicitly deallocated before kernel exit. Repeated allocations within a CTA must not request a larger column count than an earlier allocation.\n- `tcgen05.ld` and `tcgen05.st` are also warp-collective; a warp accesses its permitted lane slice, so a warpgroup is required to cover all 128 lanes.\n\nThe exact fence, proxy, and completion sequence depends on the operation. Use the PTX ISA or the corresponding CUTLASS/CuTe abstraction rather than a generic inline-assembly template.\n\n## Primary references\n\n- [PTX ISA: Tensor Memory](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensor-memory)\n- [PTX ISA §9.7.17.7: allocation and management](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-memory-alloc-manage-instructions)\n- [CUTLASS CuTe DSL documentation compilation](../../sources/docs/cutlass-cute-dsl.md)\n\n---\nSource: KernelWiki wiki/hardware/tmem.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/tmem.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/hardware/tmem.md",
+        "pageId": "hw-tmem",
+        "sourceDigest": "60f69e72b1003334aa2ab3af03a682fdfc961b678a49c5754b18eb062c006dfa",
+        "unitDigest": "323870f1b9c06826803978184725d78bf090a787827ccdcbb18076831cc3ddc6",
+        "type": "hardware",
+        "topics": [
+          "tmem",
+          "tcgen05"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/hardware/tmem.md"
+      ]
+    },
+    {
+      "unitId": "kernel-deepgemm",
+      "title": "DeepGEMM — runtime-JIT tensor-core kernels",
+      "content": "# DeepGEMM — runtime-JIT tensor-core kernels\n\nDeepGEMM supplies dense and grouped tensor-core kernels for SM90 and SM100. Its\ncurrent README documents different layout and scale contracts on the two\narchitectures: SM90 uses FP32 scales and NT inputs, while SM100 uses packed\nUE8M0 scales and supports four A/B layout combinations.\n\n## Verbatim SM100 anchor\n\nThe retained artifact is pinned to DeepGEMM commit\n`891d57b4db1071624b5c8fa0d1e51cb317fa709f`. This contiguous excerpt from\n`sm100_fp8_gemm_1d1d.cuh` shows that the implementation builds a block-scaled\ninstruction descriptor and passes it, scale-factor TMEM columns, and operand\ndescriptors through a typed MMA wrapper:\n\n```cpp\nconst auto& runtime_instr_desc =\n    make_runtime_instr_desc_with_sf_id(instr_desc, sfa_id, sfb_id);\nb_desc.lo = advance_umma_desc_lo<kMajorB, LOAD_BLOCK_N, kSwizzleBMode, b_dtype_t>(\n    b_desc_base_lo, 0, k * UMMA_K);\nmma_t::fma(a_desc, b_desc,\n           accum_stage_idx * kNumMWaves * BLOCK_N + w * BLOCK_N,\n           k_block_idx > 0 or k > 0, runtime_instr_desc,\n           kTmemStartColOfSFA + w * (kNumUTCCPAlignedElems / 32),\n           kTmemStartColOfSFB);\n```\n\nThis is not a standalone kernel. It deliberately replaces the former invalid\ninline-PTX sketch, which omitted required descriptors and used the wrong MMA\nkind for block scaling.\n\n## Grouped layouts and JIT boundary\n\nThe public API distinguishes contiguous and masked M-grouped layouts plus a\nK-grouped weight-gradient API. Those layouts have different shape/alignment\ncontracts; “grouped GEMM” is not one generic pointer-array ABI. Current\nDeepGEMM compiles kernels at runtime through its JIT module, with NVCC as the\ndocumented default and NVRTC as an opt-in path.\n\n## Performance boundary\n\nThe project README reports up to 1550 TFLOPS on H800 in its 2025-04-18 news\nentry. Because that line does not specify a matrix shape, this page preserves it\nonly as a source-reported maximum with an explicit unknown-shape boundary.\n\nThe exact retained files and hashes are recorded in\n`artifacts/kernels/deepgemm/full/PROVENANCE.yaml`. The former derived\n“Nc=128” teaching file was removed because it presented illustrative code as if\nit were the library implementation.\n\n---\nSource: KernelWiki wiki/kernels/deepgemm.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/deepgemm.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/deepgemm.md",
+        "pageId": "kernel-deepgemm",
+        "sourceDigest": "b12aaae54001c45c3135553fb4922050051859afee893f8d1f01a8e569496b61",
+        "unitDigest": "d175f345e1f252039e04cc3a779c42e614dec84fde63b7bb4e8880b3a30b8cff",
+        "type": "kernel",
+        "topics": [
+          "gemm",
+          "fp8",
+          "fp4",
+          "fine-grained-quantization",
+          "block-scale",
+          "grouped-gemm"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/deepgemm.md"
+      ]
+    },
+    {
+      "unitId": "kernel-flash-attention-4",
+      "title": "FlashAttention-4",
+      "content": "# FlashAttention-4\n\nFlashAttention-4 is a Blackwell attention implementation written in CuTe DSL. Its design responds to asymmetric scaling from Hopper to Blackwell: tensor-core throughput increased more quickly than shared-memory bandwidth and the special-function resources used by softmax.\n\n## Forward pipeline\n\n- A CTA processes two query tiles in a ping-pong schedule to overlap matrix multiplication, softmax, and memory operations.\n- Dedicated softmax warpgroups operate on attention intermediates held in TMEM.\n- Exponential work is distributed across the hardware MUFU path and a Cody-Waite/Horner software approximation on FMA units.\n- A correction warpgroup performs conditional online-softmax rescaling outside the main critical stage.\n\n## Backward pipeline\n\n- Intermediate results are retained in TMEM to reduce shared-memory traffic.\n- The two-CTA MMA mode lets paired CTAs cooperate and reduces the shared-memory traffic and global atomic reduction described by the authors.\n- The implementation also supports a deterministic scheduling mode for reproducible training.\n\n## Reported performance\n\nThe paper reports up to **1613 TFLOPS** in BF16 on B200 across its benchmark sweep, corresponding to **71%** utilization in that reported setting. The author blog separately reports up to 1605 TFLOPS and comparisons of up to 1.3× over cuDNN 9.13 and up to 2.7× over the tested Triton implementation. These are source-reported benchmark maxima, not guarantees for an arbitrary attention shape.\n\n## Reproduction boundary\n\nUse the authors' linked implementation and benchmark configuration for reproduction. Earlier local pseudo-code and the local “full implementation” bundle were removed because they were not a verbatim FA4 implementation: the purported full file came from an unrelated CUTLASS MLA-backward PR.\n\nAt the implementation commit pinned by `doc-flash-attention-4`, the public API\nREADME gives this minimal invocation:\n\n```python\nfrom flash_attn.cute import flash_attn_func, flash_attn_varlen_func\n\nout = flash_attn_func(q, k, v, causal=True)\n```\n\nThis is a verbatim usage excerpt, not a self-contained benchmark. Shapes,\ndtypes, installation, and correctness checks still have to follow the pinned\nupstream implementation.\n\n## Sources\n\n- [FlashAttention-4 paper](https://arxiv.org/abs/2603.05451)\n- [FlashAttention-4 author blog](https://tridao.me/blog/2026/flash4/)\n\n---\nSource: KernelWiki wiki/kernels/flash-attention-4.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/flash-attention-4.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/flash-attention-4.md",
+        "pageId": "kernel-flash-attention-4",
+        "sourceDigest": "b5e3ac28ba87734e16c9e11bbc3440f544a5bf04bb531d6ae01a56b36395996c",
+        "unitDigest": "54268058bc565aa10299cfed869a772e1e7a965a693ad99e530bd9350f0cb622",
+        "type": "kernel",
+        "topics": [
+          "attention",
+          "flash-attention",
+          "tcgen05",
+          "tmem",
+          "2sm-cooperative",
+          "software-exp"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/flash-attention-4.md"
+      ]
+    },
+    {
+      "unitId": "kernel-flash-attention-sm100-mla-topk",
+      "title": "FlashAttention SM100 MLA TopK Sparse Forward",
+      "content": "## Shape\n\nFlashAttention PR 2441 adds an SM100 CuTe DSL forward path for MLA shapes with\ntop-k sparsity. It is useful when an attention candidate has to combine page/KV\nlayout handling, sparse top-k selection, and tiled forward scheduling.\n\n```python\nfor i in cutlass.range_constexpr(entries_per_thread):\n    topk_idx = rTopk[i]\n    if const_expr(not self.disable_bitmask):\n        row_valid = topk_idx >= 0 and topk_idx < self.seqlen_k_limit\n        tPrRowValid[i] = row_valid\n    if const_expr(not transpose):\n        tPrXPtr[i] = utils.elem_pointer(mX, (topk_idx, 0)).toint()\n    else:\n        tPrXPtr[i] = utils.elem_pointer(mX, (0, topk_idx)).toint()\n```\n\nThis is a contiguous excerpt from `topk_gather_kv.py` in the retained PR\nsnapshot. It is implementation context, not a standalone benchmark. The full\nsnapshot and PR tests are required to exercise the path.\n\n## Transfer Notes\n\n- Treat top-k gather and tiled attention scheduling as separate evidence paths.\n- Profile memory traffic separately from tensor-pipe utilization; sparse top-k\n  routing can improve arithmetic work while worsening gather locality.\n- Keep full-workload validation because the useful path is shape-specific.\n\n---\nSource: KernelWiki wiki/kernels/flash-attention-sm100-mla-topk.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/flash-attention-sm100-mla-topk.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/flash-attention-sm100-mla-topk.md",
+        "pageId": "kernel-flash-attention-sm100-mla-topk",
+        "sourceDigest": "ecd85fc1e089bf7c36f6572978381394caced68b2f0c6953b3f0c4491936f7d9",
+        "unitDigest": "a160f2284d6137766a2737d875916cc4af535900d58948b6a6ebe7ad3bed47a5",
+        "type": "kernel",
+        "topics": [
+          "attention",
+          "flash-attention",
+          "mla",
+          "sparse-attention",
+          "tma",
+          "tile-scheduling",
+          "top-k-selection"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/flash-attention-sm100-mla-topk.md"
+      ]
+    },
+    {
+      "unitId": "kernel-flashmla",
+      "title": "FlashMLA attention kernels",
+      "content": "# FlashMLA attention kernels\n\nFlashMLA is DeepSeek's upstream library for dense and token-sparse attention\nkernels used by DeepSeek-V3 and V3.2. “MLA” in the repository's support matrix\nhas different modes: decode uses MQA-shaped latent attention, while its dense\nSM100 prefill entry is MHA. Preserve that distinction when comparing kernels.\n\n## Reproducible API boundary\n\nThe pinned upstream README gives this decode flow:\n\n```python\ntile_scheduler_metadata, num_splits = get_mla_metadata(\n    cache_seqlens, s_q * h_q // h_kv, h_kv, h_q, is_fp8, topk\n)\no_i, lse_i = flash_mla_with_kvcache(\n    q_i, kvcache_i, block_table, cache_seqlens, dv,\n    tile_scheduler_metadata, num_splits,\n    is_causal, is_fp8_kvcache, indices,\n)\n```\n\nThis is an upstream usage excerpt, not a complete benchmark. Use the repository\ntests named by the README and the matching CUDA/toolkit requirements.\n\n## Layout and benchmark boundaries\n\nThe documented FP8 decode cache is 656 bytes per token: 512 E4M3 values, four\nFP32 scales, and 64 BF16 RoPE values. Sparse decode's indices encode the page\nblock and within-page offset; invalid values are `-1`.\n\nThe retained B200 prefill maxima are 1460 TFLOPS for dense MHA forward and 1450\nTFLOPS for sparse MLA forward. They come from different benchmark suites and\nmust not be interpreted as a controlled dense-versus-sparse comparison.\n\nThe former `artifacts/kernels/flashmla` bundle was removed because its files\nwere sourced from CUTLASS and FlashInfer PRs rather than the FlashMLA repository.\n\n---\nSource: KernelWiki wiki/kernels/flashmla.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/flashmla.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/flashmla.md",
+        "pageId": "kernel-flashmla",
+        "sourceDigest": "4ad5324a8da6bb4b6237dbf5edb620a1aae161b8bcff9824202b7c7af423e07a",
+        "unitDigest": "1488b90c4324188b57ee57d8eb7d2f0fe05fe91f07e3cce775ee54097e677fa8",
+        "type": "kernel",
+        "topics": [
+          "mla",
+          "attention",
+          "decode",
+          "prefill",
+          "fp8",
+          "sparse-attention"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/flashmla.md"
+      ]
+    },
+    {
+      "unitId": "kernel-fp8-block-scale-gemm",
+      "title": "FP8 block-scale GEMM",
+      "content": "# FP8 block-scale GEMM\n\nAn FP8 block-scale GEMM multiplies low-precision operands while applying scale\nmetadata at a granularity finer than the full tensor. The exact granularity,\nscale type, layout, promotion policy, and accumulator behavior belong to the\nselected implementation; they must not be combined from different libraries.\n\nCUTLASS PR 2139's Blackwell example wires scale layouts into its collective\nbuilder. This contiguous excerpt is a reproducible configuration fragment:\n\n```cpp\nusing ScaleConfig = decltype(\n    cutlass::detail::sm100_trivial_blockwise_scale_config(MmaTileShape_MNK{}));\nusing LayoutSFA = decltype(ScaleConfig::deduce_layoutSFA());\nusing LayoutSFB = decltype(ScaleConfig::deduce_layoutSFB());\nusing CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder<\n    cutlass::arch::Sm100, cutlass::arch::OpClassTensorOp,\n    ElementA, cute::tuple<LayoutA, LayoutSFA>, AlignmentA,\n    ElementB, cute::tuple<LayoutB, LayoutSFB>, AlignmentB,\n    ElementAccumulator, MmaTileShape_MNK, ClusterShape_MNK,\n    cutlass::gemm::collective::StageCountAutoCarveout<\n        static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>,\n    cutlass::gemm::KernelTmaWarpSpecializedBlockwise1SmSm100\n>::CollectiveOp;\n```\n\nThe full retained PR artifact is the executable source. The former raw-PTX block\nwas removed because it omitted the required instruction descriptor and did not\nmatch the official block-scale operand form.\n\nDeepGEMM's README reports up to 1550 TFLOPS on H800 without naming the shape in\nthat news entry. It remains an attributed maximum, not a portable expectation\nfor this kernel class.\n\n---\nSource: KernelWiki wiki/kernels/fp8-block-scale-gemm.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/fp8-block-scale-gemm.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/fp8-block-scale-gemm.md",
+        "pageId": "kernel-fp8-block-scale-gemm",
+        "sourceDigest": "efe7413cf389f1aa5c9b6773232e35b5c1ab7157af03b83d3a1531e6289a4c1a",
+        "unitDigest": "fcf9a88730f99c58edf3826b4dc6106992be3f8d5bfeefe5c5087c822345bdae",
+        "type": "kernel",
+        "topics": [
+          "gemm",
+          "fp8",
+          "block-scale",
+          "fine-grained-quantization",
+          "tcgen05",
+          "wgmma"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/fp8-block-scale-gemm.md"
+      ]
+    },
+    {
+      "unitId": "kernel-fused-moe",
+      "title": "Fused MoE — Expert GEMM and Adjacent Operations",
+      "content": "# Fused MoE\n\n“Fused MoE” covers kernels that combine an expert GEMM with adjacent data preparation, activation, quantization, or result-combination work. It does not imply that routing, dispatch, both expert projections, and combine are always one device kernel.\n\n## Kernel boundary\n\nA concrete implementation should state which of these operations are inside the launch:\n\n- routed-row preparation or permutation;\n- grouped gate/up expert GEMM;\n- gated activation;\n- intermediate quantization;\n- grouped down-projection GEMM;\n- weighted output combination.\n\nThe profitable boundary depends on batch/routed-row distribution, data type, intermediate traffic, code size, and the available backend. Correctness must cover empty experts, repeated expert IDs, padding, routing weights, and quantization scales.\n\n## Evidence boundary\n\nThe FlashInfer contest page defines a fused-MoE track but does not publish the earlier local performance table. DeepGEMM documents grouped expert GEMM primitives, not a universal end-to-end fusion speedup. Consequently this page carries no numeric performance claim.\n\nThe previous artifact directory mixed a vLLM test-only PR, an SGLang dispatcher file, a blog extract, and a synthetic routing skeleton. It was removed because it was not a coherent fused-MoE kernel implementation and linked to excluded source PRs.\n\nOne retained, narrower example is TensorRT-LLM PR 11897's shared-expert path.\nIts BF16-output call site invokes a dense NVFP4 GEMM fused with SwiGLU:\n\n```python\noutput = torch.ops.trtllm.cute_dsl_nvfp4_dense_gemm_swiglu_blackwell(\n    act_fp4, module.weight, act_sf, module.weight_scale, alpha,\n    module.dtype)\n```\n\nThis contiguous upstream excerpt demonstrates one expert-projection fusion. It\ndoes not imply that routing, dispatch, both projections, and combine are in the\nsame device kernel.\n\n---\nSource: KernelWiki wiki/kernels/fused-moe.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/fused-moe.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/fused-moe.md",
+        "pageId": "kernel-fused-moe",
+        "sourceDigest": "3b5b7e196782c5a402eca95b11f34cefd58269e50785bf9a267586ba38d9ea50",
+        "unitDigest": "bbdf01a5422a7129d977214975bee3d1844102cba3850ebe8e187c6233607a67",
+        "type": "kernel",
+        "topics": [
+          "moe",
+          "fused-kernel",
+          "fp8",
+          "block-scale",
+          "kernel-fusion",
+          "grouped-gemm",
+          "gated-dual-gemm"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/fused-moe.md"
+      ]
+    },
+    {
+      "unitId": "kernel-gated-delta-net",
+      "title": "Gated Delta Network kernels",
+      "content": "# Gated Delta Network kernels\n\nGated Delta Networks combine a gated recurrent state update with a delta-rule\ncorrection. Implementations commonly separate or fuse projections, local\nconvolution, recurrence/chunk processing, normalization, and output projection.\nThe exact recurrence must come from the paper or implementation; a simple gated\nouter-product update is not an equivalent substitute.\n\n## Retained implementation excerpt\n\nSGLang PR 21019 fuses the split/reshape/concatenate work around Qwen3.5's GDN\nprojection. It is not the recurrent update itself. This contiguous excerpt from\nthe captured Triton file shows its interleaved-input stores:\n\n```python\ntl.store(blk_q_st_ptr, tl.load(blk_q_ptr))\ntl.store(blk_k_st_ptr, tl.load(blk_k_ptr))\ntl.store(blk_v_st_ptr, tl.load(blk_v_ptr))\ntl.store(blk_z_st_ptr, tl.load(blk_z_ptr))\n```\n\nThe full upstream file supports both the interleaved Qwen3-Next layout and the\ncontiguous Qwen3.5 layout. Layout identity is therefore a correctness condition,\nnot a performance-only choice.\n\n## Evidence and reproduction boundary\n\n- The NVlabs repository provides the research reference and points to FLA for\n  a faster variable-length implementation.\n- The FlashInfer MLSys 2026 page identifies a B200 Gated Delta Net track and\n  winner names, but publishes no latency or throughput table.\n- The retained SGLang PR description reports an H200 projection-fusion\n  benchmark; it does not validate a `tcgen05.mma` form or a universal GDN\n  mainloop.\n\nThe former synthetic prefill/decode kernels and invalid tcgen inline PTX were\nremoved. Reproduction requires an upstream implementation plus its model\nlayout, recurrence parameters, state initialization, dtype, and tolerance.\n\n---\nSource: KernelWiki wiki/kernels/gated-delta-net.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/gated-delta-net.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/gated-delta-net.md",
+        "pageId": "kernel-gated-delta-net",
+        "sourceDigest": "4e731a2b6e06ff702211b6b888051461824b784794afb8368ab33c7858497827",
+        "unitDigest": "c3ca65a44bab7e6afcc4e74e2874a558d1190589275d53f5a45fbe847c4640ae",
+        "type": "kernel",
+        "topics": [
+          "gated-delta-net",
+          "linear-attention",
+          "triton",
+          "kernel-fusion"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/gated-delta-net.md"
+      ]
+    },
+    {
+      "unitId": "kernel-gated-dual-gemm",
+      "title": "Gated Dual GEMM (Gate-Up + Activation)",
+      "content": "# Gated Dual GEMM\n\nA gated dual GEMM evaluates two projections of the same input and combines them through a gated activation, for example `SiLU(X·W_gate) * (X·W_up)`. Reusing the input tile and fusing the elementwise combination can avoid materializing both projections in global memory.\n\n## Implementation questions\n\n- whether the two projections use one combined output tile or separate accumulator regions;\n- how A and both weight tiles are staged and synchronized;\n- whether block scales are shared, independent, or applied in the epilogue;\n- how the epilogue drains accumulator fragments without exceeding register or TMEM capacity;\n- whether fusing both projections improves traffic enough to offset added live state.\n\n## Evidence boundary\n\nGPU Mode problem 3 defines the workload and its live organizer page records the benchmark context. The official evidence retained here does not support the earlier local latency or standalone speedup claims, so `performance_claims` is empty.\n\nThe previous artifact bundle was removed: its anchor was a vLLM test-only PR excluded by the kernel-source policy, and its remaining files were a blog extract and a synthetic skeleton rather than one upstream implementation.\n\nTensorRT-LLM PR 11897 supplies a concrete retained implementation boundary: an\nNVFP4 dense GEMM fused with SwiGLU. The following contiguous added-lines excerpt\nis the BF16-output call site in\n`tensorrt_llm/_torch/modules/gated_mlp.py`, not a standalone kernel:\n\n```python\noutput = torch.ops.trtllm.cute_dsl_nvfp4_dense_gemm_swiglu_blackwell(\n    act_fp4, module.weight, act_sf, module.weight_scale, alpha,\n    module.dtype)\n```\n\n---\nSource: KernelWiki wiki/kernels/gated-dual-gemm.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/gated-dual-gemm.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/gated-dual-gemm.md",
+        "pageId": "kernel-gated-dual-gemm",
+        "sourceDigest": "8a506b0683323ddfd34f4a08fb995e782705ef835aede2b82141c2f3342085cb",
+        "unitDigest": "b8cccc1afb7584332d0cc4d474bd67c3295496bf8ecc3ea270c20ca45b5a67e4",
+        "type": "kernel",
+        "topics": [
+          "gated-dual-gemm",
+          "gemm",
+          "fused-kernel",
+          "kernel-fusion",
+          "nvfp4",
+          "tmem"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/gated-dual-gemm.md"
+      ]
+    },
+    {
+      "unitId": "kernel-grouped-gemm",
+      "title": "Grouped GEMM for MoE",
+      "content": "# Grouped GEMM for MoE\n\nGrouped GEMM executes a collection of matrix products in one dispatch. In an\nMoE M-grouped layout, the expert dimension identifies the group and each expert\nmay have a different valid row count while N and K are shared by the model\nconfiguration. This avoids launching one kernel per expert, but it does not\nremove small-M inefficiency or unequal expert loads.\n\n## Retained implementation boundary\n\nDeepGEMM PR 304 exposes separate contiguous and masked M-grouped entry points.\nIts host dispatcher selects an architecture-specific implementation. This is a\ncontiguous excerpt from the retained `csrc/apis/gemm.hpp`:\n\n```cpp\nif (arch_major == 9 and sfa.scalar_type() == torch::kFloat) {\n    sm90_m_grouped_fp8_gemm_contiguous_1d2d(\n        a.first, sfa, b.first, sfb, d, grouped_layout, num_groups, m, n, k,\n        major_a, major_b, major_sfb, compiled_dims, use_psum_layout,\n        expected_m_for_psum_layout);\n} else if (arch_major == 10 and sfa.scalar_type() == torch::kInt) {\n    sm100_m_grouped_fp8_fp4_gemm_contiguous_1d1d(\n        a.first, sfa, b.first, sfb, d, grouped_layout, num_groups, m, n, k,\n        gran_k_a, gran_k_b, major_a, major_b, compiled_dims,\n        use_psum_layout, expected_m_for_psum_layout);\n}\n```\n\nThe excerpt is a dispatcher, not the device mainloop. It establishes that the\nretained code has distinct SM90 and SM100 paths and different scale\nrepresentations; it does not justify a hand-written generic tcgen instruction.\n\n## Layout and scheduling choices\n\n- A contiguous layout packs valid rows and carries a grouping layout that maps\n  rows back to experts.\n- A masked layout keeps a fixed allocation and supplies each expert's valid M,\n  which is useful when stable shapes matter.\n- A static persistent scheduler computes a deterministic tile sequence.\n- A CLC scheduler on Blackwell may acquire IDs of same-grid clusters canceled\n  before launch. CLC is optional and does not guarantee that variable expert\n  work becomes balanced.\n\nCorrectness tests should cover empty experts, nonuniform row counts, padding,\nscale layouts, output offsets, and both architecture dispatch branches. Measure\nthe whole routed workload; a grouped kernel can reduce launch overhead while\nremaining dominated by thin expert GEMMs.\n\n## Benchmark boundary\n\nThe GPU Mode problem-4 reward-hack result is not a valid kernel benchmark: the\nsubmission exploited object reuse between correctness and timing. This page\ntherefore carries no performance claim from that result.\n\n---\nSource: KernelWiki wiki/kernels/grouped-gemm.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/grouped-gemm.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/grouped-gemm.md",
+        "pageId": "kernel-grouped-gemm",
+        "sourceDigest": "67ced48fb3b8407207f72b6b5ffa64159d34e339d6b7736daba8fb4d4a6687a5",
+        "unitDigest": "9b88c8c0539b2aa729cc669907f06c016eef115f5868c56dccd8ef28a251c637",
+        "type": "kernel",
+        "topics": [
+          "grouped-gemm",
+          "moe",
+          "gemm",
+          "fp8",
+          "nvfp4",
+          "persistent-kernel",
+          "tile-scheduling"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/grouped-gemm.md"
+      ]
+    },
+    {
+      "unitId": "kernel-nsa",
+      "title": "Native Sparse Attention (NSA)",
+      "content": "# Native Sparse Attention (NSA)\n\n## Algorithm\n\nThe DeepSeek-led NSA paper presents a natively trainable sparse-attention design with three\nparallel branches:\n\n1. compressed tokens provide coarse global context;\n2. a learned selection branch chooses fine-grained tokens; and\n3. a sliding-window branch preserves local context.\n\nThe branch outputs are combined by the model. This is more than a sparse\nattention kernel dropped into an otherwise unchanged model: the compression\nand selection machinery is part of the trained architecture.\n\n## Reported performance\n\nIn the paper's A100/Triton comparison at 64K context, NSA reaches up to 9.0x\nforward and 6.0x backward speedup versus its FlashAttention-2 baseline. Table 4\nseparately derives an expected decoding speedup of up to 11.6x at that context\nlength from per-operation memory-access volume; it is not a measured decoding\nlatency result.\nThese are maxima for the paper's implementation and workload, not H100 or B200\nmeasurements and not guarantees for another sparse-attention backend.\n\n## Reproduction boundary\n\nThe paper does not provide the two purported Triton kernels that an earlier\nversion of this page printed; those local inventions were removed. For a\nconcrete adjacent integration, the vLLM DeepSeek-V3.2 post gives this exact\ntwo-line layout excerpt for its separate FP8 indexer cache:\n\n```python\nx_fp8[:, : block_size * head_dim] = x_scaled.view(num_blocks, block_size * head_dim).view(dtype=torch.uint8)\nx_fp8[:, block_size * head_dim :] = scales.view(num_blocks, block_size).view(dtype=torch.uint8)\n```\n\nThat excerpt is not an NSA reference implementation and does not reproduce the\npaper's benchmark. It is retained only as source-backed sparse-attention\nintegration code. Use the paper for NSA's algorithm and evaluation, and the\nchosen runtime's versioned source for an executable deployment.\n\n## Hardware alignment described by the paper\n\nThe paper attributes its kernel efficiency to blockwise memory access,\ngroup-centric loading that shares selected KV data across query heads, and\nloop scheduling that avoids redundant KV transfers. Those are design\nprinciples; the legal tile shapes, vector widths, and launch geometry come from\nthe actual implementation and target GPU.\n\n## Caveats\n\n- Quality depends on training the model with the sparsity mechanism.\n- Selection, compression, and branch combination add work outside the sparse\n  attention multiply itself.\n- DeepSeek-V3.2 deployment material is useful adjacent evidence, but its DSA\n  integration must not be presented as the NSA paper's missing source code.\n\n## Sources\n\n- [NSA paper](https://arxiv.org/abs/2502.11089)\n- [vLLM DeepSeek-V3.2 integration post](https://blog.vllm.ai/2025/09/29/deepseek-v3-2.html)\n\n---\nSource: KernelWiki wiki/kernels/nsa.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/nsa.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/nsa.md",
+        "pageId": "kernel-nsa",
+        "sourceDigest": "e13a9625fc0ba4f586b678eaff46c51847abee245df7a0ea29b0a142e3b0283a",
+        "unitDigest": "3ee5a7cd8662c133fc71fbbaa2575e6192a01427192dd62bc64fa4e4d71c06ab",
+        "type": "kernel",
+        "topics": [
+          "sparse-attention",
+          "attention",
+          "triton"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm80"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/nsa.md"
+      ]
+    },
+    {
+      "unitId": "kernel-nvfp4-gemm",
+      "title": "NVFP4 GEMM",
+      "content": "# NVFP4 GEMM\n\nThe retained GPU Mode workload multiplies block-scaled NVFP4 matrices on B200\nand produces FP16 output. Its task prose labels each per-16 scale\n`fp8(e4m3fnuz)`, but the organizer's executable reference constructs the scale\ntensors as `torch.float8_e4m3fn`. The two organizer artifacts therefore agree\non granularity but not on the signed FP8 encoding name. The organizer API is\nthe authority for shapes and its live leaderboard snapshot; the reference code\nis the executable semantics.\n\n## Retained CUTLASS anchor\n\nCUTLASS PR 2139 added distinct one-SM and two-SM schedule tags for NVFP4. This\ncontiguous excerpt from its captured `dispatch_policy.hpp` is a configuration\nanchor, not a complete GEMM:\n\n```cpp\nstruct KernelTmaWarpSpecialized1SmNvf4Sm100 final\n    : KernelSchedule1Sm, KernelScheduleMxNvf4Sm100 { };\nstruct KernelTmaWarpSpecialized2SmNvf4Sm100 final\n    : KernelSchedule2Sm, KernelScheduleMxNvf4Sm100 { };\nstruct KernelPtrArrayTmaWarpSpecialized1SmNvf4Sm100 final\n    : KernelSchedule1Sm, KernelSchedulePtrArrayMxNvf4Sm100 { };\nstruct KernelPtrArrayTmaWarpSpecialized2SmNvf4Sm100 final\n    : KernelSchedule2Sm, KernelSchedulePtrArrayMxNvf4Sm100 { };\n```\n\nUse the corresponding CUTLASS builder/example to derive legal alignments,\nlayouts, scale descriptors, tile shapes, and cluster shapes. The former local\nkernel skeleton was removed because it invented TMA, TMEM-allocation, and MMA\ncalls and incorrectly converted E4M3 block scales to UE8M0.\n\n## Reproduction checklist\n\n1. Match the organizer's E2M1 packing, per-16 FP8 scale tensors, output type,\n   and reference tolerances; resolve the disclosed task-prose E4M3FNUZ versus\n   reference-code `torch.float8_e4m3fn` discrepancy against the pinned contest\n   revision.\n2. Select a documented CUTLASS NVFP4 schedule and satisfy the builder's reported\n   alignment/layout constraints instead of assuming every operand needs one\n   universal byte alignment.\n3. Test tails and every benchmark shape, and report the live leaderboard time\n   with its capture date rather than as a permanent ranking.\n\n---\nSource: KernelWiki wiki/kernels/nvfp4-gemm.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/nvfp4-gemm.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/nvfp4-gemm.md",
+        "pageId": "kernel-nvfp4-gemm",
+        "sourceDigest": "b2f37b7efbb187f50cd9009bdfdea44bf136df81919f8f4c6a97e39ef9525d5c",
+        "unitDigest": "3d3a903e3446ed23488309bd4e296308e9107c4684dc704bbee1044a5499e08d",
+        "type": "kernel",
+        "topics": [
+          "gemm",
+          "nvfp4",
+          "fp4",
+          "block-scale",
+          "tcgen05",
+          "tmem",
+          "warp-specialization"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/nvfp4-gemm.md"
+      ]
+    },
+    {
+      "unitId": "kernel-nvfp4-gemv",
+      "title": "NVFP4 batched GEMV",
+      "content": "# NVFP4 batched GEMV\n\nGPU Mode problem 1 defines a batched matrix-vector product using E2M1 data,\nper-16 FP8 scales, and FP16 output on B200; it has no separate tensor-level\nscale operand. Its task prose calls the scales E4M3FNUZ, while its executable\nreference constructs them as `torch.float8_e4m3fn`; the source artifacts agree\non granularity but disagree on the encoding name. The organizer's three\nconfigurations differ in M, K, and batch L, so a submission may specialize\ntheir implementation while preserving one reference function.\n\nThis source-backed excerpt from Yue Zhang's CuTe DSL worklog shows one local\nchange: storing the loaded A and B register tensors in FP16 rather than FP32.\nIt is a partial optimization snippet, not the contest reference or a complete\nkernel:\n\n```python\ntArA = cute.make_rmem_tensor_like(tAgA, cutlass.Float16)\ntBrB = cute.make_rmem_tensor_like(tBgB, cutlass.Float16)\n```\n\nThe author writeups report useful experiments with coalescing, conversion\ninstructions, cache hints, vector width, unrolling, and register allocation.\nTheir before/after stages combine multiple edits, so none of the full delta is\nassigned to a single technique here. Yue Zhang reports a final aggregate of\n22.392 microseconds; it is author-reported context, not the live organizer\nleaderboard at every later date.\n\nFor reproduction, verify the exact PTX spelling against the toolkit's PTX ISA,\ncheck pointer alignment before vector reinterpretation, inspect generated SASS,\nand compare each contest shape independently. Use the organizer definition for\npacking, scale indexing, the permuted scale layout, and output semantics. The\nformer local artifact bundle was removed because its “full” file was an\nunrelated vLLM GEMM and its five GEMV stages were synthesized reconstructions.\n\n---\nSource: KernelWiki wiki/kernels/nvfp4-gemv.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/nvfp4-gemv.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/nvfp4-gemv.md",
+        "pageId": "kernel-nvfp4-gemv",
+        "sourceDigest": "03af47adb2d5d9cb1e14888b9dc305472353964583ee874925db269b5b6bb9b3",
+        "unitDigest": "6145361460707345fab85724359acb83eb5805f292b9a0779db3c36eda2655fc",
+        "type": "kernel",
+        "topics": [
+          "gemv",
+          "nvfp4",
+          "fp4",
+          "block-scale",
+          "cache-policy",
+          "register-budgeting",
+          "vectorized-loads"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/nvfp4-gemv.md"
+      ]
+    },
+    {
+      "unitId": "kernel-sparse-mla",
+      "title": "Sparse MLA",
+      "content": "# Sparse MLA\n\nFlashMLA's sparse paths compute attention only for caller-supplied token\nindices. Selection/indexer construction is upstream of the attention kernel and\nmust not be conflated with the sparse MLA call itself.\n\nFor sparse prefill, the upstream README defines the following equivalent\nPyTorch dataflow:\n\n```python\nfocused_kv = kv[indices]\nP = (Q @ focused_kv.transpose(-1, -2)) * sm_scale * math.log2(math.e)\nmax_logits = P.max(dim=-1)\nlse = log2sumexp2(P, dim=-1, base=2)\nS = exp2(P - lse)\nout = S @ focused_kv\n```\n\nThe full reference also specifies shapes, a single KV head, invalid-index\nhandling, and returned `(out, max_logits, lse)` values. The excerpt is not a\ndrop-in replacement for its test.\n\nSparse decode uses an FP8-with-scale KV-cache format and BF16 attention\narithmetic. Sparse prefill's B200 README maximum is 1450 TFLOPS; it is a\nsource-reported result for that suite, not evidence for an assumed top-k value,\npage size, or separate Lightning Indexer implementation. Those unsupported\nconstants and the former hand-written tcgen skeletons were removed.\n\n---\nSource: KernelWiki wiki/kernels/sparse-mla.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/sparse-mla.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/sparse-mla.md",
+        "pageId": "kernel-sparse-mla",
+        "sourceDigest": "4a078c89014684a7f729d86b7f9e871886851b77970324512adbb8b671f32e15",
+        "unitDigest": "4b27ccc2511cec2295add9ecdca76622e4bc632512e3e47e5593c8d18e6f6e3a",
+        "type": "kernel",
+        "topics": [
+          "sparse-attention",
+          "mla",
+          "fp8",
+          "attention",
+          "decode",
+          "prefill"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/sparse-mla.md"
+      ]
+    },
+    {
+      "unitId": "kernel-tensorrt-llm-blackwell-indexer",
+      "title": "TensorRT-LLM Blackwell FP4 DSA Indexer",
+      "content": "## Shape\n\nTensorRT-LLM PR 13340 integrates an FP4 indexer path for DSA on Blackwell and\nlands CUDA kernels for K-cache gather/scatter and fused FP4 concatenation. Use it\nas implementation evidence for sparse indexer memory movement and quantized\ncache layout, not as a drop-in answer for FlashInfer-Bench.\n\nThe captured PR's gather wrapper distinguishes FP8 and packed-FP4 byte widths.\nThis contiguous added-lines excerpt is an input/launch contract, not the top-k\nalgorithm:\n\n```cpp\nconstexpr int32_t VEC_SIZE = 4;\nTLLM_CHECK_WITH_INFO(head_dim == 128 || head_dim == 64,\n    \"head_dim must be 128 (FP8) or 64 (FP4 packed) for the indexer cache (got %d)\", head_dim);\nTLLM_CHECK_WITH_INFO(scale_size == 4,\n    \"scale_size must equal 4 bytes (packed UE8M0 x4 for FP4, 1 float32 for FP8, got %d)\", scale_size);\nint32_t const threads_per_block = head_dim / VEC_SIZE;\n```\n\n## Transfer Notes\n\n- Keep FP4 packing, scale placement, and invalid-token handling explicit in the\n  correctness reference.\n- Treat gather/scatter traffic as a separate NCU profile target.\n- Avoid merging this with top-k selection until the memory path is understood.\n\nThe former `candidate_indexer_probe` block was removed because it was locally\ninvented and did not represent any kernel in PR 13340.\n\n---\nSource: KernelWiki wiki/kernels/tensorrt-llm-blackwell-indexer.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/tensorrt-llm-blackwell-indexer.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/kernels/tensorrt-llm-blackwell-indexer.md",
+        "pageId": "kernel-tensorrt-llm-blackwell-indexer",
+        "sourceDigest": "a0c49ca6362b53621f77d27505e077c6341898d13ac69957fd73acda8f1b97d7",
+        "unitDigest": "d28a7a32258fd6c09edab9cf65bdc09cea0647fd47027c2dfb37b68bbfc62324",
+        "type": "kernel",
+        "topics": [
+          "attention",
+          "gemm",
+          "fp4",
+          "kernel-fusion",
+          "top-k-selection",
+          "vectorized-loads"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/kernels/tensorrt-llm-blackwell-indexer.md"
+      ]
+    },
+    {
+      "unitId": "lang-cuda-cpp",
+      "title": "CUDA C++ for Blackwell Kernels",
+      "content": "# CUDA C++ for Blackwell kernels\n\nCUDA C++ kernels can reach Blackwell-specific facilities through compiler abstractions such as CUTLASS/CuTe or through inline PTX. Inline PTX does not relax PTX participation, alignment, descriptor, memory-ordering, or target requirements.\n\n## Query hardware-dependent values\n\nThis host fragment is compilable with `nvcc` and avoids embedding a product-wide SM-count constant in a scheduler:\n\n```cpp\n#include <cuda_runtime.h>\n#include <cstdio>\n\nint main() {\n  cudaDeviceProp properties{};\n  if (cudaGetDeviceProperties(&properties, 0) != cudaSuccess) return 1;\n  std::printf(\"%s cc=%d.%d sms=%d\\n\", properties.name,\n              properties.major, properties.minor, properties.multiProcessorCount);\n}\n```\n\n## Inline-PTX review checklist\n\n- Gate target-specific instructions with a compatible compilation target.\n- Match C++ operand constraints and widths to the PTX operand types.\n- Keep `.sync.aligned` allocation/load/store operations converged across a fully active warp.\n- Give `tcgen05.mma` a correctly encoded 32-bit instruction descriptor.\n- Preserve async-proxy fences and the documented completion mechanism.\n- Make a TMA or matrix descriptor agree with the actual shared-memory layout.\n\nPrefer a maintained CUTLASS/CuTe wrapper when it expresses the operation. If inline PTX is required, copy the form from the current PTX ISA and test compilation plus numerical correctness on the intended architecture.\n\n---\nSource: KernelWiki wiki/languages/cuda-cpp.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/languages/cuda-cpp.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/languages/cuda-cpp.md",
+        "pageId": "lang-cuda-cpp",
+        "sourceDigest": "a38511912e9a9bd0e5142264709181bd93388f52a05b8017cc389c2144a5926a",
+        "unitDigest": "3abfeaa0e9dc39d90d68907a1a5b3896a6d4668ea62b1fc582e95589abd1b95a",
+        "type": "language",
+        "topics": [
+          "cuda-cpp",
+          "ptx",
+          "tcgen05",
+          "tmem"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/languages/cuda-cpp.md"
+      ]
+    },
+    {
+      "unitId": "lang-cute-dsl",
+      "title": "CuTe DSL for Blackwell",
+      "content": "## Overview\n\nNVIDIA introduced CuTe DSL in CUTLASS 4.0 as a Python programming model that\nretains CuTe's layouts, tensors, hardware atoms, and explicit hardware\nhierarchy. The maintained documentation covers SM100 tcgen05 programming as\nwell as TMA, TMEM, synchronization, control flow, compilation, and debugging.\n\nCuTe DSL is an abstraction, not a promise that allocation, synchronization,\nor layout constraints disappear. In particular, do not translate a schematic\nname such as `alloc_tmem()` or `mma()` into code unless it exists in the pinned\nAPI. The earlier version of this page did so and has been removed.\n\n## Exact SM100 pipeline excerpt\n\nCUTLASS PR 3106 contains a complete SM100 tutorial series. In its step-2\nwarp-specialized kernel, the MMA role waits for a filled TMA stage, changes the\ntcgen05 accumulate field after the first K tile, executes `cute.gemm`, and\nreleases the shared-memory stage:\n\n```python\nhandle = ab_consumer.wait_and_advance()\n\ntiled_mma.set(tcgen05.Field.ACCUMULATE, k_tile_idx != 0)\ntile_crd = (None, None, None, handle.index)\ncute.gemm(tiled_mma, tCtAcc, tCrA[tile_crd], tCrB[tile_crd], tCtAcc)\n\nhandle.release()\n```\n\nThis is a contiguous excerpt from the retained upstream file, not a standalone\nkernel. The full file is the source for its pipeline setup, TMEM allocation,\nbarrier participants, TMA partitioning, and epilogue.\n\n## Full Examples (verbatim upstream code shipped locally)\n\nThe following CuTe DSL files ship **verbatim** in this repository under `artifacts/prs/cutlass/` (pinned at each PR's merge SHA). Open them with `python3 scripts/get_page.py <pr-id> --include-code` or read them directly.\n\n| File | Purpose | Size |\n|---|---|---|\n| [`artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_0.py`](../../artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_0.py) | Step 0 — FP16 GEMM baseline | 447 lines |\n| [`artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_1.py`](../../artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_1.py) | Step 1 — 2CTA MMA + TMA multicast | 535 lines |\n| [`artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_2.py`](../../artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_2.py) | Step 2 — Warp specialization (TMA / MMA / epilogue warps) | 679 lines |\n| [`artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_3.py`](../../artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_3.py) | Step 3 — Static persistent tile scheduler | 769 lines |\n| [`artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_4.py`](../../artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_4.py) | Step 4 — Preferred + dynamic clusters | 1065 lines |\n| [`artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_5.py`](../../artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_5.py) | Step 5 — TMA prefetch | 919 lines |\n| [`artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_6.py`](../../artifacts/prs/cutlass/PR-3106/key-files/examples/python/CuTeDSL/blackwell/tutorial_gemm/fp16_gemm_6.py) | Step 6 — Programmatic Dependent Launch (PDL) | 1002 lines |\n| [`artifacts/prs/cutlass/PR-2881/key-files/examples/python/CuTeDSL/blackwell/dense_gemm_persistent_prefetch.py`](../../artifacts/prs/cutlass/PR-2881/key-files/examples/python/CuTeDSL/blackwell/dense_gemm_persistent_prefetch.py) | Persistent GEMM with prefetch | full |\n| [`artifacts/prs/cutlass/PR-3021/key-files/python/CuTeDSL/cutlass/cute/arch/clc.py`](../../artifacts/prs/cutlass/PR-3021/key-files/python/CuTeDSL/cutlass/cute/arch/clc.py) | CLC (Cluster Launch Control) Python binding | full |\n\nThe `fp16_gemm_{0..6}.py` series from `examples/python/CuTeDSL/blackwell/tutorial_gemm/` in NVIDIA/cutlass PR-3106 is the authoritative CuTe DSL learning path: it walks from a naive FP16 GEMM baseline through 2CTA MMA with TMA multicast, warp specialization, static persistent scheduling, preferred / dynamic clusters, TMA prefetch, and ends with Programmatic Dependent Launch (PDL). Reading them in order is the recommended on-ramp.\n\n## Related\n- [tcgen05-mma](../hardware/tcgen05-mma.md) — Underlying MMA instruction\n- [flash-attention-4](../kernels/flash-attention-4.md) — CuTe-DSL implementation\n- [CUTLASS Blackwell docs](../../sources/docs/nvidia-cutlass-blackwell.md) — Official reference\n- [Full CuTe DSL documentation](../../sources/docs/cutlass-cute-dsl.md) — Compiled official Python DSL documentation\n\n---\nSource: KernelWiki wiki/languages/cute-dsl.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/languages/cute-dsl.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/languages/cute-dsl.md",
+        "pageId": "lang-cute-dsl",
+        "sourceDigest": "001f81f308f18a32faee98762a9d436eac133a095a6ca73e195f061890637753",
+        "unitDigest": "c8107cd8b85087b9a7ea9e8aad627b35293ee22a9d853792e0ec3d55a418dc01",
+        "type": "language",
+        "topics": [
+          "cute-dsl",
+          "tcgen05",
+          "tmem",
+          "tma"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/languages/cute-dsl.md"
+      ]
+    },
+    {
+      "unitId": "lang-ptx",
+      "title": "PTX for SM100",
+      "content": "# PTX for SM100\n\nPTX is a versioned virtual ISA. A complete module declares both a PTX version and a target; support for one Blackwell feature does not imply support for every target-specific instruction.\n\nThis minimal module is useful as a compilation smoke test before adding an instruction under audit:\n\n```ptx\n.version 8.7\n.target sm_100a\n.address_size 64\n\n.visible .entry no_op() {\n  ret;\n}\n```\n\n## Representative forms\n\n```ptx\n// Warp-collective allocation; destination is shared memory.\ntcgen05.alloc.cta_group::1.sync.aligned.shared::cta.b32 [dst], 32;\n\n// Single-thread MMA issue; idesc is a required 32-bit instruction descriptor.\ntcgen05.mma.cta_group::1.kind::f16\n    [d_tmem], a_desc, b_desc, idesc, enable_input_d;\n\n// Track earlier MMA completion through an mbarrier.\ntcgen05.commit.cta_group::1.mbarrier::arrive::one.b64 [mma_done];\n\n// Warp-collective deallocation before exit.\ntcgen05.dealloc.cta_group::1.sync.aligned.b32 d_tmem, 32;\n```\n\nCLC is an asynchronous cancellation/acquisition protocol, not a one-operand “next tile” query:\n\n```ptx\nclusterlaunchcontrol.try_cancel.async.shared::cta\n    .mbarrier::complete_tx::bytes.b128 [response], [done];\nclusterlaunchcontrol.query_cancel.is_canceled.pred.b128 p, response;\n@p clusterlaunchcontrol.query_cancel.get_first_ctaid.v4.b32.b128\n    {x, y, z, ignored}, response;\n```\n\nThe exact legal kinds, shapes, layouts, address spaces, scopes, and target notes are normative in the current PTX ISA.\n\n---\nSource: KernelWiki wiki/languages/ptx-sm100.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/languages/ptx-sm100.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/languages/ptx-sm100.md",
+        "pageId": "lang-ptx",
+        "sourceDigest": "9f55abd607941dbb7ad962f2dce6a526a6ea4ab265c6303d45d968197449877f",
+        "unitDigest": "30fb6c4f94384da8c783c728b54b0723178797839416682e44dd3ee242e7f872",
+        "type": "language",
+        "topics": [
+          "ptx",
+          "tcgen05",
+          "tmem",
+          "tma",
+          "clc",
+          "mbarrier",
+          "nvfp4"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm100a"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/languages/ptx-sm100.md"
+      ]
+    },
+    {
+      "unitId": "lang-triton",
+      "title": "Triton on Blackwell",
+      "content": "# Triton on Blackwell\n\nTriton 3.6 includes compiler infrastructure for Blackwell TMEM and `tcgen05`, plus Gluon multi-CTA and scaled-MMA work. This makes the earlier blanket statement that Triton has no TMEM or `tcgen05` path obsolete for 3.6. It does not mean every `tl.dot` kernel lowers identically or performs like a specialized CuTe/CUDA kernel.\n\n## Verified boundary\n\n- The official 3.6 release notes establish the compiler/backend features.\n- vLLM PR 34597 provides an inspectable downstream `@triton.jit` MLA decode kernel using `tl.dot` on a source page classified for SM100.\n- SGLang PR 22079 is another retained attention example with `tl.dot` on SM100/SM90.\n- SGLang PR 21019 is a memory-rearrangement Triton kernel and therefore must not be cited as evidence of tensor-core lowering.\n\nThe retained downstream sources demonstrate use of Triton kernels on Blackwell paths. They do not contain an in-repository PTX dump proving a particular `tcgen05.mma` form for every call below.\n\n## Verbatim call-site excerpt\n\nThe following non-contiguous call sites are copied from the vLLM PR 34597 artifact to show the relevant Triton surface; consult the pinned full file for control flow and shapes:\n\n```python\nqk = tl.dot(q, k.to(q.dtype))\nqk += tl.dot(qpe, kpe.to(qpe.dtype))\nacc += tl.dot(p.to(v.dtype), v)\n```\n\nPinned file: [`triton_decode_attention.py`](../../artifacts/prs/vllm/PR-34597/key-files/vllm/v1/attention/ops/triton_decode_attention.py).\n\n## Selection guidance\n\nUse Triton when its programming model and supported operations fit the kernel and validate the generated code on every target SKU. For peak-sensitive compute kernels, compare against appropriate vendor/CuTe/CUDA implementations rather than assuming either backend wins. For memory-bound or irregular kernels, measure launch, memory, and scheduling costs separately.\n\n## Evidence ledger\n\nThe version claim is pinned in [`data/version-claims.yaml`](../../data/version-claims.yaml), and the retained-source boundary is summarized in [`data/triton-3.6-evidence.md`](../../data/triton-3.6-evidence.md).\n\n---\nSource: KernelWiki wiki/languages/triton-blackwell.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/languages/triton-blackwell.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/languages/triton-blackwell.md",
+        "pageId": "lang-triton",
+        "sourceDigest": "31b3aaa3ed0804b57c99f57063de5cdc8cced9c0b61ad805f68a502ca8f4a28e",
+        "unitDigest": "f691f2e590a944ae038233cb27aac254ea8692142be5223ac19280862800a294",
+        "type": "language",
+        "topics": [
+          "triton",
+          "attention",
+          "moe",
+          "gated-delta-net"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/languages/triton-blackwell.md"
+      ]
+    },
+    {
+      "unitId": "migration-register-to-tmem",
+      "title": "Register Accumulators to TMEM",
+      "content": "# Register Accumulators to TMEM\n\n## Migration boundary\n\nHopper WGMMA and Blackwell `tcgen05` do not expose interchangeable accumulator fragments. Hopper WGMMA accumulates into registers owned by participating threads. Blackwell `tcgen05` places the accumulator in Tensor Memory (TMEM), and epilogue threads explicitly copy the values they need from TMEM into registers.\n\nThat changes the kernel around the MMA, not just the instruction name:\n\n| Concern | Hopper WGMMA | Blackwell `tcgen05` |\n|---|---|---|\n| Accumulator location | Registers | TMEM |\n| MMA issuer | Warpgroup instruction model | A designated thread issues a CTA- or two-CTA-group operation |\n| Common A/B path | Shared-memory descriptors for WGMMA | Shared-memory descriptors for `tcgen05`; supported forms may source A from TMEM |\n| Result consumption | Register fragment already present | Explicit TMEM-to-register tiled copy |\n| Lifetime | Register-fragment lifetime | Explicit TMEM allocation and deallocation |\n\n## Practical porting sequence\n\n1. Select the supported `tcgen05` operation and instruction shape for the input and accumulator types.\n2. Build the corresponding shared-memory layouts and descriptors for A and B.\n3. Create the TMEM accumulator layout and include all live accumulator stages in its column budget.\n4. Allocate TMEM using the documented CTA-group protocol.\n5. Replace WGMMA fence/commit/wait logic with the synchronization protocol required by the selected `tcgen05` and pipeline abstractions.\n6. Partition a TMEM-to-register copy for the epilogue instead of treating C as a register fragment.\n7. Deallocate TMEM only after MMA and epilogue users have completed.\n\nCUTLASS/CuTe expresses these steps through a tiled MMA, `TmemAllocator`, TMEM fragment binding, pipeline barriers, and tiled-copy partitions. This is safer than translating an old WGMMA inline-PTX wrapper instruction by instruction.\n\n## What must be re-tuned\n\nMoving the accumulator out of registers can relieve one source of register pressure, but it does not prove a particular occupancy or speedup. CTA shape, TMEM columns, shared memory, epilogue registers, synchronization, and work scheduling remain kernel-specific constraints. Re-measure those resources and performance after the port.\n\n## Primary references\n\n- [NVIDIA Blackwell Tuning Guide](https://docs.nvidia.com/cuda/blackwell-tuning-guide/)\n- [CUTLASS CuTe DSL `tcgen05` programming guide](../../sources/docs/cutlass-cute-dsl.md)\n- [Tensor Memory](../hardware/tmem.md)\n\n---\nSource: KernelWiki wiki/migration/register-to-tmem.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/migration/register-to-tmem.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/migration/register-to-tmem.md",
+        "pageId": "migration-register-to-tmem",
+        "sourceDigest": "3273c063d1514b0deb4862c2dd294fd2b938b193723ea7fa7d89cf3a638c445a",
+        "unitDigest": "edd1349c5dc1767ee904f9ca208fe95d0bf51cc5f71883e4be5fe0fb1212fb37",
+        "type": "migration",
+        "topics": [
+          "tmem",
+          "tcgen05"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/migration/register-to-tmem.md"
+      ]
+    },
+    {
+      "unitId": "migration-wgmma-to-tcgen05",
+      "title": "Migrating from wgmma to tcgen05",
+      "content": "# Migrating from wgmma to tcgen05\n\nThis is a redesign rather than an opcode substitution. Hopper WGMMA is warpgroup-collective and keeps D in registers. The SM100 `tcgen05.mma` family has single-thread MMA issue and keeps D in Tensor Memory.\n\n## Required changes\n\n1. **Move D to TMEM.** Allocate columns with one fully active warp, distribute the resulting shared-memory address safely, and deallocate with a fully active warp before exit.\n2. **Rebuild operand paths.** B is described in shared memory. A may use either a shared-memory descriptor or a TMEM address, depending on the selected instruction form.\n3. **Build a real instruction descriptor.** The required 32-bit `idesc` encodes shapes, types, sparsity, and other details. Passing zero as an “unused scale descriptor” is invalid guidance.\n4. **Change issue ownership.** One elected thread issues `tcgen05.mma`; this does not make allocation, TMEM load, or TMEM store single-thread operations.\n5. **Use the documented completion path.** `tcgen05.commit` can track prior asynchronous MMA work through an mbarrier. Apply the required TMEM fences and waits before another thread or memory proxy consumes results.\n6. **Rebuild the epilogue.** Load the TMEM D fragment into registers with the matching warp-collective copy before applying ordinary arithmetic or stores.\n7. **Select layouts from constraints.** Make the shared-memory descriptor agree with the physical layout. Do not mechanically change every Hopper layout to a 128-byte swizzle.\n\n## Allocation ownership sketch\n\n```text\nif warp_id == allocation_warp:       # all 32 lanes take the same branch\n    tcgen05.alloc.sync.aligned(...)\nsynchronize_and_publish_tmem_address()\nif elected_mma_thread:\n    tcgen05.mma(..., idesc, enable_input_d)\nwait_for_mma_completion_and_fence()\nif warp_id == allocation_warp:       # fully active warp again\n    tcgen05.dealloc.sync.aligned(...)\n```\n\nThe same CTA-group qualifier must be used consistently by all `tcgen05` instructions in a kernel. For `cta_group::2`, allocation management is collective across one warp in each peer CTA and the peer must remain active for the paired operation.\n\n---\nSource: KernelWiki wiki/migration/wgmma-to-tcgen05.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/migration/wgmma-to-tcgen05.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/migration/wgmma-to-tcgen05.md",
+        "pageId": "migration-wgmma-to-tcgen05",
+        "sourceDigest": "918251c96fb7fb7fb63157bb167328d2cefdeab39095dd51bb284a575bab5d70",
+        "unitDigest": "6e1f7fd830c317fd5a40e28eafdbe19a1e2386cc72d6c738d30e1d64759e1dae",
+        "type": "migration",
+        "topics": [
+          "tcgen05",
+          "wgmma",
+          "tmem"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/migration/wgmma-to-tcgen05.md"
+      ]
+    },
+    {
+      "unitId": "pattern-compute-bound",
+      "title": "Not Reaching Peak FLOPS",
+      "content": "## Symptom\n\nTensor-core work is the limiting path, measured memory bandwidth is not saturated, and achieved throughput is materially below the appropriate roofline. Do not use a universal utilization cutoff; compare the kernel with a shape- and datatype-matched bound.\n\n## Likely Causes\n\n1. **Pipeline bubbles**: MMA stalled waiting for data from TMA\n2. **Non-matmul overhead**: Softmax, activation functions, reductions consuming cycles\n3. **Insufficient arithmetic intensity**: the selected tile/decomposition does not keep the tensor pipeline fed\n4. **Serialized epilogue work**: output conversion or stores delay the next mainloop iteration\n\n## Candidate Techniques\n\n| Technique | Effect |\n|---|---|\n| [2-SM cooperative](../hardware/2sm-cooperative.md) | Let a paired CTA group issue a supported collective MMA and share operand traffic |\n| [Pipeline stages](../techniques/pipeline-stages.md) | Overlap TMA load with MMA compute |\n| [Warp specialization](../techniques/warp-specialization.md) | Assign issuing and epilogue roles so independent phases can overlap |\n| [Epilogue fusion](../techniques/epilogue-fusion.md) | Overlap epilogue with next tile's MMA |\n| [Software exponential](../techniques/software-exp.md) | Distribute non-matmul ops across FMA units (FA4) |\n\n## Example: FlashAttention-4\n\nThe FlashAttention-4 article reports that Blackwell's tensor throughput grew\nfaster than its special-function throughput for the comparison it presents.\nIts kernel therefore evaluates a software exponential using range reduction and\na polynomial on general arithmetic units. That is a source-reported design for\nthe stated attention workload, not a general instruction replacement.\n\n## Caveats\n- 2-SM cooperative requires a compatible cluster launch and operand layout\n- Pipeline depth is workload- and resource-dependent\n- Software-emulated transcendentals trade accuracy for throughput\n\n---\nSource: KernelWiki wiki/patterns/compute-bound.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/compute-bound.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/patterns/compute-bound.md",
+        "pageId": "pattern-compute-bound",
+        "sourceDigest": "b559aa7fa4775ad554b98aa464a4847f51918aca4e61246a2fa0ae85ea764c10",
+        "unitDigest": "fcc46e30d5c36ddbbf6e50f3612bf90e87220668a1029340d0b5de4527e0f809",
+        "type": "pattern",
+        "topics": [
+          "tcgen05",
+          "2sm-cooperative",
+          "pipeline-stages",
+          "warp-specialization"
+        ],
+        "symptoms": [
+          "compute-bound",
+          "low-tensor-core-utilization",
+          "pipeline-stalls"
+        ],
+        "candidateTechniques": [
+          "hw-2sm-cooperative",
+          "technique-pipeline-stages",
+          "technique-warp-specialization",
+          "technique-epilogue-fusion",
+          "technique-software-exp"
+        ],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/compute-bound.md"
+      ]
+    },
+    {
+      "unitId": "pattern-low-sm-utilization",
+      "title": "Low SM Utilization",
+      "content": "## Symptom\n\nProfiling shows idle SMs during material portions of kernel execution even though resource occupancy is not the immediate limiter. The earlier fixed utilization threshold was only a local heuristic and has been removed.\n\n## Likely Causes\n\n1. **Tail effect**: Last wave of tiles leaves most SMs idle (see [tail-effect](tail-effect.md))\n2. **Load imbalance**: Some tiles take longer than others (variable computation per tile)\n3. **Static scheduling**: Fixed tile-to-SM assignment doesn't adapt to runtime conditions\n4. **Grid too small**: Fewer threadblocks than SMs\n\n## Candidate Techniques\n\n| Technique | Applicability | Effect |\n|---|---|---|\n| [CLC](../hardware/clc.md) | PTX target `sm_100` or higher | May redistribute IDs of clusters that have not launched |\n| [Persistent kernels](../techniques/persistent-kernels.md) | Software design | Can amortize launch/setup work and redistribute tasks when enough work remains |\n| [Tile scheduling](../techniques/tile-scheduling.md) | Software design | Can trade locality against load balance |\n\n## Caveats\n- Verify the selected toolkit and target before using CLC; current PTX lists\n  `clusterlaunchcontrol.try_cancel` as requiring `sm_100` or higher.\n- Persistent kernels complicate debugging and profiling\n- A larger grid can reduce wave quantization, but it can also add overhead and\n  does not correct unequal per-tile costs by itself.\n\n---\nSource: KernelWiki wiki/patterns/low-sm-utilization.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/low-sm-utilization.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/patterns/low-sm-utilization.md",
+        "pageId": "pattern-low-sm-utilization",
+        "sourceDigest": "c2883e2ed54a69ab53e8a6172c62ef02cb7f389c8e5c7085f27c1fc1d9c8635a",
+        "unitDigest": "69fe09e82047d57d3c8faaa55e4b12ec46de9f26a5bd75f9fcec2aaa05f7f688",
+        "type": "pattern",
+        "topics": [
+          "persistent-kernel",
+          "clc",
+          "tile-scheduling"
+        ],
+        "symptoms": [
+          "low-sm-utilization",
+          "tail-effect",
+          "load-imbalance"
+        ],
+        "candidateTechniques": [
+          "technique-persistent-kernels",
+          "technique-tile-scheduling",
+          "hw-clc"
+        ],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/low-sm-utilization.md"
+      ]
+    },
+    {
+      "unitId": "pattern-memory-bound",
+      "title": "Memory Bandwidth Bound",
+      "content": "## Symptom\n\nA roofline analysis or profile attributes the runtime primarily to data\nmovement rather than instruction throughput. High measured bandwidth alone is\nnot sufficient: compare achieved traffic, cache behavior, and useful work with\nthe selected GPU and workload.\n\n## Likely Causes\n\n1. **Low arithmetic intensity**: for example, some GEMV, small-batch decode, or\n   reduction workloads\n2. **Limited data reuse**: values are evicted or used too few times to amortize\n   their movement\n3. **Inefficient access**: uncoalesced transactions, misalignment, redundant\n   loads, or an unsuitable cache policy\n\n## Candidate Techniques\n\n| Technique | Effect |\n|---|---|\n| [Vectorized loads](../techniques/vectorized-loads.md) | Can reduce instruction count when width, alignment, and access order are legal |\n| [Cache policies](../techniques/cache-policy.md) | May protect reused data or avoid allocating one-pass traffic; effects are workload-specific |\n| [Register budgeting](../techniques/register-budgeting.md) | Trades per-thread state against occupancy and spilling; a lower cap is not automatically faster |\n| [TMA multicast](../hardware/tma.md) | Can avoid redundant global-to-shared transfers when multiple CTAs in a cluster consume the same tile |\n| [Swizzling](../techniques/swizzling.md) | Can remove measured shared-memory bank conflicts for a compatible layout |\n\n## Caveats\n- Confirm the bottleneck with measurements; a kernel may move between memory,\n  instruction, and latency limits as shapes change.\n- Use the exact GPU SKU's published bandwidth and the workload's measured bytes\n  transferred when constructing a speed-of-light bound.\n- Reducing decode or address-generation instructions can still matter in a\n  nominally memory-heavy kernel. Yue Zhang's reported NVFP4 GEMV stages changed\n  memory access, conversion, instruction count, and ILP together, so they do not\n  establish a universal optimization order.\n\n---\nSource: KernelWiki wiki/patterns/memory-bound.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/memory-bound.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/patterns/memory-bound.md",
+        "pageId": "pattern-memory-bound",
+        "sourceDigest": "cdd93f2414e55788ac75306557e2e3f4476d1fb23a2763b6d4c08cb0be9ff6ac",
+        "unitDigest": "8b4af2b9e45b8476d853583e94da8aedd2eacb08fd196d5943d8a3fb2e04ed7f",
+        "type": "pattern",
+        "topics": [
+          "vectorized-loads",
+          "cache-policy",
+          "shared-memory-optimization"
+        ],
+        "symptoms": [
+          "memory-bound",
+          "low-compute-utilization",
+          "high-memory-throughput"
+        ],
+        "candidateTechniques": [
+          "technique-vectorized-loads",
+          "technique-swizzling",
+          "technique-pipeline-stages"
+        ],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/memory-bound.md"
+      ]
+    },
+    {
+      "unitId": "pattern-moe-load-imbalance",
+      "title": "MoE Expert Load Imbalance",
+      "content": "# MoE Expert Load Imbalance\n\n## Symptom\n\nA grouped-GEMM trace shows unequal expert tile counts or runtimes, leaving some CTAs or SMs idle while other expert groups remain active. Confirm the imbalance from the actual routed row counts and per-tile timings; no fixed router-distribution ratio is assumed.\n\n## Kernel-local causes\n\n- routed row counts differ across experts;\n- a static tile assignment cannot adapt to unequal tile runtimes;\n- fixed-capacity masked layouts perform or carry padding work;\n- very small expert matrices do not fill the selected MMA tile effectively.\n\n## Candidate techniques\n\n| Technique | Kernel-local effect |\n|---|---|\n| [CLC](../hardware/clc.md) | Lets a persistent kernel acquire remaining grid work dynamically on supported Blackwell targets. |\n| [Persistent kernels](../techniques/persistent-kernels.md) | Reuse resident CTAs across a work queue. |\n| [Contiguous grouped layout](../kernels/grouped-gemm.md) | Packs valid routed rows and uses offsets to identify expert boundaries. |\n| [Masked grouped layout](../kernels/grouped-gemm.md) | Keeps graph-friendly static storage at the cost of masked capacity. |\n\nExpert replication and placement across GPUs are cluster/system policies and are outside this kernel-only page. The earlier EPLB speedups and a generic “80/20” routing assertion were removed.\n\n## Measurement boundary\n\nCompare static and dynamic schedulers with identical routed inputs, tile shapes, correctness checks, and launch conditions. Dynamic acquisition has its own instruction/synchronization cost, so it should be justified by measured imbalance rather than assumed to win universally.\n\n---\nSource: KernelWiki wiki/patterns/moe-load-imbalance.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/moe-load-imbalance.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/patterns/moe-load-imbalance.md",
+        "pageId": "pattern-moe-load-imbalance",
+        "sourceDigest": "c6c309273bfda2c099f03250f40058344d4570b49b17893c4f0c506662dd64c1",
+        "unitDigest": "1a428bd38039f9f1bce21a63e1f677a300e8df3901a922a87eae2afff6d98fef",
+        "type": "pattern",
+        "topics": [
+          "moe",
+          "grouped-gemm",
+          "tile-scheduling",
+          "clc"
+        ],
+        "symptoms": [
+          "load-imbalance",
+          "tail-effect",
+          "low-sm-utilization"
+        ],
+        "candidateTechniques": [
+          "technique-tile-scheduling",
+          "technique-persistent-kernels",
+          "technique-kernel-fusion"
+        ],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/moe-load-imbalance.md"
+      ]
+    },
+    {
+      "unitId": "pattern-pipeline-stalls",
+      "title": "Pipeline Stalls",
+      "content": "# Pipeline Stalls\n\n## Symptom\n\nNsight Compute shows TMA or tcgen05 units idle despite nominally compute-bound workload. Tensor core utilization drops during specific phases of the kernel. Warp-level profiling reveals threads blocked on `mbarrier.try_wait` more than expected.\n\n## Likely Causes\n\n1. **Too little in-flight work**: the measured load or compute latency is\n   longer than the work available in the other stages.\n2. **Incorrect barrier phase or participant accounting**: a consumer waits on\n   the wrong phase, or a producer reuses a stage before every consumer releases\n   it.\n3. **Incomplete operation-specific ordering**: TMA, tcgen05, and ordinary\n   shared-memory accesses have distinct completion and proxy rules. A generic\n   fence recipe is not valid for every combination.\n4. **Role imbalance**: one producer, MMA, softmax, or epilogue role takes longer\n   than the roles it is meant to overlap.\n5. **Memory-system or tail backpressure**: nominal stage depth cannot compensate\n   for bandwidth saturation, cache misses, or too little remaining grid work.\n\n## Candidate Techniques\n\n| Technique | Effect |\n|---|---|\n| [Pipeline stages](../techniques/pipeline-stages.md) | Sweep stage depth while measuring stalls and resource use |\n| [Warp specialization](../techniques/warp-specialization.md) | Separate roles when their measured overlap justifies the synchronization cost |\n| [Double-buffering](../techniques/double-buffering.md) | Give producer and consumer distinct live stages |\n| [Ping-pong scheduling](../techniques/ping-pong-scheduling.md) | Two query tiles alternate softmax/MMA (FA4 pattern) |\n\n## Diagnosis Checklist\n\n```\n1. Profile the actual kernel and identify which role is waiting.\n2. Reconstruct producer/consumer stage ownership and barrier phases.\n3. Verify expected-arrival counts and transaction bytes against the exact API\n   used by the implementation.\n4. Check the PTX ISA or pinned library abstraction for the operation-specific\n   completion, proxy, and fence sequence.\n5. Sweep stage depth and role allocation while watching shared memory,\n   registers, occupancy, and total runtime.\n```\n\n## Example Progression (tcgen05 tutorial)\n\n- v3 pipelining: 939.61 TFLOPS (62.4% of the tutorial's cuBLAS result)\n- v4 warp specialization: 1208.83 TFLOPS (80.2%)\n- v5 2-SM MMA: 1302.29 TFLOPS (86.4%)\n- v6 persistence with static scheduling: 1475.93 TFLOPS (98.0%)\n\n## Caveats\n\n- Additional stages consume shared memory and sometimes registers; derive the\n  legal budget from the compiled kernel and selected device.\n- Phase bugs can be intermittent; instrument stage ownership and phases during\n  development.\n- A lower wait counter does not by itself mean lower end-to-end runtime.\n\n---\nSource: KernelWiki wiki/patterns/pipeline-stalls.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/pipeline-stalls.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/patterns/pipeline-stalls.md",
+        "pageId": "pattern-pipeline-stalls",
+        "sourceDigest": "352b1c16a9ff8cc3fc4b0272aa6f398081fc7ab1c397957c14c7875dcd0add82",
+        "unitDigest": "14820d6046a69e05a049a0a4d4f6f27122fd76b1419a0e11ca5f055a7ff5e5ca",
+        "type": "pattern",
+        "topics": [
+          "pipeline-stages",
+          "warp-specialization",
+          "tma",
+          "tcgen05",
+          "mbarrier"
+        ],
+        "symptoms": [
+          "pipeline-stalls",
+          "compute-bound",
+          "low-tensor-core-utilization"
+        ],
+        "candidateTechniques": [
+          "technique-pipeline-stages",
+          "technique-warp-specialization",
+          "technique-double-buffering",
+          "technique-ping-pong-scheduling"
+        ],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/pipeline-stalls.md"
+      ]
+    },
+    {
+      "unitId": "pattern-register-pressure",
+      "title": "Register Pressure — Low Occupancy",
+      "content": "# Register pressure\n\nHigh live-register demand can reduce residency or cause local-memory spills. Confirm it with compiler resource output and profiler metrics before changing the kernel; occupancy alone is not a performance objective.\n\nCommon contributors include register-resident accumulators, epilogue intermediates, unrolled loop state, and long live ranges across asynchronous stages.\n\n## Candidate responses\n\n| Technique | Scope | Tradeoff |\n| --- | --- | --- |\n| TMEM accumulators | Fifth-generation Tensor Core path | Moves D out of per-thread registers, but adds explicit allocation, synchronization, and TMEM-to-register epilogue work. |\n| Warp specialization | Kernel-specific | Gives roles different register budgets, but adds synchronization and may reduce flexibility. |\n| Shorter live ranges or less unrolling | General | Can lower register count at the cost of more instructions or less instruction-level parallelism. |\n| Smaller tiles | General | Reduces state per CTA but can reduce reuse or Tensor Core efficiency. |\n\nOn `sm_100a`/`sm_100f`, PTX exposes each CTA a TMEM view of 512 columns by 128 lanes of 32-bit cells. Treat the required column count as part of the kernel resource design; do not describe that logical CTA view as a documented physical byte capacity per SM.\n\n---\nSource: KernelWiki wiki/patterns/register-pressure.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/register-pressure.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/patterns/register-pressure.md",
+        "pageId": "pattern-register-pressure",
+        "sourceDigest": "f28b86f619c1ba0b1da7b446de421f94fe7835779ca08e333543d1b32c05cfe9",
+        "unitDigest": "a9cdcf7f87fd67cd2027c731f62a1f0ce7fee96155c7356ff9e0430087f1a98d",
+        "type": "pattern",
+        "topics": [
+          "tmem",
+          "register-reuse",
+          "warp-specialization"
+        ],
+        "symptoms": [
+          "register-pressure",
+          "low-occupancy",
+          "register-spilling"
+        ],
+        "candidateTechniques": [
+          "hw-tmem",
+          "technique-warp-specialization",
+          "migration-register-to-tmem"
+        ],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/register-pressure.md"
+      ]
+    },
+    {
+      "unitId": "pattern-tail-effect",
+      "title": "Tail Effect — Last Wave Underutilization",
+      "content": "# Tail effect\n\nWhen a static grid contains a non-multiple of the number of simultaneously resident CTAs, its last wave cannot occupy every available slot. Confirm the effect from the actual grid, occupancy limit, and CTA durations; `num_tiles % num_SMs` is only the one-resident-CTA-per-SM special case.\n\nFor example, the locally verified NVIDIA B200 exposes 148 SMs. Under the simplifying assumption of one resident CTA per SM and equal-duration tiles, a 150-CTA grid has a first wave of 148 CTAs and a final wave of two CTAs, leaving 146 SMs without work during that final wave.\n\nPersistent scheduling or CLC can reduce launch overhead and redistribute uneven work. Neither can make 150 independent tile tasks occupy more than 150 tile-time slots, so they do not eliminate the final lack of parallelism in this example.\n\n## What to measure\n\n- resident CTAs per SM for the actual kernel;\n- grid and logical tile counts;\n- per-CTA duration variance;\n- time spent in the final wave;\n- changes in cache locality or synchronization introduced by the alternative scheduler.\n\n---\nSource: KernelWiki wiki/patterns/tail-effect.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/tail-effect.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/patterns/tail-effect.md",
+        "pageId": "pattern-tail-effect",
+        "sourceDigest": "49e7155eac43acbba02102fc7f936e50e4a60dcbfe91a463b870ab91fb050629",
+        "unitDigest": "5be3bd80f7b02843ed163bef2c4f384535884ef7859c40256263e773ba8def31",
+        "type": "pattern",
+        "topics": [
+          "persistent-kernel",
+          "clc",
+          "tile-scheduling"
+        ],
+        "symptoms": [
+          "tail-effect",
+          "low-sm-utilization",
+          "wave-quantization"
+        ],
+        "candidateTechniques": [
+          "technique-persistent-kernels",
+          "hw-clc",
+          "technique-tile-scheduling"
+        ],
+        "architectures": [],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/patterns/tail-effect.md"
+      ]
+    },
+    {
+      "unitId": "technique-cache-policy",
+      "title": "PTX Cache Policy Differentiation",
+      "content": "# PTX Cache Policy Differentiation\n\nPTX global-load cache operators and eviction-priority hints let a kernel express different reuse expectations for different input streams. A common experiment is to avoid allocating one-pass matrix data in L1 while giving a reused vector a longer-lived eviction hint.\n\n## Evidence from the NVFP4 GEMV writeup\n\nYue Zhang reports an optimization sequence that moves from 443 microseconds after a coalescing rewrite to 39 microseconds after using hardware intrinsics and then 27 microseconds after a PTX rewrite. The PTX stage includes byte-unpacking and cache-control changes. The source does not isolate cache policy as the cause of the whole 443-to-27-microsecond delta, so this page does not assign a standalone speedup to it.\n\n## Evaluation procedure\n\n1. Establish reuse distance and working-set size for each load stream.\n2. Implement one cache-policy change at a time while keeping address mapping and instruction width fixed.\n3. Check generated SASS and profile cache hit rates, sectors, and DRAM traffic.\n4. Re-run every supported shape: a policy that helps a large streaming K dimension can hurt a smaller, cache-resident one.\n\nCache operators are hints with architecture- and workload-dependent effects. They do not override alignment, coalescing, capacity, or correctness requirements.\n\nFlashInfer PR 1039 contains a concrete cache-operation choice in an SM100\nattention load path. The following contiguous excerpt performs guarded 16-byte\n`cp.async` copies using CUTLASS's `CacheOperation::Always` policy:\n\n```cpp\nVec* dst_ptr = &dst(i);\nconst Vec* src_ptr = &src(i);\nbool guard = elem_less(cc, limitQ);\ncutlass::arch::cp_async_zfill<16, cutlass::arch::CacheOperation::Always>(\n    dst_ptr, src_ptr, guard);\n```\n\nThe source does not establish that this policy is best for another stream or\nkernel; it is a reproducible example of an explicit policy at one call site.\n\n---\nSource: KernelWiki wiki/techniques/cache-policy.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/cache-policy.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/cache-policy.md",
+        "pageId": "technique-cache-policy",
+        "sourceDigest": "1a1710a80256b3961d10b29607a40ea1d3e7c23fc45675cfe42e07ecc930cd74",
+        "unitDigest": "e4ea4b2ffa9997286f414b7c1d8d7eef3c5b7f049dfb24da7193336b9ad4a828",
+        "type": "technique",
+        "topics": [
+          "cache-policy",
+          "vectorized-loads"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/cache-policy.md"
+      ]
+    },
+    {
+      "unitId": "technique-cccl-memory-primitives",
+      "title": "CCCL CUB SM100 Scan Tuning",
+      "content": "# CCCL CUB SM100 Scan Tuning\n\nCUB device primitives select internal policies by architecture and type. PR\n3559 extends the scan policy chain with SM100 specializations rather than\nassuming that Hopper policy choices remain optimal on B200.\n\nThe following contiguous excerpt is from the retained upstream patch. It shows\none specialization for primitive one-byte values and four-byte offsets; the\nnumbers are a particular CUB policy, not general application-kernel defaults.\n\n```cuda\ntemplate <class ValueT, class AccumT, class OffsetT>\nstruct sm100_tuning<ValueT, AccumT, OffsetT, op_type::plus, primitive_accum::yes, offset_size::_4, value_size::_1>\n{\n  static constexpr int items                           = 18;\n  static constexpr int threads                         = 512;\n  using delay_constructor                              = exponential_backon_constructor_t<768, 820>;\n  static constexpr BlockLoadAlgorithm load_algorithm   = BLOCK_LOAD_WARP_TRANSPOSE;\n  static constexpr BlockStoreAlgorithm store_algorithm = BLOCK_STORE_WARP_TRANSPOSE;\n  static constexpr CacheLoadModifier load_modifier     = LOAD_DEFAULT;\n};\n```\n\nThe patch contains different policies for other value and offset sizes and\nfalls back through the preceding policy chain where no specialization matches.\nApplications should normally call the public CUB scan API and benchmark that\ndispatch, rather than copy these implementation-detail policy constants.\n\n---\nSource: KernelWiki wiki/techniques/cccl-memory-primitives.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/cccl-memory-primitives.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/cccl-memory-primitives.md",
+        "pageId": "technique-cccl-memory-primitives",
+        "sourceDigest": "b7005e243262336840d767db9d401d7729917bcb1c4e3dd4dbf189d8e1939bac",
+        "unitDigest": "dee9a6b0da513d0f0e36a0efdf93a2289f3f1a56ca4e2bbe44f6cef2f3130fbb",
+        "type": "technique",
+        "topics": [
+          "cuda-cpp",
+          "parallel-scan",
+          "vectorized-loads",
+          "tile-scheduling"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/cccl-memory-primitives.md"
+      ]
+    },
+    {
+      "unitId": "technique-chunk-parallelism",
+      "title": "Chunk-Based Parallelism for Linear Recurrent Models",
+      "content": "# Chunk-Based Parallelism for Linear Recurrent Models\n\n## What the pattern means\n\nA recurrent sequence can be partitioned into chunks while preserving the state\npassed from one chunk to the next. Work inside a chunk can expose matrix\noperations and sequence parallelism, but the state dependency between chunks\nstill has to be respected by the algorithm or by separate kernel launches.\n\nTFLA adds a second level of sequence tiling inside each chunk for mLSTM. The\npaper and companion repository describe this as removing the earlier fixed\nchunk-size limit. They do not prescribe one generally optimal chunk size;\nselection depends on the model dimensions, sequence length, implementation,\nand target GPU.\n\n## Upstream usage excerpt\n\nThis excerpt is contiguous with the companion repository's README at commit\n`5b98ff8e2bec189b3d3c249405bab5149564d6f8`. The tensors are created immediately\nabove it in that README. It selects the published TFLA mLSTM implementation;\nit is not presented as a Gated DeltaNet kernel.\n\n```python\nfrom mlstm_kernels.torch.chunkwise.triton_xl_chunk import mlstm_chunkwise__xl_chunk\n\nmatH1 = mlstm_chunkwise__xl_chunk(\n    q=matQ, k=matK, v=matV, i=vecI, f=vecF, return_last_states=False, chunk_size=256\n)\n```\n\n## Correctness boundary\n\nChunks cannot be launched independently while all of them read and overwrite a\nsingle unsynchronized state buffer. A valid implementation must preserve the\nmodel's exact recurrence, normalization and stabilization rules, initial state,\nand chunk-boundary handoff. Decode is normally recurrent; chunkwise parallelism\nprimarily addresses sequence processing such as training or prefill.\n\nGated DeltaNet and other linear recurrent models may also use chunkwise\nformulations, but the TFLA source cited here evaluates mLSTM. Transfer to another\nrecurrence requires separate mathematical and implementation evidence.\n\n---\nSource: KernelWiki wiki/techniques/chunk-parallelism.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/chunk-parallelism.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/chunk-parallelism.md",
+        "pageId": "technique-chunk-parallelism",
+        "sourceDigest": "33287a92873bff6a67ffd2aaf1a51910156d09216ba2c00740822a5494926803",
+        "unitDigest": "1877ca8acafec49c31db6dff2e89b1f7f65daddc27811f556732439fb2e0063d",
+        "type": "technique",
+        "topics": [
+          "chunk-parallelism",
+          "linear-attention",
+          "triton"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/chunk-parallelism.md"
+      ]
+    },
+    {
+      "unitId": "technique-double-buffering",
+      "title": "Double/Multi-Buffering Patterns",
+      "content": "# Double and multi-buffering\n\nBuffering uses distinct storage regions for pipeline iterations so one agent can produce a stage while another consumes a different stage. On SM100, a kernel may pipeline shared-memory operand stages and may also partition its allocated TMEM columns among multiple accumulators or intermediates.\n\nThe PTX ISA exposes 512 TMEM columns to a CTA, with allocation in power-of-two column counts. It does not guarantee that every accumulator occupies one column per logical output column; the mapping depends on the selected MMA kind and layout. Derive the budget from the actual tiled MMA rather than assuming two equal 256-column halves.\n\n## Source-backed ownership fragment\n\nThis excerpt from FlashInfer PR 1039’s captured Blackwell attention mainloop shows a consumer waiting on one pipeline before acquiring and committing the next:\n\n```cpp\npipeline_q.consumer_wait(pipeline_q_consumer_state);\n++pipeline_q_consumer_state;\npipeline_s0.producer_acquire(pipeline_s0_producer_state);\ngemm_zero_acc(mma_qk, tSrQ0, tSrK(_, _, _, k_index), tStS0);\npipeline_s0.producer_commit(pipeline_s0_producer_state);\n```\n\n## Correctness and tuning checks\n\n- A stage must not be overwritten until every consumer has released it.\n- Producer and consumer phase/parity state must advance exactly once per reuse.\n- TMEM allocations must obey column-count and warp-collective lifetime rules.\n- Extra stages consume shared memory or TMEM and may reduce residency.\n- Select stage count from measured wait time and resource use; there is no universally correct default.\n\n---\nSource: KernelWiki wiki/techniques/double-buffering.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/double-buffering.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/double-buffering.md",
+        "pageId": "technique-double-buffering",
+        "sourceDigest": "722b78c0d894f7aca94343e728fed90714552c59612aa8fff0b703abc17706db",
+        "unitDigest": "7293f567e67a4c0a9c33730ca31f74ea06fb5961f9b1cdd24f2a5307b88d5bc2",
+        "type": "technique",
+        "topics": [
+          "double-buffering",
+          "tmem",
+          "pipeline-stages"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/double-buffering.md"
+      ]
+    },
+    {
+      "unitId": "technique-epilogue-fusion",
+      "title": "Epilogue fusion",
+      "content": "# Epilogue fusion\n\nA GEMM epilogue converts accumulator values into output values and may combine\nscaling, a source tensor, bias, activation, or quantization before the store.\nFusion can avoid a separate launch and intermediate global-memory round trip.\nOverlap with a later mainloop is a separate scheduling property and requires an\nexplicit buffer-ownership protocol.\n\nvLLM PR 16032 supplies a retained SM100 CUTLASS configuration. This contiguous\nexcerpt from its pinned upstream file uses the collective builder rather than a\nhand-written TMEM-load pseudo-API:\n\n```cpp\nusing CollectiveEpilogue =\n    typename cutlass::epilogue::collective::CollectiveBuilder<\n        ArchTag, OperatorClass, PerSmTileShape_MNK, ClusterShape,\n        cutlass::epilogue::collective::EpilogueTileAuto, ElementAccumulator,\n        ElementAccumulator, ElementC, LayoutCTag, AlignmentC, ElementD,\n        LayoutDTag, AlignmentD,\n        cutlass::epilogue::collective::EpilogueScheduleAuto>::CollectiveOp;\n```\n\nUse the complete builder and generated kernel for its supported operations.\nBlackwell does not prescribe 14 epilogue warps, a 256/256 TMEM split, or one\nuniversal visitor type. The former page and derived artifact asserted all three\nand were removed.\n\nCorrectness tests must cover alpha/beta or source-tensor semantics, activation\nedge cases, output conversion, tails, and buffer reuse. Performance attribution\nmust distinguish fusion savings from mainloop or tile-shape changes.\n\n---\nSource: KernelWiki wiki/techniques/epilogue-fusion.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/epilogue-fusion.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/epilogue-fusion.md",
+        "pageId": "technique-epilogue-fusion",
+        "sourceDigest": "8600af266d4478332a8f6f91cd18ea5ddc8e3c239c8b3b64a3928f3b6cbe8447",
+        "unitDigest": "9f849364ee02ddb49ce5f1786eb0ae237c6b2a66cc32e65ca401fa136a727fc5",
+        "type": "technique",
+        "topics": [
+          "epilogue-fusion",
+          "tmem",
+          "warp-specialization"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/epilogue-fusion.md"
+      ]
+    },
+    {
+      "unitId": "technique-external-source-map-research",
+      "title": "External Source-Map Research For Kernel Edits",
+      "content": "## Use\n\nUse external source-map research after a profile or benchmark identifies an edit\nfamily but the local PR pages do not expose a small enough implementation\nexample. The route is code-first: clone a source-map repository, grep for the\nmeasured mechanism, and cite exact files before adapting an idea.\n\n```bash\ngit clone https://github.com/ColfaxResearch/cfx-article-src external/colfax-cfx\ngit clone https://github.com/simveit/load_and_store external/simveit-load-store\nrg -n \"tma|mbarrier|swizzle|ldmatrix|stream\" external/colfax-cfx external/simveit-load-store\n```\n\n## When It Helps\n\n- Long-scoreboard or poor sector utilization: search load/store and transpose\n  examples before changing vector width or memory layout.\n- Barrier or TMA wait stalls: search pipelined GEMM examples before changing\n  stage count or producer/consumer split.\n- Tail waves: search persistent and Stream-K examples before adding a\n  shape-specific dispatcher.\n\n## Provenance Rule\n\nDo not cite this page as implementation evidence by itself. Cite one of its\nsource pages plus the concrete upstream file path, commit, or URL that shaped the\ncandidate edit.\n\n---\nSource: KernelWiki wiki/techniques/external-source-map-research.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/external-source-map-research.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/external-source-map-research.md",
+        "pageId": "technique-external-source-map-research",
+        "sourceDigest": "905263b1bf8a6e6d6a241d69c2062ae488871bb8b687674b0bbc14ed9b7afd23",
+        "unitDigest": "13a624da86d8195802e722010f5dce17a87e3ff6b571320eedd35346aeee29a2",
+        "type": "technique",
+        "topics": [
+          "cuda-cpp",
+          "cute-dsl",
+          "tma",
+          "wgmma",
+          "swizzling",
+          "vectorized-loads",
+          "persistent-kernel"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/external-source-map-research.md"
+      ]
+    },
+    {
+      "unitId": "technique-fine-grained-quantization",
+      "title": "Fine-grained FP8/FP4 scaling",
+      "content": "# Fine-grained FP8/FP4 scaling\n\nFine-grained quantization associates scales with smaller regions than an entire\ntensor. This can limit the influence of an outlier, at the cost of additional\nscale storage, layout constraints, conversion, and loads. “Block scale” is not\none universal format: DeepGEMM's SM100 FP8 path uses packed UE8M0, while the\nretained NVFP4 contest uses per-16 FP8 scales. The contest task prose calls\nthem E4M3FNUZ, while its executable reference constructs them as\n`torch.float8_e4m3fn`; the source artifacts disagree on the encoding name.\n\n## Retained implementation anchor\n\nDeepGEMM's captured SM100 kernel constructs a block-scaled descriptor and\nselects runtime scale-factor IDs before issuing its typed MMA wrapper:\n\n```cpp\nauto instr_desc = cute::UMMA::make_instr_desc_block_scaled<\n    a_dtype_t, b_dtype_t, float, cutlass::float_ue8m0_t,\n    UMMA_M, UMMA_N, kMajorA, kMajorB>();\nconst auto& runtime_instr_desc =\n    make_runtime_instr_desc_with_sf_id(instr_desc, sfa_id, sfb_id);\nmma_t::fma(a_desc, b_desc,\n           accum_stage_idx * kNumMWaves * BLOCK_N + w * BLOCK_N,\n           k_block_idx > 0 or k > 0, runtime_instr_desc,\n           kTmemStartColOfSFA + w * (kNumUTCCPAlignedElems / 32),\n           kTmemStartColOfSFB);\n```\n\nThis contiguous excerpt still depends on the surrounding template; use the full\npinned artifact for executable code. It shows the required relationship among\ntype, layout, runtime instruction descriptor, and scale locations without\ninventing an inline-PTX signature.\n\n## Porting rules\n\n- Preserve the source format and granularity; UE8M0, E4M3, and FP32 scales are\n  not interchangeable.\n- Use the library's layout transformer/query rather than deriving scale strides\n  from prose.\n- Treat promotion intervals on SM90 as kernel-specific numerical policy, not a\n  universal Hopper requirement.\n- Validate error and performance for the complete quantize–GEMM–dequantize\n  path, including tails and exceptional values.\n\n---\nSource: KernelWiki wiki/techniques/fine-grained-quantization.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/fine-grained-quantization.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/fine-grained-quantization.md",
+        "pageId": "technique-fine-grained-quantization",
+        "sourceDigest": "bac086c4a1bf641cbdf7c0757ef8ce1873acc3b63c51396b1d7cbf28656d6d8d",
+        "unitDigest": "117f70c1a27c6e8a8ae5b5be07a2e67503cc65a3a16ac595746f5feed2405616",
+        "type": "technique",
+        "topics": [
+          "fine-grained-quantization",
+          "fp8",
+          "fp4",
+          "nvfp4",
+          "block-scale"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/fine-grained-quantization.md"
+      ]
+    },
+    {
+      "unitId": "technique-kernel-fusion",
+      "title": "Kernel fusion",
+      "content": "# Kernel fusion\n\nKernel fusion keeps producer/consumer operations within one launch to avoid\nmaterializing selected intermediates in global memory. It can reduce launch and\ntraffic costs, but it may increase live state, registers, shared memory, TMEM,\ncode size, and synchronization. A workload's operation graph—not a fixed\nnumber of kernels—defines the legal boundary.\n\nTensorRT-LLM PR 11897 provides a retained example: a Blackwell NVFP4 dense GEMM\nfused with SwiGLU. This contiguous call-site excerpt is the BF16-output path:\n\n```python\noutput = torch.ops.trtllm.cute_dsl_nvfp4_dense_gemm_swiglu_blackwell(\n    act_fp4, module.weight, act_sf, module.weight_scale, alpha,\n    module.dtype)\n```\n\nThe source has separate contracts for shapes, alignment, input scales, and\noutput type. It does not establish that routing, two expert GEMMs, activation,\nand combine should all be fused into one device kernel.\n\nEvaluate fusion by holding numerics and workload constant, then measuring\nlaunch count, intermediate bytes, occupancy/resources, and end-to-end latency.\nThe former local example was removed because `tmem_alloc` and `tcgen05_mma`\nwere invented pseudo-APIs presented as CUDA.\n\n---\nSource: KernelWiki wiki/techniques/kernel-fusion.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/kernel-fusion.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/kernel-fusion.md",
+        "pageId": "technique-kernel-fusion",
+        "sourceDigest": "53897ff4557d6c3e0b94e531b87aa53bc8866ce73b99e0606b32ddaf705d8b7a",
+        "unitDigest": "ad796ef1ec0755a34f0b26caf4bad2d51c59a9479e31cb5d1928d94ae0aef434",
+        "type": "technique",
+        "topics": [
+          "kernel-fusion",
+          "fused-kernel",
+          "tmem"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/kernel-fusion.md"
+      ]
+    },
+    {
+      "unitId": "technique-kernel-fusion-transfer-sm86-principles-v1",
+      "title": "Kernel fusion (reviewed transfer sm86-principles-v1)",
+      "content": "Project-reviewed transferable suggestion, not an executed or verified result: where the Mission explicitly has producer/consumer operations, consider whether keeping intermediates within a launch can reduce materialization. Preserve the exact numerical contract and independently compare the candidate with its baseline. Fusion can increase live state, registers and synchronization; do not assume a speedup. This summary excludes the source's Blackwell/TMEM-specific examples and makes no claim that sm86 supports those instructions. Applicability review covers this general principle only, not the original implementation or its reported performance.\n\n---\nSource: KernelWiki wiki/techniques/kernel-fusion.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/kernel-fusion.md\nProject-reviewed transferable suggestion from review sm86-principles-v1; unverified, and not an executed or measured result.",
+      "scope": {
+        "hardware": [
+          "nvidia-gpu"
+        ],
+        "architecture": [
+          "sm86"
+        ]
+      },
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/kernel-fusion.md",
+        "pageId": "technique-kernel-fusion",
+        "sourceDigest": "53897ff4557d6c3e0b94e531b87aa53bc8866ce73b99e0606b32ddaf705d8b7a",
+        "unitDigest": "b3ea6986fc8b88e825373d8936df895797404afd67e7ece7c7c267ab28c9e939",
+        "type": "technique",
+        "topics": [
+          "kernel-fusion",
+          "producer-consumer",
+          "intermediate-materialization"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "reviewed-transfer",
+          "reviewId": "sm86-principles-v1",
+          "hardware": [
+            "nvidia-gpu"
+          ],
+          "architectures": [
+            "sm86"
+          ],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/kernel-fusion.md",
+        "kernel-wiki-review:sm86-principles-v1"
+      ]
+    },
+    {
+      "unitId": "technique-persistent-kernels",
+      "title": "Persistent Kernels with Cluster Launch Control",
+      "content": "# Persistent Kernels with Cluster Launch Control\n\nA persistent kernel keeps a resident worker CTA or cluster alive for more than\none logical tile. A static scheduler derives later tiles in software. On\nBlackwell, a CLC scheduler can instead try to cancel a same-grid cluster that\nhas not launched and reuse the returned cluster ID as the next work ID.\n\nCLC does not expose an arbitrary tile queue. The grid defines the candidate\ncluster IDs. `clusterlaunchcontrol.try_cancel` is asynchronous and atomic; a\nsuccessful response identifies the first CTA of the canceled cluster. A failed\nrequest means that this CTA must not issue another request. Correct code must\nalso observe the shared-memory response, mbarrier transaction, cluster\ngranularity, and proxy-ordering rules in the PTX ISA.\n\n## Retained implementation excerpt\n\nFlashAttention PR 2441 contains a CuTe DSL wrapper around its hardware\nscheduler and CLC response pipeline. The following is a contiguous excerpt from\nthe captured upstream `flash_attn/cute/tile_scheduler.py`:\n\n```python\nself._pipeline.producer_acquire(self._producer_state, loc=loc, ip=ip)\nmbarrier_addr = self._pipeline.producer_get_barrier(\n    self._producer_state, loc=loc, ip=ip\n)\nself._hw_scheduler.advance_to_next_work(mbarrier_addr, loc=loc, ip=ip)\nself._producer_state.advance(loc=loc, ip=ip)\n```\n\nThis excerpt shows request production only. Consumers still wait for the\npipeline stage and interpret the scheduler response through the surrounding\nimplementation.\n\n## Choosing between static and CLC scheduling\n\n- Static persistence has deterministic mapping and no CLC-query path.\n- CLC can redistribute cluster IDs that had not yet launched when actual SM\n  availability differs from the static assumption.\n- Neither mode creates additional independent work at the tail of a grid.\n- CLC overhead, cluster shape, locality, tile-cost variation, and kernel\n  concurrency must be measured for the actual workload.\n\nThe tutorial by Thien Tran (`gau-nernst`) reports 939.61 TFLOPS at its pipelined step and 1475.93\nTFLOPS at a later static-persistent step. Intervening changes include warp\nspecialization and two-SM MMA, so that delta is not an isolated persistence or\nCLC measurement.\n\nThe former local CUDA skeleton and “CLC full implementation” bundle were\nremoved: the skeleton used nonexistent PTX forms, and the bundle conflated a\nPDL PR with the separate CLC mechanism.\n\n---\nSource: KernelWiki wiki/techniques/persistent-kernels.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/persistent-kernels.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/persistent-kernels.md",
+        "pageId": "technique-persistent-kernels",
+        "sourceDigest": "6c51c789352ee412cb88b69c85a68e7d335b3a678933e4c68ed1dd67213c2ad1",
+        "unitDigest": "bbb4ce856967debd9227fbc04788cce124a432ae5106f5a17c314569555faf0a",
+        "type": "technique",
+        "topics": [
+          "persistent-kernel",
+          "clc",
+          "tile-scheduling"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/persistent-kernels.md"
+      ]
+    },
+    {
+      "unitId": "technique-ping-pong-scheduling",
+      "title": "Ping-Pong Scheduling",
+      "content": "# Ping-Pong Scheduling\n\nFlashAttention-4 processes two query tiles per CTA and alternates their matrix-multiply and softmax work. While one tile advances through tensor-core work, a dedicated softmax warpgroup can process the other tile's intermediate state. Synchronization and a separate correction stage keep dependencies explicit.\n\nThe technique is useful because FA4's forward pass must overlap resources whose throughput scaled differently on Blackwell. It aims to improve overlap; it does not prove that either resource remains busy continuously.\n\n## Requirements\n\n- separate live storage for both tiles, including their TMEM-backed intermediates;\n- producer/consumer barriers whose phases cannot be confused across iterations;\n- an epilogue/correction schedule that does not overwrite a tile before its consumers finish;\n- enough loop work to amortize the extra storage and synchronization.\n\nUse the FA4 implementation for exact code. The earlier local “full implementation” was an unrelated CUTLASS backward-attention file, and the teaching skeleton was not upstream FA4 code; both were removed.\n\nAt the implementation commit pinned by `doc-flash-attention-4`, the SM100\nforward kernel dispatches two softmax roles to distinct stage arguments:\n\n```python\nif warp_idx < self.softmax1_warp_ids[0]:\n    softmax_loop(stage=0, tStS=tStS)\nif warp_idx < self.correction_warp_ids[0] and warp_idx >= self.softmax1_warp_ids[0]:\n    softmax_loop(stage=1, tStS=tStS)\n```\n\nThis is a contiguous excerpt from `flash_attn/cute/flash_fwd_sm100.py`; the\nsurrounding pipeline and barriers define when each stage may run.\n\n---\nSource: KernelWiki wiki/techniques/ping-pong-scheduling.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/ping-pong-scheduling.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/ping-pong-scheduling.md",
+        "pageId": "technique-ping-pong-scheduling",
+        "sourceDigest": "5ea2e7be077b1029f42bcf406216be7438affcc2f0ea616bb97536320e5f5253",
+        "unitDigest": "b7dfa76e3b5052f409610a76d1d71289296fceeb3d713d169ad51b69da070ee4",
+        "type": "technique",
+        "topics": [
+          "ping-pong-scheduling",
+          "warp-specialization",
+          "tmem",
+          "pipeline-stages"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/ping-pong-scheduling.md"
+      ]
+    },
+    {
+      "unitId": "technique-pipeline-stages",
+      "title": "Software Pipelining and Multi-Stage Buffering",
+      "content": "# Software Pipelining and Multi-Stage Buffering\n\nSoftware pipelining keeps multiple shared-memory tile buffers in flight so a producer can load a later tile while a consumer performs MMA on an earlier tile. Each buffer stage needs an ownership protocol: the consumer waits for the transfer-complete state, and the producer waits until the consumer releases the stage before reuse.\n\n## Source-reported tutorial step\n\nIn the single-B200 GEMM tutorial by Thien Tran (`gau-nernst`), the no-pipeline v2b row reports 695.43 TFLOPS and the pipelined v3 row reports 939.61 TFLOPS, about a 35% increase for that exact benchmark. Later rows add warp specialization, two-SM MMA, and persistent static scheduling, so their gains are not attributed to pipeline staging alone.\n\n## Choosing a stage count\n\nThere is no universally optimal count. More stages can expose additional overlap but consume more shared memory and barrier state, can reduce residency, and add prologue/epilogue work. Choose the count from:\n\n- bytes of A/B/scale data per stage;\n- available dynamic shared memory after other storage;\n- measured load and MMA duration per tile;\n- K-loop length and reuse frequency;\n- occupancy and register effects of the producer/consumer roles.\n\nThe Modular article uses a multi-stage circular buffer as one component of a longer optimization sequence ending at 85% of its stated reference. That final percentage is not a pipeline-only result.\n\n## Correctness checks\n\nValidate phase transitions, expected transaction bytes, and buffer reuse with short and non-multiple K loops as well as the steady state. An off-by-one barrier phase can be a correctness bug or deadlock, and a stage-count change must not be treated as a performance-only edit.\n\nFlashInfer PR 1039 provides a concrete producer/consumer sequence. This\ncontiguous excerpt from its captured SM100 attention mainloop is illustrative,\nnot a standalone kernel:\n\n```cpp\npipeline_q.consumer_wait(pipeline_q_consumer_state);\n++pipeline_q_consumer_state;\npipeline_s0.producer_acquire(pipeline_s0_producer_state);\ngemm_zero_acc(mma_qk, tSrQ0, tSrK(_, _, _, k_index), tStS0);\npipeline_s0.producer_commit(pipeline_s0_producer_state);\n++pipeline_s0_producer_state;\n```\n\n---\nSource: KernelWiki wiki/techniques/pipeline-stages.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/pipeline-stages.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/pipeline-stages.md",
+        "pageId": "technique-pipeline-stages",
+        "sourceDigest": "751411830c16e0e344c5309483cb149971f4dc36047324382c350233862d4ab5",
+        "unitDigest": "992f7e8ad0088fbdc47110c1715ee739c570f1ee39cb627d560b6bb9062abc7e",
+        "type": "technique",
+        "topics": [
+          "pipeline-stages",
+          "double-buffering",
+          "tma",
+          "mbarrier"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/pipeline-stages.md"
+      ]
+    },
+    {
+      "unitId": "technique-register-budgeting",
+      "title": "Register budgeting",
+      "content": "# Register budgeting\n\nRegisters are one input to occupancy, alongside threads, shared memory, barrier\nstate, architectural limits, and the compiled kernel. Occupancy is stepwise,\nnot simply inverse to registers per thread. A lower budget can increase active\nwarps, but it can also cause spills, recomputation, or lost instruction-level\nparallelism.\n\nA reproducible comparison keeps source and launch shape fixed and builds\nmultiple variants, for example:\n\n```bash\nnvcc -arch=sm_100a -Xptxas=-v kernel.cu -o kernel-default\nnvcc -arch=sm_100a -Xptxas=-v --maxrregcount=80 kernel.cu -o kernel-r80\nnvcc -arch=sm_100a -Xptxas=-v --maxrregcount=64 kernel.cu -o kernel-r64\n```\n\nRecord ptxas registers and spill bytes, achieved occupancy, memory stalls, and\nkernel time. Amandeep Singh reports that changing the cap from 80 to 64 did not\naffect the tested kernel because its allocation was already below the cap. That\nobservation is a useful control: a compiler flag that does not bind cannot\nexplain a speedup.\n\nThe former page's fixed “32 registers gives four blocks per SM” and “spills can\nbe hidden” rules were removed; both depend on the complete resource and access\nprofile.\n\n---\nSource: KernelWiki wiki/techniques/register-budgeting.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/register-budgeting.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/register-budgeting.md",
+        "pageId": "technique-register-budgeting",
+        "sourceDigest": "b8b266c37a6e7911944c1f02e12da8c429599b81e721dc3f2ebd5555ae9b0ae1",
+        "unitDigest": "174e2f0bbdd24eda8a50e43fea568fb798f07419cbe00e54b10d572311e9bed0",
+        "type": "technique",
+        "topics": [
+          "register-budgeting",
+          "register-reuse"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/register-budgeting.md"
+      ]
+    },
+    {
+      "unitId": "technique-software-exp",
+      "title": "Software-Emulated Exponential",
+      "content": "# Software-Emulated Exponential\n\nFlashAttention-4 uses a software approximation of `exp2` on FMA units alongside Blackwell's hardware MUFU exponential path. The goal is to raise effective exponential throughput during softmax by using FMA capacity that would otherwise be underused while attention's tensor-core work is in flight.\n\n## Method reported by FlashAttention-4\n\nThe implementation described by the authors has three parts:\n\n1. Cody-Waite range reduction decomposes the exponent into integer and fractional components.\n2. A Sollya-optimized polynomial approximates the fractional power of two and is evaluated in Horner form on FMA units.\n3. The integer component is applied through the floating-point exponent representation.\n\nThe FA4 schedule distributes work across both the hardware MUFU path and the software FMA path; it is not simply a wholesale replacement of every hardware exponential.\n\n## Kernel integration\n\nThe technique matters in combination with FA4's forward pipeline:\n\n- two query tiles are processed in a ping-pong schedule;\n- dedicated softmax warpgroups coordinate so their exponential phases do not collide;\n- a correction warpgroup handles conditional online-softmax rescaling outside the critical stage;\n- TMEM holds intermediate attention data used across the pipeline.\n\n## Porting guidance\n\nThis is a kernel-specific numerical approximation, not a generic instruction substitution. A port must preserve the approximation range, exceptional-value behavior, and softmax error tolerance of the tested implementation. It should also confirm by profiling that the exponential path is the relevant bottleneck and validate outputs against an appropriate reference.\n\nNo universal exponential speedup, FMA latency, SFU latency, or accuracy bound is asserted here; the cited FA4 sources do not establish those earlier local figures as portable hardware facts.\n\nThe authors' implementation pinned by `doc-flash-attention-4` contains the\nfollowing contiguous core of `ex2_emulation` in `flash_attn/cute/utils.py`:\n\n```python\nx_clamped = cute.arch.fmax(x, -127.0)\nx_rounded = add_round_down(x_clamped, fp32_round_int, loc=loc, ip=ip)\nx_rounded_back = x_rounded - fp32_round_int\nx_frac = x_clamped - x_rounded_back\nx_frac_ex2 = evaluate_polynomial(x_frac, POLY_EX2[poly_degree], loc=loc, ip=ip)\nreturn combine_int_frac_ex2(x_rounded, x_frac_ex2, loc=loc, ip=ip)\n```\n\nIt relies on surrounding helpers, coefficient tables, CuTe DSL types, and the\ndocumented input-domain assumptions; this excerpt is not independently usable.\n\n## Sources\n\n- [FlashAttention-4 author blog](../../sources/blogs/flash-attention-4.md)\n- [FlashAttention-4 paper](../../sources/docs/flash-attention-4.md)\n\n---\nSource: KernelWiki wiki/techniques/software-exp.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/software-exp.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/software-exp.md",
+        "pageId": "technique-software-exp",
+        "sourceDigest": "b958462e2a8f45d66c76a9d8c749dcc5344b5717dd23f08104914961d188f3ee",
+        "unitDigest": "8ee127a2ac30df512aa3efa074fe01a14515538bd47b03555240a9fda6f423ea",
+        "type": "technique",
+        "topics": [
+          "software-exp",
+          "attention"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/software-exp.md"
+      ]
+    },
+    {
+      "unitId": "technique-swizzling",
+      "title": "Shared Memory Swizzling",
+      "content": "# Shared Memory Swizzling\n\nA shared-memory swizzle permutes address bits so that a cooperative access pattern spreads requests across banks. It can reduce bank conflicts, but the correct mapping depends on element size, matrix major mode, instruction shape, and transfer pattern.\n\nFor descriptor-based operations, the encoded descriptor and the physical shared-memory layout must agree. PTX represents non-swizzled and multiple swizzled layouts. A 128-byte swizzle is therefore neither universally mandatory nor universally optimal for `tcgen05` inputs.\n\n## CuTe layout coupling\n\nThe official CuTe DSL dense-GEMM documentation materializes a logical layout and its selected swizzle together. This excerpt is a fragment from the compiled `dense_gemm.py` documentation:\n\n```python\nsA = smem.allocate_tensor(\n    a_smem_layout.outer, swizzle=a_smem_layout.inner, dtype=ab_dtype\n)\nsB = smem.allocate_tensor(\n    b_smem_layout.outer, swizzle=b_smem_layout.inner, dtype=ab_dtype\n)\n```\n\nThe helper that produced `a_smem_layout` and `b_smem_layout` chooses among supported atoms using the actual major dimension and divisibility constraints. Hand-written PTX must enforce the equivalent agreement explicitly.\n\n## Verification\n\n- Validate the descriptor/layout pair against the instruction’s PTX layout tables.\n- Check alignment and leading-stride constraints for the chosen mode.\n- Measure bank conflicts and throughput for the actual access pattern; a larger swizzle span is not automatically faster.\n- Scope benchmark conclusions. The `tcgen05 for dummies` article reports a large gain when changing several layout/transfer choices in one B200 GEMM, not a universal penalty for every other mode.\n\n---\nSource: KernelWiki wiki/techniques/swizzling.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/swizzling.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/swizzling.md",
+        "pageId": "technique-swizzling",
+        "sourceDigest": "81b967009ab26c0264a00cf96c03c0d73083a939be437396f94cda599b6cefd6",
+        "unitDigest": "c50ad863d321025619654a0a5c95eb283c60534448e10114ac77951fb1899768",
+        "type": "technique",
+        "topics": [
+          "swizzling",
+          "shared-memory-optimization",
+          "tma"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/swizzling.md"
+      ]
+    },
+    {
+      "unitId": "technique-tile-scheduling",
+      "title": "Tile Scheduling Strategies",
+      "content": "# Tile scheduling strategies\n\nTile scheduling maps logical work tiles to CTA or cluster IDs and determines the order in which a persistent kernel processes additional work. It affects operand reuse, load balance, and the size of the last partially occupied wave.\n\n## Static raster\n\nA row-major mapping is easy to validate and is an appropriate baseline:\n\n```cpp\nstruct TileCoord { int m; int n; };\n\n__device__ TileCoord row_major_tile(int linear_id, int tiles_n) {\n  return {linear_id / tiles_n, linear_id % tiles_n};\n}\n```\n\nA blocked or swizzled raster may improve locality when nearby tiles reuse A or B data, but the useful order depends on matrix layout, tile shape, cache residency, cluster shape, and traversal direction. It cannot be assigned a fixed cache-hit improvement without a benchmark.\n\n## Persistent scheduling and CLC\n\nA software persistent scheduler repeatedly maps acquired IDs to work. On SM100, CLC can let a running cluster cancel one not-yet-launched cluster from the same grid and inherit its first CTA ID. This is not an arbitrary hardware tile queue: the launch grid and the program’s ID-to-tile mapping still define the work domain.\n\n## Selection checks\n\n- Compare schedules with identical tile shapes and launch/resource settings.\n- Report the exact GPU, SM count, grid size, raster, cluster shape, and matrix dimensions.\n- Separate locality effects from tail effects and load imbalance.\n- Do not claim that CLC removes the final shortage of parallel work; when fewer independent tiles remain than SMs, some SMs must be idle.\n\n---\nSource: KernelWiki wiki/techniques/tile-scheduling.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/tile-scheduling.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/tile-scheduling.md",
+        "pageId": "technique-tile-scheduling",
+        "sourceDigest": "96407d61263950d0e57de9d9201568c883ce401cda8ec73eb5084d7ae793a0a6",
+        "unitDigest": "9a5599da3fcb1da2c893d0ed865fcd5db6b3f506ac1b97fe307264d2ba784831",
+        "type": "technique",
+        "topics": [
+          "tile-scheduling",
+          "clc",
+          "persistent-kernel"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/tile-scheduling.md"
+      ]
+    },
+    {
+      "unitId": "technique-vectorized-loads",
+      "title": "Wide Vectorized Loads and Cache Policies",
+      "content": "# Wide Vectorized Loads and Cache Policies\n\nMemory-bound kernels can reduce load-instruction overhead and improve transaction formation by moving aligned contiguous words per thread. The legal and useful width depends on pointer alignment, per-lane address mapping, register pressure, and how the compiler lowers the operation.\n\n## NVFP4 GEMV evidence\n\nYue Zhang reports the following end-to-end optimization sequence for one GPU Mode problem-1 submission:\n\n| Stage | Reported latency |\n|---|---:|\n| Naive CUDA attempt | 2000 microseconds |\n| Coalesced rewrite | 443 microseconds |\n| Hardware-intrinsic rewrite | 39 microseconds |\n| PTX rewrite | 27 microseconds |\n| Final combined submission | 22.392 microseconds |\n\nThe stages combine layout, decoding, PTX, cache-policy, and instruction-level-parallelism changes. They do not establish a vector-load-only speedup. Amandeep Singh separately reports 26.7 microseconds for the CUDA baseline and an 8.6-microsecond speed-of-light estimate on the largest configuration in that article; this is a different benchmark context.\n\n## Evaluation procedure\n\n1. Confirm from profiling and a byte-count roofline that the kernel is bandwidth-limited.\n2. Prove alignment and contiguous per-thread access for every supported shape, including tails.\n3. Compare scalar and candidate vector widths while holding work mapping and cache policy fixed.\n4. Inspect generated instructions and measure memory sectors, transactions, replay, and registers.\n5. Only then test cache operators separately for streaming and reused inputs.\n\nWider source syntax does not guarantee a single wider hardware transaction, and an excessive width can reduce occupancy or complicate tails. Treat register limits and cache operators as independent tuning dimensions rather than part of a universal recipe.\n\nCCCL PR 3517 shows the alignment guard required before its CUB block-load path\nreinterprets a scalar pointer as a vector pointer. This is a contiguous excerpt\nfrom the captured upstream patch:\n\n```cpp\nusing vector_t = typename CubVector<device_word_t, vector_size>::Type;\nif (reinterpret_cast<uintptr_t>(block_src_ptr) % alignof(vector_t) == 0)\n{\n  vector_t vec_items[vectors_per_thread];\n  const vector_t* vec_ptr = reinterpret_cast<const vector_t*>(block_src_ptr)\n                            + linear_tid * vectors_per_thread;\n}\n```\n\nThe complete upstream branch includes the vector-load loop and fallback path;\nthe excerpt alone is not a replacement for `BlockLoad`.\n\n---\nSource: KernelWiki wiki/techniques/vectorized-loads.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/vectorized-loads.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/vectorized-loads.md",
+        "pageId": "technique-vectorized-loads",
+        "sourceDigest": "c6dab2b80866c9821ad539ac36b2b407b219a7a045d1b01324506c10602abe08",
+        "unitDigest": "975e64c71706ab77f42bf9c778ad53b1363a4dc594d8802d1a8ded4a0e221161",
+        "type": "technique",
+        "topics": [
+          "vectorized-loads",
+          "cache-policy",
+          "register-budgeting"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/vectorized-loads.md"
+      ]
+    },
+    {
+      "unitId": "technique-vectorized-loads-transfer-sm86-principles-v1",
+      "title": "Wide Vectorized Loads and Cache Policies (reviewed transfer sm86-principles-v1)",
+      "content": "Project-reviewed transferable suggestion, not an executed or verified result: for explicitly contiguous per-thread data, prove alignment, access legality and tail handling for every fixed shape before trying wider loads. Compare scalar and wider candidates while keeping work mapping and cache policy constant. Check compiler output and measure actual correctness and runtime. Wider source expressions do not guarantee wider transactions, and extra registers may offset benefits. No profiler evidence here establishes a bandwidth bottleneck. This summary excludes the source's NVFP4 implementation and latency claims; its sm86 applicability review covers only this bounded validation method.\n\n---\nSource: KernelWiki wiki/techniques/vectorized-loads.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/vectorized-loads.md\nProject-reviewed transferable suggestion from review sm86-principles-v1; unverified, and not an executed or measured result.",
+      "scope": {
+        "hardware": [
+          "nvidia-gpu"
+        ],
+        "architecture": [
+          "sm86"
+        ]
+      },
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/vectorized-loads.md",
+        "pageId": "technique-vectorized-loads",
+        "sourceDigest": "c6dab2b80866c9821ad539ac36b2b407b219a7a045d1b01324506c10602abe08",
+        "unitDigest": "8bca9450d1c23b535758d705577df62f97cc012b83a0b28b6d09d645422acc4a",
+        "type": "technique",
+        "topics": [
+          "vectorization",
+          "vectorized-loads",
+          "contiguous",
+          "alignment",
+          "tail-handling"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "reviewed-transfer",
+          "reviewId": "sm86-principles-v1",
+          "hardware": [
+            "nvidia-gpu"
+          ],
+          "architectures": [
+            "sm86"
+          ],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/vectorized-loads.md",
+        "kernel-wiki-review:sm86-principles-v1"
+      ]
+    },
+    {
+      "unitId": "technique-warp-specialization",
+      "title": "Warp Specialization on Hopper and Blackwell",
+      "content": "# Warp specialization\n\nWarp specialization assigns different warps to producer, matrix, scheduling, softmax, or epilogue work so that independent pipeline phases can overlap. The number of warps and their roles are kernel configuration choices; Blackwell has no architectural “canonical 16-warp CTA.”\n\nOn Hopper, a WGMMA instruction is issued collectively by a four-warp warpgroup. On SM100, a `tcgen05.mma` operation is initiated by one thread, while TMEM allocation and TMEM load/store operations remain warp-collective. A practical role split therefore depends on all of the selected operations—not just MMA issue granularity.\n\n## Source-backed pipeline fragment\n\nThis contiguous excerpt is from FlashInfer PR 1039’s captured `sm100_fmha_fwd_mainloop_tma_warpspecialized.hpp`. It shows ownership transfer around one QK MMA step; it does not imply a universal warp count.\n\n```cpp\nq_index = pipeline_q_consumer_state.index();\npipeline_q.consumer_wait(pipeline_q_consumer_state);\n++pipeline_q_consumer_state;\npipeline_s0.producer_acquire(pipeline_s0_producer_state);\ngemm_zero_acc(mma_qk, tSrQ0, tSrK(_, _, _, k_index), tStS0);\npipeline_s0.producer_commit(pipeline_s0_producer_state);\n```\n\n## Design checks\n\n- Name one owner for each pipeline state transition and prove that acquire/wait pairs cannot deadlock.\n- Keep `.sync.aligned` instructions on converged, fully active warps.\n- Budget registers, shared memory, TMEM columns, and resident CTAs for the actual role split.\n- Measure overlap. Extra roles and barriers can cost more than they save when phases are short or imbalanced.\n- Treat a concrete warp count as part of the cited kernel configuration, not as a property of SM100.\n\n---\nSource: KernelWiki wiki/techniques/warp-specialization.md @ b6b4301f15e8ce6955a56776690643ce5db369e6\nhttps://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/warp-specialization.md\nKernelWiki page content is unreviewed human guidance for this project; it is not a verified or measured result.",
+      "scope": {},
+      "selectionMetadata": {
+        "source": "kernel-wiki",
+        "sourceCommit": "b6b4301f15e8ce6955a56776690643ce5db369e6",
+        "sourcePath": "wiki/techniques/warp-specialization.md",
+        "pageId": "technique-warp-specialization",
+        "sourceDigest": "439f525754aabc9f3a998fa29269edefa8b18a7f3712de2fa852f561a9668fec",
+        "unitDigest": "e3d8ed37ad48e2d77fb07066c84cad30eb7d2046c935a18be9902cb537d825a4",
+        "type": "technique",
+        "topics": [
+          "warp-specialization",
+          "tcgen05",
+          "tmem"
+        ],
+        "symptoms": [],
+        "candidateTechniques": [],
+        "architectures": [
+          "sm100",
+          "sm90"
+        ],
+        "applicability": {
+          "mode": "unreviewed",
+          "reviewId": null,
+          "hardware": [],
+          "architectures": [],
+          "requiredCapabilities": [],
+          "software": []
+        }
+      },
+      "evidenceRefs": [
+        "https://github.com/mit-han-lab/KernelWiki/blob/b6b4301f15e8ce6955a56776690643ce5db369e6/wiki/techniques/warp-specialization.md"
+      ]
+    }
+  ],
+  "license": {
+    "spdx": "MIT",
+    "path": "LICENSE",
+    "copyright": "Copyright (c) 2026 hanlab",
+    "text": "MIT License\n\nCopyright (c) 2026 hanlab\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+  },
+  "snapshotDigest": "c849536ce799c7de4ac88fc770fb5f66ebad72350a92af42a8acb96d83557cd4"
+}
