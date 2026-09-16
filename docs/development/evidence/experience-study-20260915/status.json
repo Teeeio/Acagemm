@@ -3,7 +3,7 @@
   "recordedAt": "2026-09-15T12:34:20.662206+00:00",
   "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
   "phase": "operator-p3-wiki",
-  "status": "r7-retained-policy-rejection-repair-verified-new-live-pending",
+  "status": "r8-nine-slot-study-completed-standard-smoke-n20-pending",
   "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
   "contract": {
     "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
@@ -279,7 +279,7 @@
     "currentAccepted": true,
     "currentIntegrated": true
   },
-  "updatedAt": "2026-09-16T14:46:26.467350+00:00",
+  "updatedAt": "2026-09-16T15:38:22.253324+00:00",
   "taskHistory": [
     {
       "role": "runtime-condition",
@@ -13344,7 +13344,7 @@
   },
   "patchPolicyRejectionRepair": {
     "id": "R7-policy-rejection-lost-projection",
-    "status": "software_verified_new_live_batch_pending",
+    "status": "software_verified_r8_live_study_completed",
     "execution": "primary_agent_direct_user_authorized",
     "dispatchTaskId": null,
     "fact": "Automatic admission now returns the typed, effect-free PatchPolicyCheckError as a paused needs_human state. The lifecycle persists the completed Agent projection and mission/candidate/run/diff-bound policy checks together. Managed Agent observation preserves this policy control state for the same Mission/run. High risk and all existing checks still reject; unexpected failures, including journal persistence errors, still propagate.",
@@ -13512,6 +13512,482 @@
           "bytes": 13468
         }
       ],
+      "crcAndHashesVerified": true
+    },
+    "platformContextSyncPending": true
+  },
+  "r8DirectAcceptance": {
+    "id": "R8-independent-live-experience-study",
+    "status": "completed_independently_verified_not_n20",
+    "execution": "primary_agent_direct_user_authorized",
+    "dispatchTaskId": null,
+    "sourceCommit": "69747e12fb9cd604670f94c5a0b931f39772ee1e",
+    "fact": "Nine predeclared affine two-round slots completed, three per experience condition. Independent retained-artifact verification passed. Required response-model observations were 19/19, all deepseek-v4-flash. All 28 queue tasks confirmed release; slot 3 retained one OPERATOR_CORRECTNESS_MISMATCH and recovered within the original budget. No apply-command failure occurred in this batch. All nine recorded Runtime PIDs were absent after completion.",
+    "inference": "The corrected source completes this controlled nine-slot real-model/GPU study, including recovery from one numerical correctness failure. The high-risk rejection branch is covered by software integration tests; R8 did not trigger that branch.",
+    "unknown": "Three samples per condition support descriptive comparison only, not causal improvement, statistical significance, or N20 stability. Old N20 remains bound to its old source; no new N20 has run yet.",
+    "evidence": [
+      "direct-study-r8-69747e1-20260916.zip"
+    ],
+    "next_action": "Freeze the same production source for a separate standard affine smoke; if it passes, start a fresh strict twenty-attempt N20 without study conditions or pooled study runs.",
+    "slotCounts": {
+      "completed": 9
+    },
+    "modelRequiredRuns": 19,
+    "modelObservedRuns": 19,
+    "slots": [
+      {
+        "slot": "slot-01",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 2,
+          "observedRunCount": 2,
+          "reasons": []
+        },
+        "queueTasks": 3,
+        "releasedQueueTasks": 3,
+        "failedQueueTasks": [],
+        "failedCommands": 0
+      },
+      {
+        "slot": "slot-02",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 2,
+          "observedRunCount": 2,
+          "reasons": []
+        },
+        "queueTasks": 3,
+        "releasedQueueTasks": 3,
+        "failedQueueTasks": [],
+        "failedCommands": 0
+      },
+      {
+        "slot": "slot-03",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 3,
+          "observedRunCount": 3,
+          "reasons": []
+        },
+        "queueTasks": 4,
+        "releasedQueueTasks": 4,
+        "failedQueueTasks": [
+          {
+            "taskId": "queue_FC035F91A91C4C24",
+            "code": "OPERATOR_CORRECTNESS_MISMATCH"
+          }
+        ],
+        "failedCommands": 0
+      },
+      {
+        "slot": "slot-04",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 2,
+          "observedRunCount": 2,
+          "reasons": []
+        },
+        "queueTasks": 3,
+        "releasedQueueTasks": 3,
+        "failedQueueTasks": [],
+        "failedCommands": 0
+      },
+      {
+        "slot": "slot-05",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 2,
+          "observedRunCount": 2,
+          "reasons": []
+        },
+        "queueTasks": 3,
+        "releasedQueueTasks": 3,
+        "failedQueueTasks": [],
+        "failedCommands": 0
+      },
+      {
+        "slot": "slot-06",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 2,
+          "observedRunCount": 2,
+          "reasons": []
+        },
+        "queueTasks": 3,
+        "releasedQueueTasks": 3,
+        "failedQueueTasks": [],
+        "failedCommands": 0
+      },
+      {
+        "slot": "slot-07",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 2,
+          "observedRunCount": 2,
+          "reasons": []
+        },
+        "queueTasks": 3,
+        "releasedQueueTasks": 3,
+        "failedQueueTasks": [],
+        "failedCommands": 0
+      },
+      {
+        "slot": "slot-08",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 2,
+          "observedRunCount": 2,
+          "reasons": []
+        },
+        "queueTasks": 3,
+        "releasedQueueTasks": 3,
+        "failedQueueTasks": [],
+        "failedCommands": 0
+      },
+      {
+        "slot": "slot-09",
+        "outcome": "full_success",
+        "comparable": true,
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 2,
+          "observedRunCount": 2,
+          "reasons": []
+        },
+        "queueTasks": 3,
+        "releasedQueueTasks": 3,
+        "failedQueueTasks": [],
+        "failedCommands": 0
+      }
+    ],
+    "comparison": {
+      "descriptiveOnly": true,
+      "significanceClaimed": false,
+      "byCondition": {
+        "facts-only": {
+          "verifiedSlots": 3,
+          "candidateIdentities": [
+            "7e7fa7e35bf1e0e50d93e3c46484970c3145c9cc4c2171cc2c20957203d38fa9",
+            "d22e2a0fb7e6ac0f87d2be1897d43bd6a184b34004a1a6acd40bfebdf0f89f0e",
+            "e0bb6b5996502d35b14a6d53e9a7e2e2c471886da9fa6d254cfb9906cea8780b",
+            "4666b3624c0960ea74786437de534165d9ba80e077fb5966d39ebc8c464828a7",
+            "64f337fd959339ef7d4a42869f5f8b76b1cbf17000b8a6797f7df6f5957db93e",
+            "c928b7b0623b53e907d70a38c2bdf4f44947fcf87979cf681d7ec3ece9809b8a"
+          ],
+          "candidateCorrectness": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "elapsedMs": [
+            345341,
+            260899,
+            255850
+          ],
+          "observedModels": [
+            "deepseek-v4-flash",
+            "deepseek-v4-flash",
+            "deepseek-v4-flash"
+          ],
+          "modelRequestCounts": [
+            2,
+            2,
+            2
+          ],
+          "profiles": {
+            "primary": {
+              "units": [
+                "us"
+              ],
+              "comparableUnits": true,
+              "baselineValues": [
+                15.231999568641186,
+                14.336000196635723,
+                15.359999611973763
+              ],
+              "baselineMean": 14.975999792416891,
+              "candidateValues": [
+                9.216000325977802,
+                11.264000087976456,
+                9.216000325977802,
+                13.311999849975109,
+                10.239999741315842,
+                20.479999482631683
+              ],
+              "candidateMean": 12.287999968975782,
+              "sampleCount": 3
+            },
+            "small": {
+              "units": [
+                "us"
+              ],
+              "comparableUnits": true,
+              "baselineValues": [
+                14.4640002399683,
+                14.336000196635723,
+                15.359999611973763
+              ],
+              "baselineMean": 14.720000016192595,
+              "candidateValues": [
+                9.216000325977802,
+                10.239999741315842,
+                9.088000282645226,
+                20.479999482631683,
+                10.239999741315842,
+                20.479999482631683
+              ],
+              "candidateMean": 13.29066650941968,
+              "sampleCount": 3
+            }
+          }
+        },
+        "local-only": {
+          "verifiedSlots": 3,
+          "candidateIdentities": [
+            "139ac5f5380b06c2bb005f3cc5722c62ea4aac59d9d5b9d4283d4d05eabcca70",
+            "d16e15b7676eb700a8843b00d9938080650fb3b3e6f54eafe47a5d52328ee8c5",
+            "bdbf9c9f4b49a0640bd11ca5b0f50a51dac45c4aaa29eb99d085677e582d69c6",
+            "09323e114b1ff79bbf4fccfb66dc05d9ccbcfdb92985220dd198f43a2cbbc873",
+            "4319cf0d15bb8ed490ceee9e996ff083258ac8071eb3d916c284af584b3d8af7",
+            "e19dc7a5d5d23e198ea96e8e832569069805ab489f543d1e29147abbe34417f5"
+          ],
+          "candidateCorrectness": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "elapsedMs": [
+            260340,
+            280700,
+            310167
+          ],
+          "observedModels": [
+            "deepseek-v4-flash",
+            "deepseek-v4-flash",
+            "deepseek-v4-flash"
+          ],
+          "modelRequestCounts": [
+            2,
+            2,
+            2
+          ],
+          "profiles": {
+            "primary": {
+              "units": [
+                "us"
+              ],
+              "comparableUnits": true,
+              "baselineValues": [
+                14.336000196635723,
+                15.359999611973763,
+                15.359999611973763
+              ],
+              "baselineMean": 15.01866647352775,
+              "candidateValues": [
+                9.216000325977802,
+                11.264000087976456,
+                10.239999741315842,
+                12.28800043463707,
+                10.239999741315842,
+                11.264000087976456
+              ],
+              "candidateMean": 10.752000069866577,
+              "sampleCount": 3
+            },
+            "small": {
+              "units": [
+                "us"
+              ],
+              "comparableUnits": true,
+              "baselineValues": [
+                15.359999611973763,
+                15.359999611973763,
+                15.359999611973763
+              ],
+              "baselineMean": 15.359999611973763,
+              "candidateValues": [
+                8.191999979317188,
+                11.103999800980091,
+                10.239999741315842,
+                20.479999482631683,
+                10.239999741315842,
+                11.168000288307667
+              ],
+              "candidateMean": 11.903999838978052,
+              "sampleCount": 3
+            }
+          }
+        },
+        "local-and-wiki": {
+          "verifiedSlots": 3,
+          "candidateIdentities": [
+            "1381debdd15b7dd7d4c3ece4580810578f9cb546d4f9a886d77f771e349ec1b9",
+            "15382d5f4b7b5db56148c1dce96aa76525d947823ad0eb4640be0d74a8505923",
+            "56ea67155ea0fb109569a72206af0328bac85f30820c8264184ae0b421d2e6ec",
+            "cd443b04baa5621394b625073e22b7d25bcede7991e668933c435b177d443daa",
+            "323085c9dedb411310f5908b9932dff7e07fbc8934e4c6ec96420ca5e702aa6b",
+            "5cac6ebdebf490dd7cf4d859b508412a1c5e61285548a147b4f6cb2be7d7bb0a"
+          ],
+          "candidateCorrectness": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "elapsedMs": [
+            490334,
+            235700,
+            325863
+          ],
+          "observedModels": [
+            "deepseek-v4-flash",
+            "deepseek-v4-flash",
+            "deepseek-v4-flash"
+          ],
+          "modelRequestCounts": [
+            3,
+            2,
+            2
+          ],
+          "profiles": {
+            "primary": {
+              "units": [
+                "us"
+              ],
+              "comparableUnits": true,
+              "baselineValues": [
+                14.336000196635723,
+                14.336000196635723,
+                15.359999611973763
+              ],
+              "baselineMean": 14.677333335081736,
+              "candidateValues": [
+                10.239999741315842,
+                9.216000325977802,
+                10.239999741315842,
+                11.264000087976456,
+                9.216000325977802,
+                10.239999741315842
+              ],
+              "candidateMean": 10.069333327313265,
+              "sampleCount": 3
+            },
+            "small": {
+              "units": [
+                "us"
+              ],
+              "comparableUnits": true,
+              "baselineValues": [
+                14.336000196635723,
+                16.383999958634377,
+                15.359999611973763
+              ],
+              "baselineMean": 15.359999922414621,
+              "candidateValues": [
+                10.239999741315842,
+                9.216000325977802,
+                11.264000087976456,
+                10.239999741315842,
+                8.191999979317188,
+                10.239999741315842
+              ],
+              "candidateMean": 9.89866660286983,
+              "sampleCount": 3
+            }
+          }
+        }
+      }
+    },
+    "reader": {
+      "exitCode": 0,
+      "ok": true,
+      "strictN20Passed": false
+    },
+    "archive": {
+      "path": "direct-study-r8-69747e1-20260916.zip",
+      "sha256": "d71dc77bb66be02093cba51697dff9ef98cacdfd6866124bd328af85d42a2f11",
+      "bytes": 7829932,
+      "fileCount": 2056,
+      "manifestPath": "archive-manifest.json",
+      "manifestSha256": "d3e8dfbe015e4a801b81731c3e03fb8a256c8bcb5e81033651a43188d079ca12",
       "crcAndHashesVerified": true
     },
     "platformContextSyncPending": true
