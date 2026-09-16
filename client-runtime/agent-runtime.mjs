@@ -1841,7 +1841,12 @@ export function createAgentRuntime(options = {}) {
         // contain failed tool calls or recoverable error events without failing the run.
         let failed = run.status === 'failed';
         let completed = run.status === 'completed';
-        const workflowAdvanced = state.patchApplied || ['validation', 'evidence', 'curation', 'published'].includes(state.stage);
+        const rejection = state.agent.patchPolicyRejection;
+        const patchPolicyBlocked = state.iterationStats?.loopStatus === 'needs_human'
+          && state.iterationStats?.loopStatusReason === 'patch_policy_rejected'
+          && rejection?.missionId === state.activeMissionId
+          && rejection?.sourceRunId === state.agent.runId;
+        const workflowAdvanced = patchPolicyBlocked || state.patchApplied || ['validation', 'evidence', 'curation', 'published'].includes(state.stage);
         // 取消后进程未必立即死透：run.status 仍为 running，不能把已请求的取消覆盖回 running
         // （与研究分支同法：保留 cancel_requested，直到进程真正终结为 cancelled）。
         const eventCount = events.length;
@@ -2122,7 +2127,7 @@ export function createAgentRuntime(options = {}) {
           nextAgent.phase = state.agent.phase;
           nextAgent.currentAction = state.agent.currentAction;
         }
-        if (run.status === 'cancelled'
+        if (!patchPolicyBlocked && run.status === 'cancelled'
             && state.stage === 'candidate'
             && !state.patchApplied
             && Array.isArray(state.candidateEvaluations)

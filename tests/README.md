@@ -1,5 +1,13 @@
 # Test Module Contract
 
+2026-09-16 policy rejection regression: `test:autopilot-candidate-action-service`
+combines real managed Agent projection, Git diff, command journal, autopilot and
+disk snapshot reload with a fixture Provider. It checks high-risk/manual handling,
+model observation retention, repeated ticks/restart, fixed deadline, stop, foreign
+run binding, diff mismatch, ordinary admission and error propagation. No model or
+GPU runs are performed by this contract test. Authored directly under the user's
+maintenance exception; it is not an independently authored dispatch test.
+
 2026-09-16 runner progress regression: `test:test-spec` includes real Windows
 destination handles denying atomic replacement, both released and persistent,
 plus portable unclassified-error propagation in `local-c500-runner-contract-test.py`.

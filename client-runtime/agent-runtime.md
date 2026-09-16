@@ -5,6 +5,12 @@ Consumes runtime registry/provider ports and isolated Workspace adapters; expose
 describe, preflight, startRun, startResearch, startBaselineMaterialization,
 cancelRun and projectState. It does not persist the Mission or decide Gate outcomes.
 
+Managed CLI projection retains the orchestration-owned `needs_human` status,
+phase and action for `patch_policy_rejected` while its rejection matches the
+active Mission and Agent run. Provider completion/model observations continue
+to be projected; a later observation cannot silently reopen the same rejected
+candidate. A foreign-run rejection does not activate this overlay.
+
 ## Frozen experience input
 
 startRun optionally receives experienceContext from the admitted round service.

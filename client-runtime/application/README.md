@@ -59,7 +59,7 @@
 | `repository-adoption-service.mjs` | managed runtime candidate repository adoption | projected state | changed state |
 | `autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `autopilot-context-service.mjs` | auto-tick context preparation | state | autopilot context |
-| `autopilot-candidate-action-service.mjs` | candidate patch apply and recovery | candidate state | updated state |
+| `autopilot-candidate-action-service.mjs` | candidate patch apply and recovery | candidate state | updated state, including typed admission rejection paused for human intervention |
 | `autopilot-validation-service.mjs` | candidate benchmark start | candidate state | updated state |
 | `autopilot-service.mjs` | automatic iteration progression boundary | runtime state | state/action result |
 | `autopilot-fixed-profile-service.mjs` | fixed Profile post-baseline progression | Mission state | state/action result |

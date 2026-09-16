@@ -8,6 +8,12 @@
 
 `client-runtime` is the local application backend. It owns Mission state, workflow orchestration, Agent coordination, isolated workspaces, serialized operator tests, evidence decisions, and local persistence.
 
+Automatic patch-policy rejection is persisted with the observed Agent completion
+as a paused Mission requiring human intervention. Managed Agent projection retains
+that control state only for the matching Mission/run; risk checks, candidate diff
+admission and execution budgets are unchanged. See the application candidate-action
+contract and [Agent lifecycle contract](agent-runtime.md).
+
 Windows MVP Codex runs use the unelevated sandbox fallback when the optional
 Windows sandbox helper is unavailable. Boundary mode keeps Codex's structured
 file-edit tools enabled by default; the workspace sandbox and post-run Mission

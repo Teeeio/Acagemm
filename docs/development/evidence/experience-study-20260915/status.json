@@ -3,7 +3,7 @@
   "recordedAt": "2026-09-15T12:34:20.662206+00:00",
   "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
   "phase": "operator-p3-wiki",
-  "status": "r7-budget-terminal-high-risk-policy-projection-retry-defect-confirmed",
+  "status": "r7-retained-policy-rejection-repair-verified-new-live-pending",
   "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
   "contract": {
     "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
@@ -279,7 +279,7 @@
     "currentAccepted": true,
     "currentIntegrated": true
   },
-  "updatedAt": "2026-09-16T14:13:38.124947+00:00",
+  "updatedAt": "2026-09-16T14:46:26.467350+00:00",
   "taskHistory": [
     {
       "role": "runtime-condition",
@@ -13336,6 +13336,180 @@
           "path": "study.log",
           "sha256": "f195153e674b2d663ec9d7cc6d34bc1c626dea28556b89c657751a30f19c365f",
           "bytes": 456
+        }
+      ],
+      "crcAndHashesVerified": true
+    },
+    "platformContextSyncPending": true
+  },
+  "patchPolicyRejectionRepair": {
+    "id": "R7-policy-rejection-lost-projection",
+    "status": "software_verified_new_live_batch_pending",
+    "execution": "primary_agent_direct_user_authorized",
+    "dispatchTaskId": null,
+    "fact": "Automatic admission now returns the typed, effect-free PatchPolicyCheckError as a paused needs_human state. The lifecycle persists the completed Agent projection and mission/candidate/run/diff-bound policy checks together. Managed Agent observation preserves this policy control state for the same Mission/run. High risk and all existing checks still reject; unexpected failures, including journal persistence errors, still propagate.",
+    "inference": "The persisted pause and needs_human guard prevent the repeated preparation seen 102 times in R7 without admitting the rejected candidate.",
+    "unknown": "Hardware-free integration verifies the production chain with a fixture Provider and real Git/journal/snapshot files; it is not real model/GPU proof. The repair does not guarantee that the model will propose an admissible candidate or that the exploratory study or a new N20 will pass.",
+    "evidence": [
+      "direct-study-r7-906832a-20260916.zip",
+      "patch-policy-rejection-repair-20260916.zip"
+    ],
+    "next_action": "Commit and freeze the new source; run a separate nine-slot live study with original budgets, comparability and stop rules. Preserve R7 failure and old N20 source boundary.",
+    "source": {
+      "baseCommit": "eb5c764959f08507af6969f75bc25b9c60edd193",
+      "createdAt": "2026-09-16T14:31:33.885100+00:00",
+      "files": [
+        {
+          "path": "client-runtime/README.md",
+          "sha256": "fffbbcb79424da8a06086dad6018c161f93662f3f44074fb5b45aceb5ed32833"
+        },
+        {
+          "path": "client-runtime/agent-runtime.md",
+          "sha256": "bb6fbbaeecada77d368865be95e3e1b8bb1bc5ea256d744c1c8fc4b055b35331"
+        },
+        {
+          "path": "client-runtime/agent-runtime.mjs",
+          "sha256": "ed19ce3d72ab51e0d5865fed630e4db4094d8baea7cb0770afed5e2251327daf"
+        },
+        {
+          "path": "client-runtime/application/README.md",
+          "sha256": "230721c2936881d7904b3a3cef45cce8215dbb289780b975a5b97415442f65a0"
+        },
+        {
+          "path": "client-runtime/application/autopilot-candidate-action-service.md",
+          "sha256": "4c76903b08cff5457f24c3af5e24f87d5ac870eb986e726b5f69759687cf594c"
+        },
+        {
+          "path": "client-runtime/application/autopilot-candidate-action-service.mjs",
+          "sha256": "9f926af420c332dfc651407083e1442a06a066ca65f86008510d6465391f43ce"
+        },
+        {
+          "path": "client-runtime/application/autopilot-service.md",
+          "sha256": "d2808e34cbe38794ec66edcabce24f8dccc931fcd55c82e41ac33a0db574d40a"
+        },
+        {
+          "path": "client-runtime/application/autopilot-service.mjs",
+          "sha256": "60e145ff2b868c9879e248c5b35de6906cc3f249451a529c95e0b9e62d137586"
+        },
+        {
+          "path": "client-runtime/application/candidate-commands.md",
+          "sha256": "2d68cce1db11369225eaa6c3af193404ea877fe2c43d4c1c989ada3870c7bf6f"
+        },
+        {
+          "path": "client-runtime/application/candidate-commands.mjs",
+          "sha256": "c78eeefad3cdc4616616dd08ce0c714f9ee59dfeb03d57dc446ada12a2bfbb19"
+        },
+        {
+          "path": "tests/README.md",
+          "sha256": "ab7eb994acf9bdcf1aeb7d6eb7ac048e91654ee36478fd1a3c3085287a32322e"
+        },
+        {
+          "path": "tests/autopilot-candidate-action-service-test.mjs",
+          "sha256": "aaef5e8e26fe50cc4fa50261846fe5fa8b0cd68e772ba35d6677842976d80164"
+        }
+      ]
+    },
+    "checks": [
+      {
+        "command": "npm run verify:non-hardware-robustness",
+        "exitCode": 0,
+        "passedChecks": 44,
+        "includedReleaseChecks": 149
+      }
+    ],
+    "archive": {
+      "path": "patch-policy-rejection-repair-20260916.zip",
+      "sha256": "c33fda89e27abb98fcac0a504fe7efc516f5563216c819d7e6876e805b97d7b7",
+      "files": [
+        {
+          "path": "archive.py",
+          "sha256": "90ded4caae11b08889b08e192aa5dc77736f4f0ac736cb00c66b1132db493945",
+          "bytes": 3466
+        },
+        {
+          "path": "exit.json",
+          "sha256": "195232d90ce03dc287ce9e8798bb93e9b3ce144df84fe294756671b481f4fb78",
+          "bytes": 129
+        },
+        {
+          "path": "process-preflight.json",
+          "sha256": "30263a0f059caa328f366e651f37cb080e1f1c04bbb964de472dc46380b729d2",
+          "bytes": 65
+        },
+        {
+          "path": "route.json",
+          "sha256": "9acc0bc4d707a3398b03cef28bda4c2ed8ef68365bf636b06343ab8386da34ce",
+          "bytes": 311
+        },
+        {
+          "path": "source.json",
+          "sha256": "013e87fc2cd6a0b5a690297b6fd6496a39660bb40c18c0dc6ca2e0728ba350d7",
+          "bytes": 2061
+        },
+        {
+          "path": "verification.log",
+          "sha256": "75dce163b539bb77fe836dd7791a6f789a0c28a102856fe042698e83f790e2e6",
+          "bytes": 174675
+        },
+        {
+          "path": "source/client-runtime/README.md",
+          "sha256": "fffbbcb79424da8a06086dad6018c161f93662f3f44074fb5b45aceb5ed32833",
+          "bytes": 43794
+        },
+        {
+          "path": "source/client-runtime/agent-runtime.md",
+          "sha256": "bb6fbbaeecada77d368865be95e3e1b8bb1bc5ea256d744c1c8fc4b055b35331",
+          "bytes": 11177
+        },
+        {
+          "path": "source/client-runtime/agent-runtime.mjs",
+          "sha256": "ed19ce3d72ab51e0d5865fed630e4db4094d8baea7cb0770afed5e2251327daf",
+          "bytes": 138127
+        },
+        {
+          "path": "source/client-runtime/application/README.md",
+          "sha256": "230721c2936881d7904b3a3cef45cce8215dbb289780b975a5b97415442f65a0",
+          "bytes": 14388
+        },
+        {
+          "path": "source/client-runtime/application/autopilot-candidate-action-service.md",
+          "sha256": "4c76903b08cff5457f24c3af5e24f87d5ac870eb986e726b5f69759687cf594c",
+          "bytes": 1039
+        },
+        {
+          "path": "source/client-runtime/application/autopilot-candidate-action-service.mjs",
+          "sha256": "9f926af420c332dfc651407083e1442a06a066ca65f86008510d6465391f43ce",
+          "bytes": 2043
+        },
+        {
+          "path": "source/client-runtime/application/autopilot-service.md",
+          "sha256": "d2808e34cbe38794ec66edcabce24f8dccc931fcd55c82e41ac33a0db574d40a",
+          "bytes": 660
+        },
+        {
+          "path": "source/client-runtime/application/autopilot-service.mjs",
+          "sha256": "60e145ff2b868c9879e248c5b35de6906cc3f249451a529c95e0b9e62d137586",
+          "bytes": 2521
+        },
+        {
+          "path": "source/client-runtime/application/candidate-commands.md",
+          "sha256": "2d68cce1db11369225eaa6c3af193404ea877fe2c43d4c1c989ada3870c7bf6f",
+          "bytes": 1406
+        },
+        {
+          "path": "source/client-runtime/application/candidate-commands.mjs",
+          "sha256": "c78eeefad3cdc4616616dd08ce0c714f9ee59dfeb03d57dc446ada12a2bfbb19",
+          "bytes": 11743
+        },
+        {
+          "path": "source/tests/README.md",
+          "sha256": "ab7eb994acf9bdcf1aeb7d6eb7ac048e91654ee36478fd1a3c3085287a32322e",
+          "bytes": 73458
+        },
+        {
+          "path": "source/tests/autopilot-candidate-action-service-test.mjs",
+          "sha256": "aaef5e8e26fe50cc4fa50261846fe5fa8b0cd68e772ba35d6677842976d80164",
+          "bytes": 13468
         }
       ],
       "crcAndHashesVerified": true
