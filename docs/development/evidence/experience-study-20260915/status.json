@@ -3,7 +3,7 @@
   "recordedAt": "2026-09-15T12:34:20.662206+00:00",
   "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
   "phase": "operator-p3-wiki",
-  "status": "r6-retained-windows-status-write-repair-verified-new-live-pending",
+  "status": "r7-budget-terminal-high-risk-policy-projection-retry-defect-confirmed",
   "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
   "contract": {
     "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
@@ -279,7 +279,7 @@
     "currentAccepted": true,
     "currentIntegrated": true
   },
-  "updatedAt": "2026-09-16T13:54:38.473112+00:00",
+  "updatedAt": "2026-09-16T14:13:38.124947+00:00",
   "taskHistory": [
     {
       "role": "runtime-condition",
@@ -12260,6 +12260,1082 @@
           "path": "source/docs/development/TEAM_HANDOFF.md",
           "sha256": "ee9766206b3c0c9e0f20780e67a02616c32ebb943419ab7492123cd7cf7f72c5",
           "bytes": 65196
+        }
+      ],
+      "crcAndHashesVerified": true
+    },
+    "platformContextSyncPending": true
+  },
+  "r7DirectAcceptance": {
+    "id": "R7-high-risk-policy-rejection-not-persisted",
+    "status": "budget_terminal-study-stopped",
+    "execution": "primary_agent_direct_user_authorized",
+    "dispatchTaskId": null,
+    "sourceCommit": "906832ab1a256cfa00d8b05780688e32be1f10b3",
+    "fact": "R7 stopped after slot 1: one candidate passed the GPU queue and its experience was collected; the second main Agent completed with an explicit high-risk CUDA-Graph proposal. Its real diff, declared files and candidate identity passed checks, but risk.policy correctly failed. Automatic apply-patch prepare then failed 102 times (seq 4..105), with effectStarted=false; the projection was not durably advanced, so the Runtime remained running until the original budget expired. Both required models were actually observed as deepseek-v4-flash. Study retains 1 failed / 8 unstarted; no new N20.",
+    "inference": "The high-risk rejection is correct. The orchestration defect is losing the projected completed Agent state on prepare rejection and retrying the unchanged rejected action instead of persisting a clear blocked/manual-review outcome. The WinError-5 and collect-timeout mechanisms did not recur in this single invocation; that is not a general stability claim.",
+    "unknown": "No completed nine-slot comparison or strict N20 exists for this revision. No attempt was made to approve the high-risk candidate or weaken the risk gate; the correct production transition must be implemented and tested before another long study.",
+    "evidence": [
+      "direct-study-r7-906832a-20260916.zip",
+      "client-runtime/application/candidate-commands.mjs",
+      "client-runtime/application/autopilot-candidate-action-service.mjs",
+      "client-runtime/application/runtime-state-pipeline-service.mjs",
+      "client-runtime/application/runtime-lifecycle-service.mjs"
+    ],
+    "next_action": "Preserve the high-risk/manual-review policy. Persist the already-observed Agent completion and the typed policy rejection, stop automatic retries of the same candidate, and keep deadline/stop behavior effective. Add regression coverage at the real projection-to-autopilot path, then freeze a new revision before another independent live plan.",
+    "patchPrepareFailures": {
+      "count": 102,
+      "firstSeq": 4,
+      "lastSeq": 105,
+      "code": "PATCH_POLICY_CHECK_FAILED",
+      "failedCheck": "risk.policy",
+      "effectStarted": false
+    },
+    "modelObservationSummary": {
+      "schemaVersion": "operator-studio.model-observation/v1",
+      "status": "observed",
+      "model": "deepseek-v4-flash",
+      "modelSource": "observed",
+      "models": [
+        "deepseek-v4-flash"
+      ],
+      "requiredRunCount": 2,
+      "observedRunCount": 2,
+      "reasons": []
+    },
+    "slotCounts": {
+      "failed": 1,
+      "stopped": 8
+    },
+    "reader": {
+      "command": "node scripts/run-experience-condition-study.mjs --verify-report ABS_R7_REPORT",
+      "exitCode": 0,
+      "ok": true
+    },
+    "release": {
+      "allQueueTasksConfirmed": true,
+      "taskCount": 2,
+      "stopReceiptsConfirmed": true,
+      "runtimeExit": {
+        "code": null,
+        "signal": "SIGTERM"
+      },
+      "runtimePidAbsent": 80820
+    },
+    "all329SourceHashesMatch": true,
+    "archive": {
+      "path": "direct-study-r7-906832a-20260916.zip",
+      "sha256": "55c99672fed507a6a604943568e1011da745a5a0aad41cad60c4aea328d02c11",
+      "files": [
+        {
+          "path": "a/slot-01/logs/run-01.log",
+          "sha256": "14eb9279ce859e042e2583abe094ae6048379012cb36a034b7b51529a6b2ed88",
+          "bytes": 447962
+        },
+        {
+          "path": "a/slot-01/logs/slot-01.log",
+          "sha256": "19d21663551de90a52ad1deaf678786eca1ac3f020284c83b068ec66d5d400f0",
+          "bytes": 434
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/affine-state.json",
+          "sha256": "112091f5d1d2171bd61d30ad8f36b4c6c68b3313cf1ea8b5d27df400d68be378",
+          "bytes": 402788
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/attempt.json",
+          "sha256": "d288815e760df5d0e247fd226521e7a4a63542082ec5e5ccd86f16d81fca3001",
+          "bytes": 567197
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/bridge/claude-empty-mcp.json",
+          "sha256": "e93fc8db2b1bd77107fe6c758bca9545fa864cf7cce8ab93a7b2b93a1d566a7b",
+          "bytes": 18
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/bridge/claude-runs/claude_MU45ZT8Y_A641FCA9.json",
+          "sha256": "1dd977a3db241e03cc081878cae83cece0fb1465da2cc2e4a91e16eefef8126b",
+          "bytes": 3560
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/bridge/claude-runs/claude_MU45ZT8Y_A641FCA9.jsonl",
+          "sha256": "3a15bff254238254c0f528c8dff75a12ee502a75d935daf8bd80d6479c6e3550",
+          "bytes": 20525
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/bridge/claude-runs/claude_MU46186J_C562D52D.json",
+          "sha256": "1a8c4cc4e55c7d9996bbb528c3362fb5bec58edf8c07267fedb128031316be13",
+          "bytes": 3843
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/bridge/claude-runs/claude_MU46186J_C562D52D.jsonl",
+          "sha256": "2abb4fdd4c2befc823aac7978d23ba9341260a8db620d5bc260f62888f12afdb",
+          "bytes": 27339
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/bridge/git-trust/ea36961971bb4ad52a731346.gitconfig",
+          "sha256": "0848d1e7f39a284db3682d0c40c4a2daef1081af47f96d50eb2b630e30e0fbeb",
+          "bytes": 255
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/bridge/prompt-audits/claude_MU45ZT8Y_A641FCA9.json",
+          "sha256": "16a18777079b2d06f6ab7b19fde07f49c363af4b961c22de9ffc8822864c9133",
+          "bytes": 22215
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/bridge/prompt-audits/claude_MU46186J_C562D52D.json",
+          "sha256": "f9fb8c3d1cc089c38e6f3b07994a59b33349aeb9df6643579ecd53291b82f664",
+          "bytes": 41082
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/data/mock-db.json",
+          "sha256": "ae2b50f117fb1c37f5e52b8f8b3455907cf21d618bab67e2835cf36aef3ea561",
+          "bytes": 346868
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/adapter/artifacts/922287029a7b78eb3e228148b25e4d8989f5859cc119cefb2bee3be0c0ddcf43.json",
+          "sha256": "54c94bf3dc11bda5e89568795cb82bc0236125341e1ebd4e284c82aa45eb9fe2",
+          "bytes": 953
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/adapter/artifacts/a01e50a6417e4bdf02972a49ca1a4310367444c620e8e43310b60899d92065ad.json",
+          "sha256": "5e9fd4aaf651d8787970e92930af5619f7050af166bdca162ea009e956eadbcd",
+          "bytes": 953
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/adapter/preparations/prepare_00aef83d-977f-43c9-b9a2-5f768db7658c.json",
+          "sha256": "71a12d24f10f96eefd6e5acf71195b28afb393ddb4986c24a64b6a16b0c29854",
+          "bytes": 560
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/adapter/preparations/prepare_22cf2860-24e4-477f-94f6-40116d5ad0e5.json",
+          "sha256": "45c3bcd2f43880e578ba6aa5cee2adf1ba43fa86b55cdb79dc4fa6ae5c282725",
+          "bytes": 560
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/adapter/prepared/3a8e6bddc2c52795e5d3e0e420f483a3f7bf7648dbb463b9c4721206b7aff2b3-prepare_22cf2860-24e4-477f-94f6-40116d5ad0e5/oracle.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/adapter/prepared/3a8e6bddc2c52795e5d3e0e420f483a3f7bf7648dbb463b9c4721206b7aff2b3-prepare_22cf2860-24e4-477f-94f6-40116d5ad0e5/run.py",
+          "sha256": "17b6df8adc10a37657783f15ffa0304dd04ba3cfe2fb19ca3a974ff4fabf1f98",
+          "bytes": 1700
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/adapter/prepared/dd0fbb4ad6cb78c163d30e1a430caa91529fb9ffc5265c63cd674472456291e6-prepare_00aef83d-977f-43c9-b9a2-5f768db7658c/oracle.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/adapter/prepared/dd0fbb4ad6cb78c163d30e1a430caa91529fb9ffc5265c63cd674472456291e6-prepare_00aef83d-977f-43c9-b9a2-5f768db7658c/run.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/admissions/21a3f82901c567996d434e594012bf737acb78ee8e62c3a3257e7082b3a8ae10.json",
+          "sha256": "4bcdf9b26abf21dc2433c9fcf88864b72b79a37861694039a1dc2979850791af",
+          "bytes": 752
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/admissions/b1034178c0fc44f2d6e06f578e1488503933bdc3491d825a6a7eebd377fb80cf.json",
+          "sha256": "ae38a21eee23daa8cbb7e3ccad98e6ae4bb01be925805907c0b945ca00b68b1e",
+          "bytes": 752
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/blobs/17b6df8adc10a37657783f15ffa0304dd04ba3cfe2fb19ca3a974ff4fabf1f98",
+          "sha256": "17b6df8adc10a37657783f15ffa0304dd04ba3cfe2fb19ca3a974ff4fabf1f98",
+          "bytes": 1700
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/blobs/1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d",
+          "sha256": "1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d",
+          "bytes": 312
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/blobs/919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/blobs/b06df1e21f4372172e60d419c29e88461557e3dd15320d1c436b47df30980089",
+          "sha256": "b06df1e21f4372172e60d419c29e88461557e3dd15320d1c436b47df30980089",
+          "bytes": 485
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/manifests/3a8e6bddc2c52795e5d3e0e420f483a3f7bf7648dbb463b9c4721206b7aff2b3.json",
+          "sha256": "9893712d648b31e68aad469eef5b9502f2a05e46b76f52f0e1eab067edf89a80",
+          "bytes": 1537
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/manifests/dd0fbb4ad6cb78c163d30e1a430caa91529fb9ffc5265c63cd674472456291e6.json",
+          "sha256": "b5fdb40c31e8a41c0bded711f724ce1888def45dcf8ddb335ba9165d07b0cb4b",
+          "bytes": 1542
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/preparations/3a8e6bddc2c52795e5d3e0e420f483a3f7bf7648dbb463b9c4721206b7aff2b3.json",
+          "sha256": "7cbe8a0bab1196e4bc5f509ef3a625fe870686f38defd992ba712d1c6e8e1401",
+          "bytes": 374
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/packages/store/preparations/dd0fbb4ad6cb78c163d30e1a430caa91529fb9ffc5265c63cd674472456291e6.json",
+          "sha256": "1ad9c804af72b100e8f43f0cd028e74150ca4244f5d7f1e6fc7c72f690fca749",
+          "bytes": 374
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/artifacts/MIS_MU45Z70V/benchmark.json",
+          "sha256": "9de4b89b6230229e42f0c0e4e64624a381ad6c5446c135618e36fa1b43d283ce",
+          "bytes": 3678
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/artifacts/MIS_MU45Z70V/candidate-01.manifest.json",
+          "sha256": "877d877809ffc994bffdc37aa3ee28294024c6c9c98bbf25e75a89f0f7d17fa4",
+          "bytes": 321
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/artifacts/MIS_MU45Z70V/candidate-01.patch",
+          "sha256": "d40266e838eb78cb12718cbf17234e5ff0a424b8aedf2b311eb050e9ece798a1",
+          "bytes": 1252
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/artifacts/MIS_MU45Z70V/profiler.json",
+          "sha256": "0f31354964c5b6f25575e09107b6309e6c436e4f9364790e6175af9120b48331",
+          "bytes": 1329
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/artifacts/MIS_MU45Z70V/test-result.json",
+          "sha256": "81be080963c4e2a98e18f974926b8c75cba76b2d00d9ee023bc9aeee9c63c9ba",
+          "bytes": 12708
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/artifacts/MIS_MU45Z70V/tracer.json",
+          "sha256": "a2626fec492e3d38c71795f771940551f3eef77efbdf10d3fb1513d992108345",
+          "bytes": 1316
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/project.json",
+          "sha256": "dbe4119efa3bad3591cb58783fbc77d36377f1b013140c5c06ae295c225a439f",
+          "bytes": 683
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/source-registry.json",
+          "sha256": "eafb5254efa23b2b36493b23f5bdad64dd371314c5e97c661ad5cb811429dfac",
+          "bytes": 42
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/COMMIT_EDITMSG",
+          "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0",
+          "bytes": 33
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/config",
+          "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d",
+          "bytes": 218
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/description",
+          "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee",
+          "bytes": 73
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/HEAD",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10",
+          "bytes": 23
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/applypatch-msg.sample",
+          "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7",
+          "bytes": 478
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/commit-msg.sample",
+          "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437",
+          "bytes": 896
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/fsmonitor-watchman.sample",
+          "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0",
+          "bytes": 4726
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/post-update.sample",
+          "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5",
+          "bytes": 189
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/pre-applypatch.sample",
+          "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475",
+          "bytes": 424
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/pre-commit.sample",
+          "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a",
+          "bytes": 1643
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/pre-merge-commit.sample",
+          "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53",
+          "bytes": 416
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/pre-push.sample",
+          "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a",
+          "bytes": 1374
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/pre-rebase.sample",
+          "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3",
+          "bytes": 4898
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/pre-receive.sample",
+          "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989",
+          "bytes": 544
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/prepare-commit-msg.sample",
+          "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619",
+          "bytes": 1492
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/push-to-checkout.sample",
+          "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f",
+          "bytes": 2783
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/hooks/update.sample",
+          "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106",
+          "bytes": 3650
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/index",
+          "sha256": "f67b41958bcde31f9be1ed64ee45cb7420afb4e8edc0824df86c577e2e598220",
+          "bytes": 118
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/info/exclude",
+          "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1",
+          "bytes": 240
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/logs/HEAD",
+          "sha256": "2918ead4de9a59a11f06a1b4d8bd841dcf5cd12c9b4f55f7d4b5bb6027d881cb",
+          "bytes": 367
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/logs/refs/heads/master",
+          "sha256": "0318e8714cbcb190cb307930c08ee67e3c0d0768aa55e1df224ef53ebfebcf18",
+          "bytes": 198
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/objects/3d/9841810103e1046bd02b9bb3563fd235e80a74",
+          "sha256": "ffc7e9a857841233bc3c6434d175e35652d59b743178391cf2680e29b7f07a0e",
+          "bytes": 51
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/objects/77/b5bf101d0622874b8d3a0c524d461da49b5277",
+          "sha256": "f4620f8afd942eadc5f71a13cb97e77d45606872b92fb278fe2f47096e8c956f",
+          "bytes": 143
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/objects/d8/421bab611561d0c79c286fc746a7fba144dbbf",
+          "sha256": "fa362d7a3d3399eb4edb9a796109a5e5da7da7de6e9dcc50e4686b36b0c89faf",
+          "bytes": 442
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/objects/e6/9de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+          "sha256": "164c5fa8067facf1a43f09ce3d0e35ebf53a7f5723ecbf15a8667cfc53c26f6c",
+          "bytes": 15
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/ORIG_HEAD",
+          "sha256": "edcae0f9a063c79e7f0726a42b105d0d851bb90a9fb9827c4c11a9e7c4ec8e0e",
+          "bytes": 41
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/.git/refs/heads/master",
+          "sha256": "edcae0f9a063c79e7f0726a42b105d0d851bb90a9fb9827c4c11a9e7c4ec8e0e",
+          "bytes": 41
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/repository/run.py",
+          "sha256": "4af8804c9ca823980df4b5b5603abd9f8cb4e58f66ad1751b80737b524ecd81f",
+          "bytes": 1768
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/.operator-studio/workspaces/MIS_MU45Z70V/workspace.json",
+          "sha256": "c39cf5cd9235f5b57f21eb700e6f61e4000b3f78ec72c1ecdbd0385cadf7706e",
+          "bytes": 590
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/COMMIT_EDITMSG",
+          "sha256": "4e8a97fd1287be5b1892a807b2ccdce100f57e45ca6caee424d2d14b5e0fb148",
+          "bytes": 29
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/config",
+          "sha256": "d3df7bb7804fe3c142969ced24327de496239151ec0e2477b9f81823641d0044",
+          "bytes": 200
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/description",
+          "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee",
+          "bytes": 73
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/HEAD",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10",
+          "bytes": 23
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/applypatch-msg.sample",
+          "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7",
+          "bytes": 478
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/commit-msg.sample",
+          "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437",
+          "bytes": 896
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/fsmonitor-watchman.sample",
+          "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0",
+          "bytes": 4726
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/post-update.sample",
+          "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5",
+          "bytes": 189
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/pre-applypatch.sample",
+          "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475",
+          "bytes": 424
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/pre-commit.sample",
+          "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a",
+          "bytes": 1643
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/pre-merge-commit.sample",
+          "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53",
+          "bytes": 416
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/pre-push.sample",
+          "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a",
+          "bytes": 1374
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/pre-rebase.sample",
+          "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3",
+          "bytes": 4898
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/pre-receive.sample",
+          "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989",
+          "bytes": 544
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/prepare-commit-msg.sample",
+          "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619",
+          "bytes": 1492
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/push-to-checkout.sample",
+          "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f",
+          "bytes": 2783
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/hooks/update.sample",
+          "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106",
+          "bytes": 3650
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/index",
+          "sha256": "ee988b780f19263506a3a09bb5df99b508a288a2a6e9d9562392ce51398f1530",
+          "bytes": 137
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/info/exclude",
+          "sha256": "aa88cbe1915b2447b118bc3ec2f0896a9bb19dc62e7f063f5011033a29d7c10a",
+          "bytes": 258
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/logs/HEAD",
+          "sha256": "3bb27cb7cc853ea8d679afca755667a5c9c9bfe9a6bccf01f5709e780a6ffd45",
+          "bytes": 378
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/logs/refs/heads/master",
+          "sha256": "3bb27cb7cc853ea8d679afca755667a5c9c9bfe9a6bccf01f5709e780a6ffd45",
+          "bytes": 378
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/objects/3d/9841810103e1046bd02b9bb3563fd235e80a74",
+          "sha256": "ffc7e9a857841233bc3c6434d175e35652d59b743178391cf2680e29b7f07a0e",
+          "bytes": 51
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/objects/4b/825dc642cb6eb9a060e54bf8d69288fbee4904",
+          "sha256": "e72602cad67ed061ec84b13e92568f873172efac19a512a1b561dbf54e2c8426",
+          "bytes": 15
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/objects/61/b8dd596b58e614215d99295666192ed8b46c24",
+          "sha256": "ccd2cc67927402fcdcd42a2899c8ab272c4eae3c12178ddc475f5a8f4186ece7",
+          "bytes": 143
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/objects/92/86600c5c2dc7863730b621b79aa8bd1d65d0a7",
+          "sha256": "94b328424c79f6bbe4478cbe7612733fa3cbc5ed106b8af2230de6433c474dc7",
+          "bytes": 176
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/objects/d8/421bab611561d0c79c286fc746a7fba144dbbf",
+          "sha256": "fa362d7a3d3399eb4edb9a796109a5e5da7da7de6e9dcc50e4686b36b0c89faf",
+          "bytes": 442
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/.git/refs/heads/master",
+          "sha256": "9d89e7bffebddadef1bfdbd2d5c9b1b974d2f04c55b909e8260bbd13e8905303",
+          "bytes": 41
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/projects/affine/repository/run.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/checkpoints/MIS_MU45Z70V/cp_1736681B-0E8/run.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/checkpoints/MIS_MU45Z70V/cp_8C3B48E5-E8B/run.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/command-journal.jsonl",
+          "sha256": "4214cb8c783f70e9af5ccdea6c714f27b39d687da7547fe291c7e217c625fb87",
+          "bytes": 74647
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/experiences/experiences.json",
+          "sha256": "4224b9f8adea3538e2f362bd97e87f55e90b21aa5a9fb9d34bc7b920d3cd3475",
+          "bytes": 193273
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/git-trust/61e8aec189647b60cac9a3e6.gitconfig",
+          "sha256": "5bcf5d9c10c138bb04fd61a2b7001c29af19221736a67dcfd34e1c0ac5dc2840",
+          "bytes": 228
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/git-trust/65a2175a0481ba84bb77ebcc.gitconfig",
+          "sha256": "400151cfddc22d2a4b010059d06e6903a913256da5e7b2f97022ab7ed9b24aa4",
+          "bytes": 214
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/git-trust/ea36961971bb4ad52a731346.gitconfig",
+          "sha256": "0848d1e7f39a284db3682d0c40c4a2daef1081af47f96d50eb2b630e30e0fbeb",
+          "bytes": 255
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/operator-studio.pid",
+          "sha256": "d9d3ca98e2fecb7362dd2c584cfcdf6a4387472d8c0b2c1b967ae952d1a24009",
+          "bytes": 6
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/operator-test-queue.jsonl",
+          "sha256": "5725aaee654f85e014f595225118c675f8eb59c10fdf2fc6f5954ceea69747ca",
+          "bytes": 27630
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/COMMIT_EDITMSG",
+          "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0",
+          "bytes": 33
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/config",
+          "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d",
+          "bytes": 218
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/description",
+          "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee",
+          "bytes": 73
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/HEAD",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10",
+          "bytes": 23
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/applypatch-msg.sample",
+          "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7",
+          "bytes": 478
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/commit-msg.sample",
+          "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437",
+          "bytes": 896
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/fsmonitor-watchman.sample",
+          "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0",
+          "bytes": 4726
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/post-update.sample",
+          "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5",
+          "bytes": 189
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-applypatch.sample",
+          "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475",
+          "bytes": 424
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-commit.sample",
+          "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a",
+          "bytes": 1643
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-merge-commit.sample",
+          "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53",
+          "bytes": 416
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-push.sample",
+          "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a",
+          "bytes": 1374
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-rebase.sample",
+          "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3",
+          "bytes": 4898
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-receive.sample",
+          "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989",
+          "bytes": 544
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/prepare-commit-msg.sample",
+          "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619",
+          "bytes": 1492
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/push-to-checkout.sample",
+          "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f",
+          "bytes": 2783
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/update.sample",
+          "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106",
+          "bytes": 3650
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/index",
+          "sha256": "da5dbf7331f458c682a21a989812c0a48e118132d884ac923b7f3c3b7563c31e",
+          "bytes": 530
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/info/exclude",
+          "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1",
+          "bytes": 240
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/logs/HEAD",
+          "sha256": "b194f1c9d7a885ee38cc66a68eecff338d93fe56c945be10ac25e6763deba8ab",
+          "bytes": 198
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/logs/refs/heads/master",
+          "sha256": "b194f1c9d7a885ee38cc66a68eecff338d93fe56c945be10ac25e6763deba8ab",
+          "bytes": 198
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/14/1ac3d21a60f5b445d546ef829bddb347cbc61a",
+          "sha256": "07beb84b64ba0f80f723cd14b88e6dc7ba20e0010f41032de5704537898d82e8",
+          "bytes": 214
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/68/a8c18407e44135c00f5b19911f819198c0e6af",
+          "sha256": "50039b3a221b510ec6317b720ba68e54da3cb1c7d5653457c72e244fbd9686fe",
+          "bytes": 63
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/7c/dfcc064fb32cc5620f2a20c37cfe0d2060825c",
+          "sha256": "77acb078b6ca87745fca278ea59fa3e1fd0181b79ef61b201f2f183b495fe355",
+          "bytes": 69
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/a3/c0c71572e0ab4740a1146fb4e19fa31290f23f",
+          "sha256": "79f3a5bc38c8a918a87b0085d4b2a0282582a517eaa015559e7f1c20217d7577",
+          "bytes": 226
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/cf/2ab6ee5cf260ac816248ebeec979670ec1d9ac",
+          "sha256": "5dc0355c57866875a91922b8e34129bf7ea841ed0a6d12b7a69f7862d13ebb4c",
+          "bytes": 71
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/d2/874deabe85a0c334b276e9a72d0f9117ae3ed4",
+          "sha256": "f63addbb38f481796b86edec842f322adf0f7a44673d6b154e3b47a0420c4d62",
+          "bytes": 103
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/d5/551e0d00c5d83dfe670a7fd8246d512fa59b09",
+          "sha256": "0262e569f4efa84f89b02b9927006af7ca51e1aba1b821a209d9afb36d8aba7b",
+          "bytes": 145
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/e6/95f13fb5c02b2b2434582d5e5524a229de7c57",
+          "sha256": "4d62d2407692a1af3d38ba93461b930fd375f4f433ad4a9bb8fb569cd8726ddd",
+          "bytes": 152
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/objects/ff/546476bdd4d3153ab96b3e77e0d603a028d43d",
+          "sha256": "eb7f0454fce551a69b664a8087f5edd2dbf7a542d1e39a7221a6f67676355c82",
+          "bytes": 128
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/.git/refs/heads/master",
+          "sha256": "69ff46b10418a65155477b8093845c16b5f450a44513bf75e8692a619ffb90e0",
+          "bytes": 41
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/benchmarks/mla_paged_attention.yaml",
+          "sha256": "239d5b01a934b6f8a4da11a990128725141805ebe99a49e5658ddf4e576cc0fe",
+          "bytes": 103
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/kernels/paged_attention.cu",
+          "sha256": "7753ae7e686ca6472d52cebe955e8335794ec0f87bcea2525b8860eb46ba75fa",
+          "bytes": 322
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/README.md",
+          "sha256": "e19478ebe29be2bdb985aa9116cc3c4b649ef44a09d5cfc6e2277430bf8c6916",
+          "bytes": 297
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/repository/tests/paged_attention_cases.yaml",
+          "sha256": "ffdb0678ba246551cbf40c8f07686c96fb516f3ff65a946028d65a12acfbedd3",
+          "bytes": 124
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime/workspaces/MIS_01JH7R/workspace.json",
+          "sha256": "37da61ba69693316c8e8a3783cd11322f5eda6944ffee6e4e1a842eb8d9ee9ea",
+          "bytes": 403
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/runtime.log",
+          "sha256": "9bf583d157786bb0d562f32ff658b1a91d5fee0e007e4cf497ee83813e8fa6e0",
+          "bytes": 250390
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/study-audit.json",
+          "sha256": "9031d22044b78c499eb676f32537de2ed223bde2a816d515e668026cb6b0326f",
+          "bytes": 3707
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/summary.json",
+          "sha256": "6da189303d2db2ac2fa50147f44f9585f5266c5229b377ee8b84a6f6f339ea97",
+          "bytes": 996525
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/__pycache__/oracle.cpython-312.pyc",
+          "sha256": "43d583838401d9ea8ac915db83cbec2df053f7f8291495370a36fe5cb4d608a6",
+          "bytes": 2054
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/__pycache__/run.cpython-312.pyc",
+          "sha256": "54bf784b3a32ecc7ae254dc603a436df3b29662285decd5f0ef853173c1d02d3",
+          "bytes": 2051
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/analysis/mcProfiler/stderr.txt",
+          "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433",
+          "bytes": 71
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/analysis/mcProfiler/stdout.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/analysis/mctracer/stderr.txt",
+          "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16",
+          "bytes": 69
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/analysis/mctracer/stdout.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/correctness.json",
+          "sha256": "3952099ba05d502ab994e98633b35d9ad27ac0d92eda2c289c2e37da818d4de4",
+          "bytes": 1270
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/execution-claim.json",
+          "sha256": "61e61cc30432eb1a4fe14172320fa3cf8db79de8976bba308bd95d5f2c14a258",
+          "bytes": 343
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/execution-config.json",
+          "sha256": "923f6ddcf38025900ebb3b857ace84b34bb50c299242d067bab31d848c9932f3",
+          "bytes": 241
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/execution-exit.json",
+          "sha256": "daa69d5f967e3837a8b0fdd4c5803f0a2610b3b2d8c9bcd02e99a18fea50f63b",
+          "bytes": 608
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/oracle.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/result.json",
+          "sha256": "9c7c90da798c14f6d16c519b607e5bed070b7c4b2ef0cadcea178357adeec1e5",
+          "bytes": 11808
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/run.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/runner-status.json",
+          "sha256": "a3e948bedca1c544a80d5ef8af238fa1f0f9923c6b42927f92cfd4898d463b40",
+          "bytes": 123
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/runner-supervisor.mjs",
+          "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5",
+          "bytes": 13049
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/runner.stderr.log",
+          "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184",
+          "bytes": 3
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/runner.stderr.raw.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/runner.stdout.log",
+          "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184",
+          "bytes": 3
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/runner.stdout.raw.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_82747401714C5031A792C11277376154/task.json",
+          "sha256": "deab3b11ab17188d24bdc0cd27d7c8edb860b5ae90ce1fd5cb7ed2afc47ea1d4",
+          "bytes": 24678
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/__pycache__/oracle.cpython-312.pyc",
+          "sha256": "f38cc357f8bb2e3353b373e47f281ca0152d835fe18edea65283a1c520d7aff8",
+          "bytes": 2054
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/__pycache__/run.cpython-312.pyc",
+          "sha256": "2cb4d61734de8a4e77ad9fb5b277d2d2de2e70b36ebbf8c201cfb18dbe7713be",
+          "bytes": 2167
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/analysis/mcProfiler/stderr.txt",
+          "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433",
+          "bytes": 71
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/analysis/mcProfiler/stdout.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/analysis/mctracer/stderr.txt",
+          "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16",
+          "bytes": 69
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/analysis/mctracer/stdout.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/correctness.json",
+          "sha256": "2302f4096b10d4907c4189c335a4830944b1ce8f4aae5e020583fad645cf8166",
+          "bytes": 1356
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/execution-claim.json",
+          "sha256": "409b8c27e1b25be251c40671c6a692f40f5512f4b670c4abf46cebe295dfadc8",
+          "bytes": 342
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/execution-config.json",
+          "sha256": "b6e694653e447227e41100775f3b3b4c044e9140791d6c7423e75bb2491b1cbe",
+          "bytes": 241
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/execution-exit.json",
+          "sha256": "be603676d1c61a8646fe3e66e0577839c4aebf5969bab0b58e564204cf742be1",
+          "bytes": 607
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/oracle.py",
+          "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+          "bytes": 1026
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/result.json",
+          "sha256": "b133e383e983c081373e5e6c84f7c807dfe3719cd28871e34202edd738d3f862",
+          "bytes": 12113
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/run.py",
+          "sha256": "17b6df8adc10a37657783f15ffa0304dd04ba3cfe2fb19ca3a974ff4fabf1f98",
+          "bytes": 1700
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/runner-status.json",
+          "sha256": "d6c1019ac2316a43a80d1c9e68101601c695b56e458f587a54859cbe60776845",
+          "bytes": 124
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/runner-supervisor.mjs",
+          "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5",
+          "bytes": 13049
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/runner.stderr.log",
+          "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184",
+          "bytes": 3
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/runner.stderr.raw.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/runner.stdout.log",
+          "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184",
+          "bytes": 3
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/runner.stdout.raw.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/local_c500_B22C0BE2551DD34F0DF82143E885A1F7/task.json",
+          "sha256": "ae4729cde3959a9117dd5957aa834fcad15061a9a26a149b918d2bf20142b72b",
+          "bytes": 26589
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/reference-cache/05/050dad7cffab2db9b213e6c1232b53455ac15f462e9676a12e6859bde000185e.pt",
+          "sha256": "75dba9685eb272d699f0712aef40b1b54bcf73ac0e800cbb0c4764bbd6014787",
+          "bytes": 1372
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/reference-cache/08/08a47b4f0337b90a514b8ee80c5323ddcf34c9f2b88107f43f9f27b8b59c8827.pt",
+          "sha256": "e0b1a1595b7d0bbf5baca303acaf2d732fad5798680cf3cd7a6768bb6aef0fee",
+          "bytes": 1180
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/reference-cache/21/2137fa3963044770d145dcc08d4192bde5a616d00cbcd9bd5ad4c863c45563b9.pt",
+          "sha256": "71dad21175630f9473c887439e91f332945e92a3fc1b99cb5808cfeaffaed2be",
+          "bytes": 1436
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/reference-cache/3d/3dbdcd60ecf6b100339f018b6f224d0461b15a0778174f2193376b4ec29fb043.pt",
+          "sha256": "e0b1a1595b7d0bbf5baca303acaf2d732fad5798680cf3cd7a6768bb6aef0fee",
+          "bytes": 1180
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/reference-cache/70/70b083283da63ce8833cd54ea371a0d7d700a887c5549732930dd29b8f6d174f.pt",
+          "sha256": "75dba9685eb272d699f0712aef40b1b54bcf73ac0e800cbb0c4764bbd6014787",
+          "bytes": 1372
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/reference-cache/81/811693b134a2ae8dff415a5389fc2affa61ed3116caec189766c3924a7306829.pt",
+          "sha256": "44b0f1853ef1fadc38fe4e9262add53f80b1b0b0285ef5c900356b4acddfa2de",
+          "bytes": 33948
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/reference-cache/88/886d934ba31d98d732f2d2f2ef9ec4c7495b8e5213491a769fb1590d238f66c4.pt",
+          "sha256": "71dad21175630f9473c887439e91f332945e92a3fc1b99cb5808cfeaffaed2be",
+          "bytes": 1436
+        },
+        {
+          "path": "a/slot-01/shared-gpu-3AdsaT/tasks/reference-cache/8e/8eea163a154cb508d53d02201cb975b8363e376ba157ec416e33b6676775fc34.pt",
+          "sha256": "44b0f1853ef1fadc38fe4e9262add53f80b1b0b0285ef5c900356b4acddfa2de",
+          "bytes": 33948
+        },
+        {
+          "path": "exit.json",
+          "sha256": "7d2a7ee3e8ff2d7bf7d6061dda6adc2e25ff99aa3dad9879ea0c38a23bf44831",
+          "bytes": 72
+        },
+        {
+          "path": "plan.json",
+          "sha256": "48b54e8aed701c61f94e6e320ba3d49f0844bf2c27cbc1a247d09e0fa6653086",
+          "bytes": 1063
+        },
+        {
+          "path": "r/slot-01/batch.json",
+          "sha256": "1b842f0a447b42ef17791ca736b91340e69099b5367b875a5b31b9a5fe78970c",
+          "bytes": 983
+        },
+        {
+          "path": "r/slot-01/ledger.json",
+          "sha256": "18a1846b206967e9a87f9189c8fa0bc22c770cec82f7a2d8c02d01c1ec1f03c2",
+          "bytes": 77921
+        },
+        {
+          "path": "r/study.json",
+          "sha256": "3e3697bc17eb84874960a38c5a0d122f89bb548c422393af8b493f0b3d062749",
+          "bytes": 11084
+        },
+        {
+          "path": "reader-exit.json",
+          "sha256": "ea61d7736f0b7ecb9b35158f03de77013db6b100cf1d36c957e78e6c8817c5b6",
+          "bytes": 23
+        },
+        {
+          "path": "reader.json",
+          "sha256": "a89f5975c2d7c26ce45cbafdc1ae8bfea7ddec0c4d0ee92047e56fb9eb86ae65",
+          "bytes": 3922
+        },
+        {
+          "path": "reader.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "source.json",
+          "sha256": "e4f0e0fd352b2404ea479473e6d9d9ddcd8803a030766c49af68b14aab440da1",
+          "bytes": 53316
+        },
+        {
+          "path": "study.log",
+          "sha256": "f195153e674b2d663ec9d7cc6d34bc1c626dea28556b89c657751a30f19c365f",
+          "bytes": 456
         }
       ],
       "crcAndHashesVerified": true
