@@ -89,9 +89,13 @@ export const createSharedGpuEnvironmentResolver = ({ probe = probeSharedGpuRunti
   let cachedAt = 0;
   let inFlight = null;
   return Object.freeze({
-    async resolve(environmentId) {
+    async resolve(environmentId, { refresh = false } = {}) {
       if (environmentId !== SHARED_GPU_ENVIRONMENT_ID) throw fail('PACKAGE_ENVIRONMENT_UNKNOWN', 'Only the registered local shared-GPU environment is available.', { environmentId });
-      if (cached && Date.now() - cachedAt < cacheTtlMs) return structuredClone(cached);
+      // A preflight must start collection with a fresh TTL, even when the old
+      // entry has not quite expired. Concurrent readers join that query; a
+      // failed refresh must not leave the older environment available.
+      if (refresh) { cached = null; cachedAt = 0; }
+      if (!inFlight && cached && Date.now() - cachedAt < cacheTtlMs) return structuredClone(cached);
       inFlight ||= Promise.resolve().then(() => probe(probeOptions));
       let result;
       try { result = await inFlight; } finally { inFlight = null; }

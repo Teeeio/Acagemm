@@ -48,3 +48,12 @@ Missing ports are TypeError. Budget, context, experience, workspace and Agent er
 ## Verification / Change Checklist / Limitations
 
 Run `node tests/agent-round-service-test.mjs` and `node tests/round-experience-service-test.mjs`; all Agent/workspace effects are fakes. Update this contract, constructor callers and tests when ports/order change. The service does not persist a failed attempt itself, authorize projects, verify evidence receipts, or format provider prompts. Initial HTTP commands use the same budget/context through their existing journal path.
+
+## Environment preflight ordering (2026-09-16)
+
+When supplied, `roundExperience.preflightCollection` runs after the persisted
+budget starts and before collect. It owns the bounded environment query. Both
+round and Mission time are rechecked after preflight and before subsequent Agent
+or workspace effects; collection/retrieval caps include remaining Mission time.
+The optional port preserves legacy injected callers. Failure prevents collect,
+reset, checkpoint and Agent launch. No same-round retry renews a clock.

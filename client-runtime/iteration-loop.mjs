@@ -307,6 +307,13 @@ const activeMissionBudgetMs = (state = {}) => {
   return missionBudget > 0 ? missionBudget : null;
 };
 
+// The same wall clock used by detectLoopGuard, exposed for bounded preflight I/O.
+export const remainingMissionBudgetMs = (state = {}, { nowMs = Date.now() } = {}) => {
+  const startedAt = state.missionBudgetStartedAt || state.iterationStats?.loopStartedAt;
+  const elapsed = startedAt ? Math.max(0, nowMs - new Date(startedAt).getTime()) : 0;
+  return Math.max(0, (activeMissionBudgetMs(state) || TOTAL_BUDGET_MS) - elapsed);
+};
+
 const phasedIterationPolicy = (mission = {}) => mission?.testScenario?.iterationPolicy || mission?.operatorProfile?.iterationPolicy || null;
 
 export const settleGenerationAttemptBeforeStart = (state = {}, mission = {}, { retryMode = 'generation' } = {}) => {
@@ -403,11 +410,10 @@ export const detectLoopGuard = (state, { nowMs = Date.now() } = {}) => {
     // Existing execution may continue, but it still obeys the total deadline.
   }
   const missionBudgetMs = activeMissionBudgetMs(state);
-  const budgetStartedAt = state?.missionBudgetStartedAt || stats.loopStartedAt;
-  const totalElapsedMs = budgetStartedAt ? Math.max(0, nowMs - new Date(budgetStartedAt).getTime()) : 0;
-  if (missionBudgetMs) return totalElapsedMs >= missionBudgetMs ? 'total_budget' : null;
+  const remainingMs = remainingMissionBudgetMs(state, { nowMs });
+  if (missionBudgetMs) return remainingMs <= 0 ? 'total_budget' : null;
   if ((stats.round || 0) >= MAX_ROUNDS) return 'max_rounds';
-  if (totalElapsedMs >= TOTAL_BUDGET_MS) return 'total_budget';
+  if (remainingMs <= 0) return 'total_budget';
   return null;
 };
 

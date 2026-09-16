@@ -3,7 +3,7 @@
   "recordedAt": "2026-09-15T12:34:20.662206+00:00",
   "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
   "phase": "operator-p3-wiki",
-  "status": "budget-terminal-reader-verified-cold-environment-probe-timeout-reproduced",
+  "status": "environment-preflight-software-verified-live-study-pending",
   "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
   "contract": {
     "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
@@ -279,7 +279,7 @@
     "currentAccepted": true,
     "currentIntegrated": true
   },
-  "updatedAt": "2026-09-16T09:57:05.419072+00:00",
+  "updatedAt": "2026-09-16T12:00:09.540022+00:00",
   "taskHistory": [
     {
       "role": "runtime-condition",
@@ -10184,11 +10184,418 @@
       "records": 0,
       "scope": "Actual local read-only GPU resolver and production collect deadline; inert verification/storage ports; no model/candidate execution. Not a historical full-pipeline replay."
     },
-    "next_action": "Design and validate the boundary between historical evidence verification and live environment refresh, preserving fail-closed admission/freshness and fixed Mission/agent/collect budgets; then freeze source before another independent real-study plan."
+    "next_action": "Design and validate the boundary between historical evidence verification and live environment refresh, preserving fail-closed admission/freshness and fixed Mission/agent/collect budgets; then freeze source before another independent real-study plan.",
+    "resolutionRef": "environmentPreflightRepair"
   },
   "diskRecovery20260916": {
     "fact": "User reported additional cleanup; root Get-PSDrive measured 79.15GiB free before this direct work. Previous capacity blocker resolved.",
     "authority": "user authorized direct implementation during dispatch maintenance",
     "platformFilesChanged": false
+  },
+  "environmentPreflightRepair": {
+    "id": "R5-collect-cold-environment-query-repair",
+    "status": "software_and_read_only_probe_verified",
+    "execution": "primary_agent_direct_user_authorized",
+    "authorization": "用户：已释放空间，继续，目前dispatch平台正在维护，由你自己进行；本轮：开始修复",
+    "dispatchTaskId": null,
+    "platformContextSyncPending": true,
+    "fact": "Automatic and manual production starts explicitly refresh and match the bound GPU environment before collect. Preflight is capped at 30000ms and remaining original Mission/round time. Collection stays capped at 3000ms; original admission/artifact/queue/evidence verification still runs. Preflight failure, drift, abort or budget exhaustion blocks provider start. A failed cache refresh invalidates the old entry; concurrent readers share the query.",
+    "inference": "Moving the measured cold read into a separate bounded phase removes this demonstrated collection-timeout mechanism. Each relevant start now pays for a fresh environment query, even if the former cache was still valid.",
+    "unknown": "No new full model/GPU E2E or N20 was run on this source. Historical R5 per-stage timings and cache state remain unavailable. Read-only diagnostic used inert evidence/storage ports and cannot prove full historical replay or experience recording. Cancelling preflight rejects its result but a read-only subprocess may finish later; no process-release claim is made.",
+    "evidence": [
+      "environment-preflight-verification-20260916.zip",
+      "budget-terminal-reader-verification-20260916.zip"
+    ],
+    "next_action": "Freeze the repaired source and run a new independent real-study plan; retain R5 as 3 completed / 1 budget_terminal / 5 unstarted. Do not merge samples across source revisions or count old N20 as validation of this repair. Resume platform metadata sync only when maintenance ends.",
+    "checks": [
+      {
+        "command": "node tests/round-experience-service-test.mjs",
+        "exitCode": 0,
+        "passedCases": 14,
+        "newCases": 4
+      },
+      {
+        "command": "node tests/agent-round-service-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "node tests/agent-start-context-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "node tests/shared-gpu-experience-verifier-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "node tests/shared-gpu-runtime-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "node tests/local-shared-gpu-package-adapter-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "npm run verify:non-hardware-robustness",
+        "exitCode": 0,
+        "passedChecks": 44,
+        "includedReleaseChecks": 149,
+        "source": "experience-preflight-source.json"
+      },
+      {
+        "command": "node --experimental-vm-modules tests/state-domain-boundary-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "node tests/module-boundary-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "git diff --check -- client-runtime tests docs/development/TEAM_HANDOFF.md",
+        "exitCode": 0
+      }
+    ],
+    "priorFailures": [
+      {
+        "command": "node tests/round-experience-service-test.mjs (initial test fixture)",
+        "exitCode": 1,
+        "reason": "New test combined CPU hardware with GPU executionMode and hit the existing evidence conflict guard before the intended verifier branch. Fixture corrected to nvidia-gpu; no acceptance rule weakened."
+      }
+    ],
+    "intermediateVerification": "The first full run began before the forced-refresh edge case was fixed. Its log is retained, but final validation uses the separately frozen source and final full run.",
+    "reproduction": {
+      "measurements": [
+        {
+          "mode": "cold",
+          "preflightMs": 4003.3163,
+          "collectionMs": 8.273599999999533,
+          "elapsedMs": 4011.5962000000004,
+          "result": {
+            "status": "skipped",
+            "recorded": 0,
+            "existing": 0,
+            "skipped": 1,
+            "records": [
+              {
+                "status": "skipped",
+                "code": "DIAGNOSTIC_PROBE_ONLY"
+              }
+            ]
+          },
+          "queryDrainedMs": 4011.6024
+        },
+        {
+          "mode": "warm",
+          "preflightMs": 4024.2041,
+          "collectionMs": 4.406100000000151,
+          "elapsedMs": 4028.6126999999997,
+          "result": {
+            "status": "skipped",
+            "recorded": 0,
+            "existing": 0,
+            "skipped": 1,
+            "records": [
+              {
+                "status": "skipped",
+                "code": "DIAGNOSTIC_PROBE_ONLY"
+              }
+            ]
+          },
+          "queryDrainedMs": 4028.6158000000005
+        }
+      ],
+      "records": 0,
+      "scope": "Actual local read-only GPU resolver and production collect deadline; inert verification/storage ports; no model/candidate execution. Not a historical full-pipeline replay."
+    },
+    "sourceFiles": {
+      "baseCommit": "7391c97e7df7a8e4ce00c80141a4edf312d54527",
+      "capturedAt": "2026-09-16T11:47:59.238084+00:00",
+      "files": [
+        {
+          "path": "client-runtime/README.md",
+          "sha256": "4387123c6f5dae82598f0eebae8c37d673ec6a95823d8b327f16ae1258270fc0"
+        },
+        {
+          "path": "client-runtime/application/README.md",
+          "sha256": "cc5a18dde7f79b7dae76bad8ce9c7df49625c6f18097dd57733de036b597740d"
+        },
+        {
+          "path": "client-runtime/application/agent-commands.md",
+          "sha256": "8c4d0009c46d0b024dc53e2b515d2c6167b30edbdf899ac312db63cdbd587e9f"
+        },
+        {
+          "path": "client-runtime/application/agent-commands.mjs",
+          "sha256": "9444666a7742a48de8ba7e6be7e2a407445db19f587232056dcfdfa96a6b651a"
+        },
+        {
+          "path": "client-runtime/application/agent-round-service.md",
+          "sha256": "4e5faa235a803cf948f47b7c250fca14567fec0f9207c45c1625d1fbfb971c1c"
+        },
+        {
+          "path": "client-runtime/application/agent-round-service.mjs",
+          "sha256": "909d25495252fc69d8b0a27effe7d67c130e33fb2461510b830d072c8c0318a6"
+        },
+        {
+          "path": "client-runtime/application/round-experience-service.md",
+          "sha256": "49ccc0d25583af931a215b4e5bf8d9da3d01a57643d391691382fa02c6b812f0"
+        },
+        {
+          "path": "client-runtime/application/round-experience-service.mjs",
+          "sha256": "4798f4fc98a7a21fbae3c3e884cbc47d9182a93cbd03204e5ace4b5f9a9a85d1"
+        },
+        {
+          "path": "client-runtime/application/shared-gpu-experience-verifier.md",
+          "sha256": "435af24b6b1f3b1fa8a0ad81fb6452c0c7b971fc6120ea127e3bf2db415a2667"
+        },
+        {
+          "path": "client-runtime/application/shared-gpu-experience-verifier.mjs",
+          "sha256": "b2cd34e6b822b41e4927f1fcf5f99c2eb6f31a8a56eb57dcb5091784e107231a"
+        },
+        {
+          "path": "client-runtime/iteration-loop.md",
+          "sha256": "ddc302a412cb658c5678793280f8466f95e9b528365491b9ea4f71c343a4e261"
+        },
+        {
+          "path": "client-runtime/iteration-loop.mjs",
+          "sha256": "db7aa904654c322b48fb58e740e3960991313431fc81eec4bd9913261fb36123"
+        },
+        {
+          "path": "client-runtime/local-server.mjs",
+          "sha256": "68b047c87763abc34ec23c6bef8f135a7bc0ccb136f45e51298da9b134f51782"
+        },
+        {
+          "path": "client-runtime/local-shared-gpu-package-adapter.md",
+          "sha256": "cb3eb00680744eb3241e6650ef37a64d5df3b8dd4de70c52866d6b7fc17e05e2"
+        },
+        {
+          "path": "client-runtime/local-shared-gpu-package-adapter.mjs",
+          "sha256": "645d9838996c1ff1d9af6631c04103115cbeecdf85d7e985712a9e9fa10b55cd"
+        },
+        {
+          "path": "docs/development/TEAM_HANDOFF.md",
+          "sha256": "40722f044f14c95284e18241436fdc0264bbbcec8f621d98c394c52fc64e834d"
+        },
+        {
+          "path": "tests/README.md",
+          "sha256": "5f70d12f067eec6a47360cd0700ba589eef82731ed18730cc16fd4ebb970c9a0"
+        },
+        {
+          "path": "tests/agent-round-service-test.mjs",
+          "sha256": "ec341fd961766e80e359584233b0d65c1f63434f53a3dea05366940f26fadb4a"
+        },
+        {
+          "path": "tests/agent-start-context-test.mjs",
+          "sha256": "6f33119380f2871958e113d8f67cc0cd166317c8f83c721593ebd31a0e3d3ad1"
+        },
+        {
+          "path": "tests/round-experience-service-test.mjs",
+          "sha256": "3bce9d54055bd26e9bd702028aa10927f5b383098e2d1a914dae0aea3be7758a"
+        },
+        {
+          "path": "tests/shared-gpu-experience-verifier-test.mjs",
+          "sha256": "2bc93d8db15d28a95f12fbac6eb3122a3ddb5bc30c7a8b88a5086e3885d33dec"
+        },
+        {
+          "path": "tests/shared-gpu-runtime-test.mjs",
+          "sha256": "38dda1cf6647ac1cf3910da1ad72fcfdfc6d082ebba1cfa61b0773842001e58a"
+        }
+      ]
+    },
+    "archive": {
+      "path": "environment-preflight-verification-20260916.zip",
+      "sha256": "e19f78ece32afe509db468d8db2b24ee64a0f5310aca5c971f8d501b92c7cec0",
+      "files": [
+        {
+          "path": "experience-preflight-source.json",
+          "sha256": "637f1d88a1572e593268e8dfcbae3326e5cbe0c334e6703e342cc10b803b7726",
+          "bytes": 3641
+        },
+        {
+          "path": "experience-preflight-targeted.log",
+          "sha256": "f5c244f527b696db24d671b7eb67bfec01fcae17a8d329eaa5a10e7903cf5112",
+          "bytes": 3541
+        },
+        {
+          "path": "experience-preflight-targeted-final.log",
+          "sha256": "6b0cdecec1517a68537b09820736a1e3436f3e4d441e178b71519cf6728e7f01",
+          "bytes": 1663
+        },
+        {
+          "path": "experience-preflight-verifier.log",
+          "sha256": "71fa867041b5a94dc628967aa0ea70dc835c26a75cc1e42f7617b9f2f84f8b7b",
+          "bytes": 266
+        },
+        {
+          "path": "experience-preflight-refresh.log",
+          "sha256": "536c7a9883b7e8f1e8057a5ce6e69a99f39c8c3de242b6a6abf727bf293dfd63",
+          "bytes": 354
+        },
+        {
+          "path": "experience-preflight-adapter.log",
+          "sha256": "e038949c4add885c64ee01005c82cef355a860efe1d7f90758ceea737b1903f0",
+          "bytes": 93
+        },
+        {
+          "path": "experience-preflight-boundaries.log",
+          "sha256": "c1790cf5fb184def9fb74d463c4c7088e2c7fc845c09de1e698f5e83158329b3",
+          "bytes": 388
+        },
+        {
+          "path": "experience-preflight-full.log",
+          "sha256": "da6b2381896eff19407a8bf6de6dc7b64fb060f5ac9aa67e713fe252731b4f16",
+          "bytes": 175490
+        },
+        {
+          "path": "experience-preflight-full-final.log",
+          "sha256": "24ec26bbdd78021cddd48c944ad7ff0caa8c9e5ad16b552a88af00cdce1ffbbc",
+          "bytes": 176353
+        },
+        {
+          "path": "experience-preflight-full-final-exit.json",
+          "sha256": "3a7f0ffefe153701b833dc8419ee70f2e4c5918e66e6fd8172fe66cdf04b6374",
+          "bytes": 72
+        },
+        {
+          "path": "experience-preflight-real-probe.mjs",
+          "sha256": "eefd5d2464b3ea17b7d0b858c912e18a2dd1b5e116fe2d7db392745ca090a798",
+          "bytes": 3872
+        },
+        {
+          "path": "experience-preflight-real-probe.json",
+          "sha256": "c9390eb859a24434c1d18e4653c97c2c4afea1daa982ebc7d9b8a6b1f05516df",
+          "bytes": 1112
+        },
+        {
+          "path": "experience-preflight-real-probe.log",
+          "sha256": "022e8d4375922c97fc63a75242a6c745ffbca309cc5a4538489880755080abc1",
+          "bytes": 749
+        },
+        {
+          "path": "experience-preflight-diff-check.log",
+          "sha256": "02d27ad0e94e60727be79be771b6cd83ab159f7a54b510e5eb31b7258f73b9cd",
+          "bytes": 2842
+        },
+        {
+          "path": "archive-experience-preflight.py",
+          "sha256": "5523e954e9602496f8a927f88e3b16ba984fe9b96917bb7d229d6a649bda7688",
+          "bytes": 6886
+        },
+        {
+          "path": "source/client-runtime/README.md",
+          "sha256": "4387123c6f5dae82598f0eebae8c37d673ec6a95823d8b327f16ae1258270fc0",
+          "bytes": 43404
+        },
+        {
+          "path": "source/client-runtime/application/README.md",
+          "sha256": "cc5a18dde7f79b7dae76bad8ce9c7df49625c6f18097dd57733de036b597740d",
+          "bytes": 14321
+        },
+        {
+          "path": "source/client-runtime/application/agent-commands.md",
+          "sha256": "8c4d0009c46d0b024dc53e2b515d2c6167b30edbdf899ac312db63cdbd587e9f",
+          "bytes": 4284
+        },
+        {
+          "path": "source/client-runtime/application/agent-commands.mjs",
+          "sha256": "9444666a7742a48de8ba7e6be7e2a407445db19f587232056dcfdfa96a6b651a",
+          "bytes": 14426
+        },
+        {
+          "path": "source/client-runtime/application/agent-round-service.md",
+          "sha256": "4e5faa235a803cf948f47b7c250fca14567fec0f9207c45c1625d1fbfb971c1c",
+          "bytes": 4836
+        },
+        {
+          "path": "source/client-runtime/application/agent-round-service.mjs",
+          "sha256": "909d25495252fc69d8b0a27effe7d67c130e33fb2461510b830d072c8c0318a6",
+          "bytes": 3898
+        },
+        {
+          "path": "source/client-runtime/application/round-experience-service.md",
+          "sha256": "49ccc0d25583af931a215b4e5bf8d9da3d01a57643d391691382fa02c6b812f0",
+          "bytes": 16064
+        },
+        {
+          "path": "source/client-runtime/application/round-experience-service.mjs",
+          "sha256": "4798f4fc98a7a21fbae3c3e884cbc47d9182a93cbd03204e5ace4b5f9a9a85d1",
+          "bytes": 45885
+        },
+        {
+          "path": "source/client-runtime/application/shared-gpu-experience-verifier.md",
+          "sha256": "435af24b6b1f3b1fa8a0ad81fb6452c0c7b971fc6120ea127e3bf2db415a2667",
+          "bytes": 4639
+        },
+        {
+          "path": "source/client-runtime/application/shared-gpu-experience-verifier.mjs",
+          "sha256": "b2cd34e6b822b41e4927f1fcf5f99c2eb6f31a8a56eb57dcb5091784e107231a",
+          "bytes": 19889
+        },
+        {
+          "path": "source/client-runtime/iteration-loop.md",
+          "sha256": "ddc302a412cb658c5678793280f8466f95e9b528365491b9ea4f71c343a4e261",
+          "bytes": 4024
+        },
+        {
+          "path": "source/client-runtime/iteration-loop.mjs",
+          "sha256": "db7aa904654c322b48fb58e740e3960991313431fc81eec4bd9913261fb36123",
+          "bytes": 65300
+        },
+        {
+          "path": "source/client-runtime/local-server.mjs",
+          "sha256": "68b047c87763abc34ec23c6bef8f135a7bc0ccb136f45e51298da9b134f51782",
+          "bytes": 46356
+        },
+        {
+          "path": "source/client-runtime/local-shared-gpu-package-adapter.md",
+          "sha256": "cb3eb00680744eb3241e6650ef37a64d5df3b8dd4de70c52866d6b7fc17e05e2",
+          "bytes": 1656
+        },
+        {
+          "path": "source/client-runtime/local-shared-gpu-package-adapter.mjs",
+          "sha256": "645d9838996c1ff1d9af6631c04103115cbeecdf85d7e985712a9e9fa10b55cd",
+          "bytes": 13302
+        },
+        {
+          "path": "source/docs/development/TEAM_HANDOFF.md",
+          "sha256": "40722f044f14c95284e18241436fdc0264bbbcec8f621d98c394c52fc64e834d",
+          "bytes": 64581
+        },
+        {
+          "path": "source/tests/README.md",
+          "sha256": "5f70d12f067eec6a47360cd0700ba589eef82731ed18730cc16fd4ebb970c9a0",
+          "bytes": 72487
+        },
+        {
+          "path": "source/tests/agent-round-service-test.mjs",
+          "sha256": "ec341fd961766e80e359584233b0d65c1f63434f53a3dea05366940f26fadb4a",
+          "bytes": 5451
+        },
+        {
+          "path": "source/tests/agent-start-context-test.mjs",
+          "sha256": "6f33119380f2871958e113d8f67cc0cd166317c8f83c721593ebd31a0e3d3ad1",
+          "bytes": 8067
+        },
+        {
+          "path": "source/tests/round-experience-service-test.mjs",
+          "sha256": "3bce9d54055bd26e9bd702028aa10927f5b383098e2d1a914dae0aea3be7758a",
+          "bytes": 19146
+        },
+        {
+          "path": "source/tests/shared-gpu-experience-verifier-test.mjs",
+          "sha256": "2bc93d8db15d28a95f12fbac6eb3122a3ddb5bc30c7a8b88a5086e3885d33dec",
+          "bytes": 13561
+        },
+        {
+          "path": "source/tests/shared-gpu-runtime-test.mjs",
+          "sha256": "38dda1cf6647ac1cf3910da1ad72fcfdfc6d082ebba1cfa61b0773842001e58a",
+          "bytes": 4288
+        }
+      ],
+      "verified": "CRC and each SHA256 match original bytes"
+    },
+    "notRun": [
+      "new live E2E",
+      "new N20",
+      "dispatch platform modifications or task submission"
+    ]
   }
 }

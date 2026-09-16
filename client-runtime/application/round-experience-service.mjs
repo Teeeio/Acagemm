@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { ensureRoundBudgetStarted } from '../round-budget-contract.mjs';
+import { remainingMissionBudgetMs } from '../iteration-loop.mjs';
 import { appendExperience, emptyExperienceStore, experienceError, formatExperienceContext, validateExperienceContext, EXPERIENCE_CONDITIONS, EXPERIENCE_LIMITS, EXPERIENCE_SELECTION_POLICY_VERSION, EXPERIENCE_SELECTION_SCHEMA_VERSION } from '../experience-contract.mjs';
 import { isBackendTargetName, isInfrastructureTestFailure } from '../operator-test-evidence.mjs';
 // 方案 D 的冻结策略版本来自纯选择模块：静态导入保证未组合/缺失时直接失败，
@@ -448,12 +450,14 @@ const selectionQueryFor = (state, mission, scope) => {
 // 未知/空/null/非字符串值必须在任何有副作用操作之前同步失败。
 const invalidCondition = (message) => { throw Object.assign(new TypeError(message), { code: 'EXPERIENCE_INVALID', status: 400 }); };
 
-export const createRoundExperienceService = ({ experienceService, resolveAccess, verifyObservationEvidence, timers, timeoutMs = 3000, experienceCondition } = {}) => {
+export const createRoundExperienceService = ({ experienceService, resolveAccess, verifyObservationEvidence, prepareObservationEvidence, nowMs = Date.now, timers, timeoutMs = 3000, experienceCondition } = {}) => {
   if (typeof experienceService?.retrieve !== 'function' || typeof experienceService?.recordObservation !== 'function') throw new TypeError('experienceService.retrieve and recordObservation are required');
   if (typeof resolveAccess !== 'function') throw new TypeError('resolveAccess is a required trusted synchronous authority port');
   if (typeof verifyObservationEvidence !== 'function') throw new TypeError('verifyObservationEvidence is a required trusted evidence port');
   if (typeof timers?.setTimeout !== 'function' || typeof timers?.clearTimeout !== 'function') throw new TypeError('timers.setTimeout and timers.clearTimeout are required');
   timeoutValue(timeoutMs);
+  if (prepareObservationEvidence !== undefined && typeof prepareObservationEvidence !== 'function') throw new TypeError('prepareObservationEvidence must be a function');
+  if (typeof nowMs !== 'function') throw new TypeError('nowMs must be a function');
   if (experienceCondition !== undefined && !EXPERIENCE_CONDITIONS.includes(experienceCondition)) {
     invalidCondition(`experienceCondition must be one of ${EXPERIENCE_CONDITIONS.join(', ')} when it is provided`);
   }
@@ -492,6 +496,24 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
         return operation(controller.signal);
       }), deadline]);
     } finally { timers.clearTimeout(timer); parentSignal?.removeEventListener('abort', onParentAbort); }
+  };
+  const preflightCollection = async ({ state, mission }) => {
+    accessFor({ state, mission });
+    const observation = state.benchmark?.result?.experienceEvidence;
+    if (!prepareObservationEvidence || !['complete', 'failed', 'cancelled'].includes(state.benchmark?.status)
+      || observation?.executionMode !== 'gpu') return { status: 'skipped' };
+    const remaining = () => {
+      const currentTime = nowMs();
+      const { roundBudget } = ensureRoundBudgetStarted(state, { nowMs: currentTime });
+      const missionRemaining = remainingMissionBudgetMs(state, { nowMs: currentTime });
+      if (!Number.isFinite(missionRemaining) || missionRemaining <= 0) {
+        throw fail('ROUND_EXPERIENCE_BUDGET_EXCEEDED', 'Mission budget cannot admit environment preflight');
+      }
+      return Math.min(30000, Date.parse(roundBudget.deadlineAt) - currentTime, missionRemaining);
+    };
+    await bounded('preflight', (signal) => prepareObservationEvidence({ state, mission, observation, signal }), remaining(), false);
+    remaining(); // A late read-only result cannot authorize a new Agent.
+    return { status: 'ready' };
   };
   const prepare = async ({ state, mission, roundId, scope, timeoutMs: limit = timeoutMs }) => {
     const access = accessFor({ state, mission });
@@ -649,5 +671,5 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
       throw error;
     }
   };
-  return Object.freeze({ prepare, collect, record });
+  return Object.freeze({ preflightCollection, prepare, collect, record });
 };

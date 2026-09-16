@@ -1,4 +1,5 @@
 import { ensureRoundBudgetStarted } from '../round-budget-contract.mjs';
+import { remainingMissionBudgetMs } from '../iteration-loop.mjs';
 
 export const createAgentCommands = ({
   addAuditEvent,
@@ -47,14 +48,23 @@ export const createAgentCommands = ({
       const referenceFixture = runtimeDescriptor.mode === 'reference-fixture';
       // 捕获-重放：在克隆上执行 reset + startRun（含 spawn），把结果摘进 payload；apply 只做确定性的状态重建。
       const clone = structuredClone(state);
+      const ensureBudget = () => {
+        const budget = ensureRoundBudgetStarted(clone, { nowMs: now().getTime() }).roundBudget;
+        const remaining = remainingMissionBudgetMs(clone, { nowMs: now().getTime() });
+        if (!Number.isFinite(remaining) || remaining <= 0) throw Object.assign(new Error('Mission budget exhausted before Agent start'), { code: 'ROUND_EXPERIENCE_BUDGET_EXCEEDED', status: 409 });
+        return budget;
+      };
+      const experienceLimit = () => Math.min(3000, Date.parse(ensureBudget().deadlineAt) - now().getTime(), remainingMissionBudgetMs(clone, { nowMs: now().getTime() }));
       if (intent.roundBudget) clone.iterationStats = { ...(clone.iterationStats || {}), roundBudget: structuredClone(intent.roundBudget) };
       if (intent.roundExperience) clone.iterationStats = { ...(clone.iterationStats || {}), roundExperience: structuredClone(intent.roundExperience) };
       // 选择清单 sidecar 与 roundExperience 同轮冻结：intent 显式含该字段（含 null）时先原样深拷贝进克隆，
       // 字段缺失代表旧 intent，兼容地用当前 prepare 产物。
       if (intent.roundExperienceSelection !== undefined) clone.iterationStats = { ...(clone.iterationStats || {}), roundExperienceSelection: structuredClone(intent.roundExperienceSelection) };
-      ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
-      if (roundExperience?.collect) await roundExperience.collect({ state: clone, mission });
-      ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
+      ensureBudget();
+      if (roundExperience?.preflightCollection) await roundExperience.preflightCollection({ state: clone, mission });
+      ensureBudget();
+      if (roundExperience?.collect) await roundExperience.collect({ state: clone, mission, timeoutMs: experienceLimit() });
+      ensureBudget();
       resetMissionRunState(clone, goal, { referenceFixture });
       // 重放（prepare 重新收到已记录 intent）必须复用 intent 里冻结的轮次事实，不能重新
       // 读取当前可能已经前移的 facts；首次 prepare 才在 reset 归档后取当前快照。
@@ -63,7 +73,7 @@ export const createAgentCommands = ({
         clone.iterationStats = { ...(clone.iterationStats || {}), roundFacts: structuredClone(intent.roundFacts) };
       }
       const experienceContext = roundExperience
-        ? await roundExperience.prepare({ state: clone, mission, roundId: clone.iterationStats.roundBudget.roundId })
+        ? await roundExperience.prepare({ state: clone, mission, roundId: clone.iterationStats.roundBudget.roundId, timeoutMs: experienceLimit() })
         : null;
       // 真实 prepare 在「已有 context + intent 显式 null 清单」时会派生 context-derived 清单并写回状态。
       // 必须在 prepare 之后立刻按 intent 冻结为同一变量，并写回克隆，保证 provider effect 期间不再变化；
@@ -76,14 +86,14 @@ export const createAgentCommands = ({
         ? frozenRoundFacts
         : structuredClone(clone.iterationStats.roundFacts || null);
       if (recordIntent) await recordIntent({ ...intent, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceSelection: structuredClone(roundExperienceSelection), roundFacts });
-      ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
+      ensureBudget();
       let checkpoint = null;
       if (runtimeDescriptor.mode === 'reference-fixture') await runEffect(() => resetMissionWorkspace(state.activeMissionId));
       if (isManagedWorkspaceRuntimeMode(runtimeDescriptor.mode)) {
         checkpoint = await runEffect(() => createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline'));
         clone.workflowRecovery = { ...(clone.workflowRecovery || {}), checkpoints: [...(clone.workflowRecovery?.checkpoints || []), checkpoint].slice(-5) };
       }
-      ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
+      ensureBudget();
       const runtimeRun = await runEffect(() => agentRuntime.startRun({ state: clone, mission, goal, resumeThreadId: body?.resumeThreadId || null, workspace, experienceContext }));
       if (!runtimeRun.handled) startAgentRun(clone, goal, { reset: false });
       const eventType = referenceFixture

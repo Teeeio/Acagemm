@@ -1,10 +1,27 @@
 import assert from 'node:assert/strict';
-import { createSharedGpuExperienceVerifier } from '../client-runtime/application/shared-gpu-experience-verifier.mjs';
+import { createSharedGpuExperienceVerifier, createSharedGpuExperiencePreflight } from '../client-runtime/application/shared-gpu-experience-verifier.mjs';
 import { createRoundExperienceService } from '../client-runtime/application/round-experience-service.mjs';
 import { createExperienceService } from '../client-runtime/application/experience-service.mjs';
 import { emptyExperienceStore } from '../client-runtime/experience-contract.mjs';
 
 const digest = (char) => 'sha256:' + char.repeat(64);
+{
+  let current = digest('c'); let calls = 0;
+  const preflight = createSharedGpuExperiencePreflight({ environmentId: 'local-shared-gpu',
+    environmentResolver: { resolve: async (id, options) => { assert.deepEqual(options, { refresh: true }); calls++; return { id, digest: current }; } } });
+  const input = { observation: { environmentDigest: digest('c') }, signal: new AbortController().signal };
+  assert.equal((await preflight(input)).environmentDigest, digest('c'));
+  current = digest('d');
+  await assert.rejects(preflight(input), (error) => error.code === 'PACKAGE_ENVIRONMENT_CHANGED');
+  const abort = new AbortController(); abort.abort(Error('cancelled preflight'));
+  await assert.rejects(preflight({ ...input, signal: abort.signal }), /cancelled preflight/);
+  assert.equal(calls, 2, 'an aborted preflight starts no environment query');
+  const lateAbort = new AbortController();
+  const slow = createSharedGpuExperiencePreflight({ environmentId: 'local-shared-gpu',
+    environmentResolver: { resolve: async (id) => { lateAbort.abort(Error('late cancellation')); return { id, digest: digest('c') }; } } });
+  await assert.rejects(slow({ ...input, signal: lateAbort.signal }), /late cancellation/);
+  console.log('[shared-gpu-experience-preflight] identity drift and abort fail closed');
+}
 const evidence = {
   missionId: 'MIS_VERIFIER', candidateId: 'candidate-01', runId: 'run-01',
   patchDigest: digest('a'), packageDigest: digest('b'), environmentDigest: digest('c'), acceptanceDigest: digest('d'),

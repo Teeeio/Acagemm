@@ -173,3 +173,11 @@ canonical iteration guards and freezes a permitted round before persistence;
 exhausted limits are rejected synchronously, never cleared by manual start.
 Only an explicitly admitted new round can replace a settled budget. Autopilot,
 Agent preparation and replay consume that frozen active identity.
+
+
+GPU experience startup now calls `round-experience-service.preflightCollection`
+before collect in both `agent-round-service` and the manual runs command. The
+trusted port is `createSharedGpuExperiencePreflight` from the documented
+[shared-GPU verifier](shared-gpu-experience-verifier.md); failures block launch.
+The new read-only stage consumes existing round/Mission time, independently of
+the unchanged short collect timer. No cached environment bypasses admission.

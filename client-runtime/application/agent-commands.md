@@ -46,3 +46,13 @@ The fragment implements the [command journal protocol](../command-journal.md). E
 ## Verification
 
 `npm run test:workflow-commands`, `npm run test:command-recovery`, `npm run test:journal`, and the release gates.
+
+## Environment preflight (2026-09-16)
+
+The runs command invokes optional `roundExperience.preflightCollection` on its
+private state clone, after restoring the frozen intent budget and before collect.
+The preflight is read-only and bounded by the existing round/Mission deadlines.
+Failure prevents new intent recording, workspace effects and provider start.
+Collect/prepare receive at most 3000 ms and remaining round/Mission time; budgets
+are checked again before checkpoint and launch. Explicit budget-resume remains
+the operation that can renew a Mission clock, not an ordinary start or replay.

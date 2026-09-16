@@ -71,3 +71,21 @@ const context = await roundExperience.prepare({ state, mission, roundId });
 ## Change Checklist / Known Limitations
 
 字段/端口变化同步此契约、AgentRound、经验纯契约及测试。`experienceCondition` 是冻结的可选构造参数：默认省略，仅在受控实验里显式给出；显式条件与冻结清单的一致性检查不得放宽，也不得把条件写进冻结 context、轮次必需事实或任何 Agent/GPU 端口。context 64 KiB/20 项上限沿用领域。默认检索不猜 dtype/shape；未接完整包验证的旧结果不会自动成为观察。状态跨对象/进程的串行持久化由既有 Repository/command journal 负责；本服务不提供第二套事务恢复。
+
+## GPU observation preflight (2026-09-16)
+
+The optional `prepareObservationEvidence` port and injected `nowMs` clock add
+`preflightCollection({state,mission})`. For a terminal GPU observation it warms
+and checks the trusted environment before `collect`. It grants no verification
+proof and writes no experience. Missing/non-GPU observations skip the query;
+legacy callers without the port retain their behavior.
+
+This is a separate read-only stage, capped at 30 seconds AND remaining persisted
+round/Mission time. Its duration counts toward those clocks; neither is renewed.
+A timeout aborts its signal and throws ROUND_EXPERIENCE_TIMEOUT (stage=preflight,
+effectUnknown=false). Read-only queries may finish late, but their result cannot
+start an Agent. Query errors and environment drift propagate without fallback.
+The original collect/record/prepare timers remain at most 3000 ms. Thus total
+startup may include a longer preflight; this is not a claim that all startup work
+still fits within three seconds. Original admission/artifact/queue/evidence and
+fresh-environment checks still run inside collect.

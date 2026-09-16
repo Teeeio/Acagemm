@@ -514,3 +514,15 @@ npm run test:projects-service
 npm run test:missions-service
 npm run verify:local-c500-release
 ```
+
+
+### GPU experience environment preflight (2026-09-16)
+
+The composition root injects a shared-resolver environment preflight into the
+round experience service. Automatic and manual starts warm/check the bound
+environment before the three-second collect phase, within existing total clocks.
+The GPU probe uses the existing package inspection allowance (default 30000 ms,
+maximum probe timeout 30000 ms) instead of the probe helper's generic 5000 ms
+fallback. The enclosing preflight still caps the whole query by remaining budgets.
+This accommodates a slow Python/Torch import without inventing a missing runtime;
+timeout, drift and failed evidence checks remain fail-closed.

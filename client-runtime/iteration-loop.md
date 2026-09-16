@@ -67,3 +67,11 @@ required, blocking decision does.
 
 `npm run test:loop`, `npm run test:workflow-kernel`,
 `npm run test:operator-test-resilience`, `npm run test:state-domain-boundary`.
+
+## Shared remaining Mission clock
+
+`remainingMissionBudgetMs(state,{nowMs})` is the pure remaining-time projection
+used by detectLoopGuard and bounded startup preflight. It keeps the existing
+state-level budget, then active Mission budget, then TOTAL_BUDGET_MS precedence,
+using missionBudgetStartedAt or loopStartedAt. It neither allocates nor renews
+any clock. Startup consumers reject nonfinite or exhausted remaining time.

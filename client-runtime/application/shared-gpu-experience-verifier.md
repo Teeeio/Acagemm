@@ -61,3 +61,14 @@ the typed code, phase/role, failed case name/category (each also bounded), total
 executed/passed counts and the real error prefix. Verified failed development
 evidence stays non-publishable. Rejections are read-only: neither the projected
 result, the observation evidence nor the queue receipt is rewritten.
+
+## Environment preflight
+
+`createSharedGpuExperiencePreflight({environmentResolver,environmentId})` returns
+an async `{observation,signal}` port. It queries admission's trusted resolver with
+`resolve(id, {refresh: true})` to refresh the cache TTL before collection,
+requires the returned id and normalized digest to match the bound
+observation, and checks abort before/after the query. Drift or missing digest
+throws PACKAGE_ENVIRONMENT_CHANGED; query failures propagate. Its return value
+is only `{environmentDigest}`, never a trusted observation proof. The existing
+verifier and its admission/artifact/queue checks remain unchanged.

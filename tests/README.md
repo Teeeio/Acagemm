@@ -1007,3 +1007,12 @@ NVIDIA adapter and its production queue supervisor. They require the F-drive
 CUDA environment, execute real GPU correctness/benchmark work, and mark every
 observation non-publishable. They are intentionally excluded from hardware-free
 release gates.
+
+
+2026-09-16 environment-preflight coverage: round-experience-service exercises
+separate timers, skipped non-GPU inputs, query failures, Mission/round limits and
+late aborts; shared-gpu-experience-verifier tests digest drift and cancellation;
+shared-gpu-runtime tests forced refresh, coalesced readers and no stale fallback;
+automatic agent-round and manual agent-start-context tests assert ordering and
+that preflight/budget failure causes no provider start. These additions are by
+the primary agent under the user's direct-work authorization.

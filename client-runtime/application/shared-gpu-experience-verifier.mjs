@@ -8,6 +8,25 @@ const prefixed = (value) => {
   const raw = digest(value);
   return raw ? `sha256:${raw}` : null;
 };
+
+// Warm the same trusted resolver used by verifyAdmission, outside the short
+// collection timer. This grants no evidence authority and accepts no stale value.
+export const createSharedGpuExperiencePreflight = ({ environmentResolver, environmentId }) => {
+  if (typeof environmentResolver?.resolve !== 'function' || typeof environmentId !== 'string' || !environmentId) {
+    throw new TypeError('Shared-GPU experience preflight requires a trusted resolver and environment id');
+  }
+  return async ({ observation, signal }) => {
+    if (signal?.aborted) throw signal.reason;
+    const expected = digest(observation?.environmentDigest);
+    if (!expected) throw Object.assign(new Error('Observation has no bound environment digest'), { code: 'PACKAGE_ENVIRONMENT_CHANGED', status: 409 });
+    const environment = await environmentResolver.resolve(environmentId, { refresh: true });
+    if (signal?.aborted) throw signal.reason;
+    if (environment?.id !== environmentId || digest(environment?.digest) !== expected) {
+      throw Object.assign(new Error('Bound observation environment changed during preflight'), { code: 'PACKAGE_ENVIRONMENT_CHANGED', status: 409 });
+    }
+    return { environmentDigest: environment.digest };
+  };
+};
 const normalizedEvidence = (value) => {
   if (!value || typeof value !== 'object') return null;
   // A worker cannot downgrade a live-GPU claim to a simulated receipt. An

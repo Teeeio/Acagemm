@@ -8,7 +8,7 @@ import { createExperienceRepository } from './experience-repository.mjs';
 import { createExperienceService } from './application/experience-service.mjs';
 import { createExperienceApiService } from './application/experience-api-service.mjs';
 import { createRoundExperienceService } from './application/round-experience-service.mjs';
-import { createSharedGpuExperienceVerifier } from './application/shared-gpu-experience-verifier.mjs';
+import { createSharedGpuExperienceVerifier, createSharedGpuExperiencePreflight } from './application/shared-gpu-experience-verifier.mjs';
 import { createExperienceRoutes } from './server/experience-routes.mjs';
 import { createServer } from 'node:http';
 import { createRuntimeLifecycleService } from './application/runtime-lifecycle-service.mjs';
@@ -44,7 +44,7 @@ import { createExecutionPackageStore } from './execution-package-store.mjs';
 import { importExecutionPackage } from './execution-package-import.mjs';
 import { createExecutionPackageImportService } from './application/execution-package-import-service.mjs';
 import { createExecutionPackageRoutes } from './server/execution-package-routes.mjs';
-import { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARED_GPU_PACKAGE_ADAPTER } from './local-shared-gpu-package-adapter.mjs';
+import { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARED_GPU_PACKAGE_ADAPTER, sharedGpuEnvironment } from './local-shared-gpu-package-adapter.mjs';
 import { migrateLocalC500TesterState } from './local-c500-state-migration.mjs';
 import { LOCAL_C500_RUNTIME_CONTRACT_VERSION } from './local-c500-runtime-contract.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
@@ -172,18 +172,20 @@ const bridge = {
 const sharedGpuPackageRoot = process.env.OPERATOR_EXECUTION_PACKAGE_DIR
   ? path.resolve(process.env.OPERATOR_EXECUTION_PACKAGE_DIR)
   : path.join(runtimeDir, 'execution-packages');
+const packageInspectionTimeoutMs = Number(process.env.OPERATOR_PACKAGE_INSPECTION_TIMEOUT_MS || 30000);
 const sharedGpuEnvironmentResolver = localC500Config.kind === 'local-shared-gpu'
   ? createSharedGpuEnvironmentResolver({ probeOptions: {
     python: process.env.OPERATOR_GPU_PYTHON || resolvePythonExecutable({ rootDir }),
     nvidiaSmi: process.env.OPERATOR_GPU_NVIDIA_SMI || 'nvidia-smi',
     requireCudaToolkit: process.env.OPERATOR_GPU_REQUIRE_NVCC === '1',
+    timeoutMs: Math.min(30000, packageInspectionTimeoutMs),
   } }) : null;
 const sharedGpuPackageAdapter = localC500Config.kind === 'local-shared-gpu'
   ? createSharedGpuPackageAdapter({ rootDir: path.join(sharedGpuPackageRoot, 'adapter') }) : null;
 const executionPackageStore = sharedGpuPackageAdapter
   ? createExecutionPackageStore({ rootDir: path.join(sharedGpuPackageRoot, 'store'), environments: sharedGpuEnvironmentResolver,
     adapters: { [SHARED_GPU_PACKAGE_ADAPTER.id]: sharedGpuPackageAdapter },
-    inspectionTimeoutMs: Number(process.env.OPERATOR_PACKAGE_INSPECTION_TIMEOUT_MS || 30000) })
+    inspectionTimeoutMs: packageInspectionTimeoutMs })
   : null;
 const executionPackageImportService = executionPackageStore ? createExecutionPackageImportService({ store: executionPackageStore, importSource: (input) => importExecutionPackage({ store: executionPackageStore, ...input }) }) : {
   import: async () => { throw Object.assign(new Error('Execution package import requires an enabled trusted package backend.'), { code: 'PACKAGE_BACKEND_UNAVAILABLE', status: 503 }); },
@@ -219,6 +221,11 @@ const sharedGpuExperienceVerifier = executionPackageStore && sharedGpuPackageAda
   ? createSharedGpuExperienceVerifier({ executionPackageStore, packageAdapter: sharedGpuPackageAdapter, readTask: (taskId) => operatorTestQueue.readTask(taskId) }) : null;
 const roundExperienceService = createRoundExperienceService({
   experienceService, timers: { setTimeout, clearTimeout },
+  ...(sharedGpuEnvironmentResolver ? {
+    prepareObservationEvidence: createSharedGpuExperiencePreflight({
+      environmentResolver: sharedGpuEnvironmentResolver, environmentId: sharedGpuEnvironment.id,
+    }),
+  } : {}),
   // 未配置时完全不传该键，保持默认部署的构造参数与行为不变。
   ...(experienceCondition === undefined ? {} : { experienceCondition }),
   resolveAccess: ({ state, mission }) => {
