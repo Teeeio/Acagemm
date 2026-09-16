@@ -1732,7 +1732,7 @@ try {
   // Run the real study runner with slot 1 complete and slot 2 the frozen nested-exit failure.
   // `spawned` keeps the runner's own per-slot directories, so every assertion below reads the
   // bytes the runner really retained instead of a re-derived expectation.
-  const runNestedStudy = async (label) => {
+  const runNestedStudy = async (label, { budget = false } = {}) => {
     const { snapshot } = await setup(`nested-${label}`, { execution: true });
     const dirs = await studyDirs(`nested-${label}`, snapshot);
     const spawned = [];
@@ -1744,9 +1744,36 @@ try {
           index: invocation.index, condition: invocation.condition,
           artifactDir: invocation.artifactDir, reportDir: invocation.reportDir,
           snapshot, snapshotFile: dirs.snapshotFile,
-          options: invocation.index === 2
+          options: invocation.index === 2 && !budget
             ? { label, smoke: 'nested-noncomparable' } : { label: 'green' },
         });
+        if (invocation.index === 2 && budget) {
+          // Convert a complete, observed fixture to the existing driver's safe
+          // budget outcome. The outer smoke process must still fail.
+          for (const name of ['attempt.json', 'summary.json']) {
+            const file = path.join(result.runRoot, name);
+            const doc = JSON.parse(await readFile(file, 'utf8'));
+            doc.outcome = 'budget_terminal';
+            doc.fullSuccess = false;
+            if (name === 'summary.json') doc.status = 'budget_terminal';
+            for (const key of ['familyOutcomes', 'summaries']) {
+              for (const family of doc[key] ?? []) {
+                family.outcome = 'budget_terminal';
+                family.fullSuccess = false;
+                family.budgetTerminalEvidence = { safe: true, terminal: true,
+                  budgetReasonRecorded: true, resourceReleaseConfirmed: true, issues: [] };
+              }
+            }
+            await writeJson(file, doc);
+          }
+          const batchFile = path.join(invocation.reportDir, 'batch.json');
+          const batch = JSON.parse(await readFile(batchFile, 'utf8'));
+          batch.status = 'failed';
+          batch.stopReason = 'smoke_not_full_success: budget_terminal';
+          batch.invocations[0].outcome = 'budget_terminal';
+          await writeJson(batchFile, batch);
+          result.exitCode = 1;
+        }
         // The port result carries the slot's own run root back, so the case reads the raw
         // driver artifacts from the path the fixture really wrote instead of re-deriving it.
         runRoots.set(invocation.index, result.runRoot ?? null);
@@ -1860,6 +1887,42 @@ try {
       await writeJson(batchFile, batch);
     });
   });
+
+  await test('budget terminal: comparable driver exit0 remains a verified failed slot', async () => {
+    const { dirs } = await runNestedStudy('budget-positive', { budget: true });
+    const before = [await treeIdentity(dirs.reportDir), await treeIdentity(dirs.artifactDir)];
+    const receipt = await verifyStudyReport(dirs.reportDir);
+    assert.equal(receipt.ok, true);
+    assert.equal(receipt.status, 'stopped');
+    assert.equal(receipt.strictN20Passed, false);
+    assert.deepEqual(slotCountsOf(receipt, 'budget'), { completed: 1, failed: 1, stopped: 7 });
+    assert.equal(receipt.verifiedSlots[1].exitCode, 1);
+    assert.deepEqual([await treeIdentity(dirs.reportDir), await treeIdentity(dirs.artifactDir)], before);
+  });
+
+  for (const [label, target, mutate, expected] of [
+    ['false-green', 'batch', (v) => { v.status = 'passed'; }, /claims success/],
+    ['wrong-reason', 'batch', (v) => { v.stopReason = null; }, /stop reason mismatch/],
+    ['borrowed-run', 'batch', (v, f) => { v.invocations[0].runRoot = f.runRootOf(1); }, /outside slot/],
+    ['missing-budget-proof', 'summary', (v) => {
+      for (const item of v.familyOutcomes ?? v.summaries) delete item.budgetTerminalEvidence;
+    }, /originals do not prove budget termination/],
+    ['claimed-full-success', 'summary', (v) => { v.fullSuccess = true; }, /originals do not prove budget termination/],
+    ['unconfirmed-release', 'attempt', (v) => { v.cleanup.teardownStop.confirmed = false; }, /unsafe release/],
+  ]) {
+    await test(`budget terminal rejects ${label}`, async () => {
+      const fixture = await runNestedStudy(`budget-${label}`, { budget: true });
+      assert.equal((await verifyStudyReport(fixture.dirs.reportDir)).ok, true);
+      const file = target === 'batch' ? nestedBatchFile(fixture.spawned)
+        : path.join(fixture.runRootOf(2), `${target}.json`);
+      const value = JSON.parse(await readFile(file, 'utf8'));
+      mutate(value, fixture);
+      await writeJson(file, value);
+      const before = [await treeIdentity(fixture.dirs.reportDir), await treeIdentity(fixture.dirs.artifactDir)];
+      await assert.rejects(() => verifyStudyReport(fixture.dirs.reportDir), expected);
+      assert.deepEqual([await treeIdentity(fixture.dirs.reportDir), await treeIdentity(fixture.dirs.artifactDir)], before);
+    });
+  }
 
   await test('matrix 14c: a nested failure whose non-comparable proof was dropped is refused', async () => {
     await nestedReaderRejects('missing-proof', async ({ batchFile, ...nested }) => {

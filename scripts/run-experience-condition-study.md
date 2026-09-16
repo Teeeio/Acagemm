@@ -267,6 +267,16 @@ invocation, invocation `status: "completed"`, `comparable: false` and its
 non-empty issues. An all-green nested record under a failed batch is an invented
 success and is refused.
 
+A second truthful failure is a safely exhausted driver budget: nested exit `0`,
+outcome `budget_terminal`, and smoke stop reason
+`smoke_not_full_success: budget_terminal`. This branch can be comparable. The
+reader resolves its run root inside that slot (including real filesystem paths),
+reads both original attempt and summary, and reuses `classifyAcceptanceRecord`
+and `continuationSafety` to require consistent budget evidence and safe release.
+Missing proof, a borrowed run, conflicting success, or an unconfirmed teardown
+is rejected. It remains a failed slot with the original nonzero smoke exit;
+it contributes no success metrics and cannot permit another slot to start.
+
 `ok: true` means "this retained report matches its originals", never "the study
 succeeded": `status`, `stopReason`, `slotCounts` and `strictN20Passed: false`
 carry the real outcome, so a stopped/failed pilot is a valid, reviewable

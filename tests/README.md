@@ -1,5 +1,13 @@
 # Test Module Contract
 
+2026-09-16 study reader addition: `node tests/experience-condition-study-test.mjs`
+includes seven budget-terminal cases (valid stopped report, false success, wrong
+reason, borrowed run, missing budget proof, conflicting full-success flag and
+unconfirmed teardown). They exercise the public reader against real fixture files
+and assert read-only behavior. Added directly by the primary agent under the
+user's maintenance exception; these are not independently authored dispatch tests.
+The previous 23 cases remain intact; the suite now contains 30 cases.
+
 模块归属：跨模块 Verification。测试由对应生产模块主责共同维护，详细映射见
 [`docs/development/MODULE_OWNERSHIP.md`](../docs/development/MODULE_OWNERSHIP.md)。
 

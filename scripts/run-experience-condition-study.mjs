@@ -467,8 +467,42 @@ const readRetainedBatchStatus = async (reportDir) => {
       invocationExitCode: invocation?.exitCode ?? null,
       invocationComparable: invocation?.comparable ?? null,
       invocationIssues: Array.isArray(invocation?.issues) ? [...invocation.issues] : null,
+      invocationOutcome: invocation?.outcome ?? null,
+      invocationRunRoot: invocation?.runRoot ?? null,
+      mode: value.mode,
+      families: value.families,
+      strictN20Passed: value.strictN20Passed,
+      stopReason: value.stopReason,
     };
   } catch { return null; }
+};
+
+// A safely exhausted budget is a truthful driver exit 0, but never a successful
+// smoke run. Reuse the acceptance classifier and release barrier on the originals;
+// a batch label alone cannot establish this exception.
+const verifyRetainedBudgetTerminal = async (batch, slot) => {
+  const label = `slot ${slot.index} budget terminal`;
+  assert.equal(batch.mode, 'smoke', `${label}: not a smoke batch`);
+  assert.deepEqual(batch.families, [STUDY_FAMILY], `${label}: family mismatch`);
+  assert.equal(batch.strictN20Passed, false, `${label}: claims N20`);
+  assert.equal(batch.stopReason, 'smoke_not_full_success: budget_terminal', `${label}: stop reason mismatch`);
+  assert.ok(isNonBlank(batch.invocationRunRoot) && path.isAbsolute(batch.invocationRunRoot),
+    `${label}: missing absolute run root`);
+  const artifactRoot = await realpath(slot.artifactDir);
+  const runRoot = await realpath(batch.invocationRunRoot);
+  assert.ok(isStrictlyInside(artifactRoot, runRoot), `${label}: run root outside slot`);
+  for (const name of ['attempt.json', 'summary.json']) {
+    assert.ok(isStrictlyInside(runRoot, await realpath(path.join(runRoot, name))),
+      `${label}: original outside run root`);
+  }
+  const record = await readRunRecord(runRoot);
+  assert.deepEqual(record.errors, [], `${label}: unreadable originals`);
+  const classified = classifyAcceptanceRecord(record);
+  assert.equal(classified.outcome, 'budget_terminal', `${label}: originals do not prove budget termination`);
+  assert.deepEqual(classified.issues, [], `${label}: contradictory originals`);
+  assert.deepEqual(record.attempt.config?.families, [STUDY_FAMILY], `${label}: original family mismatch`);
+  const safety = continuationSafety(record);
+  assert.equal(safety.safe, true, `${label}: unsafe release: ${safety.issues.join(', ')}`);
 };
 
 // Everything relevant that a slot can only learn by reading its own retained raw
@@ -1266,11 +1300,8 @@ export const verifyStudyReport = async (reportPath) => {
             `slot ${slot.index} exited with ${String(exitCode)} while its retained batch report claims success`);
           // The nested driver exit is a DIFFERENT process layer and is never required
           // to equal the smoke batch child exit. A driver that itself exited 0 under a
-          // failed batch is the observed truthful non-comparable failure, and it stays
-          // readable only when the retained one-invocation record proves it: the batch
-          // really failed, the single smoke invocation really completed with exit 0,
-          // it is explicitly NOT comparable, and it kept the issues that made it so.
-          // An "all green" nested record is an invented success and is refused.
+          // failed batch requires either the retained non-comparability issues or
+          // raw proof of safe budget termination. Neither exception turns it green.
           if (batch.invocationExitCode === 0) {
             assert.equal(batch.status, 'failed',
               `slot ${slot.index} nested driver exited 0 although its retained batch status is ${String(batch.status)}, not failed`);
@@ -1280,10 +1311,14 @@ export const verifyStudyReport = async (reportPath) => {
               `slot ${slot.index} nested driver exited 0 although its retained batch kept ${String(batch.invocationCount)} invocations, not one`);
             assert.equal(batch.invocationStatus, 'completed',
               `slot ${slot.index} nested driver exited 0 although its retained invocation status is ${String(batch.invocationStatus)}, not completed`);
-            assert.equal(batch.invocationComparable, false,
-              `slot ${slot.index} nested driver exited 0 under a failed batch although its retained invocation claims comparability`);
-            assert.ok(Array.isArray(batch.invocationIssues) && batch.invocationIssues.length > 0,
-              `slot ${slot.index} nested driver exited 0 under a failed batch without retaining the issues that made it non-comparable`);
+            if (batch.invocationOutcome === 'budget_terminal') {
+              await verifyRetainedBudgetTerminal(batch, slot);
+            } else {
+              assert.equal(batch.invocationComparable, false,
+                `slot ${slot.index} nested driver exited 0 under a failed batch although its retained invocation claims comparability`);
+              assert.ok(Array.isArray(batch.invocationIssues) && batch.invocationIssues.length > 0,
+                `slot ${slot.index} nested driver exited 0 under a failed batch without retaining the issues that made it non-comparable`);
+            }
           }
         }
       } else {

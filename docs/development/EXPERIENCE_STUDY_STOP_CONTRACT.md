@@ -62,3 +62,28 @@ false-green, source/model drift and all original evidence checks.
   shared-gpu acceptance/model collector, study suite, release and two module
   boundaries at the integration point. No new full non-hardware run is required
   for this isolated script correction; prior runtime gates remain recorded.
+
+## S3: safely exhausted budget is a readable failure (2026-09-16)
+
+R5 (`run_52c15b22251c4935b1ba1c156423e55a`) retained three complete slots,
+then a comparable `budget_terminal` driver exit0 inside a failed smoke exit1,
+and five unstarted slots. S2's restriction to non-comparable failures was too
+narrow. Add this separate branch without changing the original S2 branch.
+
+Require exactly one completed driver invocation in a failed one-run affine smoke
+batch, strictN20=false, and the exact smoke budget stop reason. Resolve the run
+and its two originals inside that slot, rejecting filesystem aliases outside it.
+Reclassify attempt/summary through the existing acceptance classifier: outcome
+must be budget_terminal, with no contradictory issues. Reuse continuationSafety
+for release; do not invent release from the outer exit. Preserve the failed slot,
+nonzero smoke exit, absent success metrics, full denominator and strictN20=false.
+
+Public-reader filesystem tests cover a valid stopped result, claimed passed batch,
+wrong stop reason, borrowed run, missing budget proof, claimed full success and
+unconfirmed release. Both passing and rejecting reads preserve all input bytes.
+The actual R5 originals must reread as 3 completed / 1 failed / 5 stopped.
+
+The user explicitly authorized direct implementation while dispatch is maintained
+on 2026-09-16. This S3 change and its tests are by the primary agent, not an
+independent dispatch test author. Existing acceptance invariants remain unchanged;
+do not label this work as a dispatched or independently authored deliverable.

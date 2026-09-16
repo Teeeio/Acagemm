@@ -3,7 +3,7 @@
   "recordedAt": "2026-09-15T12:34:20.662206+00:00",
   "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
   "phase": "operator-p3-wiki",
-  "status": "r5-real-study-stopped-budget-terminal-reader-followup-disk-capacity",
+  "status": "budget-terminal-reader-verified-cold-environment-probe-timeout-reproduced",
   "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
   "contract": {
     "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
@@ -279,7 +279,7 @@
     "currentAccepted": true,
     "currentIntegrated": true
   },
-  "updatedAt": "2026-09-15T13:19:45.395Z",
+  "updatedAt": "2026-09-16T09:57:05.419072+00:00",
   "taskHistory": [
     {
       "role": "runtime-condition",
@@ -9999,5 +9999,196 @@
       ],
       "next_action": "Request additional storage before dispatching the three-task repair batch; preserve existing platform task history and original attempts."
     }
-  ]
+  ],
+  "budgetTerminalReaderRepair": {
+    "status": "verified",
+    "execution": "primary_agent_direct_user_authorized",
+    "authorization": "用户 2026-09-16：已释放空间，继续，目前dispatch平台正在维护，由你自己进行",
+    "dispatchTaskId": null,
+    "platformContextSyncPending": true,
+    "changes": "Separate budget_terminal failure branch: require one completed nested driver, failed affine smoke, exact stop reason, slot-contained original paths, existing acceptance classifier budget proof and release barrier. Failure stays failure; no new live run or N20.",
+    "checks": [
+      {
+        "command": "node tests/experience-condition-study-test.mjs",
+        "exitCode": 0,
+        "passedCases": 30,
+        "newCases": 7
+      },
+      {
+        "command": "node scripts/run-experience-condition-study.mjs --verify-report <original R5 report>",
+        "exitCode": 0,
+        "ok": true,
+        "status": "stopped",
+        "slotCounts": {
+          "completed": 3,
+          "failed": 1,
+          "stopped": 5
+        },
+        "strictN20Passed": false
+      },
+      {
+        "command": "npm run verify:local-c500-release",
+        "exitCode": 0,
+        "passedChecks": 149
+      },
+      {
+        "command": "node --experimental-vm-modules tests/state-domain-boundary-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "node tests/module-boundary-test.mjs",
+        "exitCode": 0
+      },
+      {
+        "command": "git diff --check -- <six owned code/doc paths>",
+        "exitCode": 0
+      }
+    ],
+    "priorFailures": [
+      {
+        "command": "node scripts/verify-local-c500-release.mjs",
+        "exitCode": 1,
+        "reason": "Direct wrapper invocation lacked npm_execpath on Windows; spawnSync npm.cmd EINVAL before first test. Correct npm run entry passed; no production change."
+      },
+      {
+        "command": "node .operator-studio-local/experience-cold-collect-diagnostic.mjs (first harness attempt)",
+        "exitCode": 1,
+        "reason": "Final state benchmark had no result; diagnostic aborted before resolver/model/GPU activity. Corrected harness reads the original queue result and passes it explicitly."
+      }
+    ],
+    "sourceFiles": [
+      {
+        "path": "scripts/run-experience-condition-study.mjs",
+        "sha256": "21ec986dc0e8b7348c7c7ccb37b6a48f21a9d6cd40d5fea0cf32a3de7d7b7777"
+      },
+      {
+        "path": "scripts/run-experience-condition-study.md",
+        "sha256": "b6776e4d849ea9eb21eefbb8061d84deefe5d687316079a78d2dc592cd1819bd"
+      },
+      {
+        "path": "tests/experience-condition-study-test.mjs",
+        "sha256": "9f70716b2aa65f63c1a006fc7f41f194c57d2baccc3d0f8290fa5ae9c25209a4"
+      },
+      {
+        "path": "tests/README.md",
+        "sha256": "f04e4a85751ff7dcc0f148934c098435867c9d22acc9c7aef5960f7efcc0391e"
+      },
+      {
+        "path": "docs/development/EXPERIENCE_STUDY_STOP_CONTRACT.md",
+        "sha256": "7fd878cb34359b850bbdc93a66db93fde0c84acf49d3100880695815da05c8be"
+      },
+      {
+        "path": "docs/development/TEAM_HANDOFF.md",
+        "sha256": "5e766f264884396e0003e849a94fccc0b60877b3ed961ed4e12b00a82b950622"
+      }
+    ],
+    "archive": {
+      "path": "budget-terminal-reader-verification-20260916.zip",
+      "sha256": "3ebff2a17bde35bf8875370bdec32b46b978a91126a71c7d90bd38ce2266a8d8",
+      "files": [
+        {
+          "path": "budget-reader-tests.log",
+          "sha256": "1f296e7130be93864a7051a43214fa87da39ea0d7ff0901f60988345309267f6",
+          "bytes": 55407
+        },
+        {
+          "path": "budget-reader-r5.json",
+          "sha256": "7286e3ebf49b9d7a65db47b3f4b9d6972794488898d1f0e9c2c98fc43a356e2e",
+          "bytes": 9502
+        },
+        {
+          "path": "budget-reader-r5.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "budget-reader-release.log",
+          "sha256": "3eacbeb7d91579fc814f2c648b36011f6e3f6474b9787c432e8682b064cd2bb4",
+          "bytes": 928
+        },
+        {
+          "path": "budget-reader-release-final.log",
+          "sha256": "17d1a7e3d70a7f36de1857e521640845e4ebf23001d906f5315deb63aa6d117a",
+          "bytes": 131328
+        },
+        {
+          "path": "budget-reader-boundaries.log",
+          "sha256": "36abd0b9134d89b9536000e7c7eb174c7ed0bb8dd708dc40bdb978694c9d0e26",
+          "bytes": 390
+        },
+        {
+          "path": "experience-probe-timing.json",
+          "sha256": "2145503a39ac4cc91e1d55d6467df79fefdd7083d620d5c591881234220c10e0",
+          "bytes": 793
+        },
+        {
+          "path": "experience-cold-collect-diagnostic.mjs",
+          "sha256": "a4afe168538516eaf0b2745591de0703fd80cb914e2df3f04d85b179702a1c6b",
+          "bytes": 3046
+        },
+        {
+          "path": "experience-cold-collect-diagnostic.json",
+          "sha256": "dd0c7ce965e2dd8827cb8e3a06720e38ee1127be40eadb5a593493df0a3cc03c",
+          "bytes": 796
+        }
+      ],
+      "verified": "CRC and each SHA256 match original bytes"
+    },
+    "notRun": [
+      "new live E2E",
+      "new N20",
+      "new full non-hardware robustness"
+    ],
+    "noProductionRuntimeChange": true
+  },
+  "collectTimeoutDiagnosis": {
+    "id": "R5-collect-cold-environment-query",
+    "fact": "Production agent-round-service caps collect at 3000ms. Its verifier calls executionPackageStore.verifyAdmission -> validate -> environments.resolve. Shared-GPU resolver caches for 30000ms; a miss runs NVIDIA/toolchain/Python-Torch queries. Real read-only probes took 6627.559 and 5322.9081ms during release verification. After release completed, actual production collect deadline plus real resolver (inert verification/storage ports) timed out at 3005.1344ms; query drained at 7162.4397ms. Warm case returned skipped in 4.084ms; zero records written.",
+    "inference": "A cache miss in this path is sufficient to reproduce the same ROUND_EXPERIENCE_TIMEOUT mechanism. This is a supported explanation for the observed intermittent collection failure, not proof that every historical timeout had this cause.",
+    "unknown": "Historical per-stage timings and exact cache state were not retained; the reproduction substitutes inert evidence/storage ports and is not a full replay. Safe production change still needs a frozen contract preserving environment identity, freshness, evidence binding and total budgets.",
+    "evidence": [
+      "client-runtime/application/agent-round-service.mjs:11",
+      "client-runtime/application/shared-gpu-experience-verifier.mjs",
+      "client-runtime/execution-package-store.mjs:277",
+      "client-runtime/local-shared-gpu-package-adapter.mjs:86",
+      "budget-terminal-reader-verification-20260916.zip"
+    ],
+    "reproduction": {
+      "measurements": [
+        {
+          "mode": "cold",
+          "elapsedMs": 3005.1344,
+          "code": "ROUND_EXPERIENCE_TIMEOUT",
+          "stage": "collect",
+          "effectUnknown": true,
+          "queryDrainedMs": 7162.4397
+        },
+        {
+          "mode": "warm",
+          "elapsedMs": 4.083999999999833,
+          "result": {
+            "status": "skipped",
+            "recorded": 0,
+            "existing": 0,
+            "skipped": 1,
+            "records": [
+              {
+                "status": "skipped",
+                "code": "DIAGNOSTIC_PROBE_ONLY"
+              }
+            ]
+          },
+          "queryDrainedMs": 4.092599999999948
+        }
+      ],
+      "records": 0,
+      "scope": "Actual local read-only GPU resolver and production collect deadline; inert verification/storage ports; no model/candidate execution. Not a historical full-pipeline replay."
+    },
+    "next_action": "Design and validate the boundary between historical evidence verification and live environment refresh, preserving fail-closed admission/freshness and fixed Mission/agent/collect budgets; then freeze source before another independent real-study plan."
+  },
+  "diskRecovery20260916": {
+    "fact": "User reported additional cleanup; root Get-PSDrive measured 79.15GiB free before this direct work. Previous capacity blocker resolved.",
+    "authority": "user authorized direct implementation during dispatch maintenance",
+    "platformFilesChanged": false
+  }
 }
