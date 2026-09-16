@@ -3,7 +3,7 @@
   "recordedAt": "2026-09-15T12:34:20.662206+00:00",
   "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
   "phase": "operator-p3-wiki",
-  "status": "r8-nine-slot-study-completed-standard-smoke-n20-pending",
+  "status": "current-source-standard-smoke-passed-N20-19-success-1-budget-terminal-not-accepted",
   "baselineCommit": "a22fde2e9c8f4da0a24d648f91abb476aba99304",
   "contract": {
     "path": "docs/development/EXPERIENCE_STUDY_CONTRACT.md",
@@ -279,7 +279,7 @@
     "currentAccepted": true,
     "currentIntegrated": true
   },
-  "updatedAt": "2026-09-16T15:38:22.253324+00:00",
+  "updatedAt": "2026-09-16T17:21:05.798500+00:00",
   "taskHistory": [
     {
       "role": "runtime-condition",
@@ -13988,6 +13988,660 @@
       "fileCount": 2056,
       "manifestPath": "archive-manifest.json",
       "manifestSha256": "d3e8dfbe015e4a801b81731c3e03fb8a256c8bcb5e81033651a43188d079ca12",
+      "crcAndHashesVerified": true
+    },
+    "platformContextSyncPending": true
+  },
+  "standardSourceAcceptance": {
+    "id": "standard-smoke-and-N20-after-R8",
+    "status": "all_twenty_attempts_finished_strict_n20_failed",
+    "execution": "primary_agent_direct_user_authorized",
+    "dispatchTaskId": null,
+    "sourceCommit": "6bf7a882068b66695c594a4e403b1ddb648b6403",
+    "productionCommit": "69747e12fb9cd604670f94c5a0b931f39772ee1e",
+    "participatingSourceFileCount": 329,
+    "sameParticipatingSourceAsR8": true,
+    "fact": "Standard affine smoke independently passed (2/2 model observations). A new fixed twenty-attempt N20 completed with 19 comparable full successes and one safely released budget_terminal/noncomparable attempt (#15); the batch exited 1 and strictN20Passed=false. The independent raw-artifact reader exactly matched the producer ledger. Required N20 model observations were 43/44; all observed models were deepseek-v4-flash. All 62 N20 queue tasks and all original Runtime executions confirmed release/exit. No failed apply command was recorded. No test matrix, risk rule, budget, code or sample denominator was changed during execution.",
+    "inference": "The earlier repeated-policy-application defect is fixed and software verified; the R8 study and standard smoke completed. This source still does not meet the project strict N20 stability threshold. Attempt 15 exhausted its original total budget after repeated model-generated candidate errors and an unproductive research attempt; this is not evidence of another proxy failure.",
+    "unknown": "Whether tighter candidate strategy selection or a different bounded research policy would prevent this failure needs separate design and verification. These records do not prove broad operator stability or authorize publication. Reduction/normalization coverage was not rerun in this batch.",
+    "evidence": [
+      "standard-smoke-n20-69747e1-20260916.zip",
+      "patch-policy-rejection-repair-20260916.zip",
+      "direct-study-r8-69747e1-20260916.zip"
+    ],
+    "next_action": "Review attempt 15 source, prompt audits, mandatory round facts and failure feedback to decide a bounded recovery/strategy change. Preserve its failed N20 outcome; after an independently tested production change, freeze a new source and run a wholly new N20, never replace or top up this batch.",
+    "smoke": {
+      "exitCode": 0,
+      "outcome": "full_success",
+      "independentReaderMatches": true,
+      "modelRequired": 2,
+      "modelObserved": 2,
+      "queueTasks": 3,
+      "queueReleased": 3,
+      "failedQueueTasks": 0,
+      "failedCommands": 0
+    },
+    "n20": {
+      "exitCode": 1,
+      "requestedAttempts": 20,
+      "executedAttempts": 20,
+      "strictN20Passed": false,
+      "independentReaderExitCode": 0,
+      "independentReaderMatches": true,
+      "totals": {
+        "runs": 20,
+        "receivedRecords": 20,
+        "duplicateRuns": 0,
+        "full_success": 19,
+        "budget_terminal": 1,
+        "failure": 0,
+        "timeout": 0,
+        "missing_summary": 0,
+        "summariesMissing": 0,
+        "attemptsMissing": 0,
+        "attemptsNotTerminal": 0,
+        "comparableRuns": 19
+      },
+      "modelRequired": 44,
+      "modelObserved": 43,
+      "queueTasks": 62,
+      "queueReleased": 62,
+      "failedQueueTasks": 3,
+      "failedCommands": 0,
+      "invocations": [
+        {
+          "index": 1,
+          "runRoot": "n20/a/shared-gpu-ruU0nz",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T15:46:08.473Z",
+          "endedAt": "2026-09-16T15:50:23.445Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 2,
+          "runRoot": "n20/a/shared-gpu-wXBV0n",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T15:50:27.979Z",
+          "endedAt": "2026-09-16T15:54:28.098Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 3,
+          "runRoot": "n20/a/shared-gpu-9oHR9t",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T15:54:32.476Z",
+          "endedAt": "2026-09-16T15:58:02.416Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 4,
+          "runRoot": "n20/a/shared-gpu-Envw8q",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T15:58:06.895Z",
+          "endedAt": "2026-09-16T16:01:52.428Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 5,
+          "runRoot": "n20/a/shared-gpu-cDeizN",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:01:56.919Z",
+          "endedAt": "2026-09-16T16:05:36.717Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 6,
+          "runRoot": "n20/a/shared-gpu-pNt5vC",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:05:41.108Z",
+          "endedAt": "2026-09-16T16:09:06.066Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 7,
+          "runRoot": "n20/a/shared-gpu-Rpb1Eo",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:09:10.259Z",
+          "endedAt": "2026-09-16T16:12:35.710Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 8,
+          "runRoot": "n20/a/shared-gpu-dC59Om",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:12:39.919Z",
+          "endedAt": "2026-09-16T16:16:45.003Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 9,
+          "runRoot": "n20/a/shared-gpu-d0e4o7",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:16:49.350Z",
+          "endedAt": "2026-09-16T16:21:09.458Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 10,
+          "runRoot": "n20/a/shared-gpu-VqAlCR",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:21:13.817Z",
+          "endedAt": "2026-09-16T16:26:37.561Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 11,
+          "runRoot": "n20/a/shared-gpu-kV288c",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:26:41.875Z",
+          "endedAt": "2026-09-16T16:30:26.692Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 12,
+          "runRoot": "n20/a/shared-gpu-lL8yRo",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:30:30.922Z",
+          "endedAt": "2026-09-16T16:34:25.535Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 13,
+          "runRoot": "n20/a/shared-gpu-P6pmdv",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:34:29.692Z",
+          "endedAt": "2026-09-16T16:37:19.704Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 14,
+          "runRoot": "n20/a/shared-gpu-CP9N42",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:37:24.226Z",
+          "endedAt": "2026-09-16T16:41:35.618Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 15,
+          "runRoot": "n20/a/shared-gpu-6da4KP",
+          "outcome": "budget_terminal",
+          "comparable": false,
+          "startedAt": "2026-09-16T16:41:39.957Z",
+          "endedAt": "2026-09-16T16:53:58.830Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "unknown",
+            "model": null,
+            "modelSource": "unknown",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 6,
+            "observedRunCount": 5,
+            "reasons": [
+              "1 required run(s) have no valid observed response model"
+            ]
+          },
+          "queueTasks": 5,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": [
+            {
+              "taskId": "queue_96C303BE67554141",
+              "code": "OPERATOR_CANDIDATE_EXCEPTION",
+              "message": "cannot access local variable '_GRAPH_MODE_OK' where it is not associated with a value"
+            },
+            {
+              "taskId": "queue_C690150EB4F44D4C",
+              "code": "OPERATOR_CORRECTNESS_MISMATCH",
+              "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.1875 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.10000000149011612 at index (0, 0) (up to 1e-05 allowed)"
+            },
+            {
+              "taskId": "queue_FD86E451982048FE",
+              "code": "OPERATOR_CANDIDATE_EXCEPTION",
+              "message": "addcmul(): argument 'tensor2' (position 3) must be Tensor, not float"
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "runRoot": "n20/a/shared-gpu-6WUbpZ",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:54:02.990Z",
+          "endedAt": "2026-09-16T16:58:03.430Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 17,
+          "runRoot": "n20/a/shared-gpu-dt69Rf",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T16:58:07.962Z",
+          "endedAt": "2026-09-16T17:03:20.265Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 18,
+          "runRoot": "n20/a/shared-gpu-pYNoAh",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T17:03:24.823Z",
+          "endedAt": "2026-09-16T17:06:44.732Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 19,
+          "runRoot": "n20/a/shared-gpu-JIDbQZ",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T17:06:49.147Z",
+          "endedAt": "2026-09-16T17:11:09.152Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        },
+        {
+          "index": 20,
+          "runRoot": "n20/a/shared-gpu-eLkRpM",
+          "outcome": "full_success",
+          "comparable": true,
+          "startedAt": "2026-09-16T17:11:13.552Z",
+          "endedAt": "2026-09-16T17:16:43.735Z",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "status": "observed",
+            "model": "deepseek-v4-flash",
+            "modelSource": "observed",
+            "models": [
+              "deepseek-v4-flash"
+            ],
+            "requiredRunCount": 2,
+            "observedRunCount": 2,
+            "reasons": []
+          },
+          "queueTasks": 3,
+          "allQueueTasksReleased": true,
+          "stopConfirmed": true,
+          "failedCandidates": []
+        }
+      ]
+    },
+    "failure15": {
+      "id": "N20-15-candidate-errors-total-budget",
+      "fact": "After one passed candidate, successive candidates failed with an unbound local _GRAPH_MODE_OK, a minimal-case numeric mismatch (absolute difference 0.1875), and addcmul receiving float where Tensor was required. Synchronous research completed without valid selected source material (RESEARCH_SOURCE_SELECTION_INVALID). The final main run started at 16:52:58.990Z and was cancelled at 16:53:53.758Z under total_budget, before a valid response-model observation. All six required run identities and the original failures remain archived.",
+      "inference": "Repeated unsuccessful optimization plus the research interval consumed the available Mission time; the final run had only about 55 seconds before total-budget cancellation.",
+      "unknown": "A stronger recovery strategy is not yet implemented or proven; no network/proxy root cause is established.",
+      "evidence": {
+        "runRoot": "n20/a/shared-gpu-6da4KP",
+        "candidateFailures": [
+          {
+            "taskId": "queue_96C303BE67554141",
+            "code": "OPERATOR_CANDIDATE_EXCEPTION",
+            "message": "cannot access local variable '_GRAPH_MODE_OK' where it is not associated with a value"
+          },
+          {
+            "taskId": "queue_C690150EB4F44D4C",
+            "code": "OPERATOR_CORRECTNESS_MISMATCH",
+            "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.1875 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.10000000149011612 at index (0, 0) (up to 1e-05 allowed)"
+          },
+          {
+            "taskId": "queue_FD86E451982048FE",
+            "code": "OPERATOR_CANDIDATE_EXCEPTION",
+            "message": "addcmul(): argument 'tensor2' (position 3) must be Tensor, not float"
+          }
+        ],
+        "runs": [
+          {
+            "runId": "claude_MU4BWGJL_658AC586",
+            "status": "completed",
+            "startedAt": "2026-09-16T16:42:15.272Z",
+            "completedAt": "2026-09-16T16:42:32.010Z",
+            "observedModel": "deepseek-v4-flash"
+          },
+          {
+            "runId": "claude_MU4BXWA4_6715C8C8",
+            "status": "completed",
+            "startedAt": "2026-09-16T16:43:22.275Z",
+            "completedAt": "2026-09-16T16:45:24.685Z",
+            "observedModel": "deepseek-v4-flash"
+          },
+          {
+            "runId": "claude_MU4C1OHU_54C001E9",
+            "status": "completed",
+            "startedAt": "2026-09-16T16:46:18.793Z",
+            "completedAt": "2026-09-16T16:47:08.683Z",
+            "observedModel": "deepseek-v4-flash"
+          },
+          {
+            "runId": "claude_MU4C7H4F_29F9CA15",
+            "status": "completed",
+            "startedAt": "2026-09-16T16:50:49.185Z",
+            "completedAt": "2026-09-16T16:52:04.575Z",
+            "observedModel": "deepseek-v4-flash"
+          },
+          {
+            "runId": "claude_MU4CA99J_4EEC4219",
+            "status": "cancelled",
+            "startedAt": "2026-09-16T16:52:58.990Z",
+            "completedAt": "2026-09-16T16:53:53.758Z",
+            "observedModel": null
+          },
+          {
+            "runId": "claude_research_MU4C3RCG_2159909C",
+            "status": "completed",
+            "startedAt": "2026-09-16T16:47:56.253Z",
+            "completedAt": "2026-09-16T16:50:25.550Z",
+            "observedModel": "deepseek-v4-flash"
+          }
+        ],
+        "budgetReason": "total_budget",
+        "requiredModels": 6,
+        "observedModels": 5
+      },
+      "next_action": "Use these exact candidate/run identities for the next recovery-policy review; keep the original budgets and correctness cases."
+    },
+    "continuationClarification": {
+      "recordedAt": "2026-09-16T16:56:38.843764+00:00",
+      "priorPlanTextRetained": true,
+      "fact": "The initial generic stopConditions wording was too broad. The existing n20 contract intentionally continues terminal, safely released failures and unknown-model records within the original twenty attempts. It stops only for invoker/unsafe release/source-config/observed-model drift. Smoke alone requires full_success for continuation. No runtime or acceptance rule was changed.",
+      "evidence": "scripts/run-shared-gpu-regression-batch.md: Continuation safety; run-shared-gpu-regression-batch.mjs: continuationSafety and mode-specific smoke stop",
+      "execution": "Continue only remaining original slots; keep invocation 15 budget_terminal/noncomparable, so strictN20Passed remains false."
+    },
+    "resourceAudit": {
+      "originalRuntimesExited": 21,
+      "laterUnrelatedPidReuses": 1,
+      "noAuditTerminationPerformed": true
+    },
+    "archive": {
+      "path": "standard-smoke-n20-69747e1-20260916.zip",
+      "sha256": "1eda2e2aff858271373b31768f499bae3fe3be4856c801ae6f4ea3d79ed45cc9",
+      "bytes": 16355991,
+      "fileCount": 4718,
+      "manifestPath": "archive-manifest.json",
+      "manifestSha256": "1a5af29a94584c2b1dd42cd66f547841b8b5980302ba455fda0193fca91e90dd",
       "crcAndHashesVerified": true
     },
     "platformContextSyncPending": true
