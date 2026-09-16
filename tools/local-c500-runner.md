@@ -1,5 +1,15 @@
 # local-c500-runner diagnostics contract
 
+Runner progress records remain temporary-file + atomic replacement writes.
+On Windows, `_write_runner_status` retries replacement denied with WinError
+5/32/33 for at most one monotonic second, sleeping up to 25 ms between attempts.
+The old complete JSON stays visible until the replacement succeeds. Persistent
+denials and all other errors still propagate; there is no direct-write fallback,
+success fabrication or budget renewal. The wait consumes the existing task and
+Mission deadlines. Shared-GPU execution inherits this same progress writer.
+`tests/local-c500-runner-contract-test.py` covers real Windows handles with and
+without timely release, and unclassified errors on every platform.
+
 `local-c500-runner.py` owns the fixed Correctness/Benchmark matrix and the
 optional mcTracer/mcProfiler diagnostic collection. `local-shared-gpu-runner.py`
 reuses the same `_run` path and only replaces the hardware probe and the

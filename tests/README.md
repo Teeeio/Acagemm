@@ -1,5 +1,11 @@
 # Test Module Contract
 
+2026-09-16 runner progress regression: `test:test-spec` includes real Windows
+destination handles denying atomic replacement, both released and persistent,
+plus portable unclassified-error propagation in `local-c500-runner-contract-test.py`.
+The tests use temporary files only, require no model/GPU, and preserve the prior
+correctness/Profile assertions. Added directly under the maintenance exception.
+
 2026-09-16 study reader addition: `node tests/experience-condition-study-test.mjs`
 includes seven budget-terminal cases (valid stopped report, false success, wrong
 reason, borrowed run, missing budget proof, conflicting full-success flag and

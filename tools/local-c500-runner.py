@@ -775,7 +775,18 @@ def _write_runner_status(task_dir, progress, stage, message):
     target = task_dir / "runner-status.json"
     temporary = task_dir / f".runner-status.{os.getpid()}.tmp"
     temporary.write_text(json.dumps({"progress": progress, "stage": stage, "message": message, "updatedAt": time.time()}, ensure_ascii=False) + "\n", encoding="utf-8")
-    os.replace(temporary, target)
+    # Windows readers may briefly hold the destination without FILE_SHARE_DELETE.
+    # Keep the old complete record until replacement succeeds; never truncate it.
+    deadline = time.monotonic() + 1.0
+    while True:
+        try:
+            os.replace(temporary, target)
+            return
+        except PermissionError as error:
+            remaining = deadline - time.monotonic()
+            if os.name != "nt" or getattr(error, "winerror", None) not in (5, 32, 33) or remaining <= 0:
+                raise
+            time.sleep(min(0.025, remaining))
 
 
 def _run(args):
