@@ -1,0 +1,47 @@
+{
+  "status": "passed",
+  "runtime": "claude-code",
+  "summaries": [
+    {
+      "family": "affine",
+      "missionId": "MIS_MTY3ADFI",
+      "firstRun": "claude_MTY3AZLZ_D6E64670",
+      "firstRoundOutcome": "reference",
+      "budgetTerminalAccepted": false,
+      "continuedRun": "claude_MTY3D3AA_C95A6106",
+      "rollbackCount": 1,
+      "completed": [
+        {
+          "taskId": "queue_6529FB2507C349A2",
+          "candidateDigest": "sha256:1d1a893244cd12c61109c368cf2ffde01e30ba2886b9568adfa7ebe99f4c2f2f",
+          "packageDigest": "sha256:3fa71a6de0c5941fb883a3b4fe41ef6a5e35eba06d9cd825c335ec96e440dde7"
+        },
+        {
+          "taskId": "queue_DACD1755A0664988",
+          "candidateDigest": "sha256:364d419f0c12d3628e238d7fcb333060cb126140cb7bd4ef47fef38b6b08b104",
+          "packageDigest": "sha256:5cbf5d534ac350812e2eacccaab401a8532d04ae453a113c3ed89b2c2997ee18"
+        }
+      ],
+      "workflowWritesAfterStart": 0,
+      "experienceCount": 2
+    }
+  ],
+  "writes": [
+    {
+      "pathname": "/api/projects",
+      "at": "2026-09-12T07:54:28.252Z"
+    },
+    {
+      "pathname": "/api/missions",
+      "at": "2026-09-12T07:54:30.648Z"
+    },
+    {
+      "pathname": "/api/actions/start-benchmark",
+      "at": "2026-09-12T07:54:32.631Z"
+    },
+    {
+      "pathname": "/api/actions/stop-mission",
+      "at": "2026-09-12T07:58:24.378Z"
+    }
+  ]
+}

@@ -8,7 +8,7 @@ import { createExperienceRepository } from './experience-repository.mjs';
 import { createExperienceService } from './application/experience-service.mjs';
 import { createExperienceApiService } from './application/experience-api-service.mjs';
 import { createRoundExperienceService } from './application/round-experience-service.mjs';
-import { createSharedGpuExperienceVerifier } from './application/shared-gpu-experience-verifier.mjs';
+import { createSharedGpuExperienceVerifier, createSharedGpuExperiencePreflight } from './application/shared-gpu-experience-verifier.mjs';
 import { createExperienceRoutes } from './server/experience-routes.mjs';
 import { createServer } from 'node:http';
 import { createRuntimeLifecycleService } from './application/runtime-lifecycle-service.mjs';
@@ -40,12 +40,11 @@ import { consumeWorkflowRecoveryBudget, reconcileWorkflowState } from './workflo
 import { normalizeWorkflowError, serializeWorkflowError } from './workflow-error.mjs';
 import { createLocalC500ServiceClient, localC500Config } from './local-c500-service-client.mjs';
 import { createOperatorTestTool } from './operator-test-tool.mjs';
-import { createExecutionPackageStore, contentDigest } from './execution-package-store.mjs';
+import { createExecutionPackageStore } from './execution-package-store.mjs';
 import { importExecutionPackage } from './execution-package-import.mjs';
 import { createExecutionPackageImportService } from './application/execution-package-import-service.mjs';
 import { createExecutionPackageRoutes } from './server/execution-package-routes.mjs';
-import { canonicalJson } from './execution-package-contract.mjs';
-import { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARED_GPU_PACKAGE_ADAPTER } from './local-shared-gpu-package-adapter.mjs';
+import { createSharedGpuEnvironmentResolver, createSharedGpuPackageAdapter, SHARED_GPU_PACKAGE_ADAPTER, sharedGpuEnvironment } from './local-shared-gpu-package-adapter.mjs';
 import { migrateLocalC500TesterState } from './local-c500-state-migration.mjs';
 import { LOCAL_C500_RUNTIME_CONTRACT_VERSION } from './local-c500-runtime-contract.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
@@ -96,6 +95,7 @@ import { createBaselineSourceService } from './application/baseline-source-servi
 import { createMaterializerPolicyService } from './application/materializer-policy-service.mjs';
 import { projectBaselineFailure } from './application/baseline-failure-projection.mjs';
 import { createBenchmarkProjectionService } from './application/benchmark-projection-service.mjs';
+import { createBenchmarkPackagePreparer } from './application/benchmark-package-preparation-service.mjs';
 import { createRepositoryAdoptionService } from './application/repository-adoption-service.mjs';
 import { selectAutopilotCandidate } from './application/autopilot-candidate-service.mjs';
 import { createAutopilotContextService } from './application/autopilot-context-service.mjs';
@@ -145,6 +145,12 @@ const serverPidPath = path.join(runtimeDir, 'operator-studio.pid');
 const port = Number(process.env.API_PORT || process.env.PORT || 4173);
 const serveWeb = process.env.SERVE_WEB !== 'false';
 const runtimeOwnerPid = Number(process.env.OPERATOR_RUNTIME_OWNER_PID || 0);
+// 受控经验研究条件：只在环境变量确实存在时才传给组合出的轮次服务。空串或未知值由服务构造期
+// 同步拒绝，因此在监听端口、写 PID、启动 Agent/GPU 之前就失败；未配置部署行为完全不变。
+// 这不是新的 Mission 设置或 API：唯一的开关就是部署环境变量本身。
+const experienceCondition = Object.hasOwn(process.env, 'OPERATOR_EXPERIENCE_CONDITION')
+  ? process.env.OPERATOR_EXPERIENCE_CONDITION
+  : undefined;
 const processAlive = (pid) => {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; }
@@ -166,18 +172,20 @@ const bridge = {
 const sharedGpuPackageRoot = process.env.OPERATOR_EXECUTION_PACKAGE_DIR
   ? path.resolve(process.env.OPERATOR_EXECUTION_PACKAGE_DIR)
   : path.join(runtimeDir, 'execution-packages');
+const packageInspectionTimeoutMs = Number(process.env.OPERATOR_PACKAGE_INSPECTION_TIMEOUT_MS || 30000);
 const sharedGpuEnvironmentResolver = localC500Config.kind === 'local-shared-gpu'
   ? createSharedGpuEnvironmentResolver({ probeOptions: {
     python: process.env.OPERATOR_GPU_PYTHON || resolvePythonExecutable({ rootDir }),
     nvidiaSmi: process.env.OPERATOR_GPU_NVIDIA_SMI || 'nvidia-smi',
     requireCudaToolkit: process.env.OPERATOR_GPU_REQUIRE_NVCC === '1',
+    timeoutMs: Math.min(30000, packageInspectionTimeoutMs),
   } }) : null;
 const sharedGpuPackageAdapter = localC500Config.kind === 'local-shared-gpu'
   ? createSharedGpuPackageAdapter({ rootDir: path.join(sharedGpuPackageRoot, 'adapter') }) : null;
 const executionPackageStore = sharedGpuPackageAdapter
   ? createExecutionPackageStore({ rootDir: path.join(sharedGpuPackageRoot, 'store'), environments: sharedGpuEnvironmentResolver,
     adapters: { [SHARED_GPU_PACKAGE_ADAPTER.id]: sharedGpuPackageAdapter },
-    inspectionTimeoutMs: Number(process.env.OPERATOR_PACKAGE_INSPECTION_TIMEOUT_MS || 30000) })
+    inspectionTimeoutMs: packageInspectionTimeoutMs })
   : null;
 const executionPackageImportService = executionPackageStore ? createExecutionPackageImportService({ store: executionPackageStore, importSource: (input) => importExecutionPackage({ store: executionPackageStore, ...input }) }) : {
   import: async () => { throw Object.assign(new Error('Execution package import requires an enabled trusted package backend.'), { code: 'PACKAGE_BACKEND_UNAVAILABLE', status: 503 }); },
@@ -213,6 +221,13 @@ const sharedGpuExperienceVerifier = executionPackageStore && sharedGpuPackageAda
   ? createSharedGpuExperienceVerifier({ executionPackageStore, packageAdapter: sharedGpuPackageAdapter, readTask: (taskId) => operatorTestQueue.readTask(taskId) }) : null;
 const roundExperienceService = createRoundExperienceService({
   experienceService, timers: { setTimeout, clearTimeout },
+  ...(sharedGpuEnvironmentResolver ? {
+    prepareObservationEvidence: createSharedGpuExperiencePreflight({
+      environmentResolver: sharedGpuEnvironmentResolver, environmentId: sharedGpuEnvironment.id,
+    }),
+  } : {}),
+  // 未配置时完全不传该键，保持默认部署的构造参数与行为不变。
+  ...(experienceCondition === undefined ? {} : { experienceCondition }),
   resolveAccess: ({ state, mission }) => {
     if (!state.projects?.some((project) => project.id === mission.projectId)) throw Object.assign(new Error('The Mission owning Project is unavailable for experience retrieval.'), { code: 'ROUND_EXPERIENCE_ACCESS_INVALID', status: 409 });
     return { projectId: mission.projectId, allowedProjectIds: [] };
@@ -401,38 +416,9 @@ const streamMissionEvents = async (request, response, missionId, after = 0) => {
 
 const { guardMutation, hasMissionBudgetInput, validateMissionBudgetInput, guardSupportedRuntimeAction, guardWorkflowTransition, interventionOutcomeMeta, adoptCandidateState } = createWorkflowCommandPolicy({ addAuditEvent, agentRuntime, appendRuntimeEvent, createCurrentBestState, createDecisionReviewState, isManagedWorkspaceRuntimeMode, markCandidateAccepted, normalizeMissionBudgetMs });
 
+// 准备端口由冻结的公共 factory 构造；组合根只注入可信 store 与 adapter 身份。
 const prepareExecutionPackage = executionPackageStore
-  ? async ({ request, mission, matrix, missionRunPy }) => {
-    const testSpec = matrix.testSpec;
-    if (!testSpec || typeof testSpec !== 'object') throw Object.assign(new Error('Shared-GPU execution requires a frozen testSpec from the active Profile.'), { code: 'PACKAGE_TEST_SPEC_REQUIRED', status: 409 });
-    const candidateFiles = { 'run.py': String(missionRunPy?.content || request.runPy || '') };
-    const dependencyFiles = Object.fromEntries(Object.entries(missionRunPy?.implementationFiles || request.implementationFiles || {}));
-    const oracle = request.oracleRunPy;
-    if (!oracle) throw Object.assign(new Error('Execution package requires an independent acceptance entrypoint.'), { code: 'PACKAGE_ORACLE_INVALID', status: 409 });
-    const candidateDigest = /^sha256:[a-f0-9]{64}$/.test(request.candidate?.digest || '')
-      ? request.candidate.digest
-      : contentDigest(Buffer.from(candidateFiles['run.py'], 'utf8'));
-    const semanticDigest = request.semanticBinding?.semanticDigest && /^sha256:[a-f0-9]{64}$/.test(request.semanticBinding.semanticDigest)
-      ? request.semanticBinding.semanticDigest
-      : contentDigest(Buffer.from(canonicalJson(testSpec), 'utf8'));
-    const assembled = await executionPackageStore.assemble({
-      language: 'python', adapter: SHARED_GPU_PACKAGE_ADAPTER, environmentId: 'local-shared-gpu',
-      binding: { missionId: request.missionId, workspaceId: mission.workspaceId || mission.id || request.missionId, candidateId: request.candidate?.id, candidateDigest },
-      candidateEntrypoint: 'run.py', candidateFiles, dependencyFiles,
-      acceptance: { entrypoint: 'oracle.py', files: { 'oracle.py': oracle }, semanticDigest, testSpec }, build: {},
-    });
-    const admission = await executionPackageStore.prepare(assembled.packageDigest);
-    return {
-      ...request,
-      candidate: { ...request.candidate, digest: candidateDigest },
-      workspaceId: mission.workspaceId || mission.id || request.missionId,
-      packageDigest: assembled.packageDigest, admissionId: admission.admissionId,
-      environmentDigest: admission.environmentDigest, acceptanceDigest: admission.acceptanceDigest,
-      target: admission.target, build: admission.build, adapter: admission.adapter,
-      checks: ['correctness', 'benchmark'],
-      deadline: new Date(Date.now() + Number(request.limits?.timeoutSeconds || 600) * 1000).toISOString(),
-    };
-  }
+  ? createBenchmarkPackagePreparer({ executionPackageStore, packageAdapter: SHARED_GPU_PACKAGE_ADAPTER })
   : null;
 
 

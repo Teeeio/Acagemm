@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { deriveTuiViewModel, deriveWorkflowTopology, renderDashboardSnapshot, renderWorkflowTopologySnapshot, resolveDashboardCommand } from '../tools/local-c500-tester/tui-state.mjs';
+import { evaluateAcceptGate } from '../client-runtime/accept-gate.mjs';
 
 const mission = (overrides = {}) => ({ id: 'MIS_TUI', title: 'MLA C550', goal: 'improve baseline by 20%', status: 'running', ...overrides });
 const task = (purpose, status = 'completed', value = null) => ({
@@ -215,6 +216,67 @@ assert.match(rendered, /queue       0 active \/ 4 total/);
 assert.match(rendered, /value       75 us/);
 assert.doesNotMatch(rendered, /\[Space\]|\[N\] Feedback|\[S\] Stop/);
 assert.match(rendered, /\[E\] Export/);
+
+// --- versioned decision projection in the dashboard ---------------------------
+// The Evidence block renders the six decision items from the same bound DTO the
+// production Gate computed. No legacy live boolean is shown once a decision
+// exists, and the blocking reason is carried through verbatim.
+const TUI_DIGEST = 'sha256:tui-decision-digest';
+const TUI_RUN = 'run-tui-1';
+const decisionSnapshot = ({ environment, value }) => {
+  const state = {
+    stage: 'published',
+    activeMissionId: 'MIS_TUI',
+    appliedCandidateId: 'candidate-03',
+    baseline: { required: false, status: 'complete' },
+    benchmark: { status: 'completed', runId: TUI_RUN, candidate: { id: 'candidate-03', digest: TUI_DIGEST, sourceRunId: 'source-tui' }, matrix: { correctnessCases: 24 }, result: { environment } },
+    candidateEvaluations: [{ id: 'candidate-03', patchDigest: TUI_DIGEST, sourceRunId: 'source-tui' }],
+    currentBest: { candidateId: 'candidate-03', candidateDigest: TUI_DIGEST, evidenceRunId: TUI_RUN, value: `${value} us` },
+    iterationStats: { loopStatus: 'completed', round: 2 },
+  };
+  const gate = evaluateAcceptGate(state, {
+    benchmark: [{ profile: 'primary', environment: 'MetaX C550', value, unit: 'us', correctness: { passed: true, total: 24 } }],
+    environment,
+    tracer: { format: 'operator-trace/v1', status: 'completed', events: [] },
+    profiler: { format: 'operator-profile/v1', status: 'completed', metrics: { kernelDurationUs: 12.5 } },
+  });
+  state.benchmark.evidenceDecision = gate.decision;
+  state.currentBest.evidenceDecision = gate.decision;
+  return state;
+};
+const decisionTasks = [task('baseline', 'completed', 100), task('candidate', 'completed', 75)];
+
+{
+  const sharedGpuEnvironment = { source: 'local-shared-gpu', service: 'local-shared-gpu-adapter', executionMode: 'gpu', liveHardware: true };
+  const state = decisionSnapshot({ environment: sharedGpuEnvironment, value: 75 });
+  const view = deriveTuiViewModel({ state, mission: mission({ status: 'published' }), tasks: decisionTasks });
+  assert.equal(view.evidence.current.execution.kind, 'live');
+  assert.equal(view.simulation, false, 'a shared-GPU development decision is not flattened into simulation');
+  const dashboard = renderDashboardSnapshot({ state, mission: mission({ status: 'published' }), tasks: decisionTasks });
+  assert.match(dashboard, /  decision    operator-studio\.evidence-decision\/v1 · operator-studio\.evidence-policy\/2026-09-12 · benchmark\.evidenceDecision/);
+  assert.match(dashboard, /  execution   live · source local-shared-gpu · 不可发布/);
+  assert.match(dashboard, /  correctness passed/);
+  assert.match(dashboard, /  bench valid valid/);
+  assert.match(dashboard, /  adoption    allowed/);
+  assert.match(dashboard, /  publication blocked · publication\.restricted_environment/);
+  // The pre-decision compatibility line must never reappear beside a decision.
+  assert.doesNotMatch(dashboard, /  live C550/);
+  console.log('[local-c500-tui-logic] decision-bound Evidence block shows all six items and its blocking reason');
+}
+
+{
+  const simulationEnvironment = { source: 'simulation', service: 'simulation-runner', executionMode: 'full-simulation', liveHardware: false };
+  const state = decisionSnapshot({ environment: simulationEnvironment, value: 75 });
+  const view = deriveTuiViewModel({ state, mission: mission({ status: 'published' }), tasks: decisionTasks });
+  assert.equal(view.evidence.current.execution.kind, 'simulation');
+  assert.equal(view.simulation, true);
+  assert.match(view.banner, /COMPLETED \/ simulation only/);
+  const dashboard = renderDashboardSnapshot({ state, mission: mission({ status: 'published' }), tasks: decisionTasks });
+  assert.match(dashboard, /  execution   simulation · source simulation · 不可发布/);
+  assert.match(dashboard, /  publication blocked · publication\.execution_not_live/);
+  assert.doesNotMatch(dashboard, /  live C550/);
+  console.log('[local-c500-tui-logic] simulation decision drives the simulation banner without a live boolean');
+}
 
 let seed = 0x5eed1234;
 const random = () => {

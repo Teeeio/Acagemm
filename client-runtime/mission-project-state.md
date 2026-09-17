@@ -29,12 +29,25 @@ Returned methods:
 | `resetMissionRunState(state, goal, {referenceFixture=false}={})` | state; history capped at 20 |
 | `startAgentRun(state, goal, {reset=true}={})` | running Agent state |
 
+The module also exports the pure `ROUND_FACTS_SCHEMA_VERSION` constant and
+`selectRoundFactsForPrompt(state, mission)`; see "Round facts snapshot" below.
+
 ## State semantics and effects
 
 Selection projects the current Mission first, restores explicit fields through
 structured clones (Baseline uses its shape factory), then audits. Goal/frozen
 semantics remain Mission metadata. `normalizeMissionState` fills domain/legacy
 defaults only; schema and finite version/sequence checks remain in `state-store`.
+
+`resumeMissionState` treats `stopped`, `needs_human` and `blocked` as resumable
+loop statuses, so a `blocked` external-verification wait can be resumed. Resume
+does not refresh the round budget or bypass the resource-release barrier. For an
+`external_verification` wait it clears `missionPaused` so the existing `test.plan`
+retry of the same candidate is admissible, records
+`iterationStats.externalVerificationAcknowledged` for that candidate/run and
+deliberately keeps `loopStatus = 'blocked'` / reason `external_verification` so no
+automatic round starts before the retest is actually queued. Neither path changes
+fixed budgets, evidence facts, candidate workspace or release rules.
 
 Creation/start mutate memory, not workspaces or real Agents. Start defaults to a
 fixture reset. Clock/UUID metadata is generated; Mission timestamp IDs may collide.
@@ -45,6 +58,81 @@ When `resetMissionRunState` archives a run, `runHistory` also records
 `candidate.sourceRunId`. This keeps recovery attempts and their candidate
 evidence attributable to the producing run rather than the first attempt in a
 Round.
+
+### Round facts snapshot
+
+`resetMissionRunState` additionally writes a versioned required-facts snapshot to
+`state.iterationStats.roundFacts` (`ROUND_FACTS_SCHEMA_VERSION =
+'operator-studio.round-facts/v1'`). It is derived only from observations already
+present in the archived state and is independent of the experience budget: a full
+or empty experience store never drops or truncates it. Missing observations stay
+`null` / `not_observed` / `unknown`; current-round budget or Mission declarations
+are never used to fill a gap.
+
+The snapshot separates `target` (the Mission/Round the facts are delivered to,
+from `iterationStats.roundBudget`) from `previous` (the archived run). `previous.roundId`
+is taken only from the explicit `agent.roundId` saved when that run started;
+legacy runs without it record `roundIdSource: 'unknown'` instead of inheriting the
+already-advanced `roundBudget`. `runHistory[].roundId` keeps the old
+`agent.roundId || roundBudget.roundId || null` compatibility fallback and also
+records `sourceRoundId`/`roundIdSource`.
+This raw fallback is compatibility metadata for late settlement, never evidence
+of the source Round. New managed and reference runs save `agent.roundId` at start.
+
+Payload sections: `candidate` (id/digest/title/direction/files/generation path/
+degraded markers/source run), `correctness` (per-environment and per-case results,
+status `passed`/`failed`/`not_observed`), `failure` (classified through
+`isInfrastructureTestFailure` as `infrastructure` or `operator`, or `null` when no
+failure was observed), `gate`, `decision`, `rollback` and `currentBest` (including
+candidate/asset status). For a `failed` benchmark with a provided top-level
+`result.correctness`, that top-level correctness is the authority for the
+archived correctness — including when `result.benchmark=[]` or stale successful
+rows are present: `status`, `total`, `failedCase`/name/category, the attempted
+cases and their real metrics are projected with `environment` from the result
+source, `profile=null` and `stage='Correctness'`. A failed benchmark whose
+top-level correctness already `passed` (for example a benchmark-stage exception
+after correctness succeeded) maps to `passed` and keeps its observed cases rather
+than being dropped to `not_observed`; `failed` still wins over a contradictory
+`passed=true`. `not_run` yields `not_observed` with no fabricated failed case and
+no invented measurement, while the successful legacy row-based path and its
+schema/semantics are unchanged.
+When the archived Gate carries a unified decision object,
+`gate.evidenceDecision` is a deep clone of the same decision the production path
+projected; legacy records without a decision are left unchanged. The next prompt
+consumes it through the existing round-facts channel only — no second process and
+no persistent I/O. Rollback never claims a clean workspace: it is
+`performed` only for an observed `round_rollback` recovery with matching candidate
+binding, confirmed cleanliness and restore timestamp (reading `stableDigest`
+from `lastRecovery` or the checkpoint with its exact `checkpointId`), otherwise
+`unknown` for a rejected round or `not_performed` when no rollback was required.
+
+The first snapshot is also saved as an independent `runHistory[].roundFacts`
+copy. Repeated reset retains `agent.runId`, so it reuses that frozen source
+snapshot and its original `recordedAt`, even after runtime fields were cleared;
+only the delivery `target` in iterationStats follows the admitted Round. Raw
+runHistory fields still refresh in place for legacy late-settlement consumers.
+A reset with no `agent.runId` leaves previous facts untouched. The archive also
+retains the run's `promptAudit` reference when available.
+
+### Response-model observation archive
+
+`resetMissionRunState` keeps the run's response-model observation as a detached
+`runHistory[].modelObservation` copy (see
+[model-observation](model-observation.md)), but only when it binds exactly — byte
+for byte, with no session trimming — to the archived run's
+provider/run/Mission/session (the live stream session, not a resume hint). The
+live `state.agent.modelObservation` is always cleared, so a new run never inherits
+an old observation (`startAgentRun` explicitly starts with `null`). A repeated
+reset for the same `runId` reuses the first valid archived copy instead of deleting
+it, and an old archive is never used to backfill a currently foreign or
+inconsistent identity. Round facts, prompt audit and Gate decisions remain
+independent of the observation.
+`selectRoundFactsForPrompt(state, mission)` returns a deep clone of
+the snapshot only when its schema version matches, `target.missionId` equals the
+supplied Mission, `target.roundId` equals the current `iterationStats.roundBudget.roundId`,
+and both source and target Mission/Project bindings agree; otherwise it returns `null`. This binding
+prevents a Mission switch or a new Round from receiving another Mission's or an
+older Round's facts.
 
 Fixed Profile operator identity takes precedence over an optional generic operator
 label. Without a Profile, the explicit operator is preserved for generic tests and

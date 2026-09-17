@@ -1,0 +1,15 @@
+$ state-domain-boundary
+$ node --experimental-vm-modules tests/state-domain-boundary-test.mjs
+[state-domain-boundary] 34 domain nodes, 80 application closure nodes, explicit ports, pure factories, and compatibility passed
+
+(node:93292) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[exit_code=0 elapsed=0.391s timeout=false cancelled=false truncated=false]
+
+$ module-boundary
+$ node tests/module-boundary-test.mjs
+[module-boundary] production path, dependency direction, and local contracts passed
+
+[exit_code=0 elapsed=0.234s timeout=false cancelled=false truncated=false]
+

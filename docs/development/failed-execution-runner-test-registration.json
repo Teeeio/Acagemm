@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "operator-studio.test-registration/v1",
+  "batch": "failed-execution-runner",
+  "authority": "docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md",
+  "authoritySha256": "55727780c161a2068b27702339df702737d9eaed78e5c2c29d6a1d72b182fbbb",
+  "createdAt": "2026-09-13",
+  "status": "pending-single-writer",
+  "note": "Isolated registration manifest only. This batch delivers one independent hardware-free Python test plus this manifest. It edits no production file, no existing test, package.json, the two verification gates or tests/README.md; a later single writer registers the npm script, both gate entries and the tests/README.md section. The node half of the frozen acceptance (tests/failed-execution-feedback-test.mjs) is a different author's deliverable and is not covered here.",
+  "hardwareFree": true,
+  "hardwareFreeStatement": "The test never imports real torch, never starts a Runtime, GPU, driver, nvidia-smi, mx-smi, triton, diagnostic tool, model or network call. It installs an explicit in-process torch/CUDA tensor double, replaces the adapter module's subprocess/shutil with explicit probe doubles (the same technique as tests/shared-gpu-target-probe-test.mjs) and doubles the Triton-only base benchmark timer; the runners' real main/_run/_run_correctness code paths still execute against real temporary candidate/oracle module files. The probe values are annotated in the test as hardware doubles (recorded real-world values used only to exercise the real parsers), not live samples. A green result would be contract evidence only and is never a hardware sample or a stability claim.",
+  "fixtures": {
+    "missionId": "MIS_FAILURE_ACCEPTANCE",
+    "candidateId": "candidate-failed",
+    "runId": "request-failed",
+    "patchDigest": "sha256 placeholder 64 x '1'",
+    "packageDigest": "sha256 placeholder 64 x '2'",
+    "environmentDigest": "sha256 placeholder 64 x '3'",
+    "acceptanceDigest": "sha256 placeholder 64 x '4'",
+    "preparedArtifactDigest": "sha256 placeholder 64 x '5'",
+    "correctnessCases": 4,
+    "requiredCategories": ["minimal", "representative", "boundary", "ragged"],
+    "benchmarkProfiles": ["primary", "secondary"],
+    "candidateFile": "candidate_prepared.py (real temporary module, inside the task directory)",
+    "oracleFile": "oracle_prepared.py (real temporary module, distinct file, inside the task directory)",
+    "taskIdentity": "task.payload.missionId/candidate/requestId are duplicated at the top level and agree; payload.candidate.digest = patchDigest",
+    "temporaryRoot": "tempfile.TemporaryDirectory(prefix='shared-gpu-failure-result-') under the OS temp directory; one unique directory per case; the production default data/bridge directories are never written"
+  },
+  "tests": [
+    {
+      "id": "shared-gpu-failure-result",
+      "file": "tests/shared-gpu-failure-result-test.py",
+      "kind": "hardware-free producer contract/acceptance (real runner main entries + temporary operator files)",
+      "owner": "failed execution result producer (base runner + shared-GPU normalizer)",
+      "npmScript": {
+        "name": "test:shared-gpu-failure-result",
+        "command": "python tests/shared-gpu-failure-result-test.py"
+      },
+      "verificationGates": [
+        {
+          "script": "scripts/verify-local-c500-release.mjs",
+          "checksArray": "checks",
+          "addEntry": "  'test:shared-gpu-failure-result',"
+        },
+        {
+          "script": "scripts/verify-non-hardware-robustness.mjs",
+          "checksArray": "checks",
+          "addEntry": "  'test:shared-gpu-failure-result',"
+        }
+      ],
+      "packageJsonScriptEntry": "\"test:shared-gpu-failure-result\": \"python tests/shared-gpu-failure-result-test.py\"",
+      "readmeSection": "## Failed execution result producer (hardware-free)",
+      "readmeDescription": "`shared-gpu-failure-result-test.py` is the independent hardware-free acceptance for the frozen producer half of `docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md`. It drives the real `main()` of `tools/local-c500-runner.py` and of `tools/local-shared-gpu-runner.py` with real temporary candidate/oracle modules and an explicit torch/CUDA tensor double, module-level `subprocess`/`shutil` probe doubles and a Triton-free base benchmark double. It covers success, first and later numeric mismatch, candidate exception, oracle exception, benchmark failure after correctness passed, original requested counts (total is never lowered to the executed prefix), typed error codes/phases/roles with the real error text, a structured result.json enforced on every failure branch, retained executionPackage binding, nonzero exit codes, direct-write-free atomic terminal correctness.json/result.json writes for success and failure, and preservation of a typed failure through shared normalization. The probe values are annotated as hardware doubles. It never touches a GPU, driver, torch install or diagnostic tool and is not live evidence.",
+      "expectedCurrentState": "red — the frozen producer contract is not implemented yet; 1/13 cases pass and the 12 red cases reproduce exactly the defects the upstream freeze names. The test is deliberately not weakened to pass on the pre-fix tree.",
+      "actualRedBaseline": {
+        "command": "python tests/shared-gpu-failure-result-test.py",
+        "exitCode": 1,
+        "result": "1/13 independent cases passed; 12 expected-red",
+        "capturedOn": "main tree at the frozen revision given to this attempt (producers unchanged, read-only)",
+        "cases": [
+          {"name": "frozen-contract-sha256", "passed": true, "detail": "sha256 of the frozen acceptance document matches the acceptance lock 55727780c161a2068b27702339df702737d9eaed78e5c2c29d6a1d72b182fbbb"},
+          {"name": "base-success-requested-counts", "passed": false, "detail": "AssertionError: base success correctness.status: expected 'passed', got None"},
+          {"name": "base-first-case-mismatch", "passed": false, "detail": "AssertionError: first mismatch correctness.status: expected 'failed', got None (this case now also forces a structured result.json envelope: failed, benchmark=[], retained correctness, typed first error consistent with the real error text)"},
+          {"name": "base-later-case-mismatch", "passed": false, "detail": "AssertionError: later mismatch correctness.status: expected 'failed', got None (same strengthened result.json envelope assertions)"},
+          {"name": "base-candidate-exception", "passed": false, "detail": "AssertionError: an attempted throwing case must persist correctness.json (the exception escapes _run_correctness before correctness.json is written; the strengthened case additionally forces result.json with the preserved typed candidate failure)"},
+          {"name": "base-oracle-exception", "passed": false, "detail": "AssertionError: an attempted oracle failure must persist correctness.json (the reference exception escapes _run_correctness before correctness.json is written; the strengthened case additionally forces result.json with the preserved typed oracle failure)"},
+          {"name": "base-benchmark-failure-preserves-correctness", "passed": false, "detail": "AssertionError: a benchmark exception must preserve already observed passed correctness: expected 'passed', got None (correctness.json exists but has no status field; no failed result record is written; the strengthened case now forces a typed benchmark-phase result.json)"},
+          {"name": "shared-success", "passed": false, "detail": "AssertionError: shared result schemaVersion: expected 'operator-studio.shared-gpu-result/v1', got None (the base result envelope carries no schemaVersion and normalization does not add it)"},
+          {"name": "shared-success-atomic-writes", "passed": false, "detail": "AssertionError: direct writes to the real final paths were observed: Path.write_text/Path.open('w') -> correctness.json, then Path.write_text/Path.open('w') -> result.json twice (base write plus shared normalization); counting os.replace alone cannot catch the overwrite after a replace"},
+          {"name": "shared-candidate-mismatch-preserved", "passed": false, "detail": "AssertionError: shared failure correctness.status: expected 'failed', got 'not_run' (shared normalization replaced the real typed correctness failure with the generic SHARED_GPU_RUNNER_FAILED not_run record; the strengthened case also requires the admitted executionPackage binding to survive)"},
+          {"name": "shared-oracle-exception-not-learned", "passed": false, "detail": "AssertionError: shared oracle failure correctness.status: expected 'failed', got 'not_run' (the oracle exception produced no typed record at all)"},
+          {"name": "shared-preflight-probe-failure-stale-result", "passed": false, "detail": "AssertionError: a preflight/probe failure must not reuse the previous successful result in the same directory: expected 'failed', got 'completed' (the stale successful result.json was re-read and re-normalized; the strengthened case also requires executionPackage on the failed record)"},
+          {"name": "shared-atomic-writes-and-preservation", "passed": false, "detail": "AssertionError: correctness.json must be written atomically (temporary file + os.replace) (no atomic destination named correctness.json exists for the throwing case; the monitor also rejects any direct final-path write and requires the temporary file to exist with content at replace time)"}
+        ]
+      },
+      "contractConfirmedDefects": [
+        "correctness lacks the added status/executedCases/passedCases/failedCase/failure fields and the typed OPERATOR_* error, so base success and both mismatch cases cannot be read as a typed result (contract 'Result contract and identity').",
+        "OPERATOR_CANDIDATE_EXCEPTION: a throwing candidate.run propagates out of _run_correctness, so the attempted case is lost and no correctness.json is written; the contract requires the case to stay attempted (never not_run) with role=candidate (contract code list).",
+        "OPERATOR_ORACLE_EXCEPTION: a throwing oracle reference propagates the same way; the contract requires the attempted case and role=oracle to survive and forbids learning it as an operator failure (contract code list).",
+        "Benchmark-stage exception: correctness.json keeps no status and no failed result record is persisted, so already-observed passed correctness is not preserved as a typed terminal fact (contract 'A benchmark-stage exception preserves any already observed passed correctness').",
+        "Shared normalization replaces a real typed correctness failure with the generic SHARED_GPU_RUNNER_FAILED not_run record instead of preserving it (contract 'Shared normalization must also be atomic and preserve an existing typed failure rather than replace it with generic not_run').",
+        "Preflight/probe failure reuses a stale successful result.json in the same task directory (contract 'preflight failure must not reuse a previous result in the same directory').",
+        "The shared result envelope is written without schemaVersion operator-studio.shared-gpu-result/v1 and result.json/correctness.json are not both written atomically via temporary file + replace (contract 'Result contract and identity' and the atomic-write sentence)."
+      ],
+      "covers": [
+        "real base main and real shared main with real temporary candidate/oracle module files (not a self-written helper mock); the shared adapter's own _probe_nvidia parsing and _benchmark_one timing run against explicit doubles",
+        "success: exit 0, correctness status=passed/passed=true/total=executedCases=passedCases=requested count, benchmark rows present, shared envelope schemaVersion/publishable/environment targetProbe/hardware=nvidia-gpu/executionMode=gpu/liveHardware=true and evidence outcome=passed with exact mission/candidate/run/patch binding",
+        "first case numeric mismatch: status=failed, passed=false, total stays the requested 4 (never lowered to the executed prefix), executedCases=1, passedCases=0, failedCase=1, failedCaseName/category identify the real case, typed error OPERATOR_CORRECTNESS_MISMATCH/phase=correctness/role=candidate/retryable=false, real positive maxDiff and float32 dtype, each failed case carries error and failure, and no successful result envelope is persisted",
+        "later case numeric mismatch: executedCases=3/failedCase=3/passedCases=2 with the preceding two successful cases preserved in caseResults",
+        "candidate exception: the throwing case is attempted (executedCases=2, status != not_run, failedCase=2) with OPERATOR_CANDIDATE_EXCEPTION/role=candidate, the preceding case stays passed, and uncomputed maxDiff/rmse/cosDiff stay null/absent instead of a fabricated 0",
+        "oracle exception: attempted case preserved with OPERATOR_ORACLE_EXCEPTION/role=oracle and no fabricated metrics, and the shared projected failure never becomes an eligible failed operator observation",
+        "every base failure branch (first mismatch, later mismatch, candidate exception, oracle exception, benchmark failure) must persist a structured result.json: status=failed, benchmark=[], publishable=false, a non-empty environment, the retained correctness, and a typed first error whose message carries the real error text (not close / addcmul / oracle reference failed / simulated benchmark stage failure), all agreeing with correctness.json",
+        "the three-place typed-failure equality (result.error == result.correctness.failure == the final failed case failure, plus result.correctness.error and the final case error being the real message strings) applies only when correctness_status == 'failed' (first mismatch, later mismatch, candidate exception, oracle exception), never to a preserved passed correctness",
+        "benchmark failure after correctness passed: nonzero exit, correctness.json keeps status=passed, the persisted failed result keeps benchmark=[] and a benchmark-phase backend error that is not relabeled as OPERATOR_CORRECTNESS_MISMATCH, and correctness.failure/correctness.error stay null/absent so the passed fact is never polluted by the benchmark error",
+        "shared-preserved candidate mismatch: result.status=failed, publishable=false, benchmark=[], top-level typed correctness, result.error == correctness.failure == final case failure by full value, targetProbe deviceName/driverVersion retained, and experienceEvidence outcome=failed/operation=test with the exact payload binding (runId=payload.requestId, not the backend taskId) including package/environment/acceptance digests and driver-resolved architecture sm86",
+        "failed executionPackage: result.executionPackage and environment.executionPackage must agree and retain the payload admissionId/preparedArtifactDigest/workspaceId/target/build/adapter plus package/environment/acceptance digests, asserted on the candidate-failure, atomic-failure and preflight-failure records, and the evidence digests must match",
+        "preflight/probe failure: a planted stale successful result.json is overwritten by a failed record with correctness not_run, publishable=false, benchmark=[], the retained executionPackage binding and no eligible failed observation",
+        "atomic terminal-state writes for success and failure: any direct write_text/open of the real final correctness.json/result.json is a failure (an atomic replace followed by a plain overwrite cannot pass), both files must reach their final names through a temporary file + os.replace in the same directory, the temporary file must exist with content at replace time, no *.tmp record may remain, and shared normalization must preserve the typed OPERATOR_CANDIDATE_EXCEPTION failure instead of the generic not_run record"
+      ],
+      "notCovered": [
+        "the Node consumer half (client-runtime/shared-gpu-experience-verifier.mjs, mission-project-state.mjs, round-experience/archive/prompt) belongs to tests/failed-execution-feedback-test.mjs, a separate author's deliverable",
+        "this test starts no real GPU/model call, so it makes no live-hardware or stability claim"
+      ]
+    }
+  ],
+  "registrationEditsForSingleWriter": [
+    "package.json: add \"test:shared-gpu-failure-result\": \"python tests/shared-gpu-failure-result-test.py\"",
+    "scripts/verify-local-c500-release.mjs: append 'test:shared-gpu-failure-result' to the checks array",
+    "scripts/verify-non-hardware-robustness.mjs: append 'test:shared-gpu-failure-result' to the checks array",
+    "tests/README.md: add the 'Failed execution result producer (hardware-free)' section documenting tests/shared-gpu-failure-result-test.py and that it is hardware-free contract evidence only"
+  ],
+  "mustNotChange": [
+    "tools/local-c500-runner.py",
+    "tools/local-shared-gpu-runner.py",
+    "client-runtime/shared-gpu-experience-verifier.mjs",
+    "client-runtime/mission-project-state.mjs",
+    "docs/development/FAILED_EXECUTION_FEEDBACK_ACCEPTANCE.md",
+    "tests/local-c500-runner-contract-test.py",
+    "tests/shared-gpu-target-probe-test.mjs",
+    "package.json",
+    "scripts/verify-local-c500-release.mjs",
+    "scripts/verify-non-hardware-robustness.mjs",
+    "tests/README.md"
+  ],
+  "verificationCommands": [
+    "python -c \"import ast, pathlib; ast.parse(pathlib.Path('tests/shared-gpu-failure-result-test.py').read_text(encoding='utf-8'))\"",
+    "python tests/shared-gpu-failure-result-test.py"
+  ],
+  "boundaries": [
+    "No live GPU, driver, nvidia-smi, mx-smi, triton, diagnostic tool, model or network call is made by this test.",
+    "The frozen contract is upstream-owned; the test must not be weakened to match a pre-implementation tree. The red baseline is the required deliverable of this batch.",
+    "Temporary candidate/oracle/task/result data lives only in a per-case OS temporary directory; the production default data/bridge directories are never written, and no tests/__pycache__ is left behind (sys.dont_write_bytecode = True).",
+    "A green run after implementation would be producer contract evidence only, never a hardware sample or a stability claim."
+  ],
+  "changedFiles": [
+    "tests/shared-gpu-failure-result-test.py",
+    "docs/development/failed-execution-runner-test-registration.json"
+  ]
+}

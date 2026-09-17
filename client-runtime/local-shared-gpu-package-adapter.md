@@ -17,3 +17,13 @@ relative or package-local imports resolve to files in the manifest. External
 imports (such as `torch` and the standard library) are supplied by the pinned
 environment layer; this check is not an OS sandbox and does not install or
 vendor host dependencies.
+
+
+The production composition root supplies the package inspection timeout to the
+runtime probe (default 30000 ms, capped at the probe's 30000 ms maximum). The
+resolver's 30000 ms cache TTL is unchanged. `resolve(id, {refresh: true})`
+invalidates the cached entry and joins or starts a fresh query; concurrent readers
+join it and a failed refresh cannot fall back to the old entry. Experience
+preflight uses this option before collection to avoid expiry mid-collection;
+it does not serve stale cache entries or authorize
+execution. Direct callers of the probe retain its generic default timeout.

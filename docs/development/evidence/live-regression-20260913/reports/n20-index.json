@@ -1,0 +1,220 @@
+[
+  {
+    "index": 1,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-Sx7jVn",
+    "phase": "terminal",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-smoke.log"
+  },
+  {
+    "index": 2,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-nGBRDg",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T01:21:47.7926085Z",
+    "endedAt": "2026-09-13T01:29:48.0685329Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:18d788cf715f5722675de8d348029f7e7cfb896c54cc043de0f380020dad1d4f",
+    "exitCode": 0,
+    "log": "affine-n20-02.log"
+  },
+  {
+    "index": 3,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-vLyEX5",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T01:31:53.1569895Z",
+    "endedAt": "2026-09-13T01:36:13.4701274Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-03.log"
+  },
+  {
+    "index": 4,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-JiyKnZ",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T01:36:14.3767158Z",
+    "endedAt": "2026-09-13T01:40:50.1475519Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-04.log"
+  },
+  {
+    "index": 5,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-McoGAb",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T01:40:51.0252885Z",
+    "endedAt": "2026-09-13T01:44:42.2045117Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-05.log"
+  },
+  {
+    "index": 6,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-1SRaGR",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T01:44:42.8680343Z",
+    "endedAt": "2026-09-13T01:49:42.7071927Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-06.log"
+  },
+  {
+    "index": 7,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-GiQwdT",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T01:49:43.3667925Z",
+    "endedAt": "2026-09-13T01:53:53.2544844Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-07.log"
+  },
+  {
+    "index": 8,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-X69hIj",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T01:53:54.1236586Z",
+    "endedAt": "2026-09-13T01:59:54.7389966Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-08.log"
+  },
+  {
+    "index": 9,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-lfFBiu",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T01:59:55.6054435Z",
+    "endedAt": "2026-09-13T02:03:25.9059806Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-09.log"
+  },
+  {
+    "index": 10,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-WvSCLT",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:03:26.7160380Z",
+    "endedAt": "2026-09-13T02:07:57.2110748Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-10.log"
+  },
+  {
+    "index": 11,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-FO1IVw",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:07:58.1842563Z",
+    "endedAt": "2026-09-13T02:11:59.2960947Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-11.log"
+  },
+  {
+    "index": 12,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-ZcRfwY",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:12:00.2191987Z",
+    "endedAt": "2026-09-13T02:16:21.1347185Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-12.log"
+  },
+  {
+    "index": 13,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-iNT7Ta",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:16:22.0092001Z",
+    "endedAt": "2026-09-13T02:28:10.9880937Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-13.log"
+  },
+  {
+    "index": 14,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-8Q8JpK",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:28:11.9804807Z",
+    "endedAt": "2026-09-13T02:31:28.3662304Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-14.log"
+  },
+  {
+    "index": 15,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-soPHyY",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:31:29.4933491Z",
+    "endedAt": "2026-09-13T02:42:40.8894210Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-15.log"
+  },
+  {
+    "index": 16,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-EFHl4V",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:42:42.0425041Z",
+    "endedAt": "2026-09-13T02:48:32.7038709Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-16.log"
+  },
+  {
+    "index": 17,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-CwAlvs",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:48:33.9246767Z",
+    "endedAt": "2026-09-13T02:51:53.8298100Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-17.log"
+  },
+  {
+    "index": 18,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-8pX9jL",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:51:54.9203637Z",
+    "endedAt": "2026-09-13T02:55:59.8029503Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-18.log"
+  },
+  {
+    "index": 19,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-IVSPpH",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T02:56:00.8351787Z",
+    "endedAt": "2026-09-13T03:00:10.7449887Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-19.log"
+  },
+  {
+    "index": 20,
+    "runRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-S24jNc",
+    "phase": "terminal",
+    "startedAt": "2026-09-13T03:00:11.7860204Z",
+    "endedAt": "2026-09-13T03:04:47.2551906Z",
+    "outcome": "full_success",
+    "fingerprint": "sha256:d09574ccc117c2c6c491636a09ffe16e60aa839d8dc2fecaf721554b17c8bc15",
+    "exitCode": 0,
+    "log": "affine-n20-20.log"
+  }
+]

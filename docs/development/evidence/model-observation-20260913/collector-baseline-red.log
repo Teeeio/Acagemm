@@ -1,0 +1,95 @@
+[collector-acceptance] AssertionError (pending contract): helper API: both frozen consumer helpers are exported callables
+    collectModelObservationEvidence must be an exported function of scripts/shared-gpu-acceptance.mjs
+[collector-acceptance] EXPECTED-RED (pending contract): collector: complete two-Mission final records yield the observed summary
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: duplicate state observations never increase the required count
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: the same final state written with different key order is one duplicate
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a later unknown final record invalidates an earlier observed snapshot
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a later conflict final record invalidates an earlier observed snapshot
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a DTO never supplies the expected session that the record lacks
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: an unreadable second run file cannot disappear from the denominator
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a malformed second run file cannot disappear from the denominator
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a new safe unreadable run file stays unbound and blocks observation
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a known run with no final record keeps its required identity
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: two Missions keep their own binding and a foreign-Mission file is ignored
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a foreign provider record cannot bind a known claude-code start
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a conflicting Mission on a known run cannot be overwritten
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a conflicting record session is rejected
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a record whose session and thread disagree is rejected
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: an unsafe filename is not admissible run evidence
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a blank or missing record runId cannot bind
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a missing session may be completed only from the actual record
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a blank final-record session is never completed from the DTO
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): collector: a blank known run identity is never observed
+    collectModelObservationEvidence is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt: a confirmed current-Mission release is accepted
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt: a released Mission with no current Agent run is accepted
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt: HTTP 202 only becomes confirmed with a proving state
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt: the helper is pure and never mutates its input
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a missing workflowRecovery.resourceRelease
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a top-level resourceRelease only
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a pending mission release
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: an unconfirmed resource status
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a resource without an explicit confirmed flag
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a resource with confirmed false
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a blocked resource
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a quarantined resource
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a missing resources array
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: missionPaused false
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a running loop intent
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a foreign activeMissionId
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a missing activeMissionId
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a current Agent release barrier
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a current Agent bound to a foreign Mission
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a terminal Agent without release proof
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt rejects: a mismatched requested Mission
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] EXPECTED-RED (pending contract): stop receipt: a missing or malformed receipt is rejected
+    evaluateMissionStopReceipt is not an exported callable of scripts/shared-gpu-acceptance.mjs (frozen consumer helper pending implementation)
+[collector-acceptance] AssertionError (pending contract): ledger: a declared modelObservationSummary without reasons is not comparable
+    a declared summary missing its required reasons array is malformed
+[collector-acceptance] AssertionError (pending contract): ledger: a declared modelObservationSummary with a non-array reasons is not comparable
+    Expected values to be strictly equal:
+[collector-acceptance] AssertionError (pending contract): ledger: an observed summary carrying a reason is not comparable
+    an observed summary with a retained reason is contradictory and cannot support comparability
+[collector-acceptance] AssertionError (pending contract): ledger: duplicate aliases with contradictory per-run model proof are a conflict
+    same config/outcome but contradictory model proof must be a duplicate conflict
+[shared-gpu-model-collector] 1/48 independent cases passed; 47 expected-red pending the frozen collect/stop-receipt helpers and the ledger model-proof boundaries

@@ -1,0 +1,208 @@
+{
+  "schemaVersion": "operator-studio.live-failed-feedback-audit/v1",
+  "mode": "read-only-retained-originals",
+  "runs": [
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-LksNBb",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-6xj8Lj",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-mEG3dK",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-bdKAQA",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-TvN43X",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-4Zt14A",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-MJoNGM",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-BYbUCC",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-xL8HlN",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-DTsPxI",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-IZHvle",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-siUhQf",
+      "eligibleFailedCandidates": 1,
+      "observed": true,
+      "rows": [
+        {
+          "taskId": "queue_FE4F1087FB9C440A",
+          "candidateId": "candidate-02",
+          "requestId": "run_457E646481ED357FC80030CF",
+          "errorCode": "OPERATOR_CORRECTNESS_MISMATCH",
+          "issues": [
+            "failed experience selected",
+            "complete failed experience in prompt"
+          ],
+          "continuationRunId": "claude_MU09MN2G_8EA4D3D1",
+          "experienceId": "exp-c3fdb03c-d791-49cb-920b-d1ea6f9fa9b5",
+          "experienceVersion": 1,
+          "passed": false
+        }
+      ],
+      "passed": false
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may",
+      "eligibleFailedCandidates": 1,
+      "observed": true,
+      "rows": [
+        {
+          "taskId": "queue_F565046784F14F02",
+          "candidateId": "candidate-01",
+          "requestId": "run_7BE32B8D1E0B6A7EE0437C5C",
+          "errorCode": "OPERATOR_CORRECTNESS_MISMATCH",
+          "issues": [
+            "failed experience selected",
+            "complete failed experience in prompt"
+          ],
+          "continuationRunId": "claude_MU09REFK_B0B56A2F",
+          "experienceId": "exp-4f7a96cc-8413-49ac-a3e4-d01a69178175",
+          "experienceVersion": 1,
+          "passed": false
+        }
+      ],
+      "passed": false
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-hXx0Yo",
+      "eligibleFailedCandidates": 1,
+      "observed": true,
+      "rows": [
+        {
+          "taskId": "queue_84BDB7C131D84801",
+          "candidateId": "candidate-01",
+          "requestId": "run_19380FDE9727E5BE2FAF5114",
+          "errorCode": "OPERATOR_CORRECTNESS_MISMATCH",
+          "issues": [
+            "failed experience selected",
+            "complete failed experience in prompt"
+          ],
+          "continuationRunId": "claude_MU0A5TVK_105162B7",
+          "experienceId": "exp-f666fa3c-4172-4c2d-9353-fe6c4f42a379",
+          "experienceVersion": 1,
+          "passed": false
+        }
+      ],
+      "passed": false
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-dF7tin",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-260pq9",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-puVMYI",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-3V5LWt",
+      "eligibleFailedCandidates": 1,
+      "observed": true,
+      "rows": [
+        {
+          "taskId": "queue_A02A2D1B7D5944D3",
+          "candidateId": "candidate-02",
+          "requestId": "run_E8BB7D3AA8ACA8186413540B",
+          "errorCode": "OPERATOR_CORRECTNESS_MISMATCH",
+          "issues": [
+            "failed experience selected",
+            "complete failed experience in prompt"
+          ],
+          "continuationRunId": "claude_MU0ASFV0_2FAF3865",
+          "experienceId": "exp-f78f6fd0-9566-403f-9565-cb7b2078cbac",
+          "experienceVersion": 1,
+          "passed": false
+        }
+      ],
+      "passed": false
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-Y09F1i",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    },
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-4Njp6D",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    }
+  ],
+  "eligibleFailedCandidates": 4,
+  "passed": false
+}

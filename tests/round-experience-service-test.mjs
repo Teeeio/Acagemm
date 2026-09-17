@@ -28,7 +28,9 @@ const setup = () => {
     },
   };
   const api = createExperienceService({ repository, now: () => '2026-09-07T12:00:00.000Z', createId: () => `experience-${++ids}` });
-  const experienceService = { ...api, retrieve: (...args) => { retrieves++; return api.retrieve(...args); } };
+  // Pin this suite to the legacy retrieve-only port: the spread of the public API
+  // must not silently expose a newer selection API to these round-service cases.
+  const experienceService = { ...api, retrieveWithSelection: undefined, retrieve: (...args) => { retrieves++; return api.retrieve(...args); } };
   const ports = {
     experienceService, timers, timeoutMs: 200,
     resolveAccess: ({ mission: owner }) => ({ projectId: owner.projectId, allowedProjectIds: [] }),
@@ -177,5 +179,66 @@ await test('batch cancellation reaches a slow second verifier and prevents a lat
   assert.equal(secondSignal.aborted, true); assert.equal(writes, 1);
   finishVerification(); await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(writes, 1);
+});
+await test('GPU preflight precedes the unchanged collection deadline and revalidates evidence', async () => {
+  const { ports } = setup(); const state = stateFor(); let clock = 1000; let ready = false;
+  state.benchmark = { status: 'complete', result: { experienceEvidence: evidence({ executionMode: 'gpu', hardware: 'nvidia-gpu' }) } };
+  const limits = [];
+  const service = createRoundExperienceService({ ...ports, timeoutMs: 3000, nowMs: () => clock,
+    timers: { setTimeout: (fn, ms) => { limits.push(ms); return setTimeout(fn, ms); }, clearTimeout },
+    prepareObservationEvidence: async () => { clock += 7000; ready = true; },
+    verifyObservationEvidence: async () => {
+      assert.equal(ready, true);
+      // A successful preflight is not a verification proof or empty-context fallback.
+      throw Object.assign(new Error('changed environment'), { code: 'PACKAGE_ENVIRONMENT_CHANGED' });
+    },
+  });
+  assert.equal((await service.preflightCollection({ state, mission })).status, 'ready');
+  assert.equal(Date.parse(state.iterationStats.roundBudget.startedAt), 1000);
+  assert.equal(Date.parse(state.iterationStats.roundBudget.deadlineAt), 901000);
+  await rejected(service.collect({ state, mission }), 'PACKAGE_ENVIRONMENT_CHANGED');
+  assert.deepEqual(limits, [30000, 3000, 3000]);
+});
+await test('preflight skips absent and non-GPU observations and propagates query failure', async () => {
+  const { ports } = setup(); const state = stateFor(); let calls = 0;
+  const service = createRoundExperienceService({ ...ports, prepareObservationEvidence: async () => {
+    calls++; throw Object.assign(new Error('GPU unavailable'), { code: 'GPU_DEVICE_UNAVAILABLE' });
+  } });
+  assert.equal((await service.preflightCollection({ state, mission })).status, 'skipped');
+  state.benchmark = { status: 'complete', result: { experienceEvidence: evidence() } };
+  assert.equal((await service.preflightCollection({ state, mission })).status, 'skipped');
+  assert.equal(calls, 0);
+  state.benchmark.result.experienceEvidence.executionMode = 'gpu';
+  await rejected(service.preflightCollection({ state, mission }), 'GPU_DEVICE_UNAVAILABLE');
+  assert.equal(calls, 1);
+});
+await test('preflight obeys Mission and round deadlines without renewing either', async () => {
+  const { ports } = setup();
+  for (const [duration, code] of [[100, 'ROUND_EXPERIENCE_BUDGET_EXCEEDED'], [900000, 'ROUND_BUDGET_EXCEEDED']]) {
+    const state = stateFor(); let clock = 1000;
+    state.missionBudgetStartedAt = new Date(1000).toISOString(); state.missionBudgetMs = duration;
+    state.benchmark = { status: 'failed', result: { experienceEvidence: evidence({ executionMode: 'gpu', hardware: 'nvidia-gpu' }) } };
+    let limit;
+    const service = createRoundExperienceService({ ...ports, nowMs: () => clock,
+      timers: { setTimeout: (fn, ms) => { limit = ms; return setTimeout(fn, ms); }, clearTimeout },
+      prepareObservationEvidence: async () => { clock += duration; },
+    });
+    await rejected(service.preflightCollection({ state, mission }), code);
+    assert.equal(limit, Math.min(30000, duration));
+    assert.equal(state.missionBudgetStartedAt, new Date(1000).toISOString());
+    assert.equal(Date.parse(state.iterationStats.roundBudget.startedAt), 1000);
+  }
+});
+await test('preflight timeout aborts the query and a late result remains unusable', async () => {
+  const { ports } = setup(); const state = stateFor(); let signal; let finish;
+  state.missionBudgetStartedAt = new Date().toISOString(); state.missionBudgetMs = 40;
+  state.benchmark = { status: 'complete', result: { experienceEvidence: evidence({ executionMode: 'gpu', hardware: 'nvidia-gpu' }) } };
+  const service = createRoundExperienceService({ ...ports, prepareObservationEvidence: (input) => {
+    signal = input.signal; return new Promise((resolve) => { finish = resolve; });
+  } });
+  await assert.rejects(service.preflightCollection({ state, mission }),
+    (error) => error.code === 'ROUND_EXPERIENCE_TIMEOUT' && error.stage === 'preflight' && error.effectUnknown === false);
+  assert.equal(signal.aborted, true); finish();
+  assert.equal(state.iterationStats.experienceCollection, undefined);
 });
 console.log(`Round experience service: ${passed} checks passed.`);

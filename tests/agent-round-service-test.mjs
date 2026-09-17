@@ -56,3 +56,23 @@ assert.ok(fixtureState.iterationStats.roundExperience);
 assert.throws(() => createAgentRoundService({ ...managed.ports, roundExperience: undefined }), /roundExperience/);
 assert.throws(() => createAgentRoundService({ ...managed.ports, nowMs: undefined }), /nowMs/);
 console.log('[agent-round-service] budget start, frozen experience, failure barriers, managed and fixture launch contracts passed');
+
+const warming = make();
+warming.ports.roundExperience.preflightCollection = async () => { warming.calls.push('preflight'); warming.setClock(8000); };
+await warming.service.startRound(input(stateFor()));
+assert.deepEqual(warming.calls, ['preflight', 'collect', 'experience', 'reset', 'checkpoint', 'agent']);
+const coldFailure = make();
+coldFailure.ports.roundExperience.preflightCollection = async () => { throw Error('cold probe failed'); };
+await assert.rejects(coldFailure.service.startRound(input(stateFor())), /cold probe failed/);
+assert.deepEqual(coldFailure.calls, []);
+console.log('[agent-round-service] environment preflight order and failure barrier passed');
+
+const missionLate = make();
+const limitedState = { ...stateFor(), missionBudgetMs: 10, missionBudgetStartedAt: new Date(1000).toISOString() };
+missionLate.ports.roundExperience.collect = async ({ timeoutMs }) => {
+  assert.equal(timeoutMs, 10); missionLate.setClock(1010);
+};
+await assert.rejects(missionLate.service.startRound(input(limitedState)),
+  (error) => error.code === 'ROUND_EXPERIENCE_BUDGET_EXCEEDED');
+assert.deepEqual(missionLate.calls, []);
+console.log('[agent-round-service] collection is capped by Mission time and late completion cannot launch');

@@ -1,0 +1,80 @@
+{
+  "sourceTaskId": "task_8aa8831d594c4271bbd354f45f49e663",
+  "sourceAttemptId": "run_42d2425e335946439a0991e5fbf72589",
+  "sourceRunRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_42d2425e335946439a0991e5fbf72589\\scratch\\real-runs\\slot-01\\shared-gpu-yWXhQR",
+  "packageDigest": "sha256:32f08669c6723947496f7b56005a69e9163dca88a0ffe159b577cdf5b883ed03",
+  "manifest": {
+    "acceptance": {
+      "digest": "sha256:d36756ce0c44518f0cc14837f0b55b56b5a69cf998faef0ad2324945c661b385",
+      "semanticDigest": "sha256:1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d",
+      "testSpecDigest": "sha256:1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d"
+    },
+    "adapter": {
+      "id": "python-shared-gpu",
+      "languages": [
+        "python"
+      ],
+      "version": "1"
+    },
+    "binding": {
+      "candidateDigest": "sha256:919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+      "candidateId": "baseline-naive-v0",
+      "missionId": "MIS_MU2JND1T",
+      "workspaceId": "MIS_MU2JND1T"
+    },
+    "build": {},
+    "entrypoints": {
+      "acceptance": "oracle.py",
+      "candidate": "run.py"
+    },
+    "environment": {
+      "digest": "sha256:f33632f5b1769a0b29d9506edf1084721c2b69db8702983be35557b5cfb6c477",
+      "id": "local-shared-gpu"
+    },
+    "format": "operator-execution-package/v1",
+    "language": "python",
+    "layers": [
+      {
+        "digest": "sha256:df0cf36c0e0ffee58610a5a61d9f0fe212354e9a4c2e0aa13c588ed1be2ce8fe",
+        "files": [
+          {
+            "digest": "sha256:919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+            "path": "run.py",
+            "size": 1026,
+            "type": "file"
+          }
+        ],
+        "id": "candidate",
+        "role": "candidate"
+      },
+      {
+        "digest": "sha256:19f5032c1bef8a95c35352f4497080dd1d43d023edeaec9e38dc7e78d9dd44f9",
+        "files": [],
+        "id": "dependency",
+        "role": "dependency"
+      },
+      {
+        "digest": "sha256:d36756ce0c44518f0cc14837f0b55b56b5a69cf998faef0ad2324945c661b385",
+        "files": [
+          {
+            "digest": "sha256:919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+            "path": "oracle.py",
+            "size": 1026,
+            "type": "file"
+          }
+        ],
+        "id": "acceptance",
+        "role": "acceptance"
+      }
+    ],
+    "schemaVersion": 1,
+    "target": {
+      "device": "gpu",
+      "platform": "nvidia-cuda"
+    }
+  },
+  "blobs": {
+    "sha256:919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a": "import torch\n\ndef inputs_for(rows, cols):\n    x = (torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32) + 3).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)\n\ndef run(inputs):\n    # Initial implementation deliberately does one redundant device copy.\n    value = torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)\n    return value.clone()\n"
+  },
+  "scope": "Replay adapter.prepare only: Python -I AST syntax/import-shape parsing, never execute submitted Python modules, no GPU/model/network."
+}

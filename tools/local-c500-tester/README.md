@@ -1,21 +1,86 @@
 # C550 Production Workflow Tester
 
+证据展示要求完整的 candidateId/candidateDigest/runId 匹配。
+Current best 从自身的 candidateDigest/evidenceRunId 及 evidenceDecision 读取；
+候选卡使用 patchDigest/evidenceRunId，队列行使用 payload.candidate.digest/requestId。
+字段不足时显示未知，不借用其他运行的决定。只接受当前已识别 v1/策略版本及一致的 DTO。
+
 模块归属：当前 TUI 客户端、Production API Client 和启动/诊断工具。详细文件归属见
 [`docs/development/MODULE_OWNERSHIP.md`](../../docs/development/MODULE_OWNERSHIP.md)。
 
-这是 Operator Studio 生产工作流的 TUI 测试入口。它复用生产 Mission、受管理 Agent、baseline、Mission Workspace、operator-test queue、Accept Gate、adoption 和连续迭代逻辑，只把 queue 后面的执行服务切换为本机沐曦 C550 backend。
+这是 Operator Studio 生产工作流的 TUI 测试入口。它复用生产 Mission、受管理 Agent、baseline、Mission Workspace、operator-test queue、Accept Gate、adoption 和连续迭代逻辑，只把 queue 后面的执行服务切换为本机沐曦 C550 backend（`local-c500` 兼容入口；当前 handoff 的真实执行后端见下一节共享 GPU）。
 
-## C500 与 C550 的边界
+## C500、C550 与共享 GPU 的边界
 
-- 当前唯一生产硬件型号是 `C550`。新 Mission、固定 Profile、测试矩阵、Mock/Simulation
-  设备描述和新执行结果均使用 `C550`。
-- C500 与 C550 是不同设备，不共享 Runner 身份；C500 结果不能通过 C550 的生产预检或
-  发布门禁。
+- **当前 handoff 的真实执行后端是本地共享 NVIDIA GPU**：`OPERATOR_TEST_BACKEND=local-shared-gpu`
+  （`tools/local-shared-gpu-runner.py`，`nvidia-smi` + CUDA event 计时），结果带
+  `source=local-shared-gpu`、`executionMode=gpu`、`hardware=nvidia-gpu`、`publishable=false`。
+  它是真实开发执行，但属于显式发布限制，当前没有 C550 正式发布证据。详见下一节。
+- `C550` 是固定 Profile / `local-c500` 兼容通道声明的 MetaX 目标型号。C500 与 C550 是
+  不同设备，不共享 Runner 身份；C500 结果不能通过 C550 的生产预检或发布门禁。
 - 目录 `tools/local-c500-tester/`、命令 `tester:c500`、后端类型 `local-c500`、
   `LOCAL_C500_*` / `OPERATOR_LOCAL_C500_*` 环境变量和 `LOCAL_C500_*` 错误码是为兼容已有
-  自动化保留的稳定程序标识，不代表目标硬件仍是 C500。
-- 已持久化的真实 C500 历史证据保持原标签，不进行型号改写；需要在 C550 上重新执行后
-  才能产生可发布的 C550 证据。
+  自动化保留的稳定程序标识，不代表当前目标硬件仍是 C500。
+- `launcher.cjs` 硬编码 `OPERATOR_TEST_BACKEND: 'local-c500'`，是旧 C500/C550 兼容入口；
+  **不能仅靠环境变量覆盖就切换到共享 GPU**。共享 GPU 要显式启动 `client-runtime/local-server.mjs`
+  并设置 `OPERATOR_TEST_BACKEND=local-shared-gpu`（见下节 E2E 命令），或使用不经过该
+  launcher 的共享 GPU E2E。
+- 已持久化的真实 C500/C550 历史证据保持原设备标签，不进行型号改写；历史 device 标签和旧
+  launcher 文档只在其原始作用域内有效。
+
+## 共享 GPU 与证据决策契约
+
+当前仓库还有一条 opt-in 的共享 GPU 真实执行路径：`OPERATOR_TEST_BACKEND=local-shared-gpu`
+（`tools/local-shared-gpu-runner.py`，`nvidia-smi` + CUDA event 计时）。它复用同一个
+operator-test queue 端口，`source=local-shared-gpu`、`executionMode=gpu`：
+
+- 它是**真实开发执行**，不是 simulation，也不是可发布结果。共享主机属于显式发布限制，
+  决策结果是不可发布（或等待外部验证），不会因为 `liveHardware=true` 就被当成可发布。
+- TUI、运行摘要和资产 outcome 不再根据 `publishable` / `liveHardware` 等布尔值自行推导
+  采用或发布；它们读取同一份带版本的领域决策。
+- 共享 GPU E2E 脚本默认 provider 是 `codex-cli`，**不是 Claude**；要用 Claude 必须显式覆盖
+  `E2E_AGENT_RUNTIME=claude-code`。准确命令（Linux/macOS；Windows 用
+  `$env:E2E_AGENT_RUNTIME='claude-code'`）：
+
+  ```bash
+  E2E_AGENT_RUNTIME=claude-code E2E_GPU_FAMILIES=affine E2E_KEEP_ARTIFACTS=1 npm run e2e:shared-gpu-agent-iteration
+  ```
+
+  该 E2E 直接启动生产 runtime，不经过 `tools/local-c500-tester/launcher.cjs`，因此不受
+  `local-c500` 硬编码影响。TUI 入口（`npm run tester:c500`）本身默认 Claude Code，但仍走
+  `local-c500` 兼容后端。
+
+决策契约由 `client-runtime/evidence-decision.mjs` 定义，schemaVersion 为
+`operator-studio.evidence-decision/v1`，公开字段可分别检查：
+
+- `execution`：`live | simulation | cpu | unknown`、`liveHardware`、`source`。
+- `correctness`：`passed`；`benchmark`：`valid`。
+- `diagnostics`：`tracer` / `profiler` 的 `schemaValid`、`available`、`evidenceEligible` 与原因码。
+- `adoption`：`allowed | reference | blocked | waiting_external_verification` 及 reasons。
+- `publication`：`allowed | blocked | waiting_external_verification` 及 reasons。
+
+存放位置固定为 `benchmark.evidenceDecision`，缺失时回退到同一候选/运行的 Gate
+(`decisionReview.gate.decision`)；采用后复制到 `currentBest.evidenceDecision`，知识草稿和
+发布资产各自携带 `evidenceDecision`。TUI/摘要只做只读投影，不生产决策、不修改 state，
+也不通过 HTTP 之外的方式读取或写入持久化状态。
+
+读取方只接受 `schemaVersion` **恰为** `operator-studio.evidence-decision/v1` 且
+binding/execution/correctness/benchmark/diagnostics/adoption/publication 结构完整的 DTO：
+未知版本、旧 flat Gate、缺字段或枚举非法的对象一律视为 `unknown`，不做字段回填或改写。
+`publication.status=allowed` 额外要求 binding 的 candidateId/candidateDigest/runId 都是非空
+字符串；缺绑定、空绑定或错绑定的 DTO 一律 `unknown`，不能被展示为可发布。
+选择决策时按调用方明确给出的当前 candidate/digest/run 身份精确匹配；身份缺失不默认匹配，
+也不会把其它 candidate/run 的决策当作当前结果，current best 只使用与自身匹配的决策。
+
+知识草稿/资产展示与 Runtime 相同：以草稿自身 `evidenceBinding` 的 candidateId/candidateDigest/runId
+三字段调用 `selectEvidenceDecision`，草稿决策、维护 change 决策和发布资产决策都必须绑定到同一
+draft 身份。change 行先找到自己的 draft，再按同一 binding 选择决策，不直接读取任意 change DTO。
+草稿无法给出自身完整身份时显示 `unknown`，不用当前 benchmark/currentBest 或 DTO 自身身份补齐；
+没有版本化决策的旧记录仍显示 `unknown` 且不可发布。
+
+兼容规则：旧报告或旧资产没有版本化决策时，显示为 `unknown` 且**不可发布**，不补造 live
+事实；历史 simulation 报告继续保留不可发布说明。真实共享 GPU 结果显示真实开发执行、
+不可发布/待外部验证；`development` / `development_only` 草稿与变更也明确显示为仅开发。
 
 ## 启动
 
@@ -122,7 +187,7 @@ codex --version
 codex login status
 ```
 
-`local-c500` 是后端适配器的兼容名称；当前真机目标固定为 C550。启动器通过 `torch.cuda.get_device_name()` 和 `mx-smi` 校验 C550，并将设备、软件栈和 smoke 结果写入 Mission、测试矩阵和结果环境标签。无法识别 C550、软件栈不匹配或 CUDA smoke 失败时，TUI 在进入交互界面前终止并报告硬件前置检查失败。
+`local-c500` 是后端适配器的兼容名称；在该兼容入口内，声明的真机目标是 C550（当前 handoff 的实际真实执行后端是共享 NVIDIA GPU，见开头边界节）。启动器通过 `torch.cuda.get_device_name()` 和 `mx-smi` 校验 C550，并将设备、软件栈和 smoke 结果写入 Mission、测试矩阵和结果环境标签。无法识别 C550、软件栈不匹配或 CUDA smoke 失败时，TUI 在进入交互界面前终止并报告硬件前置检查失败。该预检只作用于 `local-c500` 真机模式，不适用于共享 GPU 路径。
 
 Claude Code 复用相同的 Research、Baseline Materializer、Candidate、Workspace Diff、回退和采用工作流。Runtime 使用非交互 `stream-json`，只向各阶段暴露受控的 Read/Write/Edit 工具；Research acquisition 额外允许 WebSearch/WebFetch，Bash 始终禁用。不要设置 `--dangerously-skip-permissions`。
 

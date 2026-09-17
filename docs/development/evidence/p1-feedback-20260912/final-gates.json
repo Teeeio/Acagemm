@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "operator-studio.final-gates-evidence/v1",
+  "recordedAt": "2026-09-12",
+  "command": "npm.cmd run verify:non-hardware-robustness",
+  "commandScope": "includes the release gate (verify:local-c500-release) and the non-hardware robustness gate",
+  "exitCode": 0,
+  "exitMarker": {
+    "sourcePath": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p1-handoff-20260912\\final-gates.exit",
+    "content": "0"
+  },
+  "log": {
+    "sourcePath": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\p1-handoff-20260912\\final-gates.log",
+    "archivedRelativePath": "final-gates.log",
+    "sha256": "21f85c8b1fed477230ee6d573c06f0387bfe75b86dcc1349ee5be41d470da759",
+    "bytes": 72802,
+    "byteIdentical": true
+  },
+  "passLines": [
+    {
+      "gate": "release",
+      "line": "[release-check] PASS: 132 checks completed",
+      "checks": 132
+    },
+    {
+      "gate": "non-hardware",
+      "line": "[non-hardware-check] PASS: 34 checks completed without physical hardware",
+      "checks": 34
+    }
+  ],
+  "failedLines": 0,
+  "executor": "上游根工作区（F:\\设计\\快速项目\\acagemm原型），非本隔离工作区",
+  "workerNote": "本记录只依据上游真实结束标记与完整日志：本 worker 未运行任何门禁、GPU 或 Agent，只在 final-gates.exit 出现后逐字节复制已完成的日志。"
+}

@@ -1,0 +1,2 @@
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"run\",\"completed\":0,\"total\":1,\"message\":\"invocation 1/1 started\"}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"phase\":\"finish\",\"completed\":1,\"total\":1,\"message\":\"batch passed\"}"}

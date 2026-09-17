@@ -1,0 +1,1104 @@
+{
+  "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\smoke-recovered-originals.zip",
+  "sha256": "f519a0ccc79bdcb274022c0a8de052fb156c5deb1a8ec3e20d4098d01ebca045",
+  "verified": true,
+  "files": 219,
+  "originalBytes": 3834792,
+  "entries": [
+    {
+      "path": "shared-gpu-cMvSAe/affine-state.json",
+      "bytes": 583344,
+      "sha256": "dadf2c8f59bbe1d7ce031133bc0dbf4e1fc489cd038dca1608e9b02fca476cd7"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/attempt.json",
+      "bytes": 742578,
+      "sha256": "f04ec6c8f77d3c100f296d449b06ef4e0c2ca4dd99057af213c41d3fed9afa15"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/bridge/claude-empty-mcp.json",
+      "bytes": 18,
+      "sha256": "e93fc8db2b1bd77107fe6c758bca9545fa864cf7cce8ab93a7b2b93a1d566a7b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/bridge/claude-runs/claude_MU1Y3HUS_E39223D9.json",
+      "bytes": 3996,
+      "sha256": "a29b3ff4d9393430d8542723cae560c6b5b5fd0f8cc0a31bd5851a9abb8dc743"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/bridge/claude-runs/claude_MU1Y3HUS_E39223D9.jsonl",
+      "bytes": 30388,
+      "sha256": "7c02738a0113b9bcadc64eba6b6784da6d78eb8deea9d847735a0647721bd8bb"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/bridge/claude-runs/claude_MU1Y6IXD_0891EF00.json",
+      "bytes": 3716,
+      "sha256": "55769f1d4aa40a32c136dd73e44fbf2b708c71cdb250643c3b2ad79a8747742a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/bridge/claude-runs/claude_MU1Y6IXD_0891EF00.jsonl",
+      "bytes": 44811,
+      "sha256": "4ba5645ea94be7f451fd61434638f6369756880da1040a1432aebd9acd741782"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/bridge/git-trust/492e43af4d8838e366b4b7c6.gitconfig",
+      "bytes": 418,
+      "sha256": "c5abb86d7d81d2103336b10ba6610c169a0ba7c6a54017fc845369666190fb09"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/bridge/prompt-audits/claude_MU1Y3HUS_E39223D9.json",
+      "bytes": 14239,
+      "sha256": "5c4d0a0215fae382cc0ba6a32de0d568d6e7f0b1b197e740eccb599489e4e466"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/bridge/prompt-audits/claude_MU1Y6IXD_0891EF00.json",
+      "bytes": 35216,
+      "sha256": "315ac8157a283d13a58bce983a1b15c79744118eb676e3db2f3c9ca3c9a94b9b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/data/mock-db.json",
+      "bytes": 499581,
+      "sha256": "92ee90c6065f73c352fdd5a5cf6032c18ddc61e72effe864c85a58cde8e98bd2"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/artifacts/38b282dd659e0527310d4d48a71a86ee0a22f27428fc1c5fb1358c96f840c078.json",
+      "bytes": 1004,
+      "sha256": "d8d929aeab8548bb6bb40eead12e0d593566695916e8c25947c9f16d14246179"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/artifacts/db220b6c2518e16445ee7009e99b3985969e439de334b4917aa017dfa7309bfa.json",
+      "bytes": 1004,
+      "sha256": "04307fa911089a71e20994728026fee0307499215117d2940f36551314fd14de"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/artifacts/fc9e27079f9698715b4d1170ffd79ba5027ba6c3fcd6ca70e47e14445ba3d1ce.json",
+      "bytes": 1004,
+      "sha256": "4d9c4540b147c270cea6b21fec0726d51fe408619fd356929f7e69634709ac48"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/preparations/prepare_1850bece-b6db-4687-9b53-66f026151e90.json",
+      "bytes": 611,
+      "sha256": "a6b73a58e4d11a8fedaf542c7c0212d4a0ee7437e6275c9fad0c6c0678224d1c"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/preparations/prepare_1a28d267-12f2-494e-ac18-3a9910ce8bef.json",
+      "bytes": 611,
+      "sha256": "e8f757223e7a09c40ff6544885783f72ae4bc1224fdf84e83ff807d926693ea8"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/preparations/prepare_480c30bf-71e8-42fe-9877-d34956fcda87.json",
+      "bytes": 611,
+      "sha256": "37a14ffd0804b401f42d18eee93022f61a8275ddef9279d9b6e31f719d2aebf9"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/prepared/2ff235c055f0bbcbc8509e24c353842c4aa4491c6a6dec1e5f2e1f8fee2e65f1-prepare_1a28d267-12f2-494e-ac18-3a9910ce8bef/oracle.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/prepared/2ff235c055f0bbcbc8509e24c353842c4aa4491c6a6dec1e5f2e1f8fee2e65f1-prepare_1a28d267-12f2-494e-ac18-3a9910ce8bef/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/prepared/4a551b7166c3df2519711ff803d580421fa10652cda2508a48ededd447d15466-prepare_480c30bf-71e8-42fe-9877-d34956fcda87/oracle.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/prepared/4a551b7166c3df2519711ff803d580421fa10652cda2508a48ededd447d15466-prepare_480c30bf-71e8-42fe-9877-d34956fcda87/run.py",
+      "bytes": 2191,
+      "sha256": "99e78d5673bdb3516c1680b7dd07a9f24effb3f8d95d48d179c329bd8b60726b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/prepared/e83aa6fab1a10ce1232f0f4b8f5f1f14eeae32990e0a9c0c38ad16aea425c998-prepare_1850bece-b6db-4687-9b53-66f026151e90/oracle.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/adapter/prepared/e83aa6fab1a10ce1232f0f4b8f5f1f14eeae32990e0a9c0c38ad16aea425c998-prepare_1850bece-b6db-4687-9b53-66f026151e90/run.py",
+      "bytes": 3942,
+      "sha256": "222a17dace0f30eb1338729c4704e99dda6a10031cd48d08c6d9a2163f36c81e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/admissions/038bf3647da2f47521b0bd8bdf57f9706034e6c6b83a4bab4d0f43f6712c8392.json",
+      "bytes": 752,
+      "sha256": "674a57bcf8038becd2758562966a1e16e610555cf7fca81f6e0a310b156aff44"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/admissions/2b4b8caace29a1e5e1e97db7ad84c5c1411c263482576a5e75acc67b0b311e8f.json",
+      "bytes": 752,
+      "sha256": "dc5e51fe78821986753ca9b02ee2fd051c39221d86e508fbe58094cebba6574b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/admissions/ea816d9548db1107a9b875a332d36f1ed2f42cbd911df1b1dc69acfec365f26d.json",
+      "bytes": 752,
+      "sha256": "5def547fc4299ccf6dd6b25bb438bc877636ad571fa377e47f20d715092eff12"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/blobs/1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d",
+      "bytes": 312,
+      "sha256": "1e2a2a1c81a4b8963d645aea40b7d9f1e58c2c6da77d17c602232a9a24cfa72d"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/blobs/222a17dace0f30eb1338729c4704e99dda6a10031cd48d08c6d9a2163f36c81e",
+      "bytes": 3942,
+      "sha256": "222a17dace0f30eb1338729c4704e99dda6a10031cd48d08c6d9a2163f36c81e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/blobs/919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/blobs/99e78d5673bdb3516c1680b7dd07a9f24effb3f8d95d48d179c329bd8b60726b",
+      "bytes": 2191,
+      "sha256": "99e78d5673bdb3516c1680b7dd07a9f24effb3f8d95d48d179c329bd8b60726b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/blobs/b06df1e21f4372172e60d419c29e88461557e3dd15320d1c436b47df30980089",
+      "bytes": 485,
+      "sha256": "b06df1e21f4372172e60d419c29e88461557e3dd15320d1c436b47df30980089"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/manifests/2ff235c055f0bbcbc8509e24c353842c4aa4491c6a6dec1e5f2e1f8fee2e65f1.json",
+      "bytes": 1542,
+      "sha256": "22f74e66f0a53e003fc61b38312be5f88a2449a4147421a5b93217e2d16b91bf"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/manifests/4a551b7166c3df2519711ff803d580421fa10652cda2508a48ededd447d15466.json",
+      "bytes": 1537,
+      "sha256": "f7f201be4a013b63c5b9f17a0445ee6e735bbc2ac6983cf5a61b34eb9d2ce6d5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/manifests/e83aa6fab1a10ce1232f0f4b8f5f1f14eeae32990e0a9c0c38ad16aea425c998.json",
+      "bytes": 1537,
+      "sha256": "5230b2960806966c18d665aa02b36b60c9881767516cfb6a8a159d48d3d68842"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/preparations/2ff235c055f0bbcbc8509e24c353842c4aa4491c6a6dec1e5f2e1f8fee2e65f1.json",
+      "bytes": 374,
+      "sha256": "0a08f94b4127852568e9ccb0c8851a60141b4adb3a746dba26dc41e17655fcb4"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/preparations/4a551b7166c3df2519711ff803d580421fa10652cda2508a48ededd447d15466.json",
+      "bytes": 374,
+      "sha256": "2a0effbc244d43c85e06e8c315e995782a3285869e9d9a8c9469bf53418aa119"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/packages/store/preparations/e83aa6fab1a10ce1232f0f4b8f5f1f14eeae32990e0a9c0c38ad16aea425c998.json",
+      "bytes": 374,
+      "sha256": "85cec983550ba69dd5776183ec0681f4c9ce5e7f4e820b44a81b2b61b1ffb55b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/artifacts/MIS_MU1Y2W01/benchmark.json",
+      "bytes": 3691,
+      "sha256": "5af2f920b3bfceba8fe816b58828090b00de61ab06a9ab3ee9422648c606e317"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/artifacts/MIS_MU1Y2W01/candidate-01.manifest.json",
+      "bytes": 321,
+      "sha256": "375d0fdb85032c926dc1d1b8a331340bb0f84205a278921e88ee6ac0be8202e5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/artifacts/MIS_MU1Y2W01/candidate-01.patch",
+      "bytes": 1966,
+      "sha256": "517de247228f4ca9481cc1ae8e4367333178797e158338c81b0e39e25ca72f7d"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/artifacts/MIS_MU1Y2W01/candidate-02.manifest.json",
+      "bytes": 321,
+      "sha256": "0ff9e05e7d1ac9368baa07031f822ba43b285b58c3628921d06c0a2a794096ac"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/artifacts/MIS_MU1Y2W01/candidate-02.patch",
+      "bytes": 4205,
+      "sha256": "07d6ce61367d5dd355f99e369578e735df80eb5ae3624d7b693b4ff3319da680"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/artifacts/MIS_MU1Y2W01/profiler.json",
+      "bytes": 1482,
+      "sha256": "7bbc0bd603e363aeb46a0a2df71c3dc1cc78669c4472ce0af3ca3b8c1ec58753"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/artifacts/MIS_MU1Y2W01/test-result.json",
+      "bytes": 13027,
+      "sha256": "ced62c0f5f5ab3691bfd1df06e3b5adc90961267111dbd8b589d9ccb9aaa2c7e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/artifacts/MIS_MU1Y2W01/tracer.json",
+      "bytes": 1469,
+      "sha256": "21291ab74fa1dc8ba537254238943298a523ec096c2613fcf53eaf62d02dce36"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/project.json",
+      "bytes": 886,
+      "sha256": "ca93af67f9dde33df3d4d48cecaaeea2d75427e896efe9c3a5ebb2fb172c4cad"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/source-registry.json",
+      "bytes": 42,
+      "sha256": "eafb5254efa23b2b36493b23f5bdad64dd371314c5e97c661ad5cb811429dfac"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/COMMIT_EDITMSG",
+      "bytes": 33,
+      "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/config",
+      "bytes": 218,
+      "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/index",
+      "bytes": 118,
+      "sha256": "1797a5558ef725e9c0a006ca97d5ae037ecd51d7f861c7d6c9bb1afd6aaeeff0"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/info/exclude",
+      "bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/logs/HEAD",
+      "bytes": 536,
+      "sha256": "c69a8c123e7ae1a62cd78717a0b644ccd0c4c8a03ac60e583518fcaf4e874898"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/logs/refs/heads/master",
+      "bytes": 198,
+      "sha256": "bcbb443a355f365e0d30a48002baac474be3ed579bc21e1aa6ff0cb7acb3137a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/objects/3d/9841810103e1046bd02b9bb3563fd235e80a74",
+      "bytes": 51,
+      "sha256": "ffc7e9a857841233bc3c6434d175e35652d59b743178391cf2680e29b7f07a0e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/objects/c3/6aea99248f1ab9b8a019f515cc157f33518729",
+      "bytes": 145,
+      "sha256": "461106d8bec7b4050d242f90e10ac08e468bfddf35ec605380423bfea263afeb"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/objects/d8/421bab611561d0c79c286fc746a7fba144dbbf",
+      "bytes": 442,
+      "sha256": "fa362d7a3d3399eb4edb9a796109a5e5da7da7de6e9dcc50e4686b36b0c89faf"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/objects/e6/9de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "bytes": 15,
+      "sha256": "164c5fa8067facf1a43f09ce3d0e35ebf53a7f5723ecbf15a8667cfc53c26f6c"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/ORIG_HEAD",
+      "bytes": 41,
+      "sha256": "487d6adc9d31a87b62d293ef3392879b9917c02bf18f354c6b0184b72e901730"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "487d6adc9d31a87b62d293ef3392879b9917c02bf18f354c6b0184b72e901730"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/repository/run.py",
+      "bytes": 3942,
+      "sha256": "222a17dace0f30eb1338729c4704e99dda6a10031cd48d08c6d9a2163f36c81e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/.operator-studio/workspaces/MIS_MU1Y2W01/workspace.json",
+      "bytes": 741,
+      "sha256": "15da8cfc5525c1a789f1f64c2d4db38ed28bf075e9810aedba86682388979a9b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/COMMIT_EDITMSG",
+      "bytes": 29,
+      "sha256": "4e8a97fd1287be5b1892a807b2ccdce100f57e45ca6caee424d2d14b5e0fb148"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/config",
+      "bytes": 200,
+      "sha256": "d3df7bb7804fe3c142969ced24327de496239151ec0e2477b9f81823641d0044"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/index",
+      "bytes": 137,
+      "sha256": "a5fffaf58e430fb55f88bf703c794c825957cde5c78ffe64810e0f5ef29a14b7"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/info/exclude",
+      "bytes": 258,
+      "sha256": "aa88cbe1915b2447b118bc3ec2f0896a9bb19dc62e7f063f5011033a29d7c10a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/logs/HEAD",
+      "bytes": 378,
+      "sha256": "836e21b57e66d53e3db8d83d403bf32a27c194bae885c8e8b97ef905e9d7af92"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/logs/refs/heads/master",
+      "bytes": 378,
+      "sha256": "836e21b57e66d53e3db8d83d403bf32a27c194bae885c8e8b97ef905e9d7af92"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/objects/09/92f6dcf9dd5287ef24a28539684e5c44702278",
+      "bytes": 144,
+      "sha256": "cd5bc233364faaa75800d6999efdf5856de29dbd4efff0781de8d863e58b8d10"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/objects/3d/9841810103e1046bd02b9bb3563fd235e80a74",
+      "bytes": 51,
+      "sha256": "ffc7e9a857841233bc3c6434d175e35652d59b743178391cf2680e29b7f07a0e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/objects/4b/825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "bytes": 15,
+      "sha256": "e72602cad67ed061ec84b13e92568f873172efac19a512a1b561dbf54e2c8426"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/objects/73/1255acea408e53ca250f7f481d4732f515a1c1",
+      "bytes": 178,
+      "sha256": "9f6d3473f7f6d20c9e5cb81ec02147087a890f1fb76b5231ecf65549b03f4e5e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/objects/d8/421bab611561d0c79c286fc746a7fba144dbbf",
+      "bytes": 442,
+      "sha256": "fa362d7a3d3399eb4edb9a796109a5e5da7da7de6e9dcc50e4686b36b0c89faf"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "3658b7968a7b66cd08dd181812c48bbfa75584e7e881f11b6c327bede787ec1b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/projects/affine/repository/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/checkpoints/MIS_MU1Y2W01/cp_168EE08A-672/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/checkpoints/MIS_MU1Y2W01/cp_80DF0480-A29/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/command-journal.jsonl",
+      "bytes": 61241,
+      "sha256": "e1f8b57c90d7b2009e3c8be303c3d2f4c0dfcfb6842ad4e5597ee41a71839e69"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/experiences/experiences.json",
+      "bytes": 3249,
+      "sha256": "ca68139c571622f58c36fdf628733545d09f2d902c459199092f4b79b5533c76"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/git-trust/492e43af4d8838e366b4b7c6.gitconfig",
+      "bytes": 418,
+      "sha256": "c5abb86d7d81d2103336b10ba6610c169a0ba7c6a54017fc845369666190fb09"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/git-trust/4bd61e4d20df4b340bdb488c.gitconfig",
+      "bytes": 391,
+      "sha256": "60041a0317a2b916b0406a9bab3d80bd27d04b7b5a6969d330059a9dcf9f042f"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/git-trust/527ec3c753df82cf4f58d368.gitconfig",
+      "bytes": 377,
+      "sha256": "048e51c1df578176df28b365198260aa6bd2c2a4a59a23bdaaf25cb4cae68ca1"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/operator-studio.pid",
+      "bytes": 6,
+      "sha256": "90b1acfc2034e8011c24ad82746dece0bfa26d54eed6b034241fa683145b990a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/operator-test-queue.jsonl",
+      "bytes": 45691,
+      "sha256": "98acac178ea0ba1cf1395c95a3c1d7c9844bff48ea3103203f4841ad36d6f8a5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/COMMIT_EDITMSG",
+      "bytes": 33,
+      "sha256": "eeb69c38aa4428338fd8a995ea24038a5e401e02bbdc34ad096a176e21513ee0"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/config",
+      "bytes": 218,
+      "sha256": "3460281f5e2edcbee1060a5e9055b3c8e7574c5d41b4860a2adcd122a7a00a9d"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/description",
+      "bytes": 73,
+      "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/HEAD",
+      "bytes": 23,
+      "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/applypatch-msg.sample",
+      "bytes": 478,
+      "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/commit-msg.sample",
+      "bytes": 896,
+      "sha256": "1f74d5e9292979b573ebd59741d46cb93ff391acdd083d340b94370753d92437"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/fsmonitor-watchman.sample",
+      "bytes": 4726,
+      "sha256": "e0549964e93897b519bd8e333c037e51fff0f88ba13e086a331592bf801fa1d0"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/post-update.sample",
+      "bytes": 189,
+      "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-applypatch.sample",
+      "bytes": 424,
+      "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-commit.sample",
+      "bytes": 1643,
+      "sha256": "f9af7d95eb1231ecf2eba9770fedfa8d4797a12b02d7240e98d568201251244a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-merge-commit.sample",
+      "bytes": 416,
+      "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-push.sample",
+      "bytes": 1374,
+      "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-rebase.sample",
+      "bytes": 4898,
+      "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/pre-receive.sample",
+      "bytes": 544,
+      "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/prepare-commit-msg.sample",
+      "bytes": 1492,
+      "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/push-to-checkout.sample",
+      "bytes": 2783,
+      "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/hooks/update.sample",
+      "bytes": 3650,
+      "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/index",
+      "bytes": 530,
+      "sha256": "fa0d85c5440c323c004214c967a51e80440916e37cef3e65e9f1dff14b34afe4"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/info/exclude",
+      "bytes": 240,
+      "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/logs/HEAD",
+      "bytes": 198,
+      "sha256": "3610fc4821be6e4563d933a06d7908b3571493638537e9bd9fecf4aabcb2acc3"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/logs/refs/heads/master",
+      "bytes": 198,
+      "sha256": "3610fc4821be6e4563d933a06d7908b3571493638537e9bd9fecf4aabcb2acc3"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/14/1ac3d21a60f5b445d546ef829bddb347cbc61a",
+      "bytes": 214,
+      "sha256": "07beb84b64ba0f80f723cd14b88e6dc7ba20e0010f41032de5704537898d82e8"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/68/a8c18407e44135c00f5b19911f819198c0e6af",
+      "bytes": 63,
+      "sha256": "50039b3a221b510ec6317b720ba68e54da3cb1c7d5653457c72e244fbd9686fe"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/7c/dfcc064fb32cc5620f2a20c37cfe0d2060825c",
+      "bytes": 69,
+      "sha256": "77acb078b6ca87745fca278ea59fa3e1fd0181b79ef61b201f2f183b495fe355"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/81/4af10e9524cfa1a90d109f8b14909ac04e0e73",
+      "bytes": 145,
+      "sha256": "618f943fb4d0a27590b6ac70461a49d2adfaa65eed0f6581bcaf4c43c7c58512"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/a3/c0c71572e0ab4740a1146fb4e19fa31290f23f",
+      "bytes": 226,
+      "sha256": "79f3a5bc38c8a918a87b0085d4b2a0282582a517eaa015559e7f1c20217d7577"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/cf/2ab6ee5cf260ac816248ebeec979670ec1d9ac",
+      "bytes": 71,
+      "sha256": "5dc0355c57866875a91922b8e34129bf7ea841ed0a6d12b7a69f7862d13ebb4c"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/d2/874deabe85a0c334b276e9a72d0f9117ae3ed4",
+      "bytes": 103,
+      "sha256": "f63addbb38f481796b86edec842f322adf0f7a44673d6b154e3b47a0420c4d62"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/e6/95f13fb5c02b2b2434582d5e5524a229de7c57",
+      "bytes": 152,
+      "sha256": "4d62d2407692a1af3d38ba93461b930fd375f4f433ad4a9bb8fb569cd8726ddd"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/objects/ff/546476bdd4d3153ab96b3e77e0d603a028d43d",
+      "bytes": 128,
+      "sha256": "eb7f0454fce551a69b664a8087f5edd2dbf7a542d1e39a7221a6f67676355c82"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/.git/refs/heads/master",
+      "bytes": 41,
+      "sha256": "7a1c96f96c810c813eb267bd42bff03480059564baaa35132c4e017bf8d1c677"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/benchmarks/mla_paged_attention.yaml",
+      "bytes": 108,
+      "sha256": "16fcb324cd3c9d4e3bd90a894db3a13b510e0ec0806d925dbbc1a02daa87933b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/kernels/paged_attention.cu",
+      "bytes": 331,
+      "sha256": "86188a7116efccc54ee2fa62f90ba26c18d17079a0e0ca39156fc5a6a9667c97"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/README.md",
+      "bytes": 300,
+      "sha256": "0295269a56165924f94e2b67f25c927af2cd214f65ead65d14402997bffcd139"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/repository/tests/paged_attention_cases.yaml",
+      "bytes": 129,
+      "sha256": "09b47ff2d469bdb0eef74d3cdba3ea319a5884c15e3074baf620fd0c6ddbd454"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime/workspaces/MIS_01JH7R/workspace.json",
+      "bytes": 499,
+      "sha256": "6a89dbca5ac01d1c6869afc11480b35d356b9f4b141466a51646a34aa34ae80a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/runtime.log",
+      "bytes": 1015,
+      "sha256": "8344d4e5ba70acddd829b0f4208f1752c6e35ed86745b3e2dee6e8ed80e10a68"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/summary.json",
+      "bytes": 1345524,
+      "sha256": "ef3ca17aaf6327832e35789da55261f5ad6f9632dee5a0d31f30be07223e3d6a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2104,
+      "sha256": "fe11ae62106bd748daffe1b94b8f067de3c436e7f0c94158fa302239537c7bb6"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/__pycache__/run.cpython-312.pyc",
+      "bytes": 2931,
+      "sha256": "e9569e6f306c2bcc9d38e52eb447cb35b59942472bc1b5d9fbaea9299e376df9"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/correctness.json",
+      "bytes": 1356,
+      "sha256": "fa5ff658ca88a83152c43283f42355a18460a70730ce14d8e1da7b3596dd7d36"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/execution-claim.json",
+      "bytes": 343,
+      "sha256": "8aa40158d6997efe1502678c952d74d15cfb681df46536219e9921ce8a842155"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/execution-config.json",
+      "bytes": 280,
+      "sha256": "d501d12caf22aa71314f0316c3db0229c2a05dc898b68a548b5f3beb8746118c"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/execution-exit.json",
+      "bytes": 608,
+      "sha256": "d01b7a40adaa75e15ddf9039d79c3a6c84e9d6d91b8f9f1e892cb90b90d9e15a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/oracle.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/result.json",
+      "bytes": 12430,
+      "sha256": "dd6f24608c8ff284c73ceb1e25efc21c7051979b934f5609efacff1c7844eb92"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/run.py",
+      "bytes": 2191,
+      "sha256": "99e78d5673bdb3516c1680b7dd07a9f24effb3f8d95d48d179c329bd8b60726b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/runner-status.json",
+      "bytes": 124,
+      "sha256": "f2dba9d6c9305e25d318d98191572823fda5aaf4b487f5a4ac0cf37902499f14"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_098F566EA4CD339C0226569DD6E8387C/task.json",
+      "bytes": 28073,
+      "sha256": "7aecf212d5c85d519f1bde14e23873234d710f74198c4afb9c79da2451082a21"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2104,
+      "sha256": "b0ec71a26b85730d8691af7f14bb50b10d04207e677fd69b127de9b6d4182eef"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/__pycache__/run.cpython-312.pyc",
+      "bytes": 2101,
+      "sha256": "e5badfbb7bb8d910a93b99a0be26675a3b6e956ed5af5e0872ccd7e2d2a3e243"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/correctness.json",
+      "bytes": 1270,
+      "sha256": "d56fe10c2b5d5c51ba8acb59004c54d5e517f088266169ea30b22fb4c9ff3369"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/execution-claim.json",
+      "bytes": 341,
+      "sha256": "7a99f822f06c1e49e63d63d9ba1410b802b00d595cc4ca957ce0ec4650c4e923"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/execution-config.json",
+      "bytes": 280,
+      "sha256": "32fd3b01b7adf69a3f07ca517460ff818fabd4b3c07610adb1b1e6571407d470"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/execution-exit.json",
+      "bytes": 606,
+      "sha256": "5db7fe447f402207a4016c9c52145673799f97fd067423dcb91b32ed65f02594"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/oracle.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/result.json",
+      "bytes": 12142,
+      "sha256": "a37e165c387f67930341504f5e35781d5307a28d93857c0753093efb8152beff"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/run.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/runner-status.json",
+      "bytes": 124,
+      "sha256": "a5c78765fa4a0bfbc7e01bbb7e910d97d50bfa2158728d2c9de0c38f3842ca07"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_0BF459EBEC9A4E40FC930F470BD7E29A/task.json",
+      "bytes": 24867,
+      "sha256": "44b055480fc380fa722466c5359f694184f5813070b866920696a11a0a6a091e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/__pycache__/oracle.cpython-312.pyc",
+      "bytes": 2104,
+      "sha256": "0cd34d6ddcad9842efb777ce59a444f63389370cfc11a351ab319ddea70c34a0"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/__pycache__/run.cpython-312.pyc",
+      "bytes": 6631,
+      "sha256": "b937376f409670f2ea6686c60dfc859801e0bbe16f8e1f3b8bb4497ee1f3adac"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/analysis/mcProfiler/stderr.txt",
+      "bytes": 71,
+      "sha256": "a328e3d534be0cb9c84a66e65f5514f61312d73327a97f1d4949804f70bd8433"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/analysis/mcProfiler/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/analysis/mctracer/stderr.txt",
+      "bytes": 69,
+      "sha256": "0a2db2a496a6b2ea9f6b0d63142a88a4dbeee5c5fd42cd5aa5d391ef8303ae16"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/analysis/mctracer/stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/correctness.json",
+      "bytes": 1356,
+      "sha256": "e020e813352737124e77631bc1fc96b9ed3bb27a1177c4d0b208daca40b2eed6"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/execution-claim.json",
+      "bytes": 342,
+      "sha256": "a34f43ad0f49f26f4e7e490671a504b5feddbc9509c9aee68924f51273e9ef87"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/execution-config.json",
+      "bytes": 280,
+      "sha256": "fc0fd709488768ede68834ca3698f68d97646406c43e1db4f9ad4912f651291b"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/execution-exit.json",
+      "bytes": 607,
+      "sha256": "0c9e9050fd7cd3e9417581f70f61038d573ef60bc309a9f28e54b2e5209b2254"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/oracle.py",
+      "bytes": 1026,
+      "sha256": "919b7b55135ac4378eac3ffb18e674222e685bbcdb3d87379b70c9d2649eff2a"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/result.json",
+      "bytes": 12432,
+      "sha256": "dd11d37029f7d03fbf65ab755e12ac8c412f2c99327752e8188b18a68f710af5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/run.py",
+      "bytes": 3942,
+      "sha256": "222a17dace0f30eb1338729c4704e99dda6a10031cd48d08c6d9a2163f36c81e"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/runner-status.json",
+      "bytes": 124,
+      "sha256": "aae6c70411e58f550180b1553b09e9fe4da11aaed94486a01bda6b5ca85ecf65"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/runner-supervisor.mjs",
+      "bytes": 13049,
+      "sha256": "12c55eeff613521a2d9d446e30a742f578fce5b8c8e40488ecf918e8db058fd5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/runner.stderr.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/runner.stderr.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/runner.stdout.log",
+      "bytes": 3,
+      "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/runner.stdout.raw.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/local_c500_CEB79DE29D9BB3AA0F68E5D0EC9631AD/task.json",
+      "bytes": 31566,
+      "sha256": "fc561e608605ac0bf9b8d0d03fae4633e78dfcd5109b528f394684e7a5c3c2d5"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/reference-cache/05/050dad7cffab2db9b213e6c1232b53455ac15f462e9676a12e6859bde000185e.pt",
+      "bytes": 1372,
+      "sha256": "75dba9685eb272d699f0712aef40b1b54bcf73ac0e800cbb0c4764bbd6014787"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/reference-cache/08/08a47b4f0337b90a514b8ee80c5323ddcf34c9f2b88107f43f9f27b8b59c8827.pt",
+      "bytes": 1180,
+      "sha256": "e0b1a1595b7d0bbf5baca303acaf2d732fad5798680cf3cd7a6768bb6aef0fee"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/reference-cache/21/2137fa3963044770d145dcc08d4192bde5a616d00cbcd9bd5ad4c863c45563b9.pt",
+      "bytes": 1436,
+      "sha256": "71dad21175630f9473c887439e91f332945e92a3fc1b99cb5808cfeaffaed2be"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/reference-cache/3d/3dbdcd60ecf6b100339f018b6f224d0461b15a0778174f2193376b4ec29fb043.pt",
+      "bytes": 1180,
+      "sha256": "e0b1a1595b7d0bbf5baca303acaf2d732fad5798680cf3cd7a6768bb6aef0fee"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/reference-cache/70/70b083283da63ce8833cd54ea371a0d7d700a887c5549732930dd29b8f6d174f.pt",
+      "bytes": 1372,
+      "sha256": "75dba9685eb272d699f0712aef40b1b54bcf73ac0e800cbb0c4764bbd6014787"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/reference-cache/81/811693b134a2ae8dff415a5389fc2affa61ed3116caec189766c3924a7306829.pt",
+      "bytes": 33948,
+      "sha256": "44b0f1853ef1fadc38fe4e9262add53f80b1b0b0285ef5c900356b4acddfa2de"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/reference-cache/88/886d934ba31d98d732f2d2f2ef9ec4c7495b8e5213491a769fb1590d238f66c4.pt",
+      "bytes": 1436,
+      "sha256": "71dad21175630f9473c887439e91f332945e92a3fc1b99cb5808cfeaffaed2be"
+    },
+    {
+      "path": "shared-gpu-cMvSAe/tasks/reference-cache/8e/8eea163a154cb508d53d02201cb975b8363e376ba157ec416e33b6676775fc34.pt",
+      "bytes": 33948,
+      "sha256": "44b0f1853ef1fadc38fe4e9262add53f80b1b0b0285ef5c900356b4acddfa2de"
+    }
+  ]
+}

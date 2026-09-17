@@ -1,9 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, lstat, rename, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { canonicalJson, assertPackagePath, assertContentDigest, validateExecutionManifest, assertAdmissionBinding, EXECUTION_PACKAGE_FORMAT, EXECUTION_ADMISSION_FORMAT, EXECUTION_VALIDATOR_VERSION } from './execution-package-contract.mjs';
+import { canonicalJson, contentDigest, assertPackagePath, assertContentDigest, validateExecutionManifest, assertAdmissionBinding, EXECUTION_PACKAGE_FORMAT, EXECUTION_ADMISSION_FORMAT, EXECUTION_VALIDATOR_VERSION } from './execution-package-contract.mjs';
 
-export const contentDigest = (bytes) => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
+// Legacy public alias: the same pure binding now owned by the domain contract.
+export { contentDigest };
 const jsonDigest = (value) => contentDigest(canonicalJson(value));
 const fail = (code, message, details = {}) => Object.assign(new Error(message), { code, status: 422, retryable: false, details });
 const locks = new Map();

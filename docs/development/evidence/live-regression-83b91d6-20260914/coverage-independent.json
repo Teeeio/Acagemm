@@ -1,0 +1,1092 @@
+{
+  "schemaVersion": "operator-studio.retained-runs-verification/v1",
+  "mode": "read-only-offline",
+  "generatedBy": "docs/development/evidence/live-regression-20260913/verify-retained-runs.mjs",
+  "repo": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\frozen-live-83b91d6",
+  "repoHelpers": [
+    {
+      "path": "scripts/shared-gpu-acceptance.mjs",
+      "bytes": 48495,
+      "sha256": "242d3fe2562bd9dbd59762721402591d146d3a22259e58597b099a3712767955"
+    },
+    {
+      "path": "scripts/summarize-gpu-agent-runs.mjs",
+      "bytes": 27972,
+      "sha256": "91bbab8a3437bb819fcc688c285a701f5b93e6103a19e07e5cba5757bc0c2aa1"
+    },
+    {
+      "path": "client-runtime/model-observation.mjs",
+      "bytes": 16270,
+      "sha256": "2625f6fb7958d6064770c9c7919ce43d272574be050e8f0e20a8e46e6c95143d"
+    }
+  ],
+  "runRoots": [
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_fd9462bbac17432ebe42ca5a636b6dfe\\scratch\\real-runs\\shared-gpu-Lysk0G"
+  ],
+  "ledger": {
+    "schemaVersion": "operator-studio.gpu-acceptance-ledger/v1",
+    "totals": {
+      "runs": 1,
+      "receivedRecords": 1,
+      "duplicateRuns": 0,
+      "full_success": 1,
+      "budget_terminal": 0,
+      "failure": 0,
+      "timeout": 0,
+      "missing_summary": 0,
+      "summariesMissing": 0,
+      "attemptsMissing": 0,
+      "attemptsNotTerminal": 0,
+      "comparableRuns": 1
+    },
+    "duplicates": [],
+    "groups": [
+      {
+        "fingerprint": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+        "groupKey": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+        "provider": {
+          "runtime": "claude-code",
+          "cliVersion": "2.1.232 (Claude Code)",
+          "cliVersionSource": "runtime-descriptor",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "modelObservationStatus": "observed",
+          "modelObservationVersion": "operator-studio.model-observation/v1"
+        },
+        "comparable": true,
+        "counts": {
+          "runs": 1,
+          "full_success": 1,
+          "budget_terminal": 0,
+          "failure": 0,
+          "timeout": 0,
+          "missing_summary": 0
+        },
+        "stabilityDenominator": 1,
+        "unknownFields": [],
+        "comparabilityIssues": [],
+        "n20": {
+          "eligible": false,
+          "comparable": true,
+          "requiredRuns": 20,
+          "runs": 1,
+          "reason": "fewer than 20 retained attempts in this comparable group"
+        },
+        "runs": [
+          {
+            "identity": "shared-gpu-Lysk0G",
+            "runDir": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_fd9462bbac17432ebe42ca5a636b6dfe\\scratch\\real-runs\\shared-gpu-Lysk0G",
+            "outcome": "full_success",
+            "issues": [],
+            "comparable": true,
+            "modelObservation": {
+              "status": "observed",
+              "model": "deepseek-v4-flash",
+              "modelSource": "observed",
+              "requiredRunCount": 4,
+              "observedRunCount": 4
+            },
+            "modelObservationIssues": []
+          }
+        ]
+      }
+    ],
+    "n20": {
+      "eligibleGroups": [],
+      "eligibleGroupCount": 0,
+      "note": "Only groups whose provider, CLI/model version, backend, hardware, architecture, device, driver, code revision, matrix, prompt policy and budgets are all observed and identical may be pooled. A declared (env/configured) value or any unknown field keeps the group non-comparable. Missing summaries, timeouts and failures stay in the denominator of their own group; duplicate identities are counted once with a warning."
+    }
+  },
+  "runs": [
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_fd9462bbac17432ebe42ca5a636b6dfe\\scratch\\real-runs\\shared-gpu-Lysk0G",
+      "identity": "shared-gpu-Lysk0G",
+      "ledgerOutcome": "full_success",
+      "ledgerIssues": [],
+      "configFingerprint": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+      "declaredFingerprint": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+      "fingerprint": {
+        "recomputed": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+        "declared": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+        "declaredMatches": true,
+        "unknownFields": []
+      },
+      "comparable": true,
+      "comparabilityIssues": [],
+      "modelObservation": {
+        "status": "observed",
+        "model": "deepseek-v4-flash",
+        "modelSource": "observed",
+        "requiredRunCount": 4,
+        "observedRunCount": 4
+      },
+      "modelObservationIssues": [],
+      "provider": "claude-code",
+      "providerRunDir": "bridge/claude-runs",
+      "attemptMissing": false,
+      "summaryMissing": false,
+      "readErrors": [],
+      "families": [
+        {
+          "family": "reduction",
+          "missionId": "MIS_MU0BAT6M",
+          "stateFile": "reduction-state.json",
+          "stateSha256": "a479e1a2a424caaf9bf05b2b04af15bcb143611462318c8c5eab464ca44a5791",
+          "workDir": null,
+          "taskCounts": {
+            "baseline": 1,
+            "candidate": 2,
+            "candidateCompleted": 2,
+            "candidateNotCompleted": 0,
+            "other": 0
+          },
+          "candidateTasks": [
+            {
+              "taskId": "queue_6B6A6358228C450F",
+              "status": "completed",
+              "missionId": "MIS_MU0BAT6M",
+              "candidateId": "candidate-01",
+              "digest": "sha256:d82fe5cbdc37ea314e49e6805501f75686a9d06d6a4f144ac28d480abdbe33e6",
+              "completedAt": "2026-09-13T21:15:23.853Z"
+            },
+            {
+              "taskId": "queue_4265AAB61A944B6C",
+              "status": "completed",
+              "missionId": "MIS_MU0BAT6M",
+              "candidateId": "candidate-02",
+              "digest": "sha256:1ff266e83fbd2f260c1079539946f888e69c4a88158b52e2381704c1e4a5d3c6",
+              "completedAt": "2026-09-13T21:18:28.144Z"
+            }
+          ],
+          "completedCandidates": 2,
+          "distinctCandidateDigests": 2,
+          "completed": [
+            {
+              "taskId": "queue_6B6A6358228C450F",
+              "status": "completed",
+              "candidateId": "candidate-01",
+              "digest": "sha256:d82fe5cbdc37ea314e49e6805501f75686a9d06d6a4f144ac28d480abdbe33e6",
+              "queueRequestId": "run_1E388841A7B462D0E6B70FE8",
+              "candidateSourceRunId": "claude_MU0BBBA2_6FD54FDC",
+              "releaseConfirmed": true,
+              "profiles": [
+                {
+                  "profile": "primary",
+                  "total": 4,
+                  "passedCases": 4,
+                  "caseResults": 4,
+                  "allPassed": true
+                },
+                {
+                  "profile": "small",
+                  "total": 4,
+                  "passedCases": 4,
+                  "caseResults": 4,
+                  "allPassed": true
+                }
+              ],
+              "passed": true,
+              "reasons": []
+            },
+            {
+              "taskId": "queue_4265AAB61A944B6C",
+              "status": "completed",
+              "candidateId": "candidate-02",
+              "digest": "sha256:1ff266e83fbd2f260c1079539946f888e69c4a88158b52e2381704c1e4a5d3c6",
+              "queueRequestId": "run_C60B8077FC8EE607EE4971E9",
+              "candidateSourceRunId": "claude_MU0BCJ8M_74B66532",
+              "releaseConfirmed": true,
+              "profiles": [
+                {
+                  "profile": "primary",
+                  "total": 4,
+                  "passedCases": 4,
+                  "caseResults": 4,
+                  "allPassed": true
+                },
+                {
+                  "profile": "small",
+                  "total": 4,
+                  "passedCases": 4,
+                  "caseResults": 4,
+                  "allPassed": true
+                }
+              ],
+              "passed": true,
+              "reasons": []
+            }
+          ],
+          "summaryCompletedMatches": true,
+          "summaryCompletedIssues": [],
+          "sourceRoundId": "MIS_MU0BAT6M:round:1",
+          "derivedSourceRoundId": "MIS_MU0BAT6M:round:1",
+          "targetRoundId": "MIS_MU0BAT6M:round:2",
+          "projectId": "PRJ_463A2FE8AEBEE8AE",
+          "continuedRun": "claude_MU0BCJ8M_74B66532",
+          "audit": {
+            "matchedAuditsForTargetRound": [
+              "claude_MU0BCJ8M_74B66532"
+            ],
+            "selectedBy": "sourceRound.roundFacts.target.roundId",
+            "selectedFile": "claude_MU0BCJ8M_74B66532.json",
+            "selectedRunId": "claude_MU0BCJ8M_74B66532",
+            "verified": {
+              "runId": "claude_MU0BCJ8M_74B66532",
+              "roundId": "MIS_MU0BAT6M:round:2",
+              "promptDigest": "sha256:83d3d0982ce138a8a6e31f338664a1059ef6150ad54ab32ff7a4e8adc2f9659f",
+              "promptBytes": 22652,
+              "selectedExperience": {
+                "id": "exp-d1110645-901f-48b8-9cc7-e56130f1334b",
+                "version": 1,
+                "source": "execution",
+                "evidenceCandidateId": "candidate-01",
+                "evidencePatchDigest": "d82fe5cbdc37ea314e49e6805501f75686a9d06d6a4f144ac28d480abdbe33e6",
+                "evidenceRunId": "run_1E388841A7B462D0E6B70FE8"
+              },
+              "facts": {
+                "previousRunId": "claude_MU0BBBA2_6FD54FDC",
+                "previousRoundId": "MIS_MU0BAT6M:round:1",
+                "previousCandidateId": "candidate-01",
+                "previousQueueRequestId": "run_1E388841A7B462D0E6B70FE8",
+                "gateResult": "reference",
+                "rollbackPerformed": true,
+                "currentBestCandidateId": null
+              },
+              "assertions": [
+                "pre-send audit file present for the actual round following the verified candidate source round",
+                "audited prompt SHA-256 (UTF-8) recomputed independently and matched",
+                "audited prompt UTF-8 byte length recomputed independently and matched",
+                "audited prompt contains the source-round candidate execution experience ID, version and full content",
+                "audited selection bound by missionId/candidateId/patchDigest/queueRequestId (no baseline or human fallback)",
+                "audited roundFacts equal the frozen source archive and retain candidate, correctness, gate, rollback and currentBest facts",
+                "this observation reads the prepared-before-send artifact only; it does not observe the live provider"
+              ]
+            },
+            "reasons": []
+          },
+          "rollback": {
+            "performed": true,
+            "workspaceClean": true,
+            "events": [
+              {
+                "eventId": "evt_MU0BCILR_9",
+                "workspaceClean": true
+              }
+            ],
+            "continuedRun": "claude_MU0BCJ8M_74B66532",
+            "rollbackCount": 1
+          },
+          "stop": [
+            {
+              "source": "summary",
+              "family": "reduction",
+              "missionId": "MIS_MU0BAT6M",
+              "declaredStatusCode": 200,
+              "declaredConfirmed": true,
+              "initialStatusCode": 200,
+              "usedFinalState": false,
+              "evaluatedConfirmed": true,
+              "reasons": []
+            },
+            {
+              "source": "attempt",
+              "family": "reduction",
+              "missionId": "MIS_MU0BAT6M",
+              "declaredStatusCode": 200,
+              "declaredConfirmed": true,
+              "initialStatusCode": 200,
+              "usedFinalState": false,
+              "evaluatedConfirmed": true,
+              "reasons": []
+            }
+          ],
+          "workflowWritesAfterStart": 0,
+          "declaredOutcome": "full_success",
+          "declaredSummaryOutcome": "full_success",
+          "recomputedOutcome": "full_success",
+          "recomputedReasons": [],
+          "observedRuns": [
+            {
+              "provider": "claude-code",
+              "runId": "claude_MU0BCJ8M_74B66532",
+              "missionId": "MIS_MU0BAT6M",
+              "sessionId": "258e7b25-4744-49f2-a1d3-91b4dabe1086",
+              "origin": "reduction-state.agent"
+            },
+            {
+              "provider": "claude-code",
+              "runId": "claude_MU0BBBA2_6FD54FDC",
+              "missionId": "",
+              "sessionId": "1ea38f59-c635-4689-9bdc-fc2caa1b1f63",
+              "origin": "reduction-state.runHistory"
+            }
+          ],
+          "evidence": [
+            {
+              "path": "reduction-state.json",
+              "bytes": 546156,
+              "sha256": "a479e1a2a424caaf9bf05b2b04af15bcb143611462318c8c5eab464ca44a5791",
+              "error": null
+            }
+          ],
+          "passed": true,
+          "reasons": [],
+          "gaps": []
+        },
+        {
+          "family": "normalization",
+          "missionId": "MIS_MU0BGDHN",
+          "stateFile": "normalization-state.json",
+          "stateSha256": "939e97863029206a178c9e3ac75c062eb4e497b7dbc4aa3481062d4f6adccdd0",
+          "workDir": null,
+          "taskCounts": {
+            "baseline": 1,
+            "candidate": 2,
+            "candidateCompleted": 2,
+            "candidateNotCompleted": 0,
+            "other": 0
+          },
+          "candidateTasks": [
+            {
+              "taskId": "queue_367111A114774528",
+              "status": "completed",
+              "missionId": "MIS_MU0BGDHN",
+              "candidateId": "candidate-01",
+              "digest": "sha256:cf9682a3581f6015f0904b19aa25def53c31076a0b92c87700ee6c5d7b86970d",
+              "completedAt": "2026-09-13T21:19:53.828Z"
+            },
+            {
+              "taskId": "queue_5317564FD881442A",
+              "status": "completed",
+              "missionId": "MIS_MU0BGDHN",
+              "candidateId": "candidate-02",
+              "digest": "sha256:f787ed93c9eb0942f4cd32ba446fc347519df0ee609b1a8db32c04c3c26189da",
+              "completedAt": "2026-09-13T21:21:13.782Z"
+            }
+          ],
+          "completedCandidates": 2,
+          "distinctCandidateDigests": 2,
+          "completed": [
+            {
+              "taskId": "queue_367111A114774528",
+              "status": "completed",
+              "candidateId": "candidate-01",
+              "digest": "sha256:cf9682a3581f6015f0904b19aa25def53c31076a0b92c87700ee6c5d7b86970d",
+              "queueRequestId": "run_F7F1C4443EC051C9C3908CC2",
+              "candidateSourceRunId": "claude_MU0BGVXV_0B501F08",
+              "releaseConfirmed": true,
+              "profiles": [
+                {
+                  "profile": "primary",
+                  "total": 4,
+                  "passedCases": 4,
+                  "caseResults": 4,
+                  "allPassed": true
+                },
+                {
+                  "profile": "small",
+                  "total": 4,
+                  "passedCases": 4,
+                  "caseResults": 4,
+                  "allPassed": true
+                }
+              ],
+              "passed": true,
+              "reasons": []
+            },
+            {
+              "taskId": "queue_5317564FD881442A",
+              "status": "completed",
+              "candidateId": "candidate-02",
+              "digest": "sha256:f787ed93c9eb0942f4cd32ba446fc347519df0ee609b1a8db32c04c3c26189da",
+              "queueRequestId": "run_B5BE0BC67746AF5DEFAEC020",
+              "candidateSourceRunId": "claude_MU0BIBLG_93F4FDA2",
+              "releaseConfirmed": true,
+              "profiles": [
+                {
+                  "profile": "primary",
+                  "total": 4,
+                  "passedCases": 4,
+                  "caseResults": 4,
+                  "allPassed": true
+                },
+                {
+                  "profile": "small",
+                  "total": 4,
+                  "passedCases": 4,
+                  "caseResults": 4,
+                  "allPassed": true
+                }
+              ],
+              "passed": true,
+              "reasons": []
+            }
+          ],
+          "summaryCompletedMatches": true,
+          "summaryCompletedIssues": [],
+          "sourceRoundId": "MIS_MU0BGDHN:round:1",
+          "derivedSourceRoundId": "MIS_MU0BGDHN:round:1",
+          "targetRoundId": "MIS_MU0BGDHN:round:2",
+          "projectId": "PRJ_463A2FE8AEBEE8AE",
+          "continuedRun": "claude_MU0BIBLG_93F4FDA2",
+          "audit": {
+            "matchedAuditsForTargetRound": [
+              "claude_MU0BIBLG_93F4FDA2"
+            ],
+            "selectedBy": "sourceRound.roundFacts.target.roundId",
+            "selectedFile": "claude_MU0BIBLG_93F4FDA2.json",
+            "selectedRunId": "claude_MU0BIBLG_93F4FDA2",
+            "verified": {
+              "runId": "claude_MU0BIBLG_93F4FDA2",
+              "roundId": "MIS_MU0BGDHN:round:2",
+              "promptDigest": "sha256:3f075182873ba36aebde7615cd316ae05913ac6ec2da7d00d510371ae72fd765",
+              "promptBytes": 22880,
+              "selectedExperience": {
+                "id": "exp-de42201c-0331-4fa1-92dc-9c2a51dd8950",
+                "version": 1,
+                "source": "execution",
+                "evidenceCandidateId": "candidate-01",
+                "evidencePatchDigest": "cf9682a3581f6015f0904b19aa25def53c31076a0b92c87700ee6c5d7b86970d",
+                "evidenceRunId": "run_F7F1C4443EC051C9C3908CC2"
+              },
+              "facts": {
+                "previousRunId": "claude_MU0BGVXV_0B501F08",
+                "previousRoundId": "MIS_MU0BGDHN:round:1",
+                "previousCandidateId": "candidate-01",
+                "previousQueueRequestId": "run_F7F1C4443EC051C9C3908CC2",
+                "gateResult": "reference",
+                "rollbackPerformed": true,
+                "currentBestCandidateId": null
+              },
+              "assertions": [
+                "pre-send audit file present for the actual round following the verified candidate source round",
+                "audited prompt SHA-256 (UTF-8) recomputed independently and matched",
+                "audited prompt UTF-8 byte length recomputed independently and matched",
+                "audited prompt contains the source-round candidate execution experience ID, version and full content",
+                "audited selection bound by missionId/candidateId/patchDigest/queueRequestId (no baseline or human fallback)",
+                "audited roundFacts equal the frozen source archive and retain candidate, correctness, gate, rollback and currentBest facts",
+                "this observation reads the prepared-before-send artifact only; it does not observe the live provider"
+              ]
+            },
+            "reasons": []
+          },
+          "rollback": {
+            "performed": true,
+            "workspaceClean": true,
+            "events": [
+              {
+                "eventId": "evt_MU0BIAXH_9",
+                "workspaceClean": true
+              }
+            ],
+            "continuedRun": "claude_MU0BIBLG_93F4FDA2",
+            "rollbackCount": 1
+          },
+          "stop": [
+            {
+              "source": "summary",
+              "family": "normalization",
+              "missionId": "MIS_MU0BGDHN",
+              "declaredStatusCode": 200,
+              "declaredConfirmed": true,
+              "initialStatusCode": 200,
+              "usedFinalState": false,
+              "evaluatedConfirmed": true,
+              "reasons": []
+            },
+            {
+              "source": "attempt",
+              "family": "normalization",
+              "missionId": "MIS_MU0BGDHN",
+              "declaredStatusCode": 200,
+              "declaredConfirmed": true,
+              "initialStatusCode": 200,
+              "usedFinalState": false,
+              "evaluatedConfirmed": true,
+              "reasons": []
+            }
+          ],
+          "workflowWritesAfterStart": 0,
+          "declaredOutcome": "full_success",
+          "declaredSummaryOutcome": "full_success",
+          "recomputedOutcome": "full_success",
+          "recomputedReasons": [],
+          "observedRuns": [
+            {
+              "provider": "claude-code",
+              "runId": "claude_MU0BIBLG_93F4FDA2",
+              "missionId": "MIS_MU0BGDHN",
+              "sessionId": "fbf0a4e0-bf04-418b-becd-aa00ce197225",
+              "origin": "normalization-state.agent"
+            },
+            {
+              "provider": "claude-code",
+              "runId": "claude_MU0BGVXV_0B501F08",
+              "missionId": "",
+              "sessionId": "a9f2acf6-cd20-4075-8d33-2832889980e6",
+              "origin": "normalization-state.runHistory"
+            }
+          ],
+          "evidence": [
+            {
+              "path": "normalization-state.json",
+              "bytes": 779997,
+              "sha256": "939e97863029206a178c9e3ac75c062eb4e497b7dbc4aa3481062d4f6adccdd0",
+              "error": null
+            }
+          ],
+          "passed": true,
+          "reasons": [],
+          "gaps": []
+        }
+      ],
+      "modelEvidence": {
+        "provider": "claude-code",
+        "providerRunDir": "bridge/claude-runs",
+        "missionIds": [
+          "MIS_MU0BAT6M",
+          "MIS_MU0BGDHN"
+        ],
+        "enumerationError": null,
+        "runFiles": [
+          "claude_MU0BBBA2_6FD54FDC.json",
+          "claude_MU0BCJ8M_74B66532.json",
+          "claude_MU0BGVXV_0B501F08.json",
+          "claude_MU0BIBLG_93F4FDA2.json"
+        ],
+        "declaredRequiredRuns": [
+          {
+            "origin": "attempt",
+            "provider": "claude-code",
+            "runId": "claude_MU0BBBA2_6FD54FDC",
+            "missionId": "MIS_MU0BAT6M",
+            "sessionId": "1ea38f59-c635-4689-9bdc-fc2caa1b1f63"
+          },
+          {
+            "origin": "attempt",
+            "provider": "claude-code",
+            "runId": "claude_MU0BCJ8M_74B66532",
+            "missionId": "MIS_MU0BAT6M",
+            "sessionId": "258e7b25-4744-49f2-a1d3-91b4dabe1086"
+          },
+          {
+            "origin": "attempt",
+            "provider": "claude-code",
+            "runId": "claude_MU0BGVXV_0B501F08",
+            "missionId": "MIS_MU0BGDHN",
+            "sessionId": "a9f2acf6-cd20-4075-8d33-2832889980e6"
+          },
+          {
+            "origin": "attempt",
+            "provider": "claude-code",
+            "runId": "claude_MU0BIBLG_93F4FDA2",
+            "missionId": "MIS_MU0BGDHN",
+            "sessionId": "fbf0a4e0-bf04-418b-becd-aa00ce197225"
+          }
+        ],
+        "independentlyRequiredRuns": [
+          {
+            "provider": "claude-code",
+            "runId": "claude_MU0BCJ8M_74B66532",
+            "missionId": "MIS_MU0BAT6M",
+            "sessionId": "258e7b25-4744-49f2-a1d3-91b4dabe1086"
+          },
+          {
+            "provider": "claude-code",
+            "runId": "claude_MU0BBBA2_6FD54FDC",
+            "missionId": "MIS_MU0BAT6M",
+            "sessionId": "1ea38f59-c635-4689-9bdc-fc2caa1b1f63"
+          },
+          {
+            "provider": "claude-code",
+            "runId": "claude_MU0BIBLG_93F4FDA2",
+            "missionId": "MIS_MU0BGDHN",
+            "sessionId": "fbf0a4e0-bf04-418b-becd-aa00ce197225"
+          },
+          {
+            "provider": "claude-code",
+            "runId": "claude_MU0BGVXV_0B501F08",
+            "missionId": "MIS_MU0BGDHN",
+            "sessionId": "a9f2acf6-cd20-4075-8d33-2832889980e6"
+          }
+        ],
+        "requiredDiff": {
+          "missingFromDeclaration": [],
+          "absentFromEnumeration": []
+        },
+        "unboundRuns": [],
+        "undeclaredRuns": [],
+        "foreignRecords": [],
+        "foreignObservedRuns": [],
+        "recomputedSummary": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 4,
+          "observedRunCount": 4,
+          "reasons": []
+        },
+        "declaredSummary": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 4,
+          "observedRunCount": 4,
+          "reasons": []
+        },
+        "declaredSummaryFromSummaryJson": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "status": "observed",
+          "model": "deepseek-v4-flash",
+          "modelSource": "observed",
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "requiredRunCount": 4,
+          "observedRunCount": 4,
+          "reasons": []
+        },
+        "summaryMatches": true,
+        "runs": [
+          {
+            "provider": "claude-code",
+            "runId": "claude_MU0BBBA2_6FD54FDC",
+            "declaredBinding": {
+              "origin": "attempt",
+              "provider": "claude-code",
+              "runId": "claude_MU0BBBA2_6FD54FDC",
+              "missionId": "MIS_MU0BAT6M",
+              "sessionId": "1ea38f59-c635-4689-9bdc-fc2caa1b1f63"
+            },
+            "recordPath": "bridge/claude-runs/claude_MU0BBBA2_6FD54FDC.json",
+            "recordSha256": "040f7c2f22c2ef195ebf36e06af48275e19e98e596190fc644dec0729fb96d47",
+            "recordError": null,
+            "recordIdentity": {
+              "provider": "claude-code",
+              "runId": "claude_MU0BBBA2_6FD54FDC",
+              "missionId": "MIS_MU0BAT6M",
+              "sessionId": "1ea38f59-c635-4689-9bdc-fc2caa1b1f63"
+            },
+            "stateIdentities": [
+              {
+                "provider": "claude-code",
+                "runId": "claude_MU0BBBA2_6FD54FDC",
+                "missionId": "",
+                "sessionId": "1ea38f59-c635-4689-9bdc-fc2caa1b1f63",
+                "origin": "reduction-state.runHistory"
+              },
+              {
+                "provider": "claude-code",
+                "runId": "claude_MU0BBBA2_6FD54FDC",
+                "missionId": "",
+                "sessionId": "1ea38f59-c635-4689-9bdc-fc2caa1b1f63",
+                "origin": "stopReceipt.state.runHistory"
+              }
+            ],
+            "identitySource": "state+record",
+            "dtoStatus": "observed",
+            "dtoModel": "deepseek-v4-flash",
+            "dtoModels": [
+              "deepseek-v4-flash"
+            ],
+            "retainedObservations": 4,
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [
+              "claude-haiku-4-5",
+              "claude-opus-5[1m]"
+            ],
+            "rawVisibleAssistant": 2,
+            "rawVisibleModels": [
+              "deepseek-v4-flash"
+            ],
+            "rawSessionMatches": 2,
+            "rawForeignSession": 0,
+            "rawMissingSession": 0,
+            "rawMissingModel": 0,
+            "rawParseErrors": 0,
+            "metadataBoundary": "Claude Code collects assistant.message.model metadata before telemetry filtering; the retained DTO observations include thinking-only events and are a superset of the visible assistant.message events remaining in the raw .jsonl. This reader verifies visible model/session identity, requires rawVisible <= retained observations, never requires observation-array equality, never compares metadata eventIndex with JSONL line position, and never emits thinking or tool content.",
+            "comparable": true,
+            "passed": true,
+            "reasons": [],
+            "gaps": [],
+            "comparabilityNotes": [],
+            "requiredSource": "declared",
+            "fileName": "claude_MU0BBBA2_6FD54FDC.json"
+          },
+          {
+            "provider": "claude-code",
+            "runId": "claude_MU0BCJ8M_74B66532",
+            "declaredBinding": {
+              "origin": "attempt",
+              "provider": "claude-code",
+              "runId": "claude_MU0BCJ8M_74B66532",
+              "missionId": "MIS_MU0BAT6M",
+              "sessionId": "258e7b25-4744-49f2-a1d3-91b4dabe1086"
+            },
+            "recordPath": "bridge/claude-runs/claude_MU0BCJ8M_74B66532.json",
+            "recordSha256": "eadcbc6408edff031df7ac67ddd44674585ee888baab23a5494711305077a1ed",
+            "recordError": null,
+            "recordIdentity": {
+              "provider": "claude-code",
+              "runId": "claude_MU0BCJ8M_74B66532",
+              "missionId": "MIS_MU0BAT6M",
+              "sessionId": "258e7b25-4744-49f2-a1d3-91b4dabe1086"
+            },
+            "stateIdentities": [
+              {
+                "provider": "claude-code",
+                "runId": "claude_MU0BCJ8M_74B66532",
+                "missionId": "MIS_MU0BAT6M",
+                "sessionId": "258e7b25-4744-49f2-a1d3-91b4dabe1086",
+                "origin": "reduction-state.agent"
+              },
+              {
+                "provider": "claude-code",
+                "runId": "claude_MU0BCJ8M_74B66532",
+                "missionId": "MIS_MU0BAT6M",
+                "sessionId": "258e7b25-4744-49f2-a1d3-91b4dabe1086",
+                "origin": "stopReceipt.state.agent"
+              }
+            ],
+            "identitySource": "state+record",
+            "dtoStatus": "observed",
+            "dtoModel": "deepseek-v4-flash",
+            "dtoModels": [
+              "deepseek-v4-flash"
+            ],
+            "retainedObservations": 6,
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [
+              "claude-haiku-4-5",
+              "claude-opus-5[1m]"
+            ],
+            "rawVisibleAssistant": 3,
+            "rawVisibleModels": [
+              "deepseek-v4-flash"
+            ],
+            "rawSessionMatches": 3,
+            "rawForeignSession": 0,
+            "rawMissingSession": 0,
+            "rawMissingModel": 0,
+            "rawParseErrors": 0,
+            "metadataBoundary": "Claude Code collects assistant.message.model metadata before telemetry filtering; the retained DTO observations include thinking-only events and are a superset of the visible assistant.message events remaining in the raw .jsonl. This reader verifies visible model/session identity, requires rawVisible <= retained observations, never requires observation-array equality, never compares metadata eventIndex with JSONL line position, and never emits thinking or tool content.",
+            "comparable": true,
+            "passed": true,
+            "reasons": [],
+            "gaps": [],
+            "comparabilityNotes": [],
+            "requiredSource": "declared",
+            "fileName": "claude_MU0BCJ8M_74B66532.json"
+          },
+          {
+            "provider": "claude-code",
+            "runId": "claude_MU0BGVXV_0B501F08",
+            "declaredBinding": {
+              "origin": "attempt",
+              "provider": "claude-code",
+              "runId": "claude_MU0BGVXV_0B501F08",
+              "missionId": "MIS_MU0BGDHN",
+              "sessionId": "a9f2acf6-cd20-4075-8d33-2832889980e6"
+            },
+            "recordPath": "bridge/claude-runs/claude_MU0BGVXV_0B501F08.json",
+            "recordSha256": "aba54beb66a49f4b57b359ba24bd79677debcf4aba263291c7f25bc842213425",
+            "recordError": null,
+            "recordIdentity": {
+              "provider": "claude-code",
+              "runId": "claude_MU0BGVXV_0B501F08",
+              "missionId": "MIS_MU0BGDHN",
+              "sessionId": "a9f2acf6-cd20-4075-8d33-2832889980e6"
+            },
+            "stateIdentities": [
+              {
+                "provider": "claude-code",
+                "runId": "claude_MU0BGVXV_0B501F08",
+                "missionId": "",
+                "sessionId": "a9f2acf6-cd20-4075-8d33-2832889980e6",
+                "origin": "normalization-state.runHistory"
+              },
+              {
+                "provider": "claude-code",
+                "runId": "claude_MU0BGVXV_0B501F08",
+                "missionId": "",
+                "sessionId": "a9f2acf6-cd20-4075-8d33-2832889980e6",
+                "origin": "stopReceipt.state.runHistory"
+              }
+            ],
+            "identitySource": "state+record",
+            "dtoStatus": "observed",
+            "dtoModel": "deepseek-v4-flash",
+            "dtoModels": [
+              "deepseek-v4-flash"
+            ],
+            "retainedObservations": 6,
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [
+              "claude-haiku-4-5",
+              "claude-opus-5[1m]"
+            ],
+            "rawVisibleAssistant": 3,
+            "rawVisibleModels": [
+              "deepseek-v4-flash"
+            ],
+            "rawSessionMatches": 3,
+            "rawForeignSession": 0,
+            "rawMissingSession": 0,
+            "rawMissingModel": 0,
+            "rawParseErrors": 0,
+            "metadataBoundary": "Claude Code collects assistant.message.model metadata before telemetry filtering; the retained DTO observations include thinking-only events and are a superset of the visible assistant.message events remaining in the raw .jsonl. This reader verifies visible model/session identity, requires rawVisible <= retained observations, never requires observation-array equality, never compares metadata eventIndex with JSONL line position, and never emits thinking or tool content.",
+            "comparable": true,
+            "passed": true,
+            "reasons": [],
+            "gaps": [],
+            "comparabilityNotes": [],
+            "requiredSource": "declared",
+            "fileName": "claude_MU0BGVXV_0B501F08.json"
+          },
+          {
+            "provider": "claude-code",
+            "runId": "claude_MU0BIBLG_93F4FDA2",
+            "declaredBinding": {
+              "origin": "attempt",
+              "provider": "claude-code",
+              "runId": "claude_MU0BIBLG_93F4FDA2",
+              "missionId": "MIS_MU0BGDHN",
+              "sessionId": "fbf0a4e0-bf04-418b-becd-aa00ce197225"
+            },
+            "recordPath": "bridge/claude-runs/claude_MU0BIBLG_93F4FDA2.json",
+            "recordSha256": "8987b112d4de3ab8de8d5c7783a2f66767da0cfe7e3d16b59274fd34aea291cc",
+            "recordError": null,
+            "recordIdentity": {
+              "provider": "claude-code",
+              "runId": "claude_MU0BIBLG_93F4FDA2",
+              "missionId": "MIS_MU0BGDHN",
+              "sessionId": "fbf0a4e0-bf04-418b-becd-aa00ce197225"
+            },
+            "stateIdentities": [
+              {
+                "provider": "claude-code",
+                "runId": "claude_MU0BIBLG_93F4FDA2",
+                "missionId": "MIS_MU0BGDHN",
+                "sessionId": "fbf0a4e0-bf04-418b-becd-aa00ce197225",
+                "origin": "normalization-state.agent"
+              },
+              {
+                "provider": "claude-code",
+                "runId": "claude_MU0BIBLG_93F4FDA2",
+                "missionId": "MIS_MU0BGDHN",
+                "sessionId": "fbf0a4e0-bf04-418b-becd-aa00ce197225",
+                "origin": "stopReceipt.state.agent"
+              }
+            ],
+            "identitySource": "state+record",
+            "dtoStatus": "observed",
+            "dtoModel": "deepseek-v4-flash",
+            "dtoModels": [
+              "deepseek-v4-flash"
+            ],
+            "retainedObservations": 6,
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [
+              "claude-haiku-4-5",
+              "claude-opus-5[1m]"
+            ],
+            "rawVisibleAssistant": 3,
+            "rawVisibleModels": [
+              "deepseek-v4-flash"
+            ],
+            "rawSessionMatches": 3,
+            "rawForeignSession": 0,
+            "rawMissingSession": 0,
+            "rawMissingModel": 0,
+            "rawParseErrors": 0,
+            "metadataBoundary": "Claude Code collects assistant.message.model metadata before telemetry filtering; the retained DTO observations include thinking-only events and are a superset of the visible assistant.message events remaining in the raw .jsonl. This reader verifies visible model/session identity, requires rawVisible <= retained observations, never requires observation-array equality, never compares metadata eventIndex with JSONL line position, and never emits thinking or tool content.",
+            "comparable": true,
+            "passed": true,
+            "reasons": [],
+            "gaps": [],
+            "comparabilityNotes": [],
+            "requiredSource": "declared",
+            "fileName": "claude_MU0BIBLG_93F4FDA2.json"
+          }
+        ],
+        "passed": true,
+        "reasons": [],
+        "gaps": []
+      },
+      "teardownStops": [],
+      "originals": [
+        {
+          "path": "attempt.json",
+          "bytes": 1575138,
+          "sha256": "23630c11cdd401acac836efd92284ee59553a71e3453ea8a9999f101fdc18798",
+          "error": null
+        },
+        {
+          "path": "summary.json",
+          "bytes": 2981529,
+          "sha256": "8d5bc749329dbdc1037f61cb0d05f725d3391c0e7d86495d18d7f942ef9b2976",
+          "error": null
+        },
+        {
+          "path": "runtime/experiences/experiences.json",
+          "bytes": 6473,
+          "sha256": "c330f06f7949b38416736d1a4d7cb2375ebe453e68f791661a53180ba8c3553b",
+          "error": null
+        },
+        {
+          "path": "reduction-state.json",
+          "bytes": 546156,
+          "sha256": "a479e1a2a424caaf9bf05b2b04af15bcb143611462318c8c5eab464ca44a5791",
+          "error": null
+        },
+        {
+          "path": "normalization-state.json",
+          "bytes": 779997,
+          "sha256": "939e97863029206a178c9e3ac75c062eb4e497b7dbc4aa3481062d4f6adccdd0",
+          "error": null
+        },
+        {
+          "path": "bridge/claude-runs/claude_MU0BBBA2_6FD54FDC.json",
+          "bytes": 2642,
+          "sha256": "040f7c2f22c2ef195ebf36e06af48275e19e98e596190fc644dec0729fb96d47",
+          "error": null
+        },
+        {
+          "path": "bridge/claude-runs/claude_MU0BBBA2_6FD54FDC.jsonl",
+          "bytes": 20002,
+          "sha256": "2288d39a7be21ed6b9b8befdd715f2ab90cadc1a2b4b955e6cc6d865a089e72c",
+          "error": null
+        },
+        {
+          "path": "bridge/claude-runs/claude_MU0BCJ8M_74B66532.json",
+          "bytes": 2922,
+          "sha256": "eadcbc6408edff031df7ac67ddd44674585ee888baab23a5494711305077a1ed",
+          "error": null
+        },
+        {
+          "path": "bridge/claude-runs/claude_MU0BCJ8M_74B66532.jsonl",
+          "bytes": 23764,
+          "sha256": "7bdc65ab8abf1910ec6a5aa24f6bd19081ef224768bc9dcc72680cbadb28b2f8",
+          "error": null
+        },
+        {
+          "path": "bridge/claude-runs/claude_MU0BGVXV_0B501F08.json",
+          "bytes": 2930,
+          "sha256": "aba54beb66a49f4b57b359ba24bd79677debcf4aba263291c7f25bc842213425",
+          "error": null
+        },
+        {
+          "path": "bridge/claude-runs/claude_MU0BGVXV_0B501F08.jsonl",
+          "bytes": 24192,
+          "sha256": "20423bf5026a727c56397f34f53e27626c04cba52eb2e09c7658588f4b89c412",
+          "error": null
+        },
+        {
+          "path": "bridge/claude-runs/claude_MU0BIBLG_93F4FDA2.json",
+          "bytes": 2930,
+          "sha256": "8987b112d4de3ab8de8d5c7783a2f66767da0cfe7e3d16b59274fd34aea291cc",
+          "error": null
+        },
+        {
+          "path": "bridge/claude-runs/claude_MU0BIBLG_93F4FDA2.jsonl",
+          "bytes": 24347,
+          "sha256": "900c6ca6f946cc64266eb76b80183935bf44f0133768e09e620ffdb4e87c76f1",
+          "error": null
+        },
+        {
+          "path": "bridge/prompt-audits/claude_MU0BCJ8M_74B66532.json",
+          "bytes": 34586,
+          "sha256": "d96dd73d0536660e32a5fb56acfdb2d30fc5262d711ee9bf86874f9c0e5153d6",
+          "error": null
+        },
+        {
+          "path": "bridge/prompt-audits/claude_MU0BIBLG_93F4FDA2.json",
+          "bytes": 35170,
+          "sha256": "0df5cd29cdc2a1300fe37a3e43c79e9c1c8094e0e6cc4efa5332c2f84c37139a",
+          "error": null
+        }
+      ],
+      "metadataBoundary": "Claude Code collects assistant.message.model metadata before telemetry filtering; the retained DTO observations include thinking-only events and are a superset of the visible assistant.message events remaining in the raw .jsonl. This reader verifies visible model/session identity, requires rawVisible <= retained observations, never requires observation-array equality, never compares metadata eventIndex with JSONL line position, and never emits thinking or tool content.",
+      "passed": true,
+      "reasons": [],
+      "gaps": [],
+      "comparabilityNotes": []
+    }
+  ],
+  "coverage": {
+    "invocations": 1,
+    "passedInvocations": 1,
+    "families": [
+      "normalization",
+      "reduction"
+    ],
+    "familyCount": 2,
+    "candidateTasks": 4,
+    "distinctCandidateDigests": 4,
+    "modelRuns": 4,
+    "models": [
+      "deepseek-v4-flash"
+    ],
+    "fingerprints": [
+      {
+        "fingerprint": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+        "runs": 1,
+        "families": [
+          "normalization",
+          "reduction"
+        ]
+      }
+    ],
+    "note": "Coverage is reported separately from strict N20; a covered multi-family run is not a stability claim."
+  },
+  "strictN20": {
+    "requiredRuns": 20,
+    "eligible": false,
+    "eligibleGroups": [],
+    "groups": [
+      {
+        "fingerprint": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+        "groupKey": "sha256:612bd5d5a536ef1a9ddb98bf3b8b2f4638dbc04eaf2695a0ed02ca3c4f43b141",
+        "comparable": true,
+        "runs": 1,
+        "full_success": 1,
+        "budget_terminal": 0,
+        "failure": 0,
+        "timeout": 0,
+        "missing_summary": 0,
+        "deepVerified": true,
+        "duplicateConflict": false,
+        "unknownFields": [],
+        "comparabilityIssues": [],
+        "eligible": false
+      }
+    ],
+    "reason": "no same-fingerprint group meets the strict >=20 all-full_success rule in this invocation",
+    "note": "The ledger n20.eligible flag is only comparability/denominator eligibility and is never treated as a strict pass. Coverage and strict N20 are reported separately."
+  },
+  "metadataBoundary": "Claude Code collects assistant.message.model metadata before telemetry filtering; the retained DTO observations include thinking-only events and are a superset of the visible assistant.message events remaining in the raw .jsonl. This reader verifies visible model/session identity, requires rawVisible <= retained observations, never requires observation-array equality, never compares metadata eventIndex with JSONL line position, and never emits thinking or tool content.",
+  "result": {
+    "ok": true,
+    "exitCode": 0,
+    "runCount": 1,
+    "fullSuccessRuns": 1,
+    "verifiedRuns": 1,
+    "strictN20Eligible": false
+  }
+}

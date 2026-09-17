@@ -1,0 +1,77 @@
+TAP version 13
+# Subtest: local durable execution ownership
+    # Subtest: submit is content-bound and idempotent before and after adapter restart
+    ok 1 - submit is content-bound and idempotent before and after adapter restart
+      ---
+      duration_ms: 1409.1437
+      type: 'test'
+      ...
+    # Subtest: result written before process exit is not terminal evidence
+    ok 2 - result written before process exit is not terminal evidence
+      ---
+      duration_ms: 1604.012
+      type: 'test'
+      ...
+    # Subtest: actual parent process restart cannot spawn a claimed task twice
+    ok 3 - actual parent process restart cannot spawn a claimed task twice
+      ---
+      duration_ms: 2165.3868
+      type: 'test'
+      ...
+    # Subtest: lost submit response is recovered across queue recreation and executes once
+    ok 4 - lost submit response is recovered across queue recreation and executes once
+      ---
+      duration_ms: 1390.8168
+      type: 'test'
+      ...
+    # Subtest: unknown orphan is quarantined and cannot relaunch, even with result bytes
+    ok 5 - unknown orphan is quarantined and cannot relaunch, even with result bytes
+      ---
+      duration_ms: 144.8976
+      type: 'test'
+      ...
+    # Subtest: cancel kills and confirms a real descendant tree before terminal status
+    ok 6 - cancel kills and confirms a real descendant tree before terminal status
+      ---
+      duration_ms: 1832.8665
+      type: 'test'
+      ...
+    # Subtest: POSIX process-group cleanup reaps descendants after leader exit
+    ok 7 - POSIX process-group cleanup reaps descendants after leader exit # SKIP
+      ---
+      duration_ms: 0.1431
+      type: 'test'
+      ...
+    # Subtest: supervisor enforces total deadline independently of Runtime polling
+    ok 8 - supervisor enforces total deadline independently of Runtime polling
+      ---
+      duration_ms: 1456.4489
+      type: 'test'
+      ...
+    # Subtest: structured CPU correctness errors retain category, phase and role
+    ok 9 - structured CPU correctness errors retain category, phase and role
+      ---
+      duration_ms: 1477.0113
+      type: 'test'
+      ...
+    # Subtest: cancel racing completion has one irreversible atomic terminal record
+    ok 10 - cancel racing completion has one irreversible atomic terminal record
+      ---
+      duration_ms: 1894.6661
+      type: 'test'
+      ...
+    1..10
+ok 1 - local durable execution ownership
+  ---
+  duration_ms: 13806.1917
+  type: 'test'
+  ...
+1..1
+# tests 11
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 13811.077

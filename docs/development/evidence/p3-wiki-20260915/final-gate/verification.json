@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "recipe_name": "phase3-final-existing-gates",
+  "recipe_digest": "6f689b2a77ef8ae284c97a076d585fef44a81d150c52e7d585eecef4a7e7956f",
+  "executed_at": "2026-09-15T05:28:45.408+00:00",
+  "passed": true,
+  "planned_checks": 2,
+  "interrupted": null,
+  "checks": [
+    {
+      "name": "state-domain-boundary",
+      "argv": [
+        "node",
+        "--experimental-vm-modules",
+        "tests/state-domain-boundary-test.mjs"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.391,
+      "passed": true,
+      "truncated": false,
+      "cancelled": false,
+      "timeout": false
+    },
+    {
+      "name": "module-boundary",
+      "argv": [
+        "node",
+        "tests/module-boundary-test.mjs"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.234,
+      "passed": true,
+      "truncated": false,
+      "cancelled": false,
+      "timeout": false
+    }
+  ],
+  "log": "verification.log",
+  "log_truncated": false
+}

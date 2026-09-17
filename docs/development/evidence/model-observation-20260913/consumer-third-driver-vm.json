@@ -1,0 +1,160 @@
+{
+  "fixtureOnly": true,
+  "realRuntimeGpuOrNetwork": false,
+  "checks": [
+    {
+      "scenario": "confirmed",
+      "passed": true,
+      "stopCalls": 1,
+      "stopBeforeKill": true,
+      "stopConfirmed": true,
+      "originalFailure": {
+        "message": "/api/actions/start-benchmark: 500 {\"code\":\"ROOT_FIXTURE_BASELINE_FAILURE\"}",
+        "code": "ROOT_FIXTURE_BASELINE_FAILURE"
+      },
+      "modelSummary": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "status": "observed",
+        "model": "fixture-model",
+        "modelSource": "observed",
+        "models": [
+          "fixture-model"
+        ],
+        "requiredRunCount": 1,
+        "observedRunCount": 1,
+        "reasons": []
+      },
+      "sweep": {
+        "enumerationError": null,
+        "discoveredFiles": [
+          "run_a.json"
+        ]
+      },
+      "initialStatus": 200,
+      "observations": 0
+    },
+    {
+      "scenario": "pending_then_confirmed",
+      "passed": true,
+      "stopCalls": 1,
+      "stopBeforeKill": true,
+      "stopConfirmed": true,
+      "originalFailure": {
+        "message": "/api/actions/start-benchmark: 500 {\"code\":\"ROOT_FIXTURE_BASELINE_FAILURE\"}",
+        "code": "ROOT_FIXTURE_BASELINE_FAILURE"
+      },
+      "modelSummary": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "status": "observed",
+        "model": "fixture-model",
+        "modelSource": "observed",
+        "models": [
+          "fixture-model"
+        ],
+        "requiredRunCount": 1,
+        "observedRunCount": 1,
+        "reasons": []
+      },
+      "sweep": {
+        "enumerationError": null,
+        "discoveredFiles": [
+          "run_a.json"
+        ]
+      },
+      "initialStatus": 202,
+      "observations": 1
+    },
+    {
+      "scenario": "stop_transport_failure",
+      "passed": true,
+      "stopCalls": 1,
+      "stopBeforeKill": true,
+      "stopConfirmed": false,
+      "originalFailure": {
+        "message": "/api/actions/start-benchmark: 500 {\"code\":\"ROOT_FIXTURE_BASELINE_FAILURE\"}",
+        "code": "ROOT_FIXTURE_BASELINE_FAILURE"
+      },
+      "modelSummary": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "status": "observed",
+        "model": "fixture-model",
+        "modelSource": "observed",
+        "models": [
+          "fixture-model"
+        ],
+        "requiredRunCount": 1,
+        "observedRunCount": 1,
+        "reasons": []
+      },
+      "sweep": {
+        "enumerationError": null,
+        "discoveredFiles": [
+          "run_a.json"
+        ]
+      },
+      "observations": 0
+    },
+    {
+      "scenario": "final_file_missing",
+      "passed": true,
+      "stopCalls": 1,
+      "stopBeforeKill": true,
+      "stopConfirmed": true,
+      "originalFailure": {
+        "message": "/api/actions/start-benchmark: 500 {\"code\":\"ROOT_FIXTURE_BASELINE_FAILURE\"}",
+        "code": "ROOT_FIXTURE_BASELINE_FAILURE"
+      },
+      "modelSummary": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "status": "unknown",
+        "model": null,
+        "modelSource": "unknown",
+        "models": [],
+        "requiredRunCount": 1,
+        "observedRunCount": 0,
+        "reasons": [
+          "1 required run(s) have no valid observed response model"
+        ]
+      },
+      "sweep": {
+        "enumerationError": null,
+        "discoveredFiles": [
+          "run_a.json"
+        ]
+      },
+      "initialStatus": 200,
+      "observations": 0
+    },
+    {
+      "scenario": "final_directory_failure",
+      "passed": true,
+      "stopCalls": 1,
+      "stopBeforeKill": true,
+      "stopConfirmed": true,
+      "originalFailure": {
+        "message": "/api/actions/start-benchmark: 500 {\"code\":\"ROOT_FIXTURE_BASELINE_FAILURE\"}",
+        "code": "ROOT_FIXTURE_BASELINE_FAILURE"
+      },
+      "modelSummary": {
+        "schemaVersion": "operator-studio.model-observation/v1",
+        "status": "unknown",
+        "model": null,
+        "modelSource": "unknown",
+        "models": [],
+        "requiredRunCount": 1,
+        "observedRunCount": 0,
+        "reasons": [
+          "1 required run(s) have no valid observed response model"
+        ]
+      },
+      "sweep": {
+        "enumerationError": "readdir failed: ROOT_FIXTURE_READDIR_FAILURE",
+        "discoveredFiles": [
+          "run_a.json"
+        ]
+      },
+      "initialStatus": 200,
+      "observations": 0
+    }
+  ]
+}

@@ -93,6 +93,23 @@ try {
   await waitUntil(async () => (await completedClient.readRun('mock_logical')).status === 'completed', 'logical completion must settle after close');
   assert.equal((await completedClient.readRun('mock_logical')).resourceRelease.confirmed, true);
 
+  // Interleaving: a local cancel settles the run, then a late turn.completed
+  // arrives from the same (already released) child. Settlement is one-way:
+  // the terminal record and its completedAt must not be rewritten, and the
+  // late event must not be able to restart or re-project the run.
+  const lateClient = testClient();
+  await lateClient.start({ runId: 'mock_late_turn', workspace: root });
+  const lateChild = children.at(-1);
+  const settled = await lateClient.cancel('mock_late_turn');
+  assert.equal(settled.status, 'cancelled');
+  assert.equal(settled.resourceRelease.confirmed, true);
+  if (!lateChild.stdout.destroyed) lateChild.stdout.write(JSON.stringify({ type: 'turn.completed' }) + '\n');
+  await delay(50);
+  const after = await lateClient.readRun('mock_late_turn');
+  assert.equal(after.status, 'cancelled', 'a late turn.completed must not overwrite the settled cancellation');
+  assert.equal(after.resourceRelease.confirmed, true);
+  assert.equal(after.completedAt, settled.completedAt, 'a settled run may only be settled once');
+
   // A short-lived Node process tree exercises the real OS termination path.
   // No Codex executable, provider, Python, hardware, or network is invoked.
   const code = "const {spawn}=require('node:child_process');process.on('SIGTERM',()=>{});const c=spawn(process.execPath,['-e',\"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)\"],{stdio:'ignore',windowsHide:true});console.log(JSON.stringify({type:'helper.spawned',pid:c.pid}));setInterval(()=>{},1000)";

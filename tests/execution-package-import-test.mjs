@@ -1,19 +1,29 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { importExecutionPackage } from '../client-runtime/execution-package-import.mjs';
+import { removeTreeEventually } from '../client-runtime/windows-job-object.mjs';
 
 const exec = promisify(execFile);
 const findPython = async () => {
+  const attempts = [];
   for (const command of [process.env.PYTHON, 'python3', 'python']) {
     if (!command) continue;
     try { await exec(command, ['-c', 'import sys; print(sys.version_info[0])']); return command; }
-    catch (error) { if (!['ENOENT', 'EACCES'].includes(error?.code)) throw error; }
+    catch (error) {
+      // A candidate can fail in two ways: it is not on PATH at all
+      // (ENOENT/EACCES), or it is a Windows "app execution alias" stub that
+      // exits with a command-not-found code.  Both mean "try the next
+      // candidate".  A python.org install provides python.exe but no
+      // python3.exe, so treating the stub's exit code as fatal would fail the
+      // gate on a machine where a working Python is installed.
+      attempts.push(`${command} (${error?.code ?? error?.message})`);
+    }
   }
-  throw new Error('execution-package-import test requires python3 or python to build ZIP fixtures');
+  throw new Error(`execution-package-import test requires python3 or python to build ZIP fixtures; tried ${attempts.join(', ') || 'nothing'}`);
 };
 const root = await mkdtemp(path.join(os.tmpdir(), 'operator-import-'));
 const exists = async (file) => { try { await readFile(file); return true; } catch { return false; } };
@@ -50,4 +60,4 @@ try {
   await exec(python, ['-c', `import zipfile; z=zipfile.ZipFile(${JSON.stringify(unsafeZip)}, 'w'); i=zipfile.ZipInfo('link'); i.create_system=3; i.external_attr=(0o120777<<16); z.writestr(i, 'run.py'); z.close()`]);
   await assert.rejects(() => importExecutionPackage({ store, sourcePath: unsafeZip, language: 'python', adapter: { id: 'a', version: '1' }, environmentId: 'env', binding: { missionId: 'm', workspaceId: 'w', candidateId: 'c', candidateDigest: 'sha256:' + 'b'.repeat(64) }, candidateEntrypoint: 'run.py', acceptanceEntrypoint: 'oracle.py' }), (error) => error.code === 'PACKAGE_SOURCE_UNSAFE');
   console.log('[execution-package-import] directory/archive import, dependency closure and unsafe-link checks passed');
-} finally { await rm(root, { recursive: true, force: true }); }
+} finally { await removeTreeEventually(root); }

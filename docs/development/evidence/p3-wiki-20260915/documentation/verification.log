@@ -1,0 +1,6 @@
+$ current-doc-links-and-expert-authority
+$ node docs/development/evidence/p3-wiki-20260915/verify-docs.cjs
+{"files":7,"links":60,"expertSection6Unchanged":true}
+
+[exit_code=0 elapsed=0.25s timeout=false cancelled=false truncated=false]
+

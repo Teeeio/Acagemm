@@ -91,12 +91,13 @@ TUI / GUI
 | `candidate-validation-service.md` | Patch 应用、Benchmark 启动和阶段回滚 | candidate/benchmark command | validation result、state |
 | `operator-test-service.md` | 查询和取消串行测试任务 | task ID、queue port | task DTO、queue metadata |
 | `benchmark-projection-service.md` | 将 Queue snapshot 投影到 workflow | benchmark/task state | changed state |
+| `benchmark-package-preparation-service.md` | 组装共享 GPU 执行包、校验 oracle 并写入可信准入摘要 | execution package store、adapter、冻结 testSpec | 带 admission 绑定的 Benchmark 请求 |
 | `decision-service.md` | 采用、拒绝和撤销采用 | decision command | decision result、recovery metadata |
 | `repository-adoption-service.md` | 将通过 Gate 的 Candidate 写回仓库 | projected state、workspace port | changed state |
-| `experience-api-service.md` | 正式人工经验 API 的项目范围和输入边界 | 只读状态、Experience service ports | 版本化人工经验 DTO |
-| `round-experience-service.md` | 主轮冻结经验引用与可信执行观察 | 经验服务、轮状态、验证端口 | 冻结上下文、可追踪记录结果 |
+| `experience-api-service.md` | 正式人工经验 API 的项目范围和输入边界，含 KernelWiki 快照导入（`importKernelWiki`，仅接受 `{snapshot,author}`） | 只读状态、Experience service ports | 版本化人工经验 DTO、导入结果 |
+| `round-experience-service.md` | 主轮冻结经验引用、选择审计清单与可信执行观察 | 经验服务、轮状态、验证端口 | 冻结上下文、审计清单、可追踪记录结果 |
+| `experience-service.md` | 版本化开发经验、人工注入、KernelWiki 快照原子导入（`importKernelWiki`）、冻结检索上下文与选择审计清单（`retrieveWithSelection`） | 受信项目授权、repository/clock/ID ports | 非发布型经验、引用上下文与审计清单 |
 | `shared-gpu-experience-verifier.md` | 共享 GPU 执行包回执的准入、产物和候选绑定复核 | execution package store、adapter、terminal benchmark state | verified 或显式 skipped 的开发观察 |
-| `experience-service.md` | 版本化开发经验、人工注入和冻结检索上下文 | 受信项目授权、repository/clock/ID ports | 非发布型经验与引用上下文 |
 | `knowledge-service.md` | 编辑经验草稿和引用经验资产 | draft/reference command | governed state 或稳定错误 |
 
 ### 单轮迭代与自动推进
@@ -165,7 +166,9 @@ TUI / GUI
 | [`state-reference-data.mjs`](../../client-runtime/state-reference-data.md) | Reference Data | 保留旧默认记录与展示元数据 | 真机证据、运行时权限 |
 | [`state-initialization.mjs`](../../client-runtime/state-initialization.md) | Domain / Initial State | 通过注入 Mission 工厂构造 seed/product snapshot | 存储初始化、迁移执行 |
 | [`state-reference-runtime.mjs`](../../client-runtime/state-reference-runtime.md) | Reference State Projection | 现有 fixture 进度、日志和内存事件 | 真机/Agent 执行 |
-| [`accept-gate.mjs`](../../client-runtime/accept-gate.md) | Domain / Gate | 接受规则与 Baseline 证据构造 | 测试执行、持久化、采用 |
+| [`accept-gate.mjs`](../../client-runtime/accept-gate.md) | Domain / Gate | 接受规则、Baseline 证据构造与单一版本化证据决策 | 测试执行、持久化、采用 |
+| [`evidence-decision.mjs`](../../client-runtime/evidence-decision.md) | Domain / Evidence | 诊断三判定（仅 completed+显式真实来源+绑定内核内容）、失败关闭执行分类、候选/运行绑定与冲突投影、发布限制 | I/O、存储、Provider、队列、硬件执行 |
+| [`model-observation.mjs`](../../client-runtime/model-observation.md) | Domain / Runtime Observation | 无 I/O 的响应模型 DTO（`assistant.message.model`）、按原始字节精确匹配的 provider/run/mission/session 绑定（不 trim、拒绝 cancelled 自绑定）与必需 run 汇总；unknown/conflict 不阻 workflow | 环境/标签伪造观测、把 init/usage 当响应身份、以观测做候选/Gate/释放门禁、I/O |
 | [`operator-test-evidence.mjs`](../../client-runtime/operator-test-evidence.md) | Domain / Evidence | 队列快照、候选处置和事件的内存投影 | 文件系统、队列执行 |
 | [`evidence-state.mjs`](../../client-runtime/evidence-state.md) | Shared State Contract | Review/Baseline 状态工厂 | 验收授权、I/O |
 | [`mission-objective.mjs`](../../client-runtime/mission-objective.md) | Domain / Objective | 目标模式推断与规范化 | 迭代执行、持久化 |
@@ -179,7 +182,12 @@ TUI / GUI
 | `candidate-generation/README.md`、`candidate-generation/CONSTRAINTS.md` | Candidate Generation Contract | 03 候选生成输入、输出、确定性步骤和职责边界 | Provider 生命周期、Queue/Gate/采用/下一轮决策 |
 | [`execution-package-contract.mjs`](../../client-runtime/execution-package-contract.md) | Domain / Package | 语言无关闭包、摘要与准入绑定 | I/O、环境执行 |
 | [`cancellation-contract.mjs`](../../client-runtime/cancellation-contract.md) | Domain / Liveness | 资源释放屏障与匹配身份的确认 | 终止进程、持久化 |
-| [`experience-contract.mjs`](../../client-runtime/experience-contract.md) | Domain / Experience | 版本、来源、范围和非发布观察 | 发布授权、存储 |
+| [`experience-contract.mjs`](../../client-runtime/experience-contract.md) | Domain / Experience | 版本、来源、范围和非发布观察；可选选择元数据与上下文硬上限 | 发布授权、存储 |
+| [`experience-selection.mjs`](../../client-runtime/experience-selection.md) | Domain / Experience Selection | 选择元数据规范化、确定性优化假设排序（`WIKI_SELECTION_POLICY_VERSION`）、配额与选择清单 | I/O、Provider、硬件执行、发布授权 |
+| [`kernel-wiki-import.mjs`](../../client-runtime/kernel-wiki-import.md) | Domain / Experience Import | KernelWiki 页面解析、确定性快照构建、原子经验导入 | 网络/模型调用、直接写 Runtime 存储 |
+| [`scripts/import-kernel-wiki.mjs`](../../scripts/import-kernel-wiki.md) | Dev Tool / Import CLI | 固定 commit 的只读 Git blob 导入为快照文件（`--source/--commit/--out/--reviews`） | 检出/修改来源、写 live Runtime 存储、实现 workflow |
+| `scripts/experience-condition-study.mjs` | Domain / Experience Condition Study | 纯九槽位平衡调度（facts-only/local-only/local-and-wiki）、条件枚举与 `verifyExperienceConditionAudit` 条件收据 | 启动 Provider/GPU/子进程、写 Runtime 存储、把研究结果升级为 N20 或发布证据 |
+| `scripts/run-experience-condition-study.mjs` | Dev Tool / Study CLI | 严格参数解析、九槽位编排（每个槽位只经既有 smoke CLI 子进程）、先于副作用落盘九槽位 study.json、只读 `verifyStudyReport` 报告复核 | 复刻 smoke workflow/分类/发布屏障、允许 CLI 启用 mock、复核模式启动 model/GPU/进程、改写原始工件 |
 | [`experience-repository.mjs`](../../client-runtime/experience-repository.md) | Experience Adapter | 原子版本存储 | Mission 决策 |
 | [`execution-package-store.mjs`](../../client-runtime/execution-package-store.md) | Package Adapter | CAS、受信准入与准备恢复 | 另建测试队列、假定宿主机隔离 |
 | [`execution-package-import.mjs`](../../client-runtime/execution-package-import.md) | Package Import Adapter | 目录/归档读取、依赖闭包与路径安全 | 安装依赖、执行源码、绕过准入 |
@@ -225,3 +233,8 @@ TUI / GUI
 - 最近的模块测试通过。
 - 跨模块变更通过 `npm run verify:local-c500-release`。
 - 无硬件变更在条件允许时通过 `npm run verify:non-hardware-robustness`。
+- 研究条件（`facts-only`/`local-only`/`local-and-wiki`）与九槽位编排的独立验收是
+  `tests/experience-condition-runtime-test.mjs` 与 `tests/experience-condition-study-test.mjs`
+  （已注册进 release 门禁各一次）；两者只面向公开入口/端口与真实生产路径 fixture，
+  不得以实现文本匹配代替契约验收。研究结果恒为 `strictN20Passed=false`，任何槽位、
+  条件或报告都不得被表述为 N20、稳定性或发布证据。

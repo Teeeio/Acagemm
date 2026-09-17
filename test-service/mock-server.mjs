@@ -78,11 +78,17 @@ const buildResult = (task) => {
     benchmark,
     tracer: {
       format: 'operator-trace/v1',
+      status: 'mocked',
+      source: 'mock',
+      simulated: true,
       events: traceEvents,
       criticalPathUs: 38.0,
     },
     profiler: {
       format: 'operator-profile/v1',
+      status: 'mocked',
+      source: 'mock',
+      simulated: true,
       metrics: {
         achievedOccupancy: 0.74,
         dramBandwidthGbps: 812,

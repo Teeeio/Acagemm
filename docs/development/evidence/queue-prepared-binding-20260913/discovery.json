@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "operator-studio.queue-prepared-binding-discovery/v1",
+  "sourceTaskId": "task_baf9fc222be74e38afb3fbd67eb545c6",
+  "sourceAttemptId": "run_3cd5adce8d7b44888113f3a4e0ca787b",
+  "sourceRunRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_3cd5adce8d7b44888113f3a4e0ca787b\\scratch\\real-runs\\shared-gpu-5WLmXI",
+  "queueFile": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_3cd5adce8d7b44888113f3a4e0ca787b\\scratch\\real-runs\\shared-gpu-5WLmXI\\runtime\\operator-test-queue.jsonl",
+  "snapshotSha256": "2f2df5adc31a1f2a105cce145424cc6d41e4ebbaaf0fd1f7861879c4580012d3",
+  "queueTaskId": "queue_57F3209A15FE4796",
+  "backendTaskId": "local_c500_5683EF9FCD9858D80F2E4FC9826541D0",
+  "requestPreparedArtifactDigestPresent": false,
+  "resultPreparedArtifactDigest": "sha256:0bbdc3825adb221d23c59754e685b9d051ba821bad67f2a0198e6655648857be",
+  "failureCode": "OPERATOR_CORRECTNESS_MISMATCH",
+  "candidateReleaseConfirmed": true,
+  "conclusion": "Actual prepareExecutionPackage callback in local-server.mjs omits admission.preparedArtifactDigest; benchmark request/queue payload never receive it. Strict failed verifier rejects absent payload digest. Preserve strict rejection; repair producer composition."
+}

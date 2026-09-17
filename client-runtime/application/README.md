@@ -38,9 +38,9 @@
 | `operator-test-service.mjs` | Operator Test Queue queries and cancellation | task DTOs and queue path |
 | `execution-package-import-service.mjs` | source import and trusted preparation through injected ports | immutable manifest and admission DTO |
 | `mission-control-service.mjs` | Agent cancellation, human feedback, and Mission stop | persisted state and control result |
-| `experience-api-service.mjs` | Project-scoped human experience CRUD | versioned guidance DTOs and conflicts |
-| `round-experience-service.mjs` | Frozen per-round experience and verified observations | context and record status through injected ports |
-| `shared-gpu-experience-verifier.mjs` | Revalidate shared-GPU package receipts at the composition boundary | trusted verified observation or explicit skip |
+| `experience-api-service.mjs` | Project-scoped human experience CRUD plus KernelWiki snapshot import (`{snapshot,author}` only, owning Project checked first) | versioned guidance DTOs, import result, and conflicts |
+| `round-experience-service.mjs` | Frozen per-round experience, selection-audit sidecar, verified observations, and the explicit `experienceCondition` study input applied before ranking/quota | frozen context, selection sidecar, and record status through injected ports |
+| `shared-gpu-experience-verifier.mjs` | Revalidate shared-GPU package receipts at the composition boundary, including the strict released failed-candidate correctness path (real shared-GPU environment/probe, queue payload target/build/adapter and whole result agreement) | trusted verified observation (success or bounded failed summary) or explicit skip |
 | `knowledge-service.mjs` | Knowledge draft editing, asset references, and retired manual publication | persisted state or governance response |
 | `runtime-query-service.mjs` | Runtime state, preflight, and active workspace queries | state/workspace query | transport-neutral query DTOs |
 | `runtime-state-service.mjs` | TUI state patch, budget validation, and pause/resume command | state command body | persisted state or stable validation error |
@@ -55,10 +55,11 @@
 | `materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 | `baseline-failure-projection.mjs` | idempotent baseline failure projection | benchmark state | changed flag |
 | `benchmark-projection-service.mjs` | Operator Test queue snapshot and artifact projection | benchmark state | changed state |
+| `benchmark-package-preparation-service.mjs` | Shared-GPU execution package assembly, oracle admission, and trusted `preparedArtifactDigest` binding through injected store/adapter ports | request, mission, frozen matrix, mission run.py | admission-bound Benchmark request |
 | `repository-adoption-service.mjs` | managed runtime candidate repository adoption | projected state | changed state |
 | `autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `autopilot-context-service.mjs` | auto-tick context preparation | state | autopilot context |
-| `autopilot-candidate-action-service.mjs` | candidate patch apply and recovery | candidate state | updated state |
+| `autopilot-candidate-action-service.mjs` | candidate patch apply and recovery | candidate state | updated state, including typed admission rejection paused for human intervention |
 | `autopilot-validation-service.mjs` | candidate benchmark start | candidate state | updated state |
 | `autopilot-service.mjs` | automatic iteration progression boundary | runtime state | state/action result |
 | `autopilot-fixed-profile-service.mjs` | fixed Profile post-baseline progression | Mission state | state/action result |
@@ -123,12 +124,38 @@ npm run test:smoke
 
 [experience-service.mjs](experience-service.md) provides project-scoped versioned
 human guidance, execution observations and frozen retrieval contexts through
-injected repository/clock/ID ports. Production supplies it to
+injected repository/clock/ID ports. Its public `retrieveWithSelection(query)`
+returns the frozen context plus the audited selection sidecar from one repository
+read; when only `retrieve` is supplied, round-experience-service derives an
+explicitly marked context-derived sidecar without changing the injected set.
+`importKernelWiki(snapshot, { projectId, author })` wraps the pure apply API in one
+repository transaction using the injected clock, so a KernelWiki snapshot is
+imported atomically through the same store; the HTTP route
+`POST /api/projects/:projectId/experiences/import-kernel-wiki` precedes the generic
+ID matcher and accepts only `{snapshot,author}` within the existing body-size bound.
+Production supplies it to
 [round-experience-service.mjs](round-experience-service.md) and the project-scoped
 human Experience API. Agent commands and automatic rounds persist one frozen
 context; the Provider receives it as untrusted, attributed data. Terminal
 collection requires a trusted package-execution verification receipt: the current
 legacy backend has none, so it is explicitly skipped, not upgraded into evidence.
+
+The explicit study condition is a frozen per-round input: `createRoundExperienceService({
+..., experienceCondition })` accepts exactly `facts-only`, `local-only` or
+`local-and-wiki` and applies it before ranking and quota, and the Runtime composition root
+reads `OPERATOR_EXPERIENCE_CONDITION`. `facts-only` injects zero optional records while still
+collecting the round's execution observation and mandatory round facts; `local-only` keeps
+applicable local and execution records and excludes every
+`selectionMetadata.source=kernel-wiki` unit; `local-and-wiki` keeps the unchanged D
+selection. Unknown, null, empty or non-string values fail with `EXPERIENCE_INVALID` before any
+state change, and a frozen same-round context cannot switch condition. The exact condition and
+policy version are recorded in the persisted selection sidecar and the pre-send prompt audit,
+so a receipt can be verified from retained originals. The study orchestration contract lives in
+`scripts/experience-condition-study.mjs` and `scripts/run-experience-condition-study.mjs`
+(nine-slot schedule, condition receipts, read-only report reader); the condition matrix has
+independent acceptance in `tests/experience-condition-runtime-test.mjs` and
+`tests/experience-condition-study-test.mjs`, registered once each in the release gate. Study results are exploratory only and are never
+N20 — the report always states `strictN20Passed=false`.
 Mutation/resume paths enforce [resource-release barriers](../cancellation-contract.md).
 Runtime advancement checks budget guards before Autopilot and uses the injected
 Mission control releaseResources port for budget shutdown. A pending release
@@ -146,3 +173,11 @@ canonical iteration guards and freezes a permitted round before persistence;
 exhausted limits are rejected synchronously, never cleared by manual start.
 Only an explicitly admitted new round can replace a settled budget. Autopilot,
 Agent preparation and replay consume that frozen active identity.
+
+
+GPU experience startup now calls `round-experience-service.preflightCollection`
+before collect in both `agent-round-service` and the manual runs command. The
+trusted port is `createSharedGpuExperiencePreflight` from the documented
+[shared-GPU verifier](shared-gpu-experience-verifier.md); failures block launch.
+The new read-only stage consumes existing round/Mission time, independently of
+the unchanged short collect timer. No cached environment bypasses admission.

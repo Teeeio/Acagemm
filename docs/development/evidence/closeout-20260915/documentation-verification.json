@@ -1,0 +1,127 @@
+{
+  "ok": true,
+  "expertSection6BytesUnchanged": true,
+  "checkedLinks": [
+    {
+      "source": "README.md",
+      "target": "docs/development/evidence/run-diagnostics-20260914/acceptance.json"
+    },
+    {
+      "source": "README.md",
+      "target": "docs/development/evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json"
+    },
+    {
+      "source": "README.md",
+      "target": "docs/development/evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json"
+    },
+    {
+      "source": "README.md",
+      "target": "docs/development/evidence/closeout-20260915/ACCEPTANCE.md"
+    },
+    {
+      "source": "README.md",
+      "target": "docs/development/evidence/closeout-20260915/closeout.json"
+    },
+    {
+      "source": "README.md",
+      "target": "docs/development/evidence/closeout-20260915/PORTABLE.md"
+    },
+    {
+      "source": "docs/development/README.md",
+      "target": "evidence/run-diagnostics-20260914/acceptance.json"
+    },
+    {
+      "source": "docs/development/README.md",
+      "target": "evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json"
+    },
+    {
+      "source": "docs/development/README.md",
+      "target": "evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json"
+    },
+    {
+      "source": "docs/development/README.md",
+      "target": "evidence/closeout-20260915/ACCEPTANCE.md"
+    },
+    {
+      "source": "docs/development/README.md",
+      "target": "evidence/closeout-20260915/closeout.json"
+    },
+    {
+      "source": "docs/development/README.md",
+      "target": "evidence/closeout-20260915/PORTABLE.md"
+    },
+    {
+      "source": "docs/development/GENERIC_OPERATOR_GOAL.md",
+      "target": "evidence/run-diagnostics-20260914/acceptance.json"
+    },
+    {
+      "source": "docs/development/GENERIC_OPERATOR_GOAL.md",
+      "target": "evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json"
+    },
+    {
+      "source": "docs/development/GENERIC_OPERATOR_GOAL.md",
+      "target": "evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json"
+    },
+    {
+      "source": "docs/development/GENERIC_OPERATOR_GOAL.md",
+      "target": "evidence/closeout-20260915/ACCEPTANCE.md"
+    },
+    {
+      "source": "docs/development/GENERIC_OPERATOR_GOAL.md",
+      "target": "evidence/closeout-20260915/closeout.json"
+    },
+    {
+      "source": "docs/development/GENERIC_OPERATOR_GOAL.md",
+      "target": "evidence/closeout-20260915/PORTABLE.md"
+    },
+    {
+      "source": "docs/development/CURRENT_TASK_HANDOFF.md",
+      "target": "evidence/run-diagnostics-20260914/acceptance.json"
+    },
+    {
+      "source": "docs/development/CURRENT_TASK_HANDOFF.md",
+      "target": "evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json"
+    },
+    {
+      "source": "docs/development/CURRENT_TASK_HANDOFF.md",
+      "target": "evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json"
+    },
+    {
+      "source": "docs/development/CURRENT_TASK_HANDOFF.md",
+      "target": "evidence/closeout-20260915/ACCEPTANCE.md"
+    },
+    {
+      "source": "docs/development/CURRENT_TASK_HANDOFF.md",
+      "target": "evidence/closeout-20260915/closeout.json"
+    },
+    {
+      "source": "docs/development/CURRENT_TASK_HANDOFF.md",
+      "target": "evidence/closeout-20260915/PORTABLE.md"
+    },
+    {
+      "source": "docs/development/TEAM_HANDOFF.md",
+      "target": "evidence/run-diagnostics-20260914/acceptance.json"
+    },
+    {
+      "source": "docs/development/TEAM_HANDOFF.md",
+      "target": "evidence/closeout-20260915/ACCEPTANCE.md"
+    },
+    {
+      "source": "docs/development/TEAM_HANDOFF.md",
+      "target": "evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json"
+    },
+    {
+      "source": "docs/development/TEAM_HANDOFF.md",
+      "target": "evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json"
+    },
+    {
+      "source": "docs/development/TEAM_HANDOFF.md",
+      "target": "evidence/closeout-20260915/closeout.json"
+    },
+    {
+      "source": "docs/development/TEAM_HANDOFF.md",
+      "target": "evidence/closeout-20260915/PORTABLE.md"
+    }
+  ],
+  "minorEdit": "Label historical page head and section 1 explicitly; expert body unchanged."
+}

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "recipe_name": "p3-current-docs",
+  "recipe_digest": "4092fa02d8dac9e5905be3358e286ecbb5e4eb59ce98fa4d51e225a7ff230ced",
+  "executed_at": "2026-09-15T05:52:26.216+00:00",
+  "passed": true,
+  "planned_checks": 1,
+  "interrupted": null,
+  "checks": [
+    {
+      "name": "current-doc-links-and-expert-authority",
+      "argv": [
+        "node",
+        "docs/development/evidence/p3-wiki-20260915/verify-docs.cjs"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.25,
+      "passed": true,
+      "truncated": false,
+      "cancelled": false,
+      "timeout": false
+    }
+  ],
+  "log": "verification.log",
+  "log_truncated": false
+}

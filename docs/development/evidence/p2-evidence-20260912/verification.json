@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "operator-studio.p2-verification/v1",
+  "command": "npm.cmd run verify:non-hardware-robustness",
+  "exit": 0,
+  "releaseChecks": 136,
+  "nonHardwareChecks": 38,
+  "startedAt": "2026-09-12T13:11:55.2267527Z",
+  "completedAt": "2026-09-12T13:21:32.248767Z",
+  "verifiedAt": "2026-09-12T13:22:13.9660263Z",
+  "sourceFilesChecked": 485,
+  "sourceMismatches": [],
+  "logSha256": "8845f0d918cca59734f0858d13b3a1f88e9916d267c93f54e7cacbbebc29c3ab",
+  "noNewGpuOrProviderRun": true,
+  "claims": [
+    "Phase2 hardware-free governance acceptance",
+    "observer and ledger contract acceptance"
+  ],
+  "nonClaims": [
+    "updated driver live smoke",
+    "real diagnostic parser or publication",
+    "N20 stability",
+    "Phase3 Wiki"
+  ]
+}

@@ -66,6 +66,46 @@ Workspace 端口拥有文件和 Diff 的事实来源。候选必须满足：
 候选自报的 repository、commit 和 source reference 只作为可追踪信息，不能替代实际
 Workspace Diff 的准入判断。
 
+## Candidate admission is fail-closed
+
+工作区 Git Diff 是候选准入的唯一权威。任何绕过它的路径都必须关闭：
+
+- Provider 未正常终结（不可恢复失败，例如 TLS 信任链或认证失败）时，Agent 声明的候选
+  一个都不进入候选池：`*_CANDIDATE_INSPECTION_SKIPPED`、`passed: false`，已声明候选全部丢弃，
+  并且不发 `candidate.not_proposed`。
+- Agent 没有声明候选、工作区却有真实 Diff 时，观测所得候选必须显式标记降级
+  （`candidateGenerationPath: workspace_observed`、`degraded: true`、
+  `degradationReason: candidates_absent_but_diff_observed`），不得静默通过。
+
+## Empty candidates carry exactly one root cause
+
+`candidates: []` 只是结果表现，不是根因标签。分类固定优先级，落在
+`candidateValidation.classification` 与 `candidate.not_proposed` 事件载荷上：
+
+| # | classification | 含义 |
+|---|---|---|
+| 1 | `upstream_failure_no_candidate` | Provider 上游失败。这不是候选生成失败：不写候选池，也不发 `candidate.not_proposed` |
+| 2 | `no_candidate_generated` | Provider 正常终结，确实没有提出候选 |
+| 3 | `parse_mapping_loss` | 声明了候选，但原始条目无法映射为候选（丢弃计数大于 0） |
+| 4 | `tool_failed_patch_pending` | 结构化编辑工具失败，patch 回退仍待处理 |
+| 5 | `workspace_capture_gap` | 声明了候选但工作区没有真实 Diff，或声明文件与实际 Diff 不一致 |
+| 6 | `patch_admission_failed` | 结果内 patch 存在但不合法，且没能产出 Diff |
+| 7 | `task_contract_unmet` | 只返回分析文本，既无候选也无 patch |
+
+优先级 1 → 3 → 4 → 6 → 7 → 2。第 5 类由工作区观测产出（`inspectCandidateDiff`），
+不参与该序列。
+
+## Degradation marks the generation path, never the bar
+
+`candidateGenerationPath`、`degraded`、`degradationReason`、`editToolStatus`、
+`patchValidation`、`workspaceAdmission` 是事实标记，透传到候选与事件载荷，
+**不参与任何 `passed` 判定**。语言契约、必需文件、重复 digest、Oracle、固定测试矩阵与
+Gate 一律不变：降级候选照样会被语言契约拒绝。
+
+「编辑工具失败」与「编辑工具缺失」必须区分：Agent 用普通 shell 写入文件属于合法生成路径，
+工具身份只看事件的类型/名称字段，**从不读取命令正文**；编辑工具从未出现（`absent`）
+永不判降级。禁止用 `--reject`、忽略非法文件或部分应用来让 patch 回退"成功"。
+
 ## Test and decision authority
 
 Candidate Generation 不执行测试。测试队列只接收应用后的 Workspace 候选，并返回绑定

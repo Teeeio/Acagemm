@@ -1,0 +1,260 @@
+{
+  "schemaVersion": "operator-studio.no-response-client-review/v1",
+  "revisionNote": "第三版：按第二轮独立审核反馈修正取消覆盖误读——明确 model-observation projection 取消用例经真实 createAgentRuntime 进入 requestCancellation/settleCancellation 的正常成功路径，仅 single-flight 复用、deadline 实际到期、重试耗尽/needs_human 性质未在可读测试中断言；同步收紧 stall 阈值与 cancelled/signal 变量来源表述；FR-06/FR-07/FR-12/FR-20/FR-21 已修正，Markdown 同步。",
+  "findings": [
+    {
+      "claim": "[FR-01] 原件事实：第13次运行 claude_MU09TRD5_8AB4CC30 以 cancelled 终态结束，error 为 null，保留流只有 1 个 system:init 事件，模型观测为 unknown 且理由为 'no assistant response metadata in the run stream'。",
+      "classification": "fact",
+      "evidence": [
+        "case.json records[2]（runId=claude_MU09TRD5_8AB4CC30, invocation=13, targetRunId 同值）：status 'cancelled'，error null，startedAt 2026-09-13T20:33:05.332Z，lastActivityAt 2026-09-13T20:36:07.582Z，completedAt 2026-09-13T20:36:07.636Z，activityKind 'thinking'，activityUpdatedAt 2026-09-13T20:36:07.582Z。",
+        "case.json records[2].retainedEventTypes = {\"system:init\": 1}，retainedEventCount = 1。",
+        "case.json records[2].modelObservation：status 'unknown'，model null，source null，models []，observations []，reasons ['no assistant response metadata in the run stream']，configuredModels ['claude-opus-5[1m]']，usageModels []，sessionId '6911879a-ec2c-4dcb-8e6f-46cd466bc86b'（非空）。",
+        "case.json sourceRecordSha256=62bcb9b0c88b97f2da97d972f1af2705c16bad5bfc6b636f2c460690e8e09592，streamSha256=71d4f16d14076d923f81abfeb8df510f3a9adf1f0b0f4580b10eb1d059bf4201（未重算，见 limitations）。"
+      ]
+    },
+    {
+      "claim": "[FR-02] 该 unknown 的理由串只能由 '零个已解析 assistant 元数据' 分支产生：其它不完整路径（身份不全 / 缺 session_id / 外部 session / 无有效 model 标签）会写出彼此不同的 reason 文本，因此本次不是'有 assistant 事件但模型元数据缺失或被过滤'。",
+      "classification": "fact",
+      "evidence": [
+        "client-runtime/model-observation.mjs:142-149：assistantCount === 0 时才 push 'no assistant response metadata in the run stream' 并返回 status 'unknown'、models []、observations []。",
+        "client-runtime/model-observation.mjs:109-118：assistantCount 对元数据序列中每个 type==='assistant' 事件自增；:111/:113/:115 分别记 missingSessionCount / foreignSessionCount / invalidResponseCount。",
+        "client-runtime/model-observation.mjs:132-141（身份不全）与 :150-159（缺 session / 外部 session / 无效 model）返回的 reasons 文本与 FR-01 的观测串不同；:210-213 要求 unknown 必须带非空 reason，故 reasons 文本本身是分支判据。",
+        "FR-01 的 DTO sessionId 非空，说明该 DTO 通过了 :188 的非空身份校验；因此产生该 reason 时 identityComplete 为真，唯一可达分支就是 :142 的 assistantCount === 0。"
+      ]
+    },
+    {
+      "claim": "[FR-03] 采集路径在遥测过滤之前：每条完整 JSON 行与关闭时未换行的尾行都先投影安全模型元数据，thinking-only 的 assistant 事件因此仍能贡献观测，而不会把 thinking 正文写入事件文件。",
+      "classification": "fact",
+      "evidence": [
+        "client-runtime/claude-client.mjs:36-54 claudeModelMetadataFromEvent 只保留 {type, session_id, message.model} / system:init / result.modelUsage 键名。",
+        "client-runtime/claude-client.mjs:436-437：先 push modelMetadata 到 observationEvents；:445 才用 isClaudeTelemetryEvent 决定是否 append 原始行。",
+        "client-runtime/claude-client.mjs:28-34 isClaudeTelemetryEvent：system/thinking_tokens 与'内容全为 thinking 的 assistant 事件'被过滤，因而不会出现在 .jsonl（也不含正文）。",
+        "client-runtime/claude-client.mjs:461-477 close 分支：把 eventBuffer 中的未终止尾行先取到局部 tailLine、再置空缓冲，投影元数据、学习 session、必要时落盘（含 replace 的原子写链）。",
+        "client-runtime/claude-client.mjs:400-405 refreshModelObservation：DTO 变化即经 appendChain 持久化到 run record。"
+      ]
+    },
+    {
+      "claim": "[FR-04] 同 case 其它 4 次运行的观测条数确实多于保留流中的 assistant 行数（算术事实）；把这些差额解释为'被遥测过滤的 thinking-only 响应'只是与过滤路径一致的推断，不是实证，也不能由当前元数据排除其它成因。",
+      "classification": "inference",
+      "evidence": [
+        "算术事实（case.json）：records[0] observations 6 vs retainedEventTypes['assistant:'] 3；records[1] 8 vs 5；records[3] 36 vs 26；records[4] 6 vs 3；records[2]（target）0 vs 0。",
+        "推断依据：client-runtime/claude-client.mjs:436-437 先采集元数据、:445 后按 isClaudeTelemetryEvent（:28-34）过滤 thinking-only 行，故被过滤的行会推高 observations 而不增加 assistant 行。",
+        "不能排除的替代成因：observations 只统计 session 与 model 元数据都有效的 assistant 事件（model-observation.mjs:109-117），无效元数据的 assistant 事件会压低差额；而 appendFile 失败被 .catch(() => {}) 吞掉（claude-client.mjs:431、:445），保留行丢失会抬高差额。因此差额不等于 thinking-only 条数的精确测量。",
+        "相较之下 target 的 observations 0 与 assistant 行 0 一致，但这只说明没有可观测的 assistant 元数据，不区分'从未产出'与'字节丢失'（见 FR-08）。"
+      ]
+    },
+    {
+      "claim": "[FR-05] 结论（unknown 来源）：在本次可读代码路径内，没有发现'元数据被采集后又在判定阶段遗漏'的缺口——该 unknown 是零 assistant 元数据时的正常判定；但'provider 侧确实没有产出任何 assistant 行'仍是推断，且无法排除字节在被强杀前未被读入。",
+      "classification": "inference",
+      "evidence": [
+        "由 FR-02 与 FR-03：只要解析到任意 assistant 元数据（含 thinking-only、含缺 model/session、含外部 session），落盘 DTO 的 reasons 就会变成 FR-02 列举的其它文本，而不会保持 FR-01 的零值文本。",
+        "由 FR-04：过滤前采集在本次 N20 其它 4 次运行中与观测条数差异一致，未发现'只有非 thinking 响应才被采'的系统性缺口；这是与代码路径一致的推断，不是对该路径正确性的实证。",
+        "反证边界：claude-client.mjs:417-454 只在 stdout 'data' 回调中处理已读入的字节，:466-476 只处理关闭时仍在 eventBuffer 的尾行；被强杀时仍留在管道/内核缓冲或未 flush 的输出无法恢复（见 FR-08）。",
+        "appendFile 失败被吞掉（claude-client.mjs:431、:445）只影响 .jsonl 保留流，不影响内存 observationEvents 与落盘 DTO；因此它不能解释本次 unknown，但会削弱任何用保留行数反推采集行为的论证（FR-04）。"
+      ]
+    },
+    {
+      "claim": "[FR-06] 原件事实与代码可达性：落盘记录同时具有 cancelled、completedAt 与零 assistant DTO，这些字段只由 close 分支的最终 persistRun 写出，说明该次写盘成立；但不能由结构化元数据断言'任何写失败/采集遗漏均已排除'。",
+      "classification": "inference",
+      "evidence": [
+        "client-runtime/claude-client.mjs:486-493：status=cancelled、record.completedAt、error=null 与最终 persistRun 同在 close 分支；persistRun 用临时文件 + rename 原子替换（:267-281），不存在半写记录。",
+        "若 :493 的最终写失败，盘上记录会停留在 :478 之前已 await 的那一版（status 仍为 running、completedAt null）；case.json records[2] 显示 cancelled 且 completedAt 非空，故至少该次 final persist 在盘上生效（此推断依赖 case.json 抽取忠实，见 limitations[0]）。",
+        "client-runtime/claude-client.mjs:463 的局部 cancelled 只来自 cancellationRequested.delete(runId)（该集合仅由 :507 的 cancel() 写入）；:461 close 回调参数 signal 是独立输入，与 cancelled 一起在 :486 参与 record.status 判定，不是同一集合变量的来源。",
+        "不可延伸之处：record.modelObservation 是内存对象（:400-405），其内容只反映已解析的元数据；persistRun 失败被 .catch(() => {}) 吞掉（:404、:423、:431、:444、:445、:459、:493），本 case 元数据不含写入失败信号，故不能反推'写入链路全程无失败'。"
+      ]
+    },
+    {
+      "claim": "[FR-07] 结论（取消边界·本次触发分支）：182.304s 的运行时长与 budgets.mainAgentMs=180000 相差约 2.3s，且取消前 54ms 仍有 thinking 活动，这与'运行时主 Agent 预算到期触发取消'一致，但 case 未保留取消触发分支与请求时刻，不能据此证明触发原因，也不能用 error=null 排除 provider 报错。",
+      "classification": "inference",
+      "evidence": [
+        "case.json records[2]：startedAt 20:33:05.332Z → completedAt 20:36:07.636Z = 182.304s；budgets.mainAgentMs = 180000，logicalCleanupMs = 60000，driverMs = 720000。",
+        "client-runtime/agent-runtime.mjs:1765 budgetExceeded = elapsed >= (state.agent.budgetMs || mainAgentBudgetMs)，:1781 把 stalled || budgetExceeded 作为 expired 传入 settleCancellation；:1763 elapsed 由 state.agent.startedAt 计算（与 run.startedAt 不是同一时间源）。",
+        "client-runtime/agent-runtime.mjs:1764 stalled 需要 lastEventAt 距当前 >= mainAgentStallMs；该阈值按 options.mainAgentStallMs → OPERATOR_MAIN_AGENT_STALL_MS → defaultMainAgentStallMs 的空值回退顺序选值；选中值不是有限正数时使用 defaultMainAgentStallMs，后者为 runtimeDefinition.defaultStallMs || DEFAULT_MAIN_AGENT_STALL_MS（:495-499），:468 的 120000 只是全局 fallback，case.json 未锁实际生效阈值，故本报告不按 120s 定量。lastEventAt 取 run.lastActivityAt 心跳（:518-522）；取消前 54ms 仍有心跳，stalled 在当前样本上缺乏支持，但仍无法区分'预算到期'与 operator/平台侧取消。",
+        "client-runtime/agent-runtime.mjs:887 启动时写入 state.agent.budgetMs = mainAgentBudgetMs（:500-503 允许 options/env 覆盖，:449 默认 10 分钟），故 180000 来自部署配置而非默认值。",
+        "若预算到期且确认释放：:1795 timedOut 为真、:1796 nextStatus 收敛 'completed'，:1806-1808 视为可恢复生成失败；但这些只在运行时投影路径成立，本次原件不含 cancelled run 的 resourceRelease，无法核实是否走到该分支。",
+        "约 2.3s 差值无法归因：tick/投影节拍不在锁定输入内（limitations[5]），且 elapsed 起点与 run.startedAt 可能不同；error=null 不能用作排除 provider 报错的证据（FR-18）。"
+      ]
+    },
+    {
+      "claim": "[FR-08] 无法判定项：provider 是否曾产出 assistant 字节但被强杀丢失，锁定输入内不可证。",
+      "classification": "unknown",
+      "evidence": [
+        "client-runtime/claude-client.mjs:461-477：close 时只处理已读入 eventBuffer 的尾行，没有任何管道残留字节的恢复或二次读取机制。",
+        "client-runtime/claude-client.mjs:251-260 terminateProcessTree 在 win32 用 taskkill /PID /T /F 强杀整棵进程树，:255 的 execFile timeout 为 15_000ms（上限，不是实际耗时）；强杀与'尚未 flush 的 provider 输出'之间的竞争无法从保留流事后区分。",
+        "case.json limitations[2]：无上游网络 trace，无法从 init-only 的保留输出断言传输/provider 原因。"
+      ]
+    },
+    {
+      "claim": "[FR-09] 无法判定项：上游无响应的具体根因（模型侧未开始、传输停滞、还是被取消打断在 thinking 阶段）在现有证据下不可证明。",
+      "classification": "unknown",
+      "evidence": [
+        "case.json records[2] 保留流只有 system:init，且 retainedEventTypes 中不存在任何 error/result 事件；error 字段为 null。",
+        "case.json limitations[1]：case 只保留结构化元数据，无 prompt、无 thinking 正文、无 provider 请求/响应体，因此无法判断 provider 是否收到完整请求或是否开始生成。",
+        "client-runtime/claude-client.mjs:207-235 classifyClaudeFailure 依赖 run.error 与事件文本；本 run 两者皆空，故失败分类链不产生任何上游码。"
+      ]
+    },
+    {
+      "claim": "[FR-10] 取消在调用方一侧有界：同一 run 的 provider 取消是 single-flight，且每次调用的等待被 deadline（默认 5000ms，下限 20ms）截断；该 deadline 只截断调用方的等待，不终止底层 provider 取消动作。",
+      "classification": "fact",
+      "evidence": [
+        "client-runtime/agent-runtime.mjs:1240-1249 requestCancellation：按 runId 缓存同一个 operation，重复请求复用同一 promise（single-flight），完成后清理表项。",
+        "client-runtime/agent-runtime.mjs:1242 cancellationTimeoutMs = Math.max(20, Number(options.cancellationTimeoutMs) || 5_000)。",
+        "client-runtime/agent-runtime.mjs:1252-1256：超时即 resolve {status:'cancel_requested', resourceRelease:{confirmed:false, status:'unconfirmed', code:'AGENT_CANCEL_DEADLINE_EXCEEDED'}}；:1257-1260 provider 报错也收敛为 unconfirmed。",
+        "client-runtime/agent-runtime.mjs:1250-1251 注释：超时的 port 被隔离，迟到结果不改变 Mission 快照；operation 本身没有 abort/timeout 机制，迟到结果仍会 resolve（:1257）并被丢弃。"
+      ]
+    },
+    {
+      "claim": "[FR-11] 取消尝试次数有界：重试计数最多到 MAX_CANCELLATION_RETRIES=3，用尽且释放仍未确认时收敛为有限终态 needs_human + blocked/quarantined；但该计数是 settleCancellation 的尝试计数，因 single-flight 复用，实际 provider cancel 物理调用次数可能少于 3。",
+      "classification": "fact",
+      "evidence": [
+        "client-runtime/agent-runtime.mjs:448 MAX_CANCELLATION_RETRIES = 3。",
+        "client-runtime/agent-runtime.mjs:1285：isExecutionReleased(run) 为真时删除该 run 的重试计数并直接返回（投影为 null）；:1294-1298 否则按 shouldRequest 与 retryCount < 3 调用 requestCancellation 并自增。",
+        "client-runtime/agent-runtime.mjs:1243-1249：requestCancellation 对同一 runId 复用同一未完成 operation，故 3 次计数不保证 3 次物理 provider cancel 调用。",
+        "client-runtime/agent-runtime.mjs:1301-1315：exhausted = releasePending && count >= 3，随后 projection.status='needs_human'、blocked/quarantined 置位并写 nextAction。"
+      ]
+    },
+    {
+      "claim": "[FR-12] 取消在运行时侧的覆盖与释放语义（推断）：claude-client.cancel 不等待子进程真正退出；若取消端口在调用方的 cancellationTimeoutMs（默认 5s）内未落定，调用方先记 unconfirmed，quarantined 需重试耗尽（>=3）才出现，不是一次超时的必然结果；taskkill 的 15s 只是上限。这是设计取舍而非已证缺陷。可读测试已覆盖正常成功取消结算路径（projection 取消用例经真实 runtime 进入 requestCancellation 并收到立即 confirmed），但 deadline 实际到期、single-flight 并发复用与重试耗尽/needs_human 这些性质在可读输入内没有针对性断言。",
+      "classification": "inference",
+      "evidence": [
+        "client-runtime/claude-client.mjs:504-512 cancel()：await terminateProcessTree 后立即 readRun，cancel 调用开始时取得的 child 非空便返回 {...record, status:'cancel_requested'}（即使 await 期间 close 已到，仍由后续 readRun 确认终态），不等待 'close'。",
+        "client-runtime/agent-runtime.mjs:1242 默认 5_000ms；:1252-1256 超时→unconfirmed；:1258-1260 provider 取消报错→unconfirmed；:1301-1315 只有 releasePending 且 retryCount >= 3 才 quarantined/needs_human（配 :1263-1279 cancellationProjection）。",
+        "已覆盖的正常成功路径（代码可达性核对，未执行测试）：tests/model-observation-test.mjs:711-716 用真实 createAgentRuntime、:702-710 注入 projectionClient（:708 的 fake cancel 立即返回 {status:'cancelled', resourceRelease:{confirmed:true,status:'confirmed'}}）；:798-815 把 state.agent.status 置为 cancel_requested、record 仍 running 后调用 projectState，经 agent-runtime.mjs:1781 settleCancellation，:1285 因 run 仍为 running 且无 resourceRelease 而未提前返回，:1286 由 previous.status==='cancel_requested' 使 cancelling 为真，:1296-1299 requestCancellation，:1245-1246 runtimeEngine.invoke('cancel') 调 fake cancel，立即 confirmed 后 :1299 提前返回已释放结果——即该用例确实进入了 requestCancellation/settleCancellation 的正常成功结算路径。",
+        "未针对断言的性质（非'整条路径零覆盖'）：:1252-1256 deadline 实际到期（fake cancel 立即 resolve，定时器被 clearTimeout 清除）、:1244-1248 两个并发调用复用同一 operation 的 single-flight 行为、:1258-1260 provider 取消报错→unconfirmed、:1301-1315 重试耗尽→needs_human/quarantined；:1285 的'已释放即早退'分支由 tests/agent-runtime-timeout-recovery-test.mjs:20-26 预置的 cancelled run 触达（见 FR-20/FR-21）。",
+        "client-runtime/claude-client.mjs:251-260：win32 taskkill 的 execFile timeout 15_000ms 是上限，失败（含超时）才回退 child.kill('SIGTERM')；实际耗时未在本 case 保留。",
+        "client-runtime/cancellation-contract.md:24-31：needs_human/blocked/quarantined 是有限业务结局，不是进程已退出的证明；barrier 保持到 owner-aware 释放证据出现。"
+      ]
+    },
+    {
+      "claim": "[FR-13] 释放本身不被时间上界保证：重试耗尽后 barrier 保持 fail-closed，恢复/重试/工作区写入被禁止，直到出现 owner 侧释放证据（终态且未被显式标为未确认）；该证据可以是后续投影读到的终态，人工确认只是 quarantined 情况下的显式出口之一。",
+      "classification": "fact",
+      "evidence": [
+        "client-runtime/cancellation-contract.mjs:3-4 isExecutionReleased 在 status ∈ {completed, failed, cancelled} 且 resourceRelease.confirmed !== false 时为真（legacy 无该字段的终态同样算释放）。",
+        "client-runtime/cancellation-contract.mjs:65-83 resourceReleaseBarrier：cancel_requested 或 unconfirmed/pending/quarantined/blocked 的任一资源都会返回 barrier；:28-52 projectReleaseSummary 会用当前快照把已确认退出的资源投影为 confirmed，因此后续 owner 终态证据可解除 barrier。",
+        "client-runtime/cancellation-contract.mjs:85-90 assertResourcesReleased 抛 MISSION_RESOURCE_RELEASE_PENDING(409)。",
+        "client-runtime/agent-runtime.mjs:716（startRun）与 :1145（startResearch）在入口即调用 assertResourcesReleased。",
+        "client-runtime/iteration-loop.mjs:471-509：barrier 存在时返回 resource_release_pending；quarantined 时收敛为 needs_human 并写 loop.resource_release_quarantined 与 nextAction（人工确认）。"
+      ]
+    },
+    {
+      "claim": "[FR-14] 结论（恢复等待来自何处）：恢复等待由'释放未确认 + 活跃 run 占用 + 同步研究员串行'三类显式状态闸门产生，均在每次 tick 重新求值，恢复路径上没有 sleep/轮询等待循环；同一 Mission 的 120s 守卫是启动去重锁的失效计时器，不是等待。",
+      "classification": "fact",
+      "evidence": [
+        "释放闸门：client-runtime/agent-runtime.mjs:716、:1145；client-runtime/iteration-loop.mjs:471-509。",
+        "主 Agent 占用闸门：client-runtime/agent-runtime.mjs:822-827 AGENT_RUN_ALREADY_ACTIVE；client-runtime/iteration-loop.mjs:794-797 mainActive → action 'wait_main'（AGENT_ACTIVE_STATUS 含 cancel_requested，见 :24）。",
+        "同步研究员串行闸门：client-runtime/agent-runtime.mjs:813-818（主线程启动遇到同步研究员 → RESEARCH_SERIAL_BUSY）与 :1160-1165（同步研究员启动遇到主线程 → RESEARCH_SERIAL_BUSY）；client-runtime/iteration-loop.mjs:671 与 :745 → action 'wait_research'。",
+        "严格冷启动：client-runtime/iteration-loop.mjs:751-754 → action 'wait_baseline'。",
+        "120s 在途守卫（client-runtime/agent-runtime.mjs:717-727）只用于拒绝同一 Mission 120s 内重复启动（:718-723）并靠 :726 的 timer.unref() 清理 activeStartMissions，属去重锁失效计时器，不阻塞恢复。",
+        "模块内 setTimeout 仅 4 处，均不在恢复等待上：prompt-audit rename 有界重试（:120）、clone 退避（:274）、启动去重守卫（:726）、取消 deadline（:1253）。"
+      ]
+    },
+    {
+      "claim": "[FR-15] 时序推断：本案中目标 run 结束 10.263s 后启动研究员 run、研究员完成 14.669s 后启动下一次主 run，间隔与'释放确认 + tick 重新求值'的等待一致，未见固定睡眠；但无法反推节拍参数。",
+      "classification": "inference",
+      "evidence": [
+        "case.json records[2].completedAt 20:36:07.636Z → records[3]（claude_research_MU09XVS0_2A885070）startedAt 20:36:17.899Z，间隔 10.263s。",
+        "case.json records[3].completedAt 20:38:24.306Z → records[4]（claude_MU0A0WT7_0323BFE7）startedAt 20:38:38.975Z，间隔 14.669s。",
+        "client-runtime/agent-runtime.mjs:716 + client-runtime/iteration-loop.mjs:471-509：恢复前必须先通过释放闸门；client-runtime/iteration-loop.mjs:940-948（pendingInjection 自动续跑）与 :977-993（settledForResume 自动续跑）是恢复启动的既有路径。",
+        "tick 间隔不在锁定输入内，故 10.263s/14.669s 只能说明等待是状态驱动，不能反推具体节拍（见 limitations[5]）。"
+      ]
+    },
+    {
+      "claim": "[FR-16] 无法判定项：研究员 run 的触发者（停滞升级 / 隧道视野 / 操作员触发 / 固定 Profile 经验调研）无法从锁定输入归属。",
+      "classification": "unknown",
+      "evidence": [
+        "case.json records[3] 只有 runId/时间/事件计数与模型观测，没有 runPhase、synchronous、direction 或触发原因字段。",
+        "client-runtime/iteration-loop.mjs:950-973（停滞/隧道视野升级，:961-967 调 deps.startResearch）与 client-runtime/agent-runtime.mjs:1144-1238 startResearch 的 runPhase 分支（acquire/synthesize/experience）都会产生同类 runId 前缀 'claude_research_'，仅凭 runId 无法区分。",
+        "case.json 的 records 也不含 runHistory/iterationStats，因此无法复核 stagnated/consecutiveNoAdopt。"
+      ]
+    },
+    {
+      "claim": "[FR-17] 结论（上游原因可证明程度）：可证的是'客户端在取消路径上把该 run 记为 cancelled、error 置 null，且保留流中未包含任何 assistant 事件'；取消的触发分支与 provider 侧根因都不可证明，必须保持 unknown。",
+      "classification": "inference",
+      "evidence": [
+        "可证部分见 FR-06（close 分支的最终记录成功落盘）与 FR-01（cancelled/error null/零 assistant 事件为原件字段）。",
+        "触发分支不可证：case 不含取消请求时刻与触发来源；FR-07 的预算到期只是与时长一致的解释，operator/平台取消无法排除。",
+        "provider 根因不可证见 FR-08、FR-09：保留流 init-only、无 error/result 事件、无网络 trace、无请求/响应体；case.json limitations[2] 已明确 transport/provider 原因不能从 init-only 保留输出断言。",
+        "不采信替代证据：model-observation.md:9-17 与 model-observation.mjs:100-107、:202-209 规定 init 的 configuredModels 与 result.modelUsage 只作诊断标签，永远不能升级为观测；本 run 的 configuredModels ['claude-opus-5[1m]'] 与空 usageModels 不能填补 actual model。"
+      ]
+    },
+    {
+      "claim": "[FR-18] 观测缺口（真实存在但作用范围有限）：cancelled/signal 终态会把 run.error 置为 null，因此 run 记录层面的 error 字段在取消后不再承载上游诊断；该分支不删除已写入 jsonl 的事件，但在本 case 中确实没有 error/result 事件留存，故原因仍未知。",
+      "classification": "fact",
+      "evidence": [
+        "client-runtime/claude-client.mjs:486-491：record.status = completed ? 'completed' : (cancelled || signal) ? 'cancelled' : 'failed'；record.error = completed || cancelled || signal ? null : (...CLAUDE_RESULT_ERROR / CLAUDE_RESULT_MISSING / CLAUDE_EXIT_<code>)。",
+        "client-runtime/claude-client.mjs:463：cancelled 来自进程内 cancellationRequested 集合的消费，signal 来自 'close' 回调参数，两者都会走向 error=null。",
+        "范围边界：该分支只改 run.error 字段，不删除 :445/:475 已 append 的事件行；运行期若已有 result 事件，:446-452 会先写 completed/failed，:486 仍可能被取消语义覆盖状态。本 case retainedEventTypes 仅 {\"system:init\":1}，没有 error/result 事件可参考，因此'provider 是否报错'仍不可判定（FR-09）。"
+      ]
+    },
+    {
+      "claim": "[FR-19] 观测缺口：DTO 只把'采集到什么'表达为 reasons 散文，没有结构化的 assistant/缺失计数；下游只能靠字符串匹配区分'零 assistant 事件'与'assistant 事件缺模型元数据'。",
+      "classification": "fact",
+      "evidence": [
+        "client-runtime/model-observation.mjs:17-20 冻结 DTO_KEYS 中只有 status/model/source/models/configuredModels/usageModels/observations/reasons，没有计数字段。",
+        "client-runtime/model-observation.mjs:142-159：assistantCount / missingSessionCount / foreignSessionCount / invalidResponseCount 仅用于拼接 reasons 字符串，未进入 DTO。",
+        "client-runtime/model-observation.mjs:176 isReasonList 只要求非空字符串，reason 文本内容不是契约字段。"
+      ]
+    },
+    {
+      "claim": "[FR-20] 既有测试符号与覆盖现状（仅限本次可读的 16 个输入）：model-observation 侧共 34 项硬件无关检查，其中既有真实驱动 claude-client 的适配器取消用例，也有经真实 createAgentRuntime 的 projection 取消结算用例（覆盖正常成功取消路径）；另有 1 个 timeout-recovery 场景，注入不含 cancel 的假 client 且 run 预置为 cancelled。两类取消场景都只落在正常成功/已释放结算，未断言 deadline 到期、single-flight 并发复用与重试耗尽。未读取的测试不能宣布全仓覆盖为零。",
+      "classification": "fact",
+      "evidence": [
+        "tests/model-observation-test.mjs:47 check(name, fn) 为通用断言壳；按前缀统计为 pure 17 项（:136..:463）、adapter 7 项（:543..:681）、projection 7 项（:738..:878）、archive 3 项（:913..:941），合计 34，与 client-runtime/model-observation.md:129 的 '34 hardware-free checks' 一致。",
+        "tests/model-observation-test.mjs:681-695 'adapter: cancellation retains the observed metadata'：:505 createClaudeClient（假子进程驱动真实客户端），:691 实际 await claude.cancel(runId)，:692-694 断言取消后观测仍为 observed 且 model 不变。",
+        "tests/model-observation-test.mjs:602 'adapter: thinking-only assistant metadata is observed and private reasoning is not persisted'；:617 'adapter: an unterminated final JSON line is still observed on physical close'；:569 'adapter: a resume hint is not an observation; init-only/empty streams stay unknown'。",
+        "tests/model-observation-test.mjs:798 'projection: cancellation settlement retains observation without weakening release'：:711-716 创建真实 createAgentRuntime，:708 的 projectionClient.cancel 立即返回 confirmed，:806-815 以 cancel_requested 状态驱动 projectState，因而进入 agent-runtime.mjs:1781 settleCancellation/:1296-1299 requestCancellation 并走通正常成功结算（详见 FR-12）。同类还有 :834 'a cancelled run whose DTO session disagrees ...'（:845-851 基线同样走正常取消结算）与 :878 'a failing readRun clears a previously projected observation ...'。",
+        "tests/agent-runtime-timeout-recovery-test.mjs:16-30 注入的 claudeClient 只有 describe/readRun/readEvents/eventText，没有 cancel；:20-26 readRun 直接返回预先 cancelled 的 run（claude_TIMEOUT，无 resourceRelease，故 agent-runtime.mjs:1285 isExecutionReleased 为真）；:39-47 以 status 'completed'、timedOut true、301s 无活动驱动投影；:53-61 断言收敛为可重试终态。该用例覆盖的是'run 已终结/已释放 + 计时恢复'的收敛，不进入 requestCancellation。",
+        "client-runtime/agent-runtime.md:137-144、client-runtime/cancellation-contract.md:34、client-runtime/model-observation.md:131 列出的其余测试（agent-cancellation-liveness、prompt-audit、codex-runtime、research、baseline-materializer-agent、round-feedback-integration、model-observation-acceptance）不在 acceptance_inputs，未阅读，其覆盖内容不纳入本次结论（见 limitations[6]）。"
+      ]
+    },
+    {
+      "claim": "[FR-21] 覆盖缺口（仅就本次可读测试文件而言，按本案风险排序）：(1) 没有'init + thinking_tokens 后被强杀、且此前无 assistant 元数据'的采集场景；(2) 取消的正常成功路径在可读输入内已有覆盖（model-observation projection 取消结算进入 requestCancellation；timeout-recovery 覆盖已释放 run 的收敛），但 deadline 实际到期、single-flight 并发复用、重试耗尽/needs_human+quarantined 性质没有针对性断言；(3) 没有断言取消终态清空 run.error；(4) persistRun 失败被吞掉，无失败可见性测试。",
+      "classification": "fact",
+      "evidence": [
+        "(1) 最接近的是 tests/model-observation-test.mjs:569（init-only/空流保持 unknown）与 :681-695（取消保留*已存在*的观测），二者都不覆盖'只有 system:thinking_tokens 活动、从无 assistant 元数据'的目标场景；也没有断言 claudeActivityFromEvent 对 thinking_tokens 产出 kind 'thinking'（client-runtime/claude-client.mjs:87-89）。",
+        "(2) 已有覆盖：tests/model-observation-test.mjs:798-815（配 :702-716 真实 runtime 与立即 confirmed 的 fake cancel）进入 agent-runtime.mjs:1296-1299 requestCancellation 并走通成功结算；tests/agent-runtime-timeout-recovery-test.mjs:20-26 预置 cancelled run，经 :1285 isExecutionReleased 早退完成'已释放 run 的计时恢复'。未覆盖的性质：agent-runtime.mjs:1252-1256 deadline 实际到期（该用例的 fake cancel 立即 resolve）、:1244-1248 single-flight 并发复用（用例每次调用都立即落定，无并发复用）、:1258-1260 provider 取消报错→unconfirmed、:1301-1315 重试计数耗尽→needs_human/quarantined。",
+        "(3) 无测试断言 client-runtime/claude-client.mjs:486-491 的 error 置空语义（:681-695 只断言观测保留）。",
+        "(4) client-runtime/claude-client.mjs:404、:423、:431、:444、:445、:459、:493 全部以 .catch(() => {}) 吞掉持久化失败，无任何可见性或测试。",
+        "范围声明：本次未阅读 acceptance_inputs 之外的测试，故以上缺口只说明'可读输入内无覆盖'，不代表这些分支在全仓范围无测试。"
+      ]
+    },
+    {
+      "claim": "[FR-22] 结论（是否存在明确实现缺陷）：仅凭锁定输入与代码可达性，未发现能解释本案 unknown 的明确实现缺陷，但这是'未发现'而非'证明不存在'；已识别的是可观测性/证据缺口（FR-18、FR-19、FR-21）与设计上使上游原因不可证的部分（FR-17）。不得以改配置补齐 model、替换样本或扩大预算来通过门槛。",
+      "classification": "inference",
+      "evidence": [
+        "采集路径覆盖 thinking-only 与尾行（FR-03），且在本次 N20 其它 4 次运行的观测条数差异上与过滤路径一致（FR-04，属推断）；目标 run 的零值 reason 是零 assistant 元数据时的正确判定（FR-02）。",
+        "未知仍未被排除：provider 是否产出过被强杀丢失的字节（FR-08）、取消触发分支（FR-07）、上游根因（FR-09、FR-17）。",
+        "unknown 不阻塞工作流也不可比，是契约内的合法终态：client-runtime/README.md:209-212、client-runtime/model-observation.md:16-17 与 :89-94。",
+        "严格 N20 判定与'不得用 init/usage/相邻 run 填补 actual model'的约束见 case.json knownConclusion（fullSuccess true、comparable false、strictN20Passed false、modelUnknownPreserved true）与 case.json limitations[0]。",
+        "本次审核未修改任何生产源码，未启动业务 E2E、GPU 或额外 CLI/网络请求；平台审核 worker 本身经 Claude Code 调用已获授权的外部模型（见 verification 与 limitations[7]）。"
+      ]
+    }
+  ],
+  "limitations": [
+    "审核范围严格限定为 acceptance_inputs 的 16 个文件与 case.json/README.md 内的元数据；未读取任何其它源码、用户配置、凭据、prompt/thinking 正文或原件外部路径（含 case.json 指向的原始 record/jsonl）。FR-06/FR-07 中'盘上记录即 close 分支所写'依赖 case.json 抽取忠实，本工作区无法复核原始 record。",
+    "同目录下 root-preflight.md、root-timeline.json、dispatch-review-request.json 不在 acceptance_inputs，未读取其内容（仅目录列举）。",
+    "定位 agent-runtime.mjs 内符号时使用的目录级符号检索对 client-runtime/ 下的非输入文件（如 agent-runtime/definitions.mjs）也返回了少量匹配行；这些行未被打开、未纳入任何 finding 证据，FR-07 的 stall 阈值结论只依据 agent-runtime.mjs:468-499 自身，不依赖 runtimeDefinition.defaultStallMs 的具体数值。",
+    "所有 SHA-256 均为 acceptance_locks/case.json 的声明值，未在本工作区重算；按冻结验证范围只执行了固定 JSON 结构检查与只读 git status。",
+    "原件记录不含 cancelled run 的 resourceRelease 收据、取消触发来源与进程退出码，故'该次取消最终是否已确认释放''由谁触发取消'无法从锁定输入核实；FR-10/FR-11/FR-12/FR-13 只对代码路径成立。",
+    "保留流按设计丢弃 system/thinking_tokens 与 thinking-only assistant 正文，因此 .jsonl 本身永远不能证明'是否曾有 assistant 事件'；该区分只能由落盘 DTO 的 reasons 文本承担，而 appendFile 失败又被吞掉（FR-04、FR-05、FR-19）。",
+    "tick/投影节拍与 state.agent.startedAt 相对 run.startedAt 的偏移不在锁定输入内，无法把 182.304s 与 180000ms 的 ~2.3s 差值、以及 10.263s/14.669s 的恢复间隔精确归因到某一节拍参数。",
+    "client-runtime/agent-runtime.md:137-144、client-runtime/cancellation-contract.md:34、client-runtime/model-observation.md:131 引用的其余测试文件不在 acceptance_inputs，未阅读；FR-20/FR-21 的覆盖结论只覆盖可读输入，不能外推为全仓覆盖状态。",
+    "本次审核没有启动业务 E2E、GPU 或任何额外 CLI/网络请求，也未运行全量回归；但平台审核 worker 本身是经 Claude Code 调用外部模型的执行，故本报告不声称'零外部模型调用'。全部运行时结论均为原件元数据 + 代码可达性推断，不含运行时行为验证。",
+    "原件时间线（20:29–20:39 的 5 条记录）只覆盖同一 Mission 的连续 run，不能排除该 Mission 之外因素对第13次运行的并发影响；无并发/资源占用证据。"
+  ],
+  "verification": [
+    {
+      "name": "report-json-shape",
+      "command": "node -e \"const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('docs/development/evidence/no-response-20260914/client-review.json','utf8')); if(!p.schemaVersion||!Array.isArray(p.findings)||!Array.isArray(p.limitations)||!Array.isArray(p.verification)||!Object.hasOwn(p,'decisionRequest')||p.findings.some(f=>!f.claim||!['fact','inference','unknown'].includes(f.classification)||!Array.isArray(f.evidence))) process.exit(1);\"",
+      "passed": true,
+      "evidence": "Exit code 0（冻结配方原样执行一次）。findings 22 条，classification 仅取 fact/inference/unknown，limitations 10 条，verification 2 条，decisionRequest 键存在且为 null。"
+    },
+    {
+      "name": "no-production-source-modified",
+      "command": "git status --porcelain",
+      "passed": true,
+      "evidence": "输出仅两行，均为本任务报告文件：M docs/development/evidence/no-response-20260914/client-review.json、M docs/development/evidence/no-response-20260914/client-review.md；client-runtime/、tests/、AGENTS.md、docs/development/ARCHITECTURE.md 均无改动（.dispatch-result.json 由本工作区结果流程单独写入，未纳入该次输出）。"
+    }
+  ],
+  "decisionRequest": null
+}

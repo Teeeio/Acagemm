@@ -1,0 +1,2 @@
+# Keep retained evidence and audit readers byte-exact across Git checkouts.
+* -text

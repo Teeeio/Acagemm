@@ -75,7 +75,18 @@ export const createOperatorTestQueue = ({
     const temporary = filename + '.' + randomUUID() + '.tmp';
     try {
       await writeFile(temporary, tasks.map((task) => JSON.stringify(task)).join('\n') + '\n', 'utf8');
-      await rename(temporary, filename);
+      // A reader (or the rename that just replaced this same durable file) can
+      // still hold the previous handle open on Windows; that short overlap
+      // surfaces as EPERM/EBUSY. Bounded replacement retries keep the durable
+      // write atomic instead of failing a bounded operation for a transient
+      // handle and stranding the task mid-cancellation.
+      for (let attempt = 0; ; attempt += 1) {
+        try { await rename(temporary, filename); break; }
+        catch (error) {
+          if (!['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || attempt === 11) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+        }
+      }
     } finally { await rm(temporary, { force: true }).catch(() => {}); }
   };
   const locked = (operation) => {

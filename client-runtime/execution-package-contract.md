@@ -2,6 +2,10 @@
 
 This module contains pure, language-neutral rules and canonical JSON encoding.
 It neither reads files nor imports concrete queues, compilers, or runtimes.
+It is also the canonical owner of the pure `contentDigest(bytes)` helper
+(`sha256:` + SHA-256 hex over the given bytes); it needs only `node:crypto` and
+performs no I/O. Application and persistence modules that need content identity
+import this function here rather than through the package store.
 
 A v1 manifest identifies candidate, offline dependency and independent acceptance
 layers by content digest. Each regular file has a portable relative path, byte

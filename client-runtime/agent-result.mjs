@@ -1,3 +1,5 @@
+import { classifyParsedCandidateGeneration } from './candidate-generation/classification.mjs';
+
 const eventText = (event = {}) => event?.text
   || event?.message
   || event?.item?.text
@@ -64,9 +66,19 @@ export function parseAgentResult(events = []) {
   const messages = agentMessages(events);
   const finalText = messages.at(-1) || '';
   const parsed = tryParseJson(finalText);
-  const rawCandidates = parsed?.candidates || parsed?.candidatePlan?.candidates || [];
+  // 用 ?? 而不是 ||：显式声明的 null / 0 / '' 也是「声明过」，必须如实记录，不能
+  // 悄悄回落到候选计划字段。类型不是数组时同样记录，不再静默地当成空数组——那正是
+  // 「候选去哪了」这个问题的第一手证据。
+  const declaredCandidates = parsed?.candidates ?? parsed?.candidatePlan?.candidates ?? null;
+  const rawCandidatesType = Array.isArray(declaredCandidates) ? 'array' : declaredCandidates == null ? 'absent' : 'non-array';
+  const rawCandidateCount = rawCandidatesType === 'array' ? declaredCandidates.length : null;
   const source = events.some((event) => event?.provider === 'claude-code') ? 'claude-agent' : 'codex-agent';
-  const candidates = Array.isArray(rawCandidates) ? rawCandidates.map((candidate, index) => normalizeCandidate(candidate, index, source)).filter(Boolean) : [];
+  const candidates = Array.isArray(declaredCandidates) ? declaredCandidates.map((candidate, index) => normalizeCandidate(candidate, index, source)).filter(Boolean) : [];
+  // 类型不可映射时数量未知：记 null，不伪造成 0。
+  const droppedCandidateCount = rawCandidateCount === null ? null : rawCandidateCount - candidates.length;
+  const format = parsed ? 'structured-json' : 'text-fallback';
+  const patch = typeof parsed?.patch === 'string' ? parsed.patch : (typeof parsed?.unifiedDiff === 'string' ? parsed.unifiedDiff : null);
+  const hasPatch = typeof patch === 'string' && patch.length > 0;
   const proposedNextAction = parsed?.nextAction || parsed?.next_action || (candidates.length ? {
     type: 'candidate.plan',
     title: '执行 Candidate Plan',
@@ -82,7 +94,7 @@ export function parseAgentResult(events = []) {
   } : null;
   return {
     schemaVersion: parsed?.schemaVersion || parsed?.schema_version || 'operator-studio.agent-result/v1',
-    format: parsed ? 'structured-json' : 'text-fallback',
+    format,
     summary: parsed?.summary || parsed?.diagnosis?.summary || finalText || 'Agent 未返回最终摘要。',
     diagnosis: parsed?.diagnosis || null,
     candidates,
@@ -90,10 +102,25 @@ export function parseAgentResult(events = []) {
     nextAction,
     risks: Array.isArray(parsed?.risks) ? parsed.risks : [],
     sourceReferences: Array.isArray(parsed?.sourceReferences) ? parsed.sourceReferences : [],
-    patch: typeof parsed?.patch === 'string' ? parsed.patch : (typeof parsed?.unifiedDiff === 'string' ? parsed.unifiedDiff : null),
+    patch,
+    // 候选生成证据：声明了什么、映射丢了多少、有没有 patch、属于哪一类。
+    // 纯观测，不参与任何准入判定——准入权威永远是工作区 Git Diff。
+    candidateGeneration: {
+      schemaVersion: 'operator-studio.candidate-generation/v1',
+      format,
+      rawCandidatesType,
+      rawCandidateCount,
+      normalizedCandidateCount: candidates.length,
+      droppedCandidateCount,
+      hasPatch,
+      classification: classifyParsedCandidateGeneration({ format, rawCandidatesType, normalizedCandidateCount: candidates.length, droppedCandidateCount, hasPatch }),
+    },
     rawText: finalText.slice(0, 8_000),
   };
 }
+
+// 研究员与基线物化结果的解析保持原样：它们的产物结构必须永远避开 candidates，
+// 这是「研究产物不得进入候选验证路径」的第一道闸。
 
 // 研究员子 Agent 的结果解析：产出调研笔记（findings / suggestedDirections / sources），
 // 结构必须避开 candidates 字段，确保研究产物永远不会进入候选验证路径。

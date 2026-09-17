@@ -1,0 +1,23 @@
+
+> operator-studio-mvp@0.1.0 test:smoke
+> node tests/client-runtime-smoke-test.mjs
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert.ok(adopted.state.knowledgeMaintenance.changes.every((change) => change.outcome === 'simulation_only'))
+
+    at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/acagemm%E5%8E%9F%E5%9E%8B/tests/client-runtime-smoke-test.mjs:293:10
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v22.23.2

@@ -1,0 +1,240 @@
+{
+  "status": "prepared_not_submitted",
+  "submissionBlocker": "Host auto-review rejected v1; do not submit v2 until user answers the concrete approval question.",
+  "destination": {
+    "profileId": "model_24e9ad57f50c4e21b6dcb581a454ae93",
+    "harness": "claude-code",
+    "configuredBaseUrl": "https://api.deepseek.com/anthropic",
+    "configuredModel": "deepseek-v4-flash",
+    "verification": "Read from dispatch profiles in this turn; no fresh upstream request was made."
+  },
+  "dataScope": {
+    "exactFiles": [
+      {
+        "path": "docs/development/evidence/no-response-20260914/README.md",
+        "sha256": "314d9133270ac1ffc0c22a52e8df09ae14677c1b236a0bf449ab1522bb6682f8"
+      },
+      {
+        "path": "docs/development/evidence/no-response-20260914/case.json",
+        "sha256": "df6ccf5df226fee440eee3876e3af9c0174ae0ee6c553d3172d4f7ba559e767c"
+      },
+      {
+        "path": "client-runtime/claude-client.mjs",
+        "sha256": "e2bd984035e6da0b2c9fae841c929cab38840d49d438d3247b54db2b5685a4fb"
+      },
+      {
+        "path": "client-runtime/model-observation.mjs",
+        "sha256": "2625f6fb7958d6064770c9c7919ce43d272574be050e8f0e20a8e46e6c95143d"
+      },
+      {
+        "path": "client-runtime/model-observation.md",
+        "sha256": "8f581d3da6889bf12648d582b7d79bf509fe441c54a4e7b2396b73ed66a17020"
+      },
+      {
+        "path": "client-runtime/agent-runtime.mjs",
+        "sha256": "dbd4c7a0a2088b81ab04cabb2c4f7cc8be7b462dda8b22c999f032c8305e82ce"
+      },
+      {
+        "path": "client-runtime/agent-runtime.md",
+        "sha256": "f4a942d92d4f276b8659f8e0fa7946b75ff7d804e9d3952df6dabb57fe52c5af"
+      },
+      {
+        "path": "client-runtime/cancellation-contract.md",
+        "sha256": "996262728ad9756e255eb9e5c7c0baec97188735a65e1875d5aa8bdffb198a35"
+      },
+      {
+        "path": "tests/agent-runtime-timeout-recovery-test.mjs",
+        "sha256": "0f130186a025d3bd655986714aced759046a7390d57445fc84a5e7b84be41aa3"
+      },
+      {
+        "path": "AGENTS.md",
+        "sha256": "6fc2452e367605a043e68ca9f81d62f464a30c3fea9fd95603fccf1a17b2d26d"
+      },
+      {
+        "path": "docs/development/ARCHITECTURE.md",
+        "sha256": "69e9f9d2429f08bd9ef63228c6bc4af221734311b2c3f188afbeef9881315408"
+      },
+      {
+        "path": "client-runtime/README.md",
+        "sha256": "5aebf2050886c381a84776b421979afd0a1b18d6992fc585849b611877844809"
+      },
+      {
+        "path": "client-runtime/iteration-loop.mjs",
+        "sha256": "d7989257b0b7b5acc58d38e57850f040f1d4153d4a6b2c4c0987e77e0db74206"
+      },
+      {
+        "path": "client-runtime/iteration-loop.md",
+        "sha256": "733688555505787680de724fbec051cd3bfe4c8f309784d99d9e8b95dfc7542c"
+      },
+      {
+        "path": "client-runtime/cancellation-contract.mjs",
+        "sha256": "ba49589bd210208081e0a9065668f99cd6418d1053930f271605b392b6e2f2d3"
+      },
+      {
+        "path": "tests/model-observation-test.mjs",
+        "sha256": "920d0dcf6a475ca8110f92213eb236e75f52c6c77fb2606fc1dd29060389e20f"
+      }
+    ],
+    "additionalContext": "Task instructions, platform existing project context, and existing Claude Code harness context; these may contain local paths and repository information.",
+    "excluded": "No credential files, API key values, raw prompt/thinking bodies, unrelated source or original external evidence files may be read."
+  },
+  "effects": {
+    "workerTasks": 1,
+    "timeoutSeconds": 900,
+    "productionWrites": false,
+    "newGpuRuns": 0,
+    "additionalAgentCalls": false,
+    "outputs": [
+      "docs/development/evidence/no-response-20260914/client-review.json",
+      "docs/development/evidence/no-response-20260914/client-review.md"
+    ]
+  },
+  "request": {
+    "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+    "request_id": "no-response-code-review-20260914-v2",
+    "tasks": [
+      {
+        "title": "第13样本无响应/取消恢复独立代码审核",
+        "goal": "沿冻结诊断路线审核既有Claude客户端与Agent Runtime：判断unknown是否采集遗漏、取消是否有界、恢复时序与证据缺口，交可独立审查的报告。",
+        "task_type": "diagnostic-review",
+        "milestone_id": "operator-real-regression",
+        "work_item": "无响应与取消恢复诊断",
+        "execution_kind": "model",
+        "profile_id": "model_24e9ad57f50c4e21b6dcb581a454ae93",
+        "allowed_paths": [
+          "docs/development/evidence/no-response-20260914/client-review.json",
+          "docs/development/evidence/no-response-20260914/client-review.md"
+        ],
+        "required_artifacts": [
+          "docs/development/evidence/no-response-20260914/client-review.json",
+          "docs/development/evidence/no-response-20260914/client-review.md"
+        ],
+        "acceptance_inputs": [
+          {
+            "path": "docs/development/evidence/no-response-20260914/README.md",
+            "sha256": "314d9133270ac1ffc0c22a52e8df09ae14677c1b236a0bf449ab1522bb6682f8"
+          },
+          {
+            "path": "docs/development/evidence/no-response-20260914/case.json",
+            "sha256": "df6ccf5df226fee440eee3876e3af9c0174ae0ee6c553d3172d4f7ba559e767c"
+          },
+          {
+            "path": "client-runtime/claude-client.mjs",
+            "sha256": "e2bd984035e6da0b2c9fae841c929cab38840d49d438d3247b54db2b5685a4fb"
+          },
+          {
+            "path": "client-runtime/model-observation.mjs",
+            "sha256": "2625f6fb7958d6064770c9c7919ce43d272574be050e8f0e20a8e46e6c95143d"
+          },
+          {
+            "path": "client-runtime/model-observation.md",
+            "sha256": "8f581d3da6889bf12648d582b7d79bf509fe441c54a4e7b2396b73ed66a17020"
+          },
+          {
+            "path": "client-runtime/agent-runtime.mjs",
+            "sha256": "dbd4c7a0a2088b81ab04cabb2c4f7cc8be7b462dda8b22c999f032c8305e82ce"
+          },
+          {
+            "path": "client-runtime/agent-runtime.md",
+            "sha256": "f4a942d92d4f276b8659f8e0fa7946b75ff7d804e9d3952df6dabb57fe52c5af"
+          },
+          {
+            "path": "client-runtime/cancellation-contract.md",
+            "sha256": "996262728ad9756e255eb9e5c7c0baec97188735a65e1875d5aa8bdffb198a35"
+          },
+          {
+            "path": "tests/agent-runtime-timeout-recovery-test.mjs",
+            "sha256": "0f130186a025d3bd655986714aced759046a7390d57445fc84a5e7b84be41aa3"
+          },
+          {
+            "path": "AGENTS.md",
+            "sha256": "6fc2452e367605a043e68ca9f81d62f464a30c3fea9fd95603fccf1a17b2d26d"
+          },
+          {
+            "path": "docs/development/ARCHITECTURE.md",
+            "sha256": "69e9f9d2429f08bd9ef63228c6bc4af221734311b2c3f188afbeef9881315408"
+          },
+          {
+            "path": "client-runtime/README.md",
+            "sha256": "5aebf2050886c381a84776b421979afd0a1b18d6992fc585849b611877844809"
+          },
+          {
+            "path": "client-runtime/iteration-loop.mjs",
+            "sha256": "d7989257b0b7b5acc58d38e57850f040f1d4153d4a6b2c4c0987e77e0db74206"
+          },
+          {
+            "path": "client-runtime/iteration-loop.md",
+            "sha256": "733688555505787680de724fbec051cd3bfe4c8f309784d99d9e8b95dfc7542c"
+          },
+          {
+            "path": "client-runtime/cancellation-contract.mjs",
+            "sha256": "ba49589bd210208081e0a9065668f99cd6418d1053930f271605b392b6e2f2d3"
+          },
+          {
+            "path": "tests/model-observation-test.mjs",
+            "sha256": "920d0dcf6a475ca8110f92213eb236e75f52c6c77fb2606fc1dd29060389e20f"
+          }
+        ],
+        "depends_on": [],
+        "resource_keys": [],
+        "steps": [
+          "先读锁定README与case.json；只可读取acceptance_inputs列出的精确16个文件，以及本任务描述/平台既有项目上下文。不得读取其它源码、用户配置、凭据、prompt/thinking正文或原件外部路径；缺必要依赖返回decisionRequest，不扩大读取范围。",
+          "审核claude-client的stdout分行、thinking遥测过滤前模型采集、关闭tail、取消及持久化顺序；审核agent-runtime主Agent预算、释放屏障与同步research/恢复路径。必须把事实、代码推断、未知分别标记，不能根据thinking活动把实际model填成已观测。",
+          "列出现有测试符号与覆盖缺口，评估是否已有明确实现缺陷或仅有可观测性缺口。若无证据就明确不能确定上游原因，不替Root选择新架构、不改源码或预算、不新增依赖/Agent/GPU/网络调用。",
+          "仅写两个报告。每个finding给相对路径+符号/行号或case字段证据。对缺关键接口返回decisionRequest具体question/reason/evidence。只运行固定JSON结构检查；不运行全套测试或真实CLI。"
+        ],
+        "acceptance": [
+          "两个required_artifacts必须真实收录且JSON符合冻结结构。",
+          "分别回答unknown来源、取消边界、恢复等待以及上游原因可证明程度；至少引用claude-client、agent-runtime、model-observation及实际case元数据。",
+          "原始N20失败/unknown保持，不能用配置补模型或建议替换样本/扩大预算来通过门槛；没有任何生产源码修改。"
+        ],
+        "verification_commands": [
+          "node -e \"const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('docs/development/evidence/no-response-20260914/client-review.json','utf8')); if(!p.schemaVersion||!Array.isArray(p.findings)||!Array.isArray(p.limitations)||!Array.isArray(p.verification)||!Object.hasOwn(p,'decisionRequest')||p.findings.some(f=>!f.claim||!['fact','inference','unknown'].includes(f.classification)||!Array.isArray(f.evidence))) process.exit(1);\""
+        ],
+        "verification_recipe": {
+          "name": "diagnostic-report-shape",
+          "checks": [
+            {
+              "name": "report-json-shape",
+              "argv": [
+                "node",
+                "-e",
+                "const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('docs/development/evidence/no-response-20260914/client-review.json','utf8')); if(!p.schemaVersion||!Array.isArray(p.findings)||!Array.isArray(p.limitations)||!Array.isArray(p.verification)||!Object.hasOwn(p,'decisionRequest')||p.findings.some(f=>!f.claim||!['fact','inference','unknown'].includes(f.classification)||!Array.isArray(f.evidence))) process.exit(1);"
+              ],
+              "timeout_seconds": 30
+            }
+          ]
+        },
+        "timeout_seconds": 900,
+        "upstream_plan": {
+          "approach": "对同一不可比原始样本做限定只读代码审核，Root同时重建原件时间线后交叉核对；不发起新实测，先判明已证实事实和观测缺口再制定实施契约。",
+          "estimated_minutes": 12,
+          "verification_level": "targeted",
+          "interfaces": [
+            "输入为Root结构化case/v1（5个运行记录、原件SHA、保留事件类型，无prompt/思维正文/凭据）。来源N20任务failed如实标记，本文件是Root准备输入，不伪称已集成来源任务payload。",
+            "JSON schema：schemaVersion字符串，findings[{claim,classification:fact|inference|unknown,evidence:[]}],limitations[],verification[],decisionRequest:null|具体缺失项。Markdown面向Root审查，结论必须同JSON一致。",
+            "实际model只能assistant.message.model；init/usage标签、thinking_tokens、相邻run均不能替代。Case主Agent预算180000/cleanup60000/driver720000保持。",
+            "审核输入已明确限定为16个精确路径及SHA-256，见acceptance_inputs；不将Root预检结论作为独立审核的前提。"
+          ],
+          "stop_conditions": [
+            "出现未冻结接口或证据不足时返回具体decisionRequest/unknown，不扩源码、架构、测试或外部访问范围。",
+            "不修改生产源码、已有验收基准/旧报告；不调用Claude CLI、GPU、联网安装或任何额外模型；仅平台配置worker执行本审核。"
+          ],
+          "preflight": [
+            {
+              "check": "MCP与规则恢复",
+              "status": "passed",
+              "evidence": "当前submit/preview含required_artifacts，retry含expected_attempt_id/expected_issue_version；专用wait实际actionable empty_scope/required=false；open恢复revision36，当前无运行任务且scheduler健康。"
+            },
+            {
+              "check": "输入原件",
+              "status": "passed",
+              "evidence": "Root已读取target原record与流，182.304秒后cancelled，保留流仅system:init；case.json从5records提取元数据并锁SHA。unknown及旧N20失败是待分析故障事实，不是假passed前置。"
+            }
+          ]
+        },
+        "dispatch_reason": "用户要求检查新版MCP后继续定位N20第13样本。先前v1外部审核提交被宿主自动审批拒绝；本v2将读取范围冻结为16个精确文件，等待用户针对 https://api.deepseek.com/anthropic 的明确授权后才提交。现有auth台账不替代宿主审批。"
+      }
+    ]
+  }
+}

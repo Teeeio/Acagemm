@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "recipe_name": "strict-n20-terminal-report",
+  "recipe_digest": "47893163500589e10a42679f16371d8ef9d4838aa65539d512a5cf1b0b6bf25e",
+  "executed_at": "2026-09-15T02:27:36.191+00:00",
+  "passed": true,
+  "planned_checks": 1,
+  "interrupted": null,
+  "checks": [
+    {
+      "name": "strict-n20-report",
+      "argv": [
+        "node",
+        "-e",
+        "const fs=require('node:fs');const b=JSON.parse(fs.readFileSync('docs/development/evidence/run-diagnostics-20260914/n20-recovered-20260915/batch.json','utf8'));const l=JSON.parse(fs.readFileSync('docs/development/evidence/run-diagnostics-20260914/n20-recovered-20260915/ledger.json','utf8'));if(b.status!=='passed'||b.requestedRuns!==20||b.invocations.length!==20||b.strictN20Passed!==true||b.stopReason!==null||b.invocations.some(x=>x.outcome!=='full_success'||x.comparable!==true||x.exitCode!==0))throw Error('strict N20 failed');console.log('strict N20 terminal report passed');"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.219,
+      "passed": true,
+      "truncated": false,
+      "cancelled": false,
+      "timeout": false
+    }
+  ],
+  "log": "verification.log",
+  "log_truncated": false
+}

@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-09-14T18:51:59.061100+00:00",
+  "source": "read-only current CC Switch SQLite configuration",
+  "currentProviders": [
+    {
+      "id": "998b9212-bbf7-4677-90f7-143e508ad9f6",
+      "name": "DeepSeek",
+      "baseURL": "https://api.deepseek.com/anthropic"
+    }
+  ],
+  "proxy": [
+    {
+      "app_type": "claude",
+      "listen_address": "127.0.0.1",
+      "listen_port": 15721,
+      "proxy_enabled": 1,
+      "enabled": 1,
+      "auto_failover_enabled": 0,
+      "live_takeover_active": 0
+    }
+  ]
+}

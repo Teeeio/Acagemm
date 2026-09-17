@@ -1,4 +1,5 @@
 import { ensureRoundBudgetStarted } from '../round-budget-contract.mjs';
+import { remainingMissionBudgetMs } from '../iteration-loop.mjs';
 
 export const createAgentCommands = ({
   addAuditEvent,
@@ -47,24 +48,52 @@ export const createAgentCommands = ({
       const referenceFixture = runtimeDescriptor.mode === 'reference-fixture';
       // 捕获-重放：在克隆上执行 reset + startRun（含 spawn），把结果摘进 payload；apply 只做确定性的状态重建。
       const clone = structuredClone(state);
+      const ensureBudget = () => {
+        const budget = ensureRoundBudgetStarted(clone, { nowMs: now().getTime() }).roundBudget;
+        const remaining = remainingMissionBudgetMs(clone, { nowMs: now().getTime() });
+        if (!Number.isFinite(remaining) || remaining <= 0) throw Object.assign(new Error('Mission budget exhausted before Agent start'), { code: 'ROUND_EXPERIENCE_BUDGET_EXCEEDED', status: 409 });
+        return budget;
+      };
+      const experienceLimit = () => Math.min(3000, Date.parse(ensureBudget().deadlineAt) - now().getTime(), remainingMissionBudgetMs(clone, { nowMs: now().getTime() }));
       if (intent.roundBudget) clone.iterationStats = { ...(clone.iterationStats || {}), roundBudget: structuredClone(intent.roundBudget) };
       if (intent.roundExperience) clone.iterationStats = { ...(clone.iterationStats || {}), roundExperience: structuredClone(intent.roundExperience) };
-      ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
-      if (roundExperience?.collect) await roundExperience.collect({ state: clone, mission });
-      ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
+      // 选择清单 sidecar 与 roundExperience 同轮冻结：intent 显式含该字段（含 null）时先原样深拷贝进克隆，
+      // 字段缺失代表旧 intent，兼容地用当前 prepare 产物。
+      if (intent.roundExperienceSelection !== undefined) clone.iterationStats = { ...(clone.iterationStats || {}), roundExperienceSelection: structuredClone(intent.roundExperienceSelection) };
+      ensureBudget();
+      if (roundExperience?.preflightCollection) await roundExperience.preflightCollection({ state: clone, mission });
+      ensureBudget();
+      if (roundExperience?.collect) await roundExperience.collect({ state: clone, mission, timeoutMs: experienceLimit() });
+      ensureBudget();
       resetMissionRunState(clone, goal, { referenceFixture });
+      // 重放（prepare 重新收到已记录 intent）必须复用 intent 里冻结的轮次事实，不能重新
+      // 读取当前可能已经前移的 facts；首次 prepare 才在 reset 归档后取当前快照。
+      const frozenRoundFacts = intent.roundFacts !== undefined ? structuredClone(intent.roundFacts) : null;
+      if (intent.roundFacts !== undefined) {
+        clone.iterationStats = { ...(clone.iterationStats || {}), roundFacts: structuredClone(intent.roundFacts) };
+      }
       const experienceContext = roundExperience
-        ? await roundExperience.prepare({ state: clone, mission, roundId: clone.iterationStats.roundBudget.roundId })
+        ? await roundExperience.prepare({ state: clone, mission, roundId: clone.iterationStats.roundBudget.roundId, timeoutMs: experienceLimit() })
         : null;
-      if (recordIntent) await recordIntent({ ...intent, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null) });
-      ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
+      // 真实 prepare 在「已有 context + intent 显式 null 清单」时会派生 context-derived 清单并写回状态。
+      // 必须在 prepare 之后立刻按 intent 冻结为同一变量，并写回克隆，保证 provider effect 期间不再变化；
+      // intent、payload 与 provider.start 都从这一个冻结变量取深拷贝，显式 null 也还原为 null。
+      const roundExperienceSelection = intent.roundExperienceSelection !== undefined
+        ? structuredClone(intent.roundExperienceSelection)
+        : structuredClone(clone.iterationStats.roundExperienceSelection ?? null);
+      clone.iterationStats = { ...(clone.iterationStats || {}), roundExperienceSelection: structuredClone(roundExperienceSelection) };
+      const roundFacts = intent.roundFacts !== undefined
+        ? frozenRoundFacts
+        : structuredClone(clone.iterationStats.roundFacts || null);
+      if (recordIntent) await recordIntent({ ...intent, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceSelection: structuredClone(roundExperienceSelection), roundFacts });
+      ensureBudget();
       let checkpoint = null;
       if (runtimeDescriptor.mode === 'reference-fixture') await runEffect(() => resetMissionWorkspace(state.activeMissionId));
       if (isManagedWorkspaceRuntimeMode(runtimeDescriptor.mode)) {
         checkpoint = await runEffect(() => createWorkspaceCheckpoint(state.activeMissionId, 'agent-run-baseline'));
         clone.workflowRecovery = { ...(clone.workflowRecovery || {}), checkpoints: [...(clone.workflowRecovery?.checkpoints || []), checkpoint].slice(-5) };
       }
-      ensureRoundBudgetStarted(clone, { nowMs: now().getTime() });
+      ensureBudget();
       const runtimeRun = await runEffect(() => agentRuntime.startRun({ state: clone, mission, goal, resumeThreadId: body?.resumeThreadId || null, workspace, experienceContext }));
       if (!runtimeRun.handled) startAgentRun(clone, goal, { reset: false });
       const eventType = referenceFixture
@@ -72,13 +101,17 @@ export const createAgentCommands = ({
         : runtimeDescriptor.mode === 'cli-file'
           ? 'mission.run_requested'
           : `${runtimeDescriptor.mode === 'claude-code' ? 'claude' : 'codex'}.run_started`;
-      return { payload: { goal, referenceFixture, eventType, runtimeMode: runtimeDescriptor.mode, agent: clone.agent, checkpoint, runId: clone.agent.runId, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceStatus: structuredClone(clone.iterationStats.roundExperienceStatus || null), experienceCollection: structuredClone(clone.iterationStats.experienceCollection || null) }, result: { runId: clone.agent.runId } };
+      return { payload: { goal, referenceFixture, eventType, runtimeMode: runtimeDescriptor.mode, agent: clone.agent, checkpoint, runId: clone.agent.runId, roundBudget: structuredClone(clone.iterationStats.roundBudget), roundExperience: structuredClone(clone.iterationStats.roundExperience || null), roundExperienceSelection: structuredClone(roundExperienceSelection), roundExperienceStatus: structuredClone(clone.iterationStats.roundExperienceStatus || null), experienceCollection: structuredClone(clone.iterationStats.experienceCollection || null), roundFacts }, result: { runId: clone.agent.runId } };
     },
     apply: (state, payload) => {
       resetMissionRunState(state, payload.goal, { referenceFixture: payload.referenceFixture });
       if (payload.checkpoint) state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), payload.checkpoint].slice(-5) };
       state.agent = payload.agent;
       if (payload.roundBudget) state.iterationStats = { ...(state.iterationStats || {}), roundBudget: structuredClone(payload.roundBudget), roundExperience: structuredClone(payload.roundExperience || null), roundExperienceStatus: structuredClone(payload.roundExperienceStatus || null), experienceCollection: structuredClone(payload.experienceCollection || null) };
+      // 选择清单必须与 payload 冻结的 context 同源还原；显式 null 也还原，缺失字段才留给旧 payload 兼容。
+      if (payload.roundExperienceSelection !== undefined) state.iterationStats = { ...(state.iterationStats || {}), roundExperienceSelection: structuredClone(payload.roundExperienceSelection) };
+      // apply 只重建准备阶段冻结的事实快照，不从 apply 时的当前状态重新推导。
+      if (payload.roundFacts !== undefined) state.iterationStats = { ...(state.iterationStats || {}), roundFacts: structuredClone(payload.roundFacts) };
       if (!state.runtimeEvents?.some((e) => e.type === payload.eventType && e.payload?.runId === payload.runId)) {
         appendRuntimeEvent(state, payload.eventType, { runId: payload.runId, goal: payload.goal }, { kind: 'adapter', mode: payload.referenceFixture ? 'reference-fixture' : payload.eventType === 'mission.run_requested' ? 'cli-file' : payload.runtimeMode });
       }

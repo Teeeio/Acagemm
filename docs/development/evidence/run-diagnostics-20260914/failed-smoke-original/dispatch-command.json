@@ -1,0 +1,33 @@
+{
+  "execution_kind": "command",
+  "argv": [
+    "node",
+    "F:/设计/快速项目/acagemm原型/.operator-studio-local/frozen-live-21c6d78/scripts/run-shared-gpu-regression-batch.mjs",
+    "--mode",
+    "smoke",
+    "--families",
+    "affine",
+    "--artifact-dir",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_189b972e6c6a45d6baef54781ee7b0f1\\scratch/real-runs",
+    "--report-dir",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_189b972e6c6a45d6baef54781ee7b0f1\\workspace/docs/development/evidence/run-diagnostics-20260914/smoke",
+    "--gpu-python",
+    "F:/设计/快速项目/acagemm原型/.gpu-venv/Scripts/python.exe"
+  ],
+  "exit_code": 1,
+  "elapsed_seconds": 742.437,
+  "cancelled": false,
+  "timeout": false,
+  "progress": {
+    "reported": true,
+    "phase": "finish",
+    "message": "batch failed (smoke_not_full_success: failure)",
+    "completed": 1,
+    "total": 1,
+    "percent": 100.0,
+    "at": "2026-09-14T19:33:24.747+00:00"
+  },
+  "log_truncated": false,
+  "started_at": "2026-09-14T19:21:02.729+00:00",
+  "ended_at": "2026-09-14T19:33:25.172+00:00"
+}

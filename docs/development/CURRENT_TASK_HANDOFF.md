@@ -1,0 +1,772 @@
+# 当前主线开发交接（Codex Agent 运行时与通用算子闭环）
+
+> 交接版本：2026-09-10（Asia/Shanghai）  
+> 交接对象：下一位开发者、代码审查者或负责恢复 Goal 的 Agent  
+> 交接时状态（已由下方当前状态入口取代）：P0 已提交到 main；Job supervisor P1 的 Windows Job Object/观测改动已作为 WIP 推送到专用交接分支，但尚未合并 main、尚未完成本轮总门禁。
+
+> **最新入口（2026-09-15，Phase 3 软件批次）**：Phase 3（KernelWiki 导入器 + 确定性选择 +
+> 现有生产 API/prepare 集成）的**软件实现**已独立验收并集成，生产实现提交
+> `bb3ddd5dfbe9285ec982c795ede04595edcf69cf`（其后仅由 Root 补充 review 主题词，生产代码未再改动，
+> `status.json` 已锁定）：新增 31 个用例（import 8 / selection 16 / runtime 7）通过，
+> `release 147 / non-hardware 44`，exit 0；固定源 KernelWiki `b6b4301f…369e6` 实际 52 页 / 54 单元，
+> 幂等导入 54/54（第二次 `unchanged`），两条 sm86 已审查建议进入最终 prompt，其中经验注入区块
+> `renderedBytes` 为 6 383 UTF-8 字节（**不是**完整 prompt 长度），
+> `publishable=false`。**本批无新的实机模型/GPU 运行**：新生产版本没有新增实机 E2E 或 N20，
+> 三条件（无经验 / 仅本地经验 / 本地+已审查 Wiki）收益**仍待验证**，本批不宣称性能或发布能力。
+> 读者说明与必要 CLI/HTTP 用法见
+> [`PHASE3_WIKI_ACCEPTANCE.md`](PHASE3_WIKI_ACCEPTANCE.md)；单一事实源、全部计数与失败细节见
+> [`evidence/p3-wiki-20260915/status.json`](evidence/p3-wiki-20260915/status.json)。
+>
+> **此前的实机验收入口（2026-09-15 UTC，仅对冻结源 `21c6d78` 有效，不适用于当前 HEAD）**：冻结生产源码
+> `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`（git clean）。本批真实回归在本机共享 NVIDIA GPU
+> （`sm86`、`publishable=false`）上完成并通过独立验收：affine smoke 1 次运行 / 2 候选 /
+> 2 次实际模型观测；**严格 N20 20/20 `full_success`、20/20 独立验证且可比、44/44 实际模型观测
+> （`deepseek-v4-flash`）、40 个不同候选**，队列任务全部终态释放、`workflowWritesAfterStart=0`；
+> 另做**单独** reduction / normalization 两家族覆盖（每族两轮）4 个不同候选、4/4 实际模型观测，
+> 不计入 N20。权威事实见
+> [`evidence/run-diagnostics-20260914/acceptance.json`](evidence/run-diagnostics-20260914/acceptance.json)，
+> 原件 reader/diagnostics 见
+> [`n20-recovered-20260915/reader.json`](evidence/run-diagnostics-20260914/n20-recovered-20260915/reader.json)、
+> [`coverage-recovered-20260915/reader.json`](evidence/run-diagnostics-20260914/coverage-recovered-20260915/reader.json)；
+> 范围与冻结输入见 [`evidence/closeout-20260915/ACCEPTANCE.md`](evidence/closeout-20260915/ACCEPTANCE.md)；
+> 交付状态与离线复核结果以
+> [`evidence/closeout-20260915/closeout.json`](evidence/closeout-20260915/closeout.json) 为单一事实源，
+> 便携交付包的操作说明见
+> [`evidence/closeout-20260915/PORTABLE.md`](evidence/closeout-20260915/PORTABLE.md)。
+> 结论限定该冻结源码、本机共享 GPU 与既定矩阵，
+> `publishable=false`；历史失败/unknown（旧 `83b91d6` 严格 N20 19 可比 + 1 unknown、无响应与
+> 代理重试失败、被拒绝的外发请求等）原样保留；该批止于上述实机回归，未涉及 Phase 3，
+> Phase 3 的最新状态见上方入口；旧实机结论不能因为工作树 git clean 或后续无生产变更就当成
+> 新 HEAD 的实机证据。本批无生产代码变更、未推送远端。术语：「下游」仅指 dispatch 平台 agent，
+> 被测的 Acagemm 运行 agent 不是下游。
+>
+> 以下 2026-09-12 的当前状态入口、Phase 2 入口以及 §1–§16 的交接主体**均为历史记录**
+> （2026-09-10/09-11 状态），最新状态以上方入口为准。
+
+> **历史状态入口（2026-09-12，已被上方 2026-09-15 入口取代）**：本文档主体是 2026-09-10/09-11 的 Job supervisor 交接，属历史记录，
+> 保留原时间与边界。当前已验收基线是轮次反馈 P1（`TEAM_HANDOFF.md` §14 第 1–5 项），验收见
+> [`P1_FEEDBACK_ACCEPTANCE.md`](P1_FEEDBACK_ACCEPTANCE.md)，原件与边界见
+> [`evidence/p1-feedback-20260912/README.md`](evidence/p1-feedback-20260912/README.md)。
+> 交接分支仍是 `handoff/codex-job-supervisor-p1`（本批 3 个本地提交 `fc251a8` / `dd95938` /
+> `6a5ae54`）。实际执行后端是本地共享 NVIDIA GPU
+> （`local-shared-gpu`，开发证据、`publishable=false`）与 CPU E2E；Claude Code 是 TUI 默认
+> Agent Runtime，Codex CLI 走显式路径，**两个 provider 的验收彼此独立**。新版 E2E driver 只对
+> 真实原件做 observer 只读回放，未重跑整段实机；单次真实两轮不构成 N=20 稳定性，
+> 当时 §14 第 6–7 项（Phase 2/3）未完成；其最新状态见下一段。第 8 项文档订正已完成。下文 S3、§10.1 等处的
+> "Codex" 应按 provider-neutral 的真实 Agent 路径阅读。
+>
+> **Phase 2 历史入口（2026-09-12 追加，最新状态见上方 2026-09-15 入口）**：诊断资格 + 版本化统一决策与治理（§14 第 6 项）
+> 已按劳务任务集成，对应冻结契约 [`P2_EVIDENCE_ACCEPTANCE.md`](P2_EVIDENCE_ACCEPTANCE.md)，
+> 当前证据索引与边界见
+> [`evidence/p2-evidence-20260912/README.md`](evidence/p2-evidence-20260912/README.md)，
+> 实机观察/台账规则见 [`REAL_GPU_REGRESSION.md`](REAL_GPU_REGRESSION.md)。**Phase 2 无硬件验收通过：
+> release 136 / non-hardware 38，exit 0**；485 个代码与测试文件运行前后哈希一致。
+> 没有新实机运行，也不构成 N=20 或真实发布；§14 第 7 项（KernelWiki，Phase 3）**当时尚未开始**（最新状态见上方
+> 2026-09-15 入口）。上文关于 Job
+> supervisor 的主体内容与 P1 结论保持历史原样。
+
+本文件不是历史设计草稿，而是接手当前工作树后可以直接执行的操作清单。若本文件与代码冲突，以代码中的测试、模块合同和最近一次已确认的持久化状态为准；若本文件与用户的新指令冲突，以用户新指令为准。
+
+## 1. 一句话结论
+
+产品主线是“后端/云端测试队列可替换的通用算子迭代闭环”。当前最紧急的运行时问题不是换模型，而是让每个 Agent attempt 有可解释的失败终态、可验证的进程释放证据和正确的候选/测试归属。
+
+P0（失败分类、恢复归属、有限终态）已经在 9b80437 完成并推送。P1 当前保存在 handoff/codex-job-supervisor-p1：Windows 原生 Codex 进程默认进入 Job Object，实时 JSONL 仍被采集，取消/退出后通过 receipt 查询活动进程数并形成 release proof，同时记录 stdout/stderr/解析层观测数据。
+
+接手者的第一目标不是继续扩展功能，而是：
+
+1. 审查未提交的 Job supervisor 差异；
+2. 让聚焦测试和完整门禁在干净环境下通过；
+3. 解决审查发现的竞态或兼容性问题；
+4. 提交、推送并更新验证记录；
+5. 再回到 Linux 兼容、真实 Agent 对照（provider-neutral，按 provider 独立验收）和通用算子长期能力。
+
+## 1.1 本轮收口结果（2026-09-10 完成）
+
+上述五项目标已由接手者执行完毕。两项总门禁本轮**真实通过**（完整日志见 `$TEMP/gate-local.log`、`$TEMP/gate-robust.log`，非历史记录）：
+
+| 命令 | 结果 | exit code |
+|---|---|---|
+| `npm run verify:local-c500-release` | `[release-check] PASS: 126 checks completed` | 0 |
+| `npm run verify:non-hardware-robustness` | `[non-hardware-check] PASS: 28 checks completed without physical hardware` | 0 |
+
+环境：Windows 10、Node v22.23.2、npm 10.9.8、分支 `handoff/codex-job-supervisor-p1`（基线 `138f9cf`）。**未使用真实 provider**：本轮证明的是本地确定性 fixture、进程收容与状态转换，不证明模型服务容量、TLS 信任链或云端排队。
+
+审查发现并修复的缺陷（细节见 §7.5）：
+
+1. `result` 承诺早于 helper 临时目录清理结算，调用方随即删除父目录，造成并发双删 → 负载下 `EPERM`（原 flake 的真正根因，不是重试预算不足）。
+2. helper 预算 15s 低于实测负载延迟，把普通调度延迟误报为 `CODEX_JOB_START_TIMEOUT` 并隔离健康工作区。
+3. 测试用固定 `delay(200)` / 3s 死线代替握手证据，在负载下必然失败。
+4. `findPython` 只容忍 `ENOENT`/`EACCES`，无法跳过 Windows Store 的 python3 别名桩（退出码 9009）。
+5. `test:local-c500-production-tui` 的源码断言停留在 `process.platform`，被 P1 WIP 改成注入式 `platform` 后失效——**该测试在 WIP 之后从未重跑过**，这正是"门禁未完成就不能算 PASS"的实例。
+
+仍未完成、需在下一轮处理的部分见 §9.1（P1 验收边界）与 §12（短期任务）。本轮**没有**放宽候选 Gate、固定测试矩阵、资源释放屏障或证据 provenance。
+
+## 1.2 第二轮收口结果（2026-09-11 完成）
+
+本轮范围（用户确认）：P1 档剩余缺口 + 专家在 `lastest_demand_for_job.md` §六点名"必须通过"的三项交错测试。
+明确**未**并入 §二.2（冻结 `roundStartSnapshot`）与 §二.3（attempt 退避预算）。
+
+两项总门禁在**修复后的同一棵树**上**连跑两轮均真实通过**（日志：`%TEMP%\gate-release.log` / `%TEMP%\gate-robust.log`，
+复跑 `%TEMP%\final-release.log` / `%TEMP%\final-robust.log`；非历史记录、非中断回填）。
+注意：本轮的第一次门禁尝试**真的失败了**，根因见下面的「门禁首次未通过」小节——不是沿用历史结论，也不是中断后回填：
+
+| 命令 | 结果 | exit code |
+|---|---|---|
+| `npm run verify:local-c500-release` | `[release-check] PASS: 128 checks completed` | 0 |
+| `npm run verify:non-hardware-robustness` | `[non-hardware-check] PASS: 30 checks completed without physical hardware` | 0 |
+
+较上一轮各 +2：新增 `test:agent-runtime-candidate-admission` 与 `test:round-settlement-interleaving`
+（两条都已写入 `package.json`，并同时登记进两道总门禁的 `checks` 数组；门禁没有自动发现机制）。
+
+### 门禁首次未通过：两个 Windows 原子写竞态（已修）
+
+本轮第一次跑 `verify:non-hardware-robustness` 时**真实失败**（exit 1，`[non-hardware-check] FAILED: verify:local-c500-release`），
+之后单独复跑 release 门禁又在另一处失败。两次都与候选/准入无关，根因是同一类 Windows 缺陷，且**都不是本轮引入的**
+（`operator-test-queue.mjs` 与内嵌 supervisor 源码在本轮其它改动中均未被触碰）：
+
+| # | 失败点 | 根因 | 处置 |
+|---|---|---|---|
+| 1 | `test:local-c500-recovery` 的 `actual parent process restart cannot spawn a claimed task twice` | supervisor 写 `execution-claim.json` 时 `rename` 撞上客户端仍持有的旧句柄，Windows 返回 `EPERM`；该异常被宽 catch 统一报成误导性的 `Job Object launch failed`，任务被判 `resourceRelease.confirmed: false` 并隔离 | `runner-supervisor` 的 `write` 改为与 `local-c500-service-client.atomicJson` 同形的有界重试（`EPERM`/`EBUSY`/`EACCES`，12 次退避）；catch 的 reason 改为携带真实错误，不再误报为 Job Object 问题 |
+| 2 | `test:queue-liveness`（`task deadline cancels independently of a stalled get` 等，约 1/8 复现） | `operator-test-queue.persist` 的 `rename` 同样撞上 `EPERM`，reject 掉一次 `locked` 操作 → 该次取消结算被吞掉 → 任务停在 `quarantined`，总截止时间到期后再也不落到 `failed` | `persist` 改为同样的有界重试 |
+
+诊断依据（不是推测）：失败运行时测试把工件保留在 `%TEMP%\operator-local-recovery-*`，其中 `runner.stderr.log` 与
+`execution-exit.json` 直接记录了 `EPERM: operation not permitted, rename ... execution-claim.json.<pid>.tmp`；
+队列侧则用带 trace 的**树外临时副本**复现，抓到 `flight-reject ... EPERM ... rename ... .jsonl.<uuid>.tmp`，
+并确认失败记录停在 `status: quarantined` / `failures: { poll: 1 }`。
+
+修复后：`test:queue-liveness` 连跑 40 次、`test:local-c500-recovery` 连跑 6 次全部 exit 0；两道总门禁在修复后的
+同一棵树上真实通过（128 / 30，exit 0）。为了这次通过**没有**放宽任何 Gate、测试矩阵、观察窗口或重试预算。
+
+仍缺同类重试的原子写点（同一模式，本轮未改，属第三轮候选）：`command-journal.mjs`、`execution-package-store.mjs`、
+`state-snapshot-storage.mjs`、`state-workspace.mjs`、`claude-client.mjs`、`codex-client.mjs`。它们不在本轮失败点上，
+但 Windows 下同样可能瞬时 `EPERM`。
+
+### 修了一个真实的 fail-open（是缺陷，不是加固）
+
+`agent-runtime.mjs` 准入块原先写 `let verifiedCandidates = agentResult.candidates;`。当失败属于不可恢复类
+（`CODEX_TLS_TRUST_FAILED` / `CODEX_AUTH_FAILED` 等）时 `candidateInspectionEligible === false`，
+跳过工作区 Git Diff 校验；但 `terminalReached` 仍为真，准入判断照样成立——声明候选带着
+`patchDigest === undefined` 进入 `state.candidateEvaluations`，且 `candidateValidation` 为 `null`。
+这直接违反 `admission.mjs` 与 `candidate-generation/CONSTRAINTS.md` 声明的"工作区 Git Diff 是候选准入权威"。
+现在改为 `verifiedCandidates = []`，并在 `terminalReached && !candidateInspectionEligible && 有声明候选` 时
+给出 `*_CANDIDATE_INSPECTION_SKIPPED`（`passed: false`）→ 走既有 `candidate.diff_rejected` 路径，
+且**不发** `candidate.not_proposed`。`tests/agent-runtime-candidate-admission-test.mjs` 用例 1 钉死该行为。
+
+### 空候选不再是无因标签
+
+新增 `client-runtime/candidate-generation/classification.mjs`（纯函数、零 import、零副作用），
+把专家的逐层重放固化为固定优先级的唯一根因码：
+
+1 `upstream_failure_no_candidate` → 3 `parse_mapping_loss` → 4 `tool_failed_patch_pending`
+→ 6 `patch_admission_failed` → 7 `task_contract_unmet` → 2 `no_candidate_generated`；
+第 5 类 `workspace_capture_gap` 由 `inspectCandidateDiff` 的工作区观测产出，不参与该序列。
+
+分类落在 `state.agent.candidateValidation.classification` 与 `candidate.not_proposed` 事件载荷上。
+`parseAgentResult` 同时开始记录 `rawCandidatesType` / `rawCandidateCount` / `droppedCandidateCount`
+与解析层分类，映射丢失因此可追溯。
+
+### 降级的是生成路径，不是准入标准
+
+`candidateGenerationPath` / `degraded` / `degradationReason` / `editToolStatus` / `patchValidation` /
+`workspaceAdmission` 六个字段透传到候选与事件载荷，**不参与任何 `passed` 判定**。两条曾经静默的路径现在会说话：
+
+- 结果内 patch 回退：事件 `candidate.patch_fallback_generation`（未降级）或
+  `candidate.degraded_generation`（结构化编辑工具失败）。
+- Agent 没返回候选、工作区却有真实 Diff：此前伪造的 `candidate-01` 现在标记
+  `workspace_observed` + `degraded: true` + `candidates_absent_but_diff_observed`。
+
+"编辑工具失败"与"编辑工具缺失"严格区分：工具身份只看事件的类型/名称字段，从不读命令正文；
+编辑工具从未出现（`absent`）永不判降级。`tests/candidate-generation-test.mjs` 用"降级候选仍被语言契约拒绝"
+钉死"降级不降标"。
+
+### runHistory 去重与归属
+
+`resetMissionRunState` 原先无条件前插 `[entry, ...runHistory]`，缺少 `agent-runtime.mjs` 那样的 runId 去重；
+同一 `state.agent.runId` 的迟到结算投影会产生两条相同的 `runHistory[0]`，而 `finalizeCandidateAdmission`
+正是读 `runHistory` 的 digest 做重复拒绝——重复条目会污染该输入。现改为按 runId 就地替换（保持时序位置，
+`slice(0, 20)` 不变），并新增平面归属字段 `roundId` / `queueRequestId` / `candidateGenerationPath` /
+`degraded` / `degradationReason`。
+
+### 专家三项交错测试
+
+| # | 场景 | 落点 |
+|---|---|---|
+| 1 | 首次失败 / 恢复成功 / 结算投影迟到 | 新增 `tests/round-settlement-interleaving-test.mjs`：A 去重与最新投影、B 归属是恢复 run 而非首次失败 run、C 同一 idempotencyKey 重放得到 `skipped_idempotent` 且队列中该 requestId 只出现一次；另含 Round 级"已取消 Round 不得重启"（`confirmed:false` 与 `quarantined` 两条 fail-closed 用例，并用正常终结轮次作正对照，证明断言确实走在 `settledForResume` 上） |
+| 2 | 本地取消 × 迟到 `turn.completed` | 扩展 `tests/codex-cancellation-test.mjs`：先结算为 `cancelled`，再注入迟到 `turn.completed`，断言状态、`resourceRelease` 与 `completedAt` 均不被改写 |
+| 3 | Queue 已接受但调用方丢响应 | 已由 `tests/local-c500-recovery-test.mjs` 与 `tests/generic-iteration-fault-injection-test.mjs` 覆盖且已在门禁内；本轮在既有用例内补了"并发恢复查询不得产生并发重复 runner"的断言 |
+
+第 1 项的纯 CLI 版本 `scripts/e2e-cpu-agent-iteration.mjs` 仍是 opt-in 的真实 Agent 验收脚本（需要真实 CLI 连接），
+本轮**未改写它**，而是补了确定性替代品。
+
+### 本轮明确延后（原计划第三轮；实际第三轮只修了编辑工具身份判定，见 §1.3，本节各项**仍然延后**）
+
+§二.2 冻结 `roundStartSnapshot`（需动 Workspace 快照生命周期与失败工件保留）；§二.3 attempt 退避预算
+（3 次上限已存在，缺的是退避与预算覆盖门，会改 `iteration-loop` 调度节奏）；`cancel.origin` 枚举；
+释放证据五项补齐（`rootProcessExited` / `containmentCoverageVerified` / `stdoutCaptureComplete` /
+`stderrCaptureComplete` 等，需改内嵌 C# helper）；五层观测第 4–5 层与 per-request token（会动已持久化的
+`operator-studio.token-usage/v2`，需 v3 迁移）；三层启动预检、8 项 SLO、N=20 回归门、P2 模型/上下文兼容；
+`Quote()` argv[0] 转义（低危，已记录）。
+
+本轮**没有**放宽候选 Gate、固定测试矩阵、资源释放屏障或证据 provenance。
+
+## 1.3 第三轮：编辑工具身份判定修复 + E2E harness 静默路径（2026-09-11 完成）
+
+### 根因：`editToolSignal` 在两个 Provider 下都恒定返回 `absent`
+
+专家 §三.4 要求区分 `file_change` 的**失败**与**缺失**。第二轮把它实现成了只认 `apply_patch` 的正则匹配。
+该形状是**推断出来的、不是采集来的**：在 78 个真实 Codex run 文件里，`apply_patch` 作为 `item.type` 出现 **0 次**；
+真实的结构化编辑事件是 `item.type: 'file_change'`（64 次）。而 Claude Code 的 `claude-client.mjs` 把**每一个**
+`tool_use` 都规范化成 `item.type: 'command_execution'`，真正的工具身份只留在 `item.name`（`Write` / `Edit` / `Bash`）。
+
+后果不是「漏了一个 Provider」，而是**两个 Provider 在生产里都恒定落回 `absent`**：`editToolStatus` 恒为 `absent`
+→ `structuredEditFailed` 恒为 `false` → 专家分类表**行 4 `tool_failed_patch_pending` 在生产中不可达**，
+同时行 5 `workspace_capture_gap` 被过度上报。测试夹具是按同一个错误假设写的（也用 `apply_patch`），
+于是实现与测试互相验证了彼此的错误——这正是 128 + 30 项门禁全绿却掩盖该缺陷的原因。
+
+真实降级样本（原先被读成「缺失」）：`codex_MTUULWMN_40A19CE7.jsonl`（`in_progress → failed → in_progress → failed`）
+与 `codex_MTUYPJ8S_CB10DC61.jsonl`（`in_progress → failed`）。
+
+### 修复
+
+`client-runtime/candidate-generation/classification.mjs` 的 `editToolSignal` 改为**分两个字段通道**判定，
+且**工具名优先于事件类型**：先看声明的工具名（`Write` / `Edit` / `Bash` / …），再看事件类型
+（`file_change` / `command_execution`）。命令正文永远不参与匹配，所以 `git apply foo.patch` 这类普通 shell 文本
+不会把一次成功写入误标成降级。三条语义不变：出现且失败 = `failed`、出现且正常 = `succeeded`、
+从未出现 = `absent`（缺失永不判降级）；首个失败的编辑工具即定调，后续 shell 写盘成功不给它翻案。
+
+回归断言逐字使用**真实采集到的事件形状**（夹具注释里带采集文件路径），不再是推断的 schema：
+`tests/candidate-generation-test.mjs` 新增 8 条，覆盖 Codex `file_change` 与 Claude `command_execution + name`
+两种布局，以及「先失败、后 shell 成功」的交错。`resetMissionRunState` 的归档条目补 `editToolStatus`，
+使验收报告能看出生成路径为什么降级。
+
+### E2E harness：含 `~` 的路径会把「兜底路径」报成绿的
+
+`scripts/e2e-cpu-agent-iteration.mjs` 的 run root 取自 `os.tmpdir()`。在非 ASCII 用户名下该值可能是 8.3 短名
+（本机为 `C:\Users\棉被暖~3\AppData\Local\Temp`），而 Claude Code 的路径权限守卫拒绝写含 `~` 的路径——
+`Write` / `Edit` 被拒后 Agent 只能走结果内 patch 兜底，**验收却照样报绿**。
+
+已用 5 组探针把触发条件收敛到单因子：`C:\claude-path-probe\plain\repository` ✅、
+`C:\claude-path-probe\.operator-studio\workspaces\MIS\repository` ✅（点目录不是原因）、
+`C:\path-probe~1\repository` ❌、`C:\Users\棉被暖人心\AppData\Local\Temp\...` ✅ → **`~` 是唯一触发因子**。
+生产工作区在 `<project>/.operator-studio/workspaces/...` 下，**不受影响**。
+
+harness 现在支持 `E2E_RUN_ROOT` 覆盖，并在 `summary` 里输出 `candidateGenerationPath` / `editToolStatus` /
+`degradedGeneration` / `degradationReason`，让验收报告自述实际走的是哪条生成路径。
+**没有**加「必须 `structured_edit`」的硬断言——patch 兜底是合法的恢复路径，硬断言会造出新的假失败。
+### 本轮验证（真实执行，非历史回填）
+
+单测全部 exit 0（日志 `%TEMP%\round3-units.log`）：`test:candidate-generation`、
+`test:agent-runtime-candidate-admission`、`test:round-settlement-interleaving`、`test:codex-cancellation`、
+`test:local-c500-recovery`、`test:agent-runtime-timeout-recovery`、`test:mission-project-state`、`test:loop`、
+`test:module-boundary`、`test:state-domain-boundary`。
+
+| 命令 | 结果 | exit code |
+|---|---|---|
+| `npm run verify:local-c500-release` | `[release-check] PASS: 128 checks completed` | 0 |
+| `npm run verify:non-hardware-robustness` | `[non-hardware-check] PASS: 30 checks completed without physical hardware` | 0 |
+
+日志 `%TEMP%\round3-gates.log`，在**修复后的同一棵树**上重跑。两道的检查数与上一轮相同（128 / 30），
+这是预期的：本轮改的是 `editToolSignal` 的内部判定与一处归档字段，没有新增门禁项；断言强度的提升落在
+`tests/candidate-generation-test.mjs` 的**既有**条目内部（新增 8 条 `editToolSignal` 断言），而不是新增计数。
+为了这次通过**没有**放宽任何 Gate、测试矩阵、观察窗口或重试预算。
+
+真实 Claude Agent E2E（`E2E_RUN_ROOT=C:\agent-e2e-tmp E2E_KEEP_ARTIFACTS=1 npm run e2e:cpu-agent-iteration`，
+exit 0，日志 `%TEMP%\round3-e2e-claude.log`）的关键字段：
+
+    candidateGenerationPath: "structured_edit"
+    editToolStatus: "succeeded"
+    degradedGeneration: false
+    degradationReason: null
+    workflowWritesAfterRunStart: 0
+    firstRoundOutcome: "reference"    # 第 1 轮未达标并自动开启第 2 轮
+    liveHardware: false
+
+修复前同样的验收：run root 含 `~` 时得到 `candidateGenerationPath: "patch_fallback"`；
+而 `editToolStatus` 因实现只认 `apply_patch` 而**恒为 `absent`**——两个标记现在都如实反映实际路径。
+
+仍**没有**真机 liveHardware 证据：`source=cpu-e2e`、`liveHardware=false`，不能用于发布证明。
+
+本机 Claude 会话累计消耗：3 轮探针 + 2 次真实 E2E ≈ $0.88。
+
+文档改动（§1.3、§10.2、两个 README）发生在门禁之后，因此补跑了会读取这些 README 的两个测试：
+`test:module-boundary`（`module-boundary-test.mjs:175+`）与 `test:state-domain-boundary`（`state-domain-boundary-test.mjs:89`）——
+两者只断言文档存在、非空并被 `MODULE_OWNERSHIP.md` 链接，不解析正文；连同 `test:candidate-generation` 均 exit 0。
+`git diff --check` 无空白错误。非 markdown 文件在门禁前后逐字节未变。
+
+## 2. 项目与产品背景
+
+### 2.1 产品目标
+
+产品希望把算子工程师从反复手工试错中解放出来：用户在不同平台提交算子及其完整依赖包，Agent 在 Mission Workspace 中生成或修改候选，测试后端以工具/端口形式抽象，未来可以从本地 GPU 测试队列平滑替换为云端 GPU 队列，并自动沉淀经过验证的经验。
+
+当前优先级是跑通一般算子的通用迭代流程，而不是仅支持两个 demo 算子。Profiler、tracer 等性能工具可以暂时 mock 或延后；正确性、候选准入、测试提交、证据归属和失败收尾不能延后。
+
+### 2.2 已对齐的运行约束
+
+- 暂无云端服务；测试队列必须通过工具/端口抽象，本地实现是当前后端，云端实现以后接入。
+- 本机没有隔离的 CPU/GPU 测试资源；当前主线优先使用本机 GPU，MVP 可放宽由竞争造成的性能阈值，但不能放宽固定 correctness、shape、dtype 和候选准入契约。
+- 算子文件和依赖必须作为执行包整体导入、验证、打包后再提交；运行期间只能引用包内文件。后续必须支持 Python 之外的语言，因此执行包合同不能绑定单一解释器。
+- Agent 只能写 active Mission Workspace；真实 Workspace Diff 是候选事实来源。
+- 候选证据、Queue 请求、benchmark 结果必须绑定同一候选 digest；simulation 证据永远不能发布为 live-hardware 证据。
+- 测试保持串行，终态必须原子持久化；丢失响应时查询/重发同一稳定请求，不创建第二个权威测试任务。
+- 真实 Agent 对照是 **provider-neutral** 的：Claude Code 是默认路径，Codex CLI 走显式路径；
+  两个 provider 的验收彼此独立。Codex 侧模型对照优先使用 gpt-5.5 或 gpt-5.6-sol；不要把
+  gpt-6 作为默认稳定性实验模型。
+
+## 3. 必读入口和依赖边界
+
+接手后按下面顺序阅读，不要先从某个深层实现文件开始猜测合同：
+
+1. ARCHITECTURE.md：层次、生产路径、允许的依赖方向。
+2. MODULE_OWNERSHIP.md：模块职责与主责边界。
+3. 要修改目录最近的 README；本轮重点是 client-runtime/README.md。
+4. CODEX_AGENT_DIAGNOSTIC_HANDOFF.md：真实 Codex 问题的证据、专家意见和未确认假设。
+5. GENERIC_OPERATOR_GOAL.md：通用算子目标和历史验证记录；其中旧门禁数字是历史快照，不能替代本轮新门禁。
+6. MODULE_03_CANDIDATE_GENERATION_HANDOFF.md：03 候选生成模块的输入输出和同事交接边界。
+7. client-runtime/codex-client.md、client-runtime/cancellation-contract.md 及相关 application 服务合同。
+
+允许的依赖方向：
+
+    TUI -> HTTP API -> application orchestration -> domain rules -> ports -> adapters
+
+不要让 domain 依赖 TUI、HTTP、Codex、Claude、硬件适配器或文件系统实现；不要在 HTTP route 中复制 workflow/Gate/hardware 规则；生产行为必须继续走 TUI -> Production API -> Client Runtime，不要创建第二套 workflow。
+
+## 4. Git、远端和工作树事实
+
+### 4.1 当前分支与远端
+
+    工作目录：F:\设计\快速项目\acagemm原型
+    稳定分支：main
+    稳定基线：9b80437 fix: close agent failure and release attribution contracts
+    交接分支：handoff/codex-job-supervisor-p1
+    首个 WIP 交接提交：c63b132 wip: hand off codex job supervisor p1
+    origin：https://github.com/Teeeio/Acagemm.git
+    origin/main：当前已包含 9b80437，未包含 P1 WIP
+    origin/handoff/codex-job-supervisor-p1：包含 P1 当前代码与本 handoff
+    运行环境：Windows；Node v22.23.2（Node 可执行文件位于 F:\Node\node.exe）
+
+用户已经明确授权将验证后的改动推送到远端；接手者不需要再次等待授权，但仍不得把未审查的实验产物或用户文件提交。
+
+### 4.2 交接分支中的受控改动
+
+以下 7 个 tracked 文件是本轮 P1 代码差异，已经进入专用 WIP 分支，但未合并 main：
+
+    client-runtime/README.md
+    client-runtime/codex-client.mjs
+    client-runtime/windows-job-object-helper.ps1
+    client-runtime/windows-job-object.mjs
+    tests/codex-runtime-test.mjs
+    tests/release-guard-test.mjs
+    tests/windows-job-object-test.mjs
+
+P1 代码差异规模约为 644 行新增、69 行删除；加上 handoff 后，首个 WIP 提交 c63b132 共约 1069 行新增、69 行删除。必须先读提交 diff 和测试，再决定如何修正或整理提交；不要把 WIP commit 直接当作已验收发布。
+
+### 4.3 必须保留的未跟踪文件
+
+工作树中有若干动画 HTML 文件（例如 ti-peng-bicycle-2d-animation.html、penguin-bicycle-svg-animation-generated.html、pelican-bicycle-svg-animation.html，具体以接手时 git status --short 为准）。这些是用户既有产物，与本任务无关：
+
+- 不要删除；
+- 不要为了清理工作树而 reset/checkout；
+- 不要把它们加入本轮 commit；
+- 若必须使用全量暂存，先改用显式文件列表并复核 git diff --cached --name-only。
+
+## 5. 已完成的 P0（不要重复重做）
+
+提交 9b80437 已把专家指出的三类控制契约落到主线，主要内容如下。
+
+### 5.1 失败原因与资源释放分离
+
+Agent 运行记录同时保留：
+
+    primaryFailure       # TLS、capacity、工具、候选契约等业务/上游原因
+    resourceRelease      # 进程树是否已经可证明释放
+    workspace            # 可复用、隔离、需人工处理等后续动作
+
+UnknownIssuer 不能被后续 CODEX_CANCEL_UNCONFIRMED 覆盖；取消请求也不能被误报成释放成功。资源不确定时必须 fail-closed，Workspace 隔离，禁止自动恢复写入。
+
+### 5.2 Round/Attempt/Candidate/Queue 归属
+
+概念关系已经按下面的模型修正：
+
+    Mission
+      └─ Round R
+          ├─ Attempt A1：capacity/TLS 等失败
+          └─ Attempt A2：恢复后完成
+              └─ Candidate C（sourceRunId = A2）
+                  └─ 稳定 Queue 请求 Q
+                      └─ Evidence E
+
+E2E 不能永远查询初始 firstRunId；必须等待 Round 的持久化终态，再读取实际候选的 sourceRunId、Queue 请求和 evidence。重试不能产生第二个权威测试身份。
+
+### 5.3 有限终态
+
+cancel_requested 不能无限停留。正常成功、已释放的正常失败、以及“时间用尽但释放未确认”的 blocked/needs_human/quarantined 必须区别记录。迟到的 turn.completed 只能作为证据，不能重新打开已经结算的 Round。
+
+### 5.4 P0 验收边界
+
+P0 仍需通过原有 test:codex-cancellation、test:agent-cancellation-liveness、Round/Queue/候选归属测试；不要为了让测试“更容易通过”而放宽 Gate、固定测试矩阵或错误重试预算。
+
+## 6. 当前 P1 实现清单（未提交）
+
+### 6.1 client-runtime/codex-client.mjs
+
+本文件仍是 Codex adapter，不是 domain workflow。当前增量包括：
+
+- 通过 platform、spawnImpl、spawnJobObjectProcessImpl 注入可测试实现；真实 Windows native command 默认启用 Job Object。
+- OPERATOR_CODEX_JOB_OBJECT=0 可以显式关闭 Job Object；.cmd shim 不适合直接传给 CreateProcessW，会回退为 child-process，并在 preflight() 中给出 processSupervisorReason。
+- Agent 记录增加 observability：transport、stdout/stderr 字节数、chunk 数、首末活动时间、解析事件数、解析错误数、terminal event 类型。
+- Job 路径为 prompt 建立外部 bridge 文件，避免把桥接文件写入 Mission Workspace；通过 stdin file、ready sidecar 和 receipt sidecar 交换启动与收尾证据。
+- 接收到 started handshake 后才写入目标 PID；记录 helper PID、Job name、stdout/stderr/ready/receipt 路径。
+- stdout/stderr 由 Job supervisor 增量 tail，实时传给 adapter；JSONL 仍写入原有 run event log，不靠进程退出后一次性读取。
+- result receipt 中 release === confirmed 且 releaseProof.confirmed !== false 才能成为可复用释放证据。
+- Job result 拒绝或释放未确认时，记录 CODEX_JOB_RELEASE_UNCONFIRMED/启动失败信息，状态保持 fail-closed，禁止 recovery。
+- 旧的注入 child-process 路径保留，供 Linux、.cmd shim 和单元测试使用。
+
+### 6.2 client-runtime/windows-job-object.mjs
+
+- 创建临时 config，启动 powershell.exe helper；配置值采用 base64，避免路径和换行破坏配置。
+- started 只有在 CreateProcessW(CREATE_SUSPENDED)、AssignProcessToJobObject、ResumeThread 成功后才 resolve。
+- 持续 tail stdout/stderr 文件，使用 StringDecoder 处理跨 chunk UTF-8；helper 关闭后再做一次 drain。
+- result 读取 receipt sidecar，并校验 Job name、exit code、release 状态；不满足条件则 reject。
+- 启动超时有界；超时会 best-effort 请求终止，但最终是否释放仍由 receipt 决定。
+- terminate() 通过 Job name 调 helper 的 terminate 动作；调用方不可只依据“发出了终止请求”就标记释放成功。
+- 保留原有 local C500 使用的调用形状，避免把硬件 runner 的 Job helper 误改成 Codex 专用接口。
+
+### 6.3 client-runtime/windows-job-object-helper.ps1
+
+helper 内嵌 C# Win32 调用，当前目标是：
+
+1. 用 suspended target 避免进程在纳入 Job 前产生后代；
+2. 设置 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE；
+3. target 与 descendants 都进入同一 Job；
+4. parent owner 消失时通过 owner watchdog 终止 Job；
+5. target 退出后查询 JobObjectBasicAccountingInformation.ActiveProcesses；
+6. 如果仍有后代，先终止 Job，再有界重查；
+7. 写入包含 activeProcessCount、confirmed、ownerLost、时间戳的 receipt proof。
+
+### 6.4 测试和文档改动
+
+- tests/windows-job-object-test.mjs：保留原有两个进程树测试，新增 stdin bridge、started handshake、实时 JSONL tail、receipt release proof 测试，目前共 3 个子测例。
+- tests/codex-runtime-test.mjs：增加 observability 断言和注入式 Job supervisor 测试，验证 prompt、PID、Job 元数据、terminal/release proof、JSON 参数。
+- tests/release-guard-test.mjs：增加 Windows 文件句柄释放后的有限重试；启动健康检查尝试次数从 30 增加到 100，解决测试本身的短暂启动/EBUSY 噪声。
+- client-runtime/README.md：补充 Job supervisor、stdin、实时 tail、release proof 和环境开关说明。
+
+## 7. 测试状态（必须按“当前”与“历史”区分）
+
+### 7.1 已确认通过的聚焦测试
+
+在本轮差异下已单独执行并通过：
+
+    node tests/codex-runtime-test.mjs
+    node tests/windows-job-object-test.mjs       # 3/3
+    node tests/codex-cancellation-test.mjs
+    node tests/module-boundary-test.mjs
+    node tests/release-guard-test.mjs            # 在清理旧 server/增加重试后通过
+    git diff --check
+
+这些结果证明主要路径和确定性 fixture 可用，但不能证明真实 provider 网络稳定，也不能替代完整发布门禁。
+
+### 7.2 最近一次总门禁的真实状态（已由 §1.1 / §1.2 / §1.3 取代）
+
+> **最新一次真实门禁状态见 §1.3**：在第三轮修复后的同一棵树上重跑，`verify:local-c500-release` 128 checks / exit 0，`verify:non-hardware-robustness` 30 checks / exit 0（日志 `%TEMP%\round3-gates.log`）。本节以下内容只作历史记录，**不得再引用为当前结论**。
+
+历史情况（保留，不得再引用为本轮结论）：当时启动的是 `npm run verify:non-hardware-robustness`。该轮在用户中断时已经打印并通过大量前置检查，包括 execution package、experience、Queue liveness、local C500 recovery、Windows Job Object 3/3、generic iteration fault injection、candidate generation、module boundary 等；中断点在：
+
+    test:state-storage-adapters
+
+那一轮因此**不能**算 PASS。
+
+本轮（2026-09-10）已从头重跑并真实通过两项门禁，见 §1.1。重跑时发现的两个环境问题，供下一位参考：
+
+- 在 Git Bash 里跑 `npm run` 时，`/usr/bin/tar`（GNU tar 1.35）会遮蔽 `C:\Windows\System32\tar.exe`（bsdtar），并把 `C:\...` 当作远程主机而报 `tar: Cannot connect to C: resolve failed`。这是运行器 PATH 问题，不是代码缺陷；请在 PowerShell/cmd 中运行门禁，或让 System32 优先于 MSYS 路径。
+- 本机未安装 `python3`，只有 `python`（`F:\Python312`）与 `py` 启动器；`C:\...\WindowsApps\python3.exe` 是 Store 别名桩，退出码 9009。相关测试的候选探测已修复（见 §7.5 第 4 条）。
+
+中断的 node 进程/服务也要先确认没有占用测试端口；不要凭进程名盲杀用户的 Node 服务。
+
+### 7.3 历史验证材料的使用规则
+
+GENERIC_OPERATOR_VERIFICATION.json 和 .log.txt 是以前一轮的机器可读摘要/日志，里面的“PASS 数量”不一定覆盖当前未提交差异。可以用于了解命令顺序，不能作为本轮 P1 的验收证明。
+
+### 7.4 本轮聚焦测试结果（2026-09-10）
+
+以下全部 exit 0：`codex-runtime-test`、`windows-job-object-test`（3/3）、`codex-cancellation-test`、`agent-cancellation-liveness-test`、`module-boundary-test`、`release-guard-test`、`local-c500-production-tui-test`、`execution-package-import-test`、`git diff --check`。
+
+另做了负载归因实验（`tests/windows-job-object-test.mjs`）：修复前在 16 路 CPU 负载下 2 次中失败 1 次、9 次中失败 5 次；修复后同样负载下 12/12 通过。修复过程还抓到了两份证据——`OpenJobObject failed`（Job 尚未创建就发出 terminate 请求）和残留的 `acagemm-job-*/config.txt`（旧清理预算耗尽后泄漏的配置目录），二者都指向"测试用固定墙钟猜测代替握手证据"，而不是 Job Object 逻辑错误。
+
+### 7.5 本轮审查发现的缺陷与处置
+
+**已修复（5 项）**
+
+1. **`result` 早于清理结算（flaky 根因）。** `windows-job-object.mjs` 原本在 `finally` 里 `await removeTreeEventually(configDir)`，而 `resolve/reject` 已经先执行；调用方一拿到结算就删除自己的父目录，两边并发删同一子树 → 负载下 `EPERM`。现在清理完成后才结算，且 spawn 失败路径也改为在 `close` 处理器里结算（已验证 Node 对 spawn 失败必定发出 `close`：`error:ENOENT -> close:code=-4058`）。同时把清理预算从 8×50ms（约 400ms，且静默失败）提升为 10×100ms 并导出复用。
+2. **helper 15s 预算过紧。** 实测 PowerShell 冷启动：空闲 1.3–1.9s，16 路负载 5.2–9.4s，在已饱和的测试套件内超过 15s。原默认值不足实测负载延迟的 2×，会把纯调度延迟变成 `CODEX_JOB_START_TIMEOUT`，进而被记录为释放未确认并隔离健康工作区。现默认 `DEFAULT_JOB_HELPER_TIMEOUT_MS = 60_000`，可用 `OPERATOR_CODEX_JOB_START_TIMEOUT_MS` 覆盖（低于 1s 的取值回落到默认值而不是缩小上限）。**这是存活期上界，不是释放期限**：超时后仍然按原路径 fail-closed。
+3. **测试用固定死线代替握手证据。** `windows-job-object-test.mjs` 用 `await delay(200)` 猜测 Job 已创建；负载下 helper 还在冷启动，terminate 于 `OpenJobObject failed` 失败。现改为等待 `child.started` 握手。另外两处 3s 的 descendant 死线在负载下也不够（owner 自身都起不来），改为 30s——断言语义仍是"最终记录到/最终释放"，不是"在空闲机器的时限内"。
+4. **`findPython` 无法跳过 Store 别名桩。** `tests/execution-package-import-test.mjs` 原本对非 `ENOENT`/`EACCES` 的失败直接 `throw`，而 `python3` 别名桩以 9009 退出，于是本机明明有可用的 `python` 也会失败。现在遍历所有候选并在最终错误里列出各自的失败原因。
+5. **`test:local-c500-production-tui` 的过时源码断言。** 该断言要求 `OPERATOR_CODEX_WINDOWS_SANDBOX` 后跟 `process.platform === 'win32' ? 'unelevated'`；P1 WIP 把该处改成注入式 `platform`（`options.platform || process.platform`，与文件内另外 6 处 Windows 判断一致），断言随之失效。生产行为不变（选项未注入时回落到 `process.platform`），因此更新的是断言而不是代码，未放宽保护强度。
+
+清理策略也已统一：`release-guard-test`、`codex-runtime-test`、`windows-job-object-test`、`execution-package-import-test` 现在共用导出的 `removeTreeEventually`，不再各自维护一份重试副本——副本不一致正是这个 flake 长期漏掉 `windows-job-object-test.mjs` 的原因。会泄漏的调用点改为断言返回值。
+
+**已复核、结论为无缺陷（危险点 2/3/4/7/8）**
+
+- helper 的 `releaseProof` 在 `ActiveProcessCount` 查询失败时返回 `null` 并置 `release: unconfirmed`，调用方随之拒绝 → fail-closed。
+- `ownerWatchdog: false` 明确表示"watchdog 未启用"，与 `ownerLost: true`（已因 owner 消失而终止 Job）语义可区分。
+- `stdinPath` 为空时回退到 `NUL` 而非空句柄；`ERROR_ALREADY_EXISTS(183)` 会拒绝复用同名 Job。
+- Job 路径的 bridge 文件位于 `.operator-studio-local/runtime/agent-bridge`，已被 `.gitignore` 覆盖，不进入 Workspace Diff。**残余风险**：若显式设置 `OPERATOR_BRIDGE_DIR`/`OPERATOR_RUNTIME_DIR` 指向工作区内路径，该保证不再成立。
+- 释放未确认时 `runtime-advance-service` 会因 `isResourceReleaseQuarantined` 阻止 advance，不会自动启动下一 attempt。
+- Job 路径在 `appendChain` 排空后才 `finishClosed`，最后一段无换行内容不会丢失。
+
+**已记录、本轮未修复（低危）**
+
+- `windows-job-object-helper.ps1` 的 `Quote()` 复用了 JSON 转义，把 argv[0] 中的每个 `\` 变成 `\\`。因为 `lpApplicationName` 单独传入，该字符串只影响子进程看到的 argv[0]，**不会造成参数错位**（引号仍正确闭合），属外观性偏差。修它需要改动内嵌 C# 并重跑负载验证，留到下一轮连同 §12 的观测字段一起处理。
+
+## 8. 接手后的立即执行顺序（短期任务）
+
+### T0：拉取交接分支并建立安全快照
+
+    git clone https://github.com/Teeeio/Acagemm.git
+    Set-Location Acagemm
+    git fetch origin
+    git switch --track origin/handoff/codex-job-supervisor-p1
+    git status --short
+    git diff --stat
+    git diff --check
+    git branch --show-current
+    git log -1 --oneline
+    git remote -v
+
+若是在原工作目录接手，先确认当前分支和未跟踪文件；若还会继续修改，把 git show c63b132 > $env:TEMP\acagemm-p1-job-supervisor.patch 保存为可回滚证据。不要用 git reset --hard 或 git checkout -- 清理用户工作树。
+
+### T1：阅读并审查差异
+
+重点审查下面几个危险点：
+
+1. Job helper 启动失败后，children、receipt、临时目录和 fail-closed 状态是否都能收敛；
+2. stdout/stderr tail 与 append chain 是否会因 helper close 顺序丢最后一行；
+3. target 退出但 descendant 仍在时，active-process query 是否真的覆盖所有 Job 成员；
+4. owner watchdog 的父 PID 打开失败时，是否明确记录“未启用 watchdog”而不是宣称已保护；
+5. .cmd、Node shim、非 Windows 平台、注入 spawn 的 fallback 是否仍兼容原有测试；
+6. Job receipt reject 与业务 primaryFailure 是否保持两条独立故障轴；
+7. 外部 bridge 文件是否绝不混入 Workspace Diff；
+8. 无论 helper 是否已输出 receipt，都不会自动启动下一 attempt。
+
+### T2：重新跑聚焦测试
+
+    node tests/codex-runtime-test.mjs
+    node tests/windows-job-object-test.mjs
+    node tests/codex-cancellation-test.mjs
+    node tests/agent-cancellation-liveness-test.mjs
+    node tests/module-boundary-test.mjs
+    node tests/release-guard-test.mjs
+
+若某个测试因旧 server/端口失败，先读取测试进程和端口归属；不要把网络、模型或业务代码改动作为第一反应。测试代码已经有有限清理重试，持续失败才进入代码排查。
+
+### T3：完成完整门禁
+
+    npm run verify:local-c500-release
+    npm run verify:non-hardware-robustness
+
+verify:non-hardware-robustness 会再次包含 local release gate；如果时间有限，至少先完成 local gate，并在交接记录中明确第二个命令未完成。禁止把被中断的命令写成 PASS。
+
+### T4：完成审查后的提交与推送
+
+WIP 已经推送到专用分支。测试和审查完成后，只显式暂存新增修复；不要把用户动画文件带入后续提交：
+
+    git status --short
+    git add <本次明确修改的文件>
+    git diff --cached --name-only
+    git commit -m "fix: finish codex job supervisor p1"
+    git push origin handoff/codex-job-supervisor-p1
+
+如果代码审查要求拆分 commit，可在最终合并前整理为“实现/测试/文档”，但必须保持每个可合并 commit 不破坏门禁。完成验收后再由负责人合并或 cherry-pick 到 main，并记录新的 main commit hash。
+
+## 9. P1 完成验收标准
+
+只有同时满足下列条件，才能说当前 P1 完成：
+
+- 原生 Windows Codex executable 默认走 Job Object；.cmd fallback 的原因可观察且不冒充 Job 收容。
+- target 启动前已加入 Job；启动 handshake 能证明 target PID、Job name 与时间。
+- stdout/stderr 在运行期间持续可观测，事件文件保留 JSONL，最后一段无换行内容也不会丢失。
+- target 退出不等于资源释放；只有 receipt 的 release proof 确认 active process count 为 0，才可复用 Workspace。
+- owner 消失、helper 异常、receipt 缺失、查询失败都会有限结束为 blocked/quarantined/fail-closed，不会无限 cancel_requested，也不会自动恢复。
+- P0 的 primaryFailure（例如 TLS trust failure、capacity、候选契约失败）仍然可追踪，不被释放错误覆盖。
+- 恢复 attempt 产生的 candidate、Queue request、evidence 都指向实际生成该 candidate 的 sourceRunId；不会回查最初失败的 run。
+- 测试请求在超时、调用方丢响应、Queue 重启时使用同一稳定身份，不重复执行权威任务。
+- 聚焦测试和两项 release gate 通过，并记录运行日期、Node/CLI 版本、是否真实 provider。
+
+### 9.1 本轮对这九条的核对结果
+
+**已满足（本轮亲自复核或重跑）**：第 1、2、3、4、5、6、7 条；第 9 条已由本轮两项门禁 + 聚焦测试 + §1.1 的环境记录满足。第 8 条（Queue 稳定身份）在 P0 已实现稳定 `requestId`，本轮未回归，但**尚未**具备专家要求的三项交错测试（见下）。
+
+**部分满足**：第 8 条。"同一稳定请求"已成立；但专家 §6 要求的三项交错测试——(a) 首次 attempt 失败、恢复成功、结算投影迟到；(b) 本地取消与迟到 `turn.completed` 交错、Round 只结算一次；(c) Queue 已接受但调用方丢失响应后不产生并发 runner——都还没有落地为 fixture。
+
+**明确未做（属于下一轮，不属于本轮 P1 收口范围）**：专家清单里下列条目仍未实现，**不要把它们读成已完成**：
+
+- `cancel.origin` 枚举（`user|watchdog|e2e_teardown|shutdown|superseded`）；当前只有自由文本 `cancelReason`。
+- `candidates: []` 的六类区分；`patch_fallback` 降级成功标记（`degraded = true`、`degradationReason`）——当前 patch 回退是**静默成功**。
+- attempt 级重试预算与 5–15s / 15–45s 随机退避；CLI 内部重试与 Runtime 新 attempt 的分别计数。
+- 释放证据的完整五项（`rootProcessExited`、`containmentCoverageVerified`、`stdoutCaptureComplete`、`stderrCaptureComplete`）；当前只有 `activeProcessCount` 与 `ownerWatchdog`/`ownerLost`。
+- 五层观测的第 4–5 层（adapter 归一化、Runtime 持久化）与逐请求 token 字段、prompt 字节/token 估算。
+- 三层启动预检（安装/配置、网络/证书、同运行时栈探针）；当前没有真实 provider 往返。
+- §4 的 8 项 SLO 指标与 N=20 回归门禁。
+- 上述 `Quote()` argv[0] 转义（低危，见 §7.5）。
+
+## 10. 已知限制与风险（不要误报为已解决）
+
+### 10.1 真实 provider 仍未被此 fixture 证明（provider-neutral）
+
+Job tests 使用确定性本地进程和注入 supervisor；它们证明的是本地收容、流采集和状态转换，不证明模型服务容量、TLS 信任链、服务端排队或 Code Mode host 的行为。真实 provider 需要在预检通过后用同一 CLI/模型/认证/配置做单独探针；Claude Code 路径已由 P1 轮次反馈验收的真实两轮覆盖，Codex 等其余 provider 仍待各自独立探针，两者不能互相代替。
+
+尤其不能把：
+
+- UnknownIssuer 归因成模型生成能力；
+- turn.started 后无 turn.completed 归因成模型静默；
+- 浏览器能联网归因成 Codex provider 路径正常；
+- 20 次本地 fixture 成功归因成生产稳定率。
+- 单次真实 Claude E2E 通过归因成 Provider 稳定率或真机可发布证据。§1.3 那次验收证明的是
+  「默认 Provider 下工作区真实写入 → 工作区 Diff 准入 → CPU 正确性/基准 → Gate → 自动续轮」这条路径走通，
+  且 `editToolStatus` 如实反映结构化编辑工具确实成功；它**不**证明模型容量、限流、成本或长期稳定性，
+  `source=cpu-e2e` / `liveHardware=false` 也不构成真机发布证据。
+
+### 10.2 Windows 兼容边界
+
+- Job Object 只对 native Windows executable 直接适用；.cmd/某些 shim 会走 legacy child-process。
+- Job supervisor 能证明它实际收容的进程；如果存在外部 broker、提权服务或 sandbox helper，不应假设它们自动在同一 Job 中。
+- unelevated sandbox 不是完整隔离承诺；sandbox 决定访问边界，Job supervisor 决定生命周期，两者不能互相替代。
+- helper 目前依赖 Windows PowerShell、Win32 API 和本地临时文件；真实部署还应验证路径 ACL、杀毒软件句柄、长路径和非 ASCII 路径。
+- Claude Code 的路径权限守卫**拒绝写含 `~` 的路径**。在非 ASCII 用户名下 `os.tmpdir()` 会返回 8.3 短名
+  （本机 `C:\Users\棉被暖~3\AppData\Local\Temp`），真实 Agent 因此改不动工作区。
+  生产工作区在 `<project>/.operator-studio/workspaces/...` 下、路径不含 `~`，**不受影响**；受影响的是把 run root
+  放在 `%TEMP%` 的测试/验收脚本（`e2e:cpu-agent-iteration` 已提供 `E2E_RUN_ROOT` 覆盖）。
+  这不是隔离问题，也不是 Claude 不能改工作区——单因子探针已确认 `~` 是唯一触发条件。
+
+### 10.3 尚未覆盖的测试
+
+- owner parent 在 target 运行中突然退出的真实 fixture；
+- receipt 写入失败、Job 查询 API 返回 UInt32.MaxValue、helper 被杀死后的恢复；
+- 大量 stderr、分块多字节 UTF-8、迟到 terminal event 的组合回放；
+- .cmd shim 的实际 Codex 版本解析和 preflight 展示；
+- Linux process group/supervisor 与 Windows Job Object 对等性；
+- 云端 GPU Queue 的稳定请求、服务端 trace ID 和跨进程证据关联。
+
+### 10.4 当前环境诊断噪声
+
+本机对 Get-CimInstance Win32_Process 和 tasklist /V 曾返回“拒绝访问”。这不是代码已修复或 WMI 已可用的证明；需要调查进程时优先使用测试自身输出、受控 PID、端口探针和 Job receipt，不要依赖未授权的 WMI 快照。
+
+## 11. 错误分类与恢复策略速查
+
+| 情况 | primaryFailure | release | 自动动作 |
+|---|---|---|---|
+| 明确 capacity 终态 | CODEX_CAPACITY...（以现有分类器实际值为准） | confirmed | 释放确认后有限恢复，仍受 Round 总预算约束 |
+| 临时连接重置/超时 | transport 类 | confirmed | 有限恢复；记录 attempt 次数与退避 |
+| 持续 UnknownIssuer | CODEX_TLS_TRUST_FAILED | 可独立为 confirmed/unconfirmed | 同配置不继续外层重试，要求环境修复和预检 |
+| 工具失败但 patch 可验证 | 工具失败分类 | confirmed | 标记 candidateGenerationPath=patch_fallback，不降低 correctness/Gate |
+| 正常完成但候选为空 | candidate contract | confirmed | 不伪装成网络重试，进入候选失败分类 |
+| helper/Job 释放证据缺失 | 原始上游原因另存 | unconfirmed | blocked/quarantined，禁止恢复和 Workspace 复用 |
+| Queue 已接受但调用方没收到 | 不应新建 provider failure | 按 Queue 证据 | 查询或用同一稳定请求重发，不创建新任务 |
+
+推荐状态关系：
+
+    running
+      ├─ completed/failed/cancelled + release confirmed
+      └─ cancel_requested
+            ├─ released -> terminal business status
+            └─ deadline/release unknown -> blocked/needs_human + quarantined
+
+不要用一个布尔 success 覆盖业务结果、资源释放、候选准入和 Queue 终态。
+
+## 12. 短期任务（完成 P1 后的 1～3 个迭代）
+
+### S1：补齐确定性运行时 fixture
+
+- 首次 attempt capacity，第二次 attempt 生成候选；故意延迟结算 projection，确认 E2E 不查 firstRunId。
+- 本地取消与迟到 turn.completed 交错；断言 Round 只结算一次。
+- Queue 已接受但响应丢失；断言重启后同一稳定请求被查询，不产生并发 runner。
+- helper 退出但 receipt 缺失、owner 退出、descendant 残留；断言 blocked/quarantine 和禁止 recovery。
+
+### S2：完善 Job supervisor 的审计字段
+
+把 provider 请求、stdout 原始流、JSONL parser、adapter、Runtime 持久化五层的最后活动时间和计数分开记录。不要只记录一个“最后活动时间”，否则无法区分服务端无响应、CLI 不吐 stdout、解析器阻塞和状态投影落后。
+
+### S3：完成真实 Agent 最小探针（provider-neutral；默认 Claude Code，Codex 显式）
+
+在同一生产路径下记录 CLI binary digest、模型请求标识、sandbox、认证模式、provider、网络/证书指纹、thread/turn/request ID。只返回 OK 的只读任务先跑通，再进入候选生成。证书问题不得通过关闭校验规避。
+
+> 当前口径（2026-09-12）：Claude Code + 本地共享 GPU 的最小真实路径已由 P1 轮次反馈验收
+> （§14.1–5）覆盖；本项剩余的 Codex 等 provider 仍需各自独立探针。**不得**用 "Codex 未验"
+> 否定已验收的 Claude 路径，也不得用 Claude 通过代替 Codex 验收。
+
+### S4：更新机器可读验证摘要
+
+门禁完全通过后再更新 GENERIC_OPERATOR_VERIFICATION.json/.log.txt 或新增本轮记录；保留历史记录，不覆盖失败证据。记录样本数、平台、是否真实模型、是否使用 fixture、失败分类和耗时分位数。
+
+### S5：Linux 兼容收口
+
+Linux 继续采用 process group/等价 supervisor，但把通用接口抽象为“启动、实时流、取消、释放证明、失败原因”。不要把 Windows Job API 细节泄漏到 domain/application；新增 Linux 实现时补对应集成测试和平台 preflight。
+
+## 13. 长期任务路线图
+
+### L1：跨平台/云端测试后端
+
+- 以测试工具/port 为唯一上层入口，保留 local GPU adapter。
+- 新增 cloud GPU queue adapter、提交/查询/取消/幂等协议和服务端 trace 关联。
+- 明确 simulation、local shared GPU、cloud live GPU 的 evidence provenance，禁止跨环境冒充。
+- 处理断线、重复提交、服务端接受但客户端未收到响应、远端 worker 释放证明。
+
+### L2：通用执行包与多语言算子
+
+- Python、C++/CUDA、Rust 等语言共享 manifest、依赖闭包、入口、平台、编译/运行命令和 digest 合同。
+- import 前完整有效性验证；危险路径、符号链接、越界引用、外部绝对路径和未声明依赖 fail-closed。
+- 运行时只允许包内引用，测试证据绑定 execution bundle digest。
+
+### L3：03 候选生成工作区内部优化
+
+03 输入输出合同已经解耦，伙伴可以在不改变外部 I/O 的前提下把自由发散生成改成可量化 workflow。长期要接入：上一轮经验、已验证经验、失败摘要、token/time/correctness/benchmark 评估；经验必须带 provenance、版本和证据，不得把未验证建议当知识。
+
+03 不负责：启动进程、文件 I/O、Queue、Gate、硬件判定或跨模块持久化。相关 orchestration 仍由 application/client runtime 负责。
+
+### L4：稳定性与性能观测
+
+- 固定 CLI 构建、模型版本/别名、工具 schema、Prompt/semantic/testSpec digest。
+- 比较 gpt-5.5 与 gpt-5.6-sol 时交错执行，不把模型切换伪装成重试。
+- 分别统计生成、释放、Queue、correctness、benchmark 延迟；超时样本不能从总体 p95/p99 中偷偷剔除。
+- Profiler/tracer 在基础闭环稳定后再接入，不能改变候选准入和证据完整性。
+
+### L5：生产级恢复与审计
+
+- 原子 Round settlement snapshot；迟到事件只能追加证据，不能重开终态。
+- 统一 attempt/candidate/evidence/queue ID 关联查询。
+- 支持人工处理 blocked/quarantined workspace，并可安全恢复而不复用未知仍在写入的进程。
+- 为支持团队生成脱敏诊断包，不上传 token、cookie、认证头或未审查 Prompt。
+
+## 14. 交接时的提交/回滚规则
+
+### 提交规则
+
+- 先通过 nearest module tests，再跑 npm run verify:local-c500-release；硬件无关改动尽量补 npm run verify:non-hardware-robustness。
+- commit message 要说明是 Job supervisor、observability 或状态修复，不把真实 provider 尚未验证写成“稳定性完成”。
+- 只提交受控 tracked 文件和本 handoff/README 更新；动画 HTML 等用户文件留在工作树。
+- push 后把 commit hash、门禁命令、exit code 和未完成项写回本文件或后续交接记录。
+
+### 回滚规则
+
+- 先把当前 diff 导出为 patch，再逐文件恢复；禁止无用户确认执行 git reset --hard、git clean -fd 或删除宽目录。
+- 如果 Job supervisor 在生产验证中出现异常，优先使用 OPERATOR_CODEX_JOB_OBJECT=0 作为受控 fallback，但仍保留 fail-closed 释放要求；不要把 fallback 误报成隔离已解决。
+- 回滚不能放宽候选 Gate、固定 test matrix、资源释放屏障或证据 provenance。
+
+## 15. 交给下一位同事的最短消息模板
+
+可以直接转发以下内容：
+
+> 请拉取 https://github.com/Teeeio/Acagemm.git 的 handoff/codex-job-supervisor-p1 分支，阅读 docs/development/CURRENT_TASK_HANDOFF.md、docs/development/ARCHITECTURE.md 和 client-runtime/README.md。main 已包含 P0 提交 9b80437；交接分支从该提交分出，并包含 WIP 提交 c63b132（Windows Job Object、实时 JSONL、release proof 及 handoff）。先检查工作树，不要删除或提交未跟踪的动画 HTML；先跑 node tests/codex-runtime-test.mjs、node tests/windows-job-object-test.mjs、node tests/codex-cancellation-test.mjs，再跑两个 release gate。只有在确认释放证据、候选 sourceRunId 和 Queue 幂等都没有回归后，才合并到 main。真实 provider 稳定性仍需按 provider 分别用单独探针验证（Claude Code 路径已由 P1 轮次反馈验收的真实两轮覆盖，Codex 等仍待验），不能用本地 fixture 代替。
+
+## 16. 完成定义
+
+当且仅当下一位接手者完成以下事项，本次交接才算闭环：
+
+1. 知道哪些改动已在远端、哪些仍在本地；
+2. 能在不误删用户文件的情况下重现聚焦测试；
+3. 解释 primaryFailure、resourceRelease、sourceRunId、stable Queue ID 的关系；
+4. 证明 Job supervisor 的实时流和 release proof，而不只证明 helper 进程退出；
+5. 完成或明确记录总门禁的最终结果；
+6. 提交/推送后留下新的 commit hash 和后续未决任务；
+7. 不把 TLS、模型容量、外部 broker 或真实云端稳定性尚未验证的部分写成已解决。

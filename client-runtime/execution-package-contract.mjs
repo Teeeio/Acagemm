@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
+
 // Pure, language-neutral execution package rules. No filesystem or runner imports.
 export const EXECUTION_PACKAGE_FORMAT = 'operator-execution-package/v1';
 export const EXECUTION_ADMISSION_FORMAT = 'operator-execution-admission/v1';
 export const EXECUTION_VALIDATOR_VERSION = 'package-policy/1';
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
+export const contentDigest = (bytes) => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
 const roles = new Set(['candidate', 'dependency', 'acceptance']);
 const fail = (code, message, details = {}) => {
   throw Object.assign(new Error(message), { code, status: 422, retryable: false, details });

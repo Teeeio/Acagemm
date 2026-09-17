@@ -1,3 +1,14 @@
+// Raised only by admission, before any journaled effect starts. Consumers must
+// not treat arbitrary errors with the same wire code as a safe policy outcome.
+export class PatchPolicyCheckError extends Error {
+  constructor(checks) {
+    super('Patch 自动策略检查未通过，请通过人工介入查看失败项。');
+    this.status = 409;
+    this.code = 'PATCH_POLICY_CHECK_FAILED';
+    this.details = structuredClone(checks);
+  }
+}
+
 export const createCandidateCommands = ({
   addAuditEvent,
   agentRuntime,
@@ -41,11 +52,7 @@ export const createCandidateCommands = ({
         { id: 'risk.policy', label: '风险未命中强制人工介入', passed: state.agent?.currentAction?.risk !== 'high' },
       ];
       if (policyChecks.some((check) => !check.passed)) {
-        const error = new Error('Patch 自动策略检查未通过，请通过人工介入查看失败项。');
-        error.status = 409;
-        error.code = 'PATCH_POLICY_CHECK_FAILED';
-        error.details = policyChecks;
-        throw error;
+        throw new PatchPolicyCheckError(policyChecks);
       }
       return runEffect(async () => {
         const checkpoint = isManagedWorkspaceRuntimeMode(runtime.mode) && state.workflowRecovery?.checkpoints?.length

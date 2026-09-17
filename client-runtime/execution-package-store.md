@@ -1,5 +1,11 @@
 # Execution package storage and admission adapter
 
+`contentDigest` remains exported here as a compatibility alias only: it is the
+same binding as the canonical pure function in
+[execution-package-contract](execution-package-contract.md), which owns the
+implementation. The store imports it for its own use and adds no wrapper or
+duplicate algorithm.
+
 createExecutionPackageStore accepts a private cache root, a trusted environment
 registry and language adapters. assemble produces a canonical immutable manifest
 and content-addressed blobs; validate rechecks all bytes, layers and the current

@@ -1,0 +1,69 @@
+
+> operator-studio-mvp@0.1.0 e2e:cpu-iteration
+> node scripts/e2e-cpu-iteration.mjs
+
+{
+  "status": "passed",
+  "executionMode": "cpu-e2e",
+  "missionId": "MIS_MTYEIC3B",
+  "candidateId": "candidate-02",
+  "candidateDigest": "sha256:b39a2682390d05e9f24e6ffebb56f6ba2b4eb2168b0ba695ebc0ec2c530049ee",
+  "testedArtifactMatchesWorkspace": true,
+  "baselineUs": 2.3,
+  "candidateUs": 1.8,
+  "correctness": {
+    "status": "passed",
+    "passed": true,
+    "total": 1,
+    "executedCases": 1,
+    "passedCases": 1,
+    "failedCases": 0,
+    "categories": [
+      "minimal"
+    ],
+    "caseNames": [
+      "small-vector"
+    ],
+    "caseResults": [
+      {
+        "case": "small-vector",
+        "category": "minimal",
+        "passed": true
+      }
+    ],
+    "atol": 0,
+    "rtol": 0,
+    "durationMs": 0.092,
+    "source": "cpu-e2e",
+    "liveHardware": false
+  },
+  "gate": "eligible",
+  "execution": {
+    "kind": "cpu",
+    "liveHardware": false,
+    "source": "cpu-e2e"
+  },
+  "publication": {
+    "status": "blocked",
+    "reasons": [
+      "publication.execution_not_live"
+    ]
+  },
+  "adoption": {
+    "status": "allowed",
+    "reasons": []
+  },
+  "knowledge": {
+    "extracted": 3,
+    "matched": 2,
+    "created": 1,
+    "autoPublished": 0,
+    "reviewRequired": 3
+  },
+  "knowledgeOutcomes": [
+    "exp.async-plan-cache:review_required",
+    "exp.c550-plan-cache-boundary:review_required",
+    "exp.cross-platform-adoption-gate:review_required"
+  ],
+  "liveHardware": false
+}

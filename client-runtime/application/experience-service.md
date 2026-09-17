@@ -20,6 +20,8 @@
 | `update(id,patch,options)` | options: projectId、expectedVersion | `{experience,created:false}`，追加版本 |
 | `recordObservation(input)` | 执行经验与绑定 evidence | `{experience,created}`；同证据重试 false |
 | `retrieve(query)` | projectId、missionId、roundId、scope?、limit?、versions?、allowedProjectIds? | 递归冻结 context |
+| `retrieveWithSelection(query)` | 同 retrieve | `{context,selection}`：同一遍历产出的 context 与审计选择清单 |
+| `importKernelWiki(snapshot,{projectId,author})` | 冻结的 KernelWiki 导入快照与作者 | 纯 apply 的结果 `{created,updated,unchanged,records,sourceCommit,snapshotDigest}` |
 
 ## Inputs
 
@@ -27,17 +29,21 @@
 
 调用者必须提供可信 projectId 与 allowedProjectIds；用户输入不能自授跨项目白名单。共享记录仍仅在授权项目范围可见，更新严格属于当前项目。read(null) 返回可见最新记录（包含非 active，便于治理）；read(id,{version}) 可查历史，但不能绕过当前头版本的共享权限。
 
+`importKernelWiki` 把纯导入模块的 `applyKernelWikiSnapshot(store,snapshot,{projectId,now,author})` 包在**唯一一次** `repository.transact` 里，时间取注入时钟；快照/摘要/幂等/版本推进/全量校验由纯模块负责，本服务不新增 repository、side-index 文件或第二套存储事务。纯模块是静态导入的普通依赖（不是域应用的第二套加载器/回退路径）；模块缺失或未导出 `applyKernelWikiSnapshot` 时按原样失败，不静默跳过导入。返回值即纯模块的 `result`；同快照重复导入为 no-op（记录与 revision 不变），内容变化经 expectedVersion 推进同一 ID，旧版本保留。
+
+`selectionMetadata` 只能经 `importKernelWiki` 写入。通用 `create`/`update` 显式拒绝该字段（`EXPERIENCE_INVALID`，400），且拒绝发生在进入事务之前——被拒的写入既不追加记录也不产生新版本，执行观察同样不接受它。导入路径在同一个事务内直接调用纯 apply，不受该拦截影响。
+
 recordObservation 的包、环境、验收和 Candidate 摘要必须来自上游已绑定执行结果。本模块仅验证字段一致性，不证明这些值真实。人工与执行分别固定 guidance/observation；人工内容不接收 verification，执行内容只允许追加状态修订。
 
 ## Outputs / Invariants
 
-read 和写返回独立可变副本；retrieve 返回不可变、带版本/来源/凭据的 context。旧 context 不受随后 update 影响；调用者应每轮取得一次并持有该对象，重启恢复时自行持久化该 context。本服务不缓存 roundId，相同轮次再次调用可能取得新 repositoryRevision。
+read 和写返回独立可变副本；retrieve 返回不可变、带版本/来源/凭据的 context。旧 context 不受随后 update 影响；调用者应每轮取得一次并持有该对象，重启恢复时自行持久化该 context。本服务不缓存 roundId，相同轮次再次调用可能取得新 repositoryRevision。retrieveWithSelection 复用同一选择逻辑并返回递归冻结的 `{context,selection}`；selection 是审计旁路（版本/来源/选择与排除原因/策略版本/快照 revision/UTF-8 字节），未授权项目只保留计数，不暴露 ID 或内容。
 
 人工始终 unverified 建议；CPU/仿真只供开发记录；GPU 观察仍 `publishable:false`。任何来源都不授予正式发布权。retrieve 只选最新有效且匹配 scope 的记录，不复活归档/冲突/失效或旧 pin 版本。外部建议正文应作为带来源的数据注入，而非可信系统指令。
 
 ## Dependencies / Side Effects
 
-仅导入公开 experience-contract API。禁止 state-store、文件适配器默认导入、HTTP、Provider 和固定 Profile 实现。副作用仅通过 repository/now/createId 端口；不写 Mission、Candidate、Knowledge，不启动模型、进程、测试或硬件。
+仅导入公开 experience-contract API 与纯 KernelWiki 导入模块（无默认 FS/Provider/第二 workflow，无动态加载器）。禁止 state-store、文件适配器默认导入、HTTP、Provider 和固定 Profile 实现。副作用仅通过 repository/now/createId 端口；不写 Mission、Candidate、Knowledge，不启动模型、进程、测试或硬件。
 
 ## Error Contract
 

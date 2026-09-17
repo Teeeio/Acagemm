@@ -8,6 +8,12 @@
 
 `client-runtime` is the local application backend. It owns Mission state, workflow orchestration, Agent coordination, isolated workspaces, serialized operator tests, evidence decisions, and local persistence.
 
+Automatic patch-policy rejection is persisted with the observed Agent completion
+as a paused Mission requiring human intervention. Managed Agent projection retains
+that control state only for the matching Mission/run; risk checks, candidate diff
+admission and execution budgets are unchanged. See the application candidate-action
+contract and [Agent lifecycle contract](agent-runtime.md).
+
 Windows MVP Codex runs use the unelevated sandbox fallback when the optional
 Windows sandbox helper is unavailable. Boundary mode keeps Codex's structured
 file-edit tools enabled by default; the workspace sandbox and post-run Mission
@@ -17,12 +23,91 @@ required for a controlled diagnostic run. Runs also ignore the local Codex
 `config.toml` by default to prevent an unexpectedly large user-rule context from
 starving the Agent turn; set `OPERATOR_CODEX_IGNORE_USER_CONFIG=0` to opt back in.
 
+On Windows, native Codex executables are launched through the Job Object
+supervisor by default. Each run receives an independent Job, a file-backed
+stdin bridge, a `started` handshake after containment and resume, and live
+stdout/stderr tailing into the normal JSONL event path. The terminal receipt
+contains `releaseProof.activeProcessCount`; a closed helper or closed output
+pipe alone is never treated as process-tree release. Set
+`OPERATOR_CODEX_JOB_OBJECT=0` only for a controlled compatibility diagnostic;
+the legacy path remains fail-closed when its process tree cannot be verified.
+
+The helper timeout (`DEFAULT_JOB_HELPER_TIMEOUT_MS`, 60s) bounds one helper
+invocation: the start handshake and the terminate request, both dominated by
+PowerShell cold start. It is a scheduling-delay tolerance, not a release
+deadline — expiry still fails closed through the normal quarantine path, only
+later. Override with `OPERATOR_CODEX_JOB_START_TIMEOUT_MS`; a value below 1s
+falls back to the default rather than shrinking the bound. Measured cold-start
+latency on the development machine was 1.3–1.9s idle and 5.2–9.4s under
+16-way CPU load, so the earlier 15s default misreported ordinary load as
+`CODEX_JOB_START_TIMEOUT` and quarantined a healthy workspace.
+
+`windows-job-object.mjs` also exports `removeTreeEventually(target, { attempts,
+baseDelayMs })` and `RETRYABLE_CLEANUP_CODES`. Windows holds a directory busy
+for a short window after its owner exits; every teardown in this area must use
+that bounded, non-throwing helper instead of a bare `rm`, and should assert on
+its return value when a leak would matter.
+
 Agent 运行的失败原因与资源生命周期是两条独立契约：`agent.primaryFailure`
 保存 Provider/传输等上游原因，`resourceRelease` 保存进程树是否已确认退出。
 取消在有限重试后会进入 `needs_human` 与 `blocked/quarantined` 投影；释放未确认
 前，Mission Workspace、恢复和新测试始终 fail-closed。恢复尝试生成的候选必须
 携带 `candidate.sourceRunId`，Queue 请求与 `benchmark.candidate.sourceRunId`
 沿用该来源，不能用 Round 的首次 attempt ID 代替。
+
+每个新 Claude run 在既有 run JSON 中附带一个有界的 `diagnostics`
+（`operator-studio.agent-run-diagnostics/v1`），键集合固定为
+`schemaVersion/provider/runId/missionId/stdout/stderr/events/firstModelObservedAt/cancellation/close`，
+只保留计数、字节数、客户端边界的真实 UTC 时间、事件类别计数和子进程关闭事实，不复制
+stdout/stderr 正文、thinking、prompt、路径或凭据，也不新增另一路持久化或无界事件数组。
+`events`（`systemInit/thinkingTokens/assistant/result/other/invalidJson`）在遥测过滤前按既有
+type/subtype 逐行计数一次，含 close 时的未终止尾行，空行为 no-op；合法 JSON 的
+primitive/array（含 `null`）固定归 `other` 且不改变正常事件语义，主行、尾行、close 时重载的
+raw events 与 `readEvents` 都不得因此崩溃；`firstModelObservedAt` 只在既有
+[model-observation](model-observation.md) 权威首次给出 `observed` 时写入一次，init/usage/configured
+标签不设置，后续 conflict 既不回退历史时间也不使当前 DTO 可比，诊断永不改写该 DTO。`close` 在真实
+子进程 `close` 回调前为 null，之后严格为 `{at, exitCode, signal}`，exitCode 为回调整数值或 null，
+signal 为固定 Node 信号名或 null，不虚构成功码，也不构成新的进程树释放证明。
+
+Runtime 通过既有 provider cancel 端口 `cancel(runId, context?)` 提供可选诊断上下文；只有 Claude
+接收该附加参数，其他 provider 调用形状不变。对仍存活的自有子进程，首次真实取消在等待终止前即把
+`cancellation` 固定为 `{requestedAt, context}` 并经既有串行原子 run writer 落盘，因此在终止 pending
+期间即可观察；重复调用不覆盖首个 requestedAt/context，子进程已消失时不伪造请求，旧的无 diagnostics
+记录保持可读且不回填。context 为 `operator-studio.cancellation-context/v1`，仅复制白名单标量
+（`runId/missionId/role/trigger/triggeredAt/budgetMs/elapsedMs/stallTimeoutMs/idleMs`），逐字段校验：
+非法 schema、身份、role/trigger 枚举、时间或数值（负值、非正 stall timeout、非有限数）一律
+`context=null` 且不阻止取消；未知预算/耗时为 null，绝不猜成 0；多余键被丢弃，所以原始正文、
+stderr、thinking、路径与凭据无法进入诊断。`cancel(runId)` 的旧调用合法地产生 `context=null`。
+仅新 stderr 活动与取消须在 close 前可观察：每个非空 stderr chunk 都立即请求既有串行原子 writer
+的写入，同一时刻至多排队一次并把期间的 chunk 合并进同一次写入，所以单条 stderr 无需后续事件或
+等到 close 即已落盘，也不引入新 timer、不新增无界数组、不改 `lastActivityAt`。诊断不改变状态机、
+轮次预算、释放屏障、重试/单飞语义或既有 `lastActivityAt`/stall 行为。
+
+归档轮次的必需事实（上一轮 candidate/digest、Correctness 结果、失败分类、Gate、
+Decision、回滚真实性与 currentBest 资产状态）在 `resetMissionRunState` 归档时写入
+`iterationStats.roundFacts`，版本见
+[mission-project-state](mission-project-state.md#round-facts-snapshot)。该快照
+独立于经验库预算：零命中、预算耗尽或未检索都不能丢事实，缺失观测一律
+`unknown`/`not_observed`，绝不用当前已前移的 roundBudget 或 Mission 声明补齐。
+自动轮次（`agent-round-service` + `agent-runtime.startRun`）与手动命令
+（`agent-commands` 冻结 intent/payload/apply）通过同一 `selectRoundFactsForPrompt`
+投影进 Prompt 的 `iterationContext`；只有绑定当前 Mission 与当前 Round 才会投递，
+Mission 切换、新轮次和重放都不会拿到别轮事实。
+
+Provider 中立的发送前 prompt 审计（`operator-studio.prompt-audit/v1`）在
+`agent-runtime.startRun` 调用 provider **之前**原子写入
+`<bridgeDir>/prompt-audits/<runId>.json`，写入失败以 `PROMPT_AUDIT_WRITE_FAILED`
+阻止发送，不假称 provider 已收到。Claude 与 Codex 共用同一 helper，审计的 `prompt`
+严格等于 `start.goal`；OpenCode 与 cli-file 主启动分支各自记录真正交付的
+prompt/request.goal，不记录仅存在于内存的字符串。审计件含 `promptDigest`
+（`sha256:<hex>`，UTF-8 字节）、`promptBytes`（`Buffer.byteLength`）、Mission/Project/
+Round/Run 绑定、`runtimeMode`、`createdAt`、`deliveryStage:prepared-before-send`、轮次事实快照与经验选择清单；
+`state.agent.promptAudit` 只保留 `path/digest/bytes/schemaVersion` 引用，
+`resetMissionRunState` 归档时随 `runHistory[].promptAudit` 保留，旧审计不被新状态改写。
+runId 必须是安全文件名（含路径分隔符或 `..` 时拒绝发送），rename 沿用既有有界重试
+处理 Windows EPERM/EBUSY 竞态。选择清单来自
+[round-experience-service](application/round-experience-service.md) 保存的同 round
+sidecar，审计不重建、不改写选中集合。
 
 ## Inputs
 
@@ -74,6 +159,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 | `application/baseline-failure-projection.mjs` | baseline failure state projection | benchmark state | changed flag |
 | `application/benchmark-projection-service.mjs` | Operator Test snapshot projection | benchmark state | changed state |
+| `application/benchmark-package-preparation-service.mjs` | Shared-GPU execution package preparation port (`createBenchmarkPackagePreparer`) | request, mission, frozen matrix, injected store/adapter | admission-bound Benchmark request |
 | `application/repository-adoption-service.mjs` | Accept Gate repository adoption | projected state | changed state |
 | `application/autopilot-candidate-service.mjs` | automatic candidate priority selection | state | candidate DTO |
 | `application/autopilot-context-service.mjs` | automatic iteration context preparation | state | autopilot context |
@@ -102,7 +188,9 @@ All external outcomes must be normalized before changing Mission state.
 | `state-reference-data.mjs` | legacy fixture defaults and metadata | none | shared reference records |
 | `state-initialization.mjs` | seed/product state factories | injected Mission domain factory | initial snapshots (no storage) |
 | `state-reference-runtime.mjs` | existing reference-fixture progression | state and elapsed clock | fixture state/log projection |
-| `accept-gate.mjs` | I/O-free acceptance rules | state and runner evidence | Gate / Baseline evidence |
+| `accept-gate.mjs` | I/O-free acceptance rules and the single versioned evidence decision | state, runner result and diagnostic envelopes | Gate / Baseline evidence / decision |
+| `evidence-decision.mjs` | I/O-free diagnostic qualification and versioned decision helpers | diagnostic envelope, expected candidate/run binding | three diagnostic predicates, fail-closed execution classification, binding-conflict projection, stable reason codes |
+| `model-observation.mjs` | I/O-free response-model observation contract (schema, pure observe/bind/summarize); byte-exact identities | raw Claude stream metadata, required run identities | frozen DTO, deep-detached binding, comparability summary |
 | `operator-test-evidence.mjs` | in-memory queue evidence projection | state and task snapshot | updated state / decisions / events |
 | `evidence-state.mjs` | shared review/Baseline shapes | kind/status/overrides | schema-compatible records |
 | `mission-objective.mjs` | objective normalization and queries | Mission/objective | normalized policy |
@@ -115,7 +203,7 @@ All external outcomes must be normalized before changing Mission state.
 | `runtime-events.mjs` | canonical Mission and audit events | state, event fields | in-memory event |
 | `agent-runtime.mjs` | Agent use-case lifecycle | Mission context, runtime events | Agent state/results |
 | `agent-runtime/` | definitions, registry, dispatch, capabilities | runtime ID, operation | definition or provider call |
-| `candidate-generation/` | Candidate prompt, Workspace Diff admission, language/repeat guards, and candidate identity | frozen Mission round context, Agent result, Workspace manifest | candidate prompt and verified candidate admission |
+| `candidate-generation/` | Candidate prompt, Workspace Diff admission, empty-candidate root-cause classification, degraded generation-path markers, language/repeat guards, and candidate identity | frozen Mission round context, Agent result, Workspace manifest | candidate prompt and verified candidate admission |
 | `cli-command.mjs` | Resolve direct Agent executables behind Windows npm shims | provider and configured command | executable plus fixed argument prefix |
 | `operator-test-queue.mjs` | serialized test lifecycle | test payload | persisted task snapshot |
 | `local-c500-service-client.mjs` | C550 production execution and isolated CPU E2E command execution | queue task payload | correctness/benchmark artifacts |
@@ -132,10 +220,52 @@ All external outcomes must be normalized before changing Mission state.
 - State transitions preserve active Mission projection consistency.
 - Runtime API, SSE projection, and auto tick state access share the State Repository exclusive queue.
 - No simulation result is publishable.
+- Accept Gate evidence decisions are versioned
+  (`operator-studio.evidence-decision/v1`). Flat `passed`/`publishable`/
+  `evidenceSource`/`liveHardware`/`result` fields are projections of one
+  decision; consumers do not reclassify truth from a boolean or infer
+  publication from `liveHardware`.
+- Diagnostic qualification is three independent predicates
+  (`schemaValid`/`available`/`evidenceEligible`). Only an explicit `completed`
+  status and an explicit non-mock `source`/`metricsSource`/`provenance` prove a
+  real collection (a top-level tool name or artifact path is not a source);
+  mock/simulated provenance wins over a contradictory status; tracer content
+  requires well-formed kernel-categorised events; profiler provenance is never
+  guessed from value equality. Required real evidence must be bound to the
+  current candidate/run and a contradictory benchmark/applied candidate binding
+  blocks.
+- Publication requires a passed adoption, live execution, no explicit
+  development/shared-host restriction and two eligible bound real diagnostics.
+  Explicit simulation/mock/fixture/scripted and CPU signals outrank
+  `liveHardware=true`. Backend names and `publishable=true` are not publication
+  authority; missing real diagnostics pauses for external verification instead
+  of driving new Agent edits or being reported as complete evidence.
+- Response-model observation is provider-reported (`assistant.message.model`),
+  bound exactly by provider/run/mission/session and never promoted from
+  init/env/usage labels or declared configuration. `unknown`/`conflict` never
+  blocks a workflow and never becomes comparable; it is not remote attestation.
 - Test evidence and workspace candidate identities match.
+- The Workspace Git Diff is the only candidate admission authority. A Provider that
+  did not terminate normally yields no candidates at all, and a candidate the Agent
+  never declared is admitted only as explicitly degraded (`workspace_observed`).
+- `candidates: []` always carries exactly one root-cause classification
+  (`upstream_failure_no_candidate`, `no_candidate_generated`, `parse_mapping_loss`,
+  `tool_failed_patch_pending`, `workspace_capture_gap`, `patch_admission_failed`,
+  `task_contract_unmet`). Degraded markers describe the generation path only; they never
+  relax the language contract, the repeat guard, the fixed test matrix, or the Gate.
+- Structured edit-tool identity is read only from a structured tool field, never from command
+  text. Codex reports the edit tool as `item.type: 'file_change'`, while `claude-client.mjs`
+  normalizes every tool into `item.type: 'command_execution'` and keeps the real identity in
+  `item.name` (`Write` / `Edit` / `Bash`). A declared tool name therefore outranks the event
+  type. An edit tool that never appeared is `absent` and is never a degradation; only an edit
+  tool that appeared and failed is, and the first failure is not overturned by a later
+  successful shell write.
 - Every Candidate test uses the persisted Baseline `oracleRunPy`; Candidate-owned
   `reference()` code is never the correctness authority.
 - External failures use `workflow-error.mjs` normalization.
+- Durable state is replaced by write-to-temp then rename. A Windows handle overlap
+  (`EPERM`/`EBUSY`/`EACCES`) is retried a bounded number of times and then rethrown — never
+  swallowed, so a bounded operation cannot be left half-applied by a transient lock.
 - Runtime events use `runtime-events.mjs`; do not define local event appenders.
 - Provider capability checks use the Agent Runtime registry.
 - Windows Codex MVP runs with the explicit `unelevated` fallback when the
@@ -165,6 +295,12 @@ All external outcomes must be normalized before changing Mission state.
 - The real-Agent test intentionally uses an unreachable performance target so the continuation branch
   is deterministic. After observing the next round it calls the public stop action solely for cleanup.
   It is intentionally excluded from routine verification because it consumes a live Agent session.
+- `E2E_RUN_ROOT` overrides the harness run root. On Windows the default `os.tmpdir()` may be an
+  8.3 short name containing `~`, and the Claude Code path-permission guard refuses writes under
+  such a path; the run would then silently use the result-patch fallback while still reporting
+  green. The emitted `summary` reports `candidateGenerationPath`, `editToolStatus`,
+  `degradedGeneration` and `degradationReason` so the report is self-describing. A
+  result-patch fallback is a legitimate recovery path and is deliberately not asserted against.
 
 ## Command recovery
 
@@ -252,16 +388,34 @@ Queue 继续是唯一测试调度与原子终态所有者；工具不增加另�
 
 | 公共模块 | API / 责任 |
 |---|---|
-| [execution-package-contract](execution-package-contract.md) | 纯 manifest、路径、层、Candidate/Workspace、验收与准入绑定规则 |
-| [execution-package-store](execution-package-store.md) | assemble / validate / prepare / reconcilePreparation / verifyAdmission；私有 CAS 与可信准入 |
+| [execution-package-contract](execution-package-contract.md) | 纯 manifest、路径、层、Candidate/Workspace、验收与准入绑定规则；canonical 纯 `contentDigest(bytes)`（仅 `node:crypto`，无 I/O） |
+| [execution-package-store](execution-package-store.md) | assemble / validate / prepare / reconcilePreparation / verifyAdmission；私有 CAS 与可信准入；`contentDigest` 仅为指向 contract canonical 函数的同绑定兼容导出 |
 | [execution-package-import](execution-package-import.md) | 将目录或 tar/tar.gz/zip 归档读取为候选、依赖、独立验收层；拒绝链接、设备、越界路径后交给 package store 准入 |
 | [operator-test-tool](operator-test-tool.md) | capabilities / prepare / submit / read-only get / cancel / findByRequestId；仅调用一个队列 |
-| [experience-contract](experience-contract.md) | 版本、范围、来源、证据与非发布型开发经验规则 |
+| [experience-contract](experience-contract.md) | 版本、范围、来源、证据与非发布型开发经验规则；可选版本绑定的选择元数据与上下文硬上限 |
+| [experience-selection](experience-selection.md) | 纯规范化与确定性排序：`normalizeSelectionMetadata`、`rankExperienceCandidates`、`WIKI_SELECTION_POLICY_VERSION`、配额与排除原因 |
+| [kernel-wiki-import](kernel-wiki-import.md) | 纯解析/构建/原子导入：`parseKernelWikiPage`、`buildKernelWikiSnapshot`、`applyKernelWikiSnapshot`；来源固定为 Git blob，绝不解释上游性能声明 |
 | [experience-repository](experience-repository.md) | 私有原子存储、同进程事务、不可变历史 |
-| [experience-service](application/experience-service.md) | 注入端口的人工经验、观察记录与冻结检索上下文 |
-| [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；完整可信凭据才记录执行观察 |
+| [experience-service](application/experience-service.md) | 注入端口的人工经验、观察记录、KernelWiki 快照导入、冻结检索上下文与审计选择清单 |
+| [round-experience-service](application/round-experience-service.md) | 冻结版本/来源/范围并注入 Agent；保存同轮选择 sidecar；完整可信凭据才记录执行观察；可用显式 `experienceCondition` 研究条件准备同一冻结上下文 |
 | [round-budget-contract](round-budget-contract.md) | 主 Agent、测试与同轮重试共享 15 分钟墙钟；暂停/恢复不刷新 |
 | [cancellation-contract](cancellation-contract.md) | 资源释放真相、只读 barrier 与显式推进中的确认收敛 |
+| [model-observation](model-observation.md) | 无 I/O 的响应模型观测 DTO、按原始字节精确匹配的 provider/run/mission/session 绑定与必需 run 汇总；仅 `assistant.message.model` 是响应身份，unknown/conflict 不阻 workflow 也不可比 |
+
+研究条件（facts-only / local-only / local-and-wiki）是同一冻结上下文的三种可选经验
+注入：显式条件经 `createRoundExperienceService({...,experienceCondition})` 传入，
+`local-server.mjs` 另外读取环境变量 `OPERATOR_EXPERIENCE_CONDITION`。条件在检索排序与
+配额之前生效：`facts-only` 注入零条可选经验，`local-only` 排除全部 kernel-wiki 单元，
+`local-and-wiki` 保持既有选择不变；未知/空/非字符串条件在改变任何状态之前以
+`EXPERIENCE_INVALID` 失败，同一 round 的冻结上下文不得改换条件。实际使用的条件与策略
+版本写入持久化的选择 sidecar 与发送前 prompt audit；`local-and-wiki` 记录的
+`policyVersion` 仍是当前 D 的 `WIKI_SELECTION_POLICY_VERSION`，绝不回退到旧
+retrieve-only 常量。研究编排侧（九槽位调度、条件收据、只读报告复核）位于
+`scripts/experience-condition-study.mjs` 与 `scripts/run-experience-condition-study.mjs`，
+接口与验收矩阵见 `docs/development/EXPERIENCE_STUDY_CONTRACT.md`；条件矩阵的独立验收
+分别在 `tests/experience-condition-runtime-test.mjs` 与
+`tests/experience-condition-study-test.mjs`。研究结果只作探索性对照，报告恒为
+`strictN20Passed=false`，不得标注为 N20、稳定性或发布证据。
 
 执行包是 Candidate 文件、离线直接/传递依赖、精确锁定环境层和独立冻结验收包的
 逻辑整体。内容层按摘要复用；不要求每轮重复上传解释器/编译器/大型库。
@@ -366,3 +520,15 @@ npm run test:projects-service
 npm run test:missions-service
 npm run verify:local-c500-release
 ```
+
+
+### GPU experience environment preflight (2026-09-16)
+
+The composition root injects a shared-resolver environment preflight into the
+round experience service. Automatic and manual starts warm/check the bound
+environment before the three-second collect phase, within existing total clocks.
+The GPU probe uses the existing package inspection allowance (default 30000 ms,
+maximum probe timeout 30000 ms) instead of the probe helper's generic 5000 ms
+fallback. The enclosing preflight still caps the whole query by remaining budgets.
+This accommodates a slow Python/Torch import without inventing a missing runtime;
+timeout, drift and failed evidence checks remain fail-closed.

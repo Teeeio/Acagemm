@@ -1,6 +1,6 @@
 import { lstat, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { isExecutionReleased, assertResourcesReleased, reconcileResourceRelease } from './cancellation-contract.mjs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { opencodeClient as defaultOpenCodeClient, parseOpenCodeModel } from './opencode-client.mjs';
@@ -14,6 +14,13 @@ import { prepareAgentBoundary } from './agent-boundary.mjs';
 import { loadSourceMirrorPolicy, normalizeRepositoryIdentity, resolveSourceTransport, verifySourceTransportSnapshot } from './source-mirror-policy.mjs';
 import { buildCandidateGenerationPrompt } from './candidate-generation/prompt.mjs';
 import { candidateWorkspaceRequirements, finalizeCandidateAdmission, inspectCandidateDiff } from './candidate-generation/admission.mjs';
+import {
+  CANDIDATE_GENERATION_PATH,
+  CANDIDATE_OUTCOME,
+  classifyEmptyCandidateOutcome,
+  describeGenerationPath,
+  editToolSignal,
+} from './candidate-generation/classification.mjs';
 import { testSpecAgentInstruction } from './test-spec.mjs';
 import { formatExperienceContext } from './experience-contract.mjs';
 import { fixedOperatorPrompt } from './fixed-operator-profiles.mjs';
@@ -22,6 +29,8 @@ import { runtimeRegistry } from './agent-runtime/registry.mjs';
 import { createAgentRuntimeEngine } from './agent-runtime/engine.mjs';
 import { isManagedWorkspaceRuntimeMode, normalizeAgentRuntimeMode } from './agent-runtime/capabilities.mjs';
 import { appendRuntimeEvent } from './runtime-events.mjs';
+import { selectRoundFactsForPrompt } from './mission-project-state.mjs';
+import { bindModelObservation } from './model-observation.mjs';
 
 export { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
 export { appendRuntimeEvent } from './runtime-events.mjs';
@@ -32,6 +41,128 @@ const defaultBridgeDir = path.join(runtimeDir, 'agent-bridge');
 
 const fileExists = async (target) => {
   try { return (await stat(target)).isFile(); } catch { return false; }
+};
+
+// §14.4：provider 中立的发送前 prompt 审计。runId 必须是安全文件名；写入失败以明确
+// 错误阻止发送，不假称 provider 已收到。审计件是唯一权威来源，之后不得从 state 重建。
+const PROMPT_AUDIT_SCHEMA_VERSION = 'operator-studio.prompt-audit/v1';
+const AUDIT_REPLACE_RETRY_CODES = ['EPERM', 'EBUSY', 'EACCES'];
+const safeAuditRunId = (runId) => typeof runId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(runId) && !runId.includes('..');
+const auditFailure = (message, code, cause) => Object.assign(new Error(message), { code, status: 500, ...(cause ? { cause } : {}) });
+const missionProjectIdFor = (state, mission) => mission?.projectId || state?.missions?.find((item) => item.id === mission?.id)?.projectId || state?.activeProjectId || null;
+const isNonBlankString = (value) => typeof value === 'string' && value.trim().length > 0;
+
+// §D3：取消诊断 context 的字节冻结形状。Runtime 只提供已经存在的标量事实；未知一律
+// null，绝不猜测为 0。此对象只用于 provider 诊断端口，不进入任何状态机或持久化 Mission。
+const CANCELLATION_CONTEXT_SCHEMA_VERSION = 'operator-studio.cancellation-context/v1';
+const finiteNonNegativeOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);
+const finitePositiveOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null);
+const elapsedSince = (startedAt) => {
+  const startedAtMs = Date.parse(startedAt || '');
+  return Number.isFinite(startedAtMs) ? Math.max(0, Date.now() - startedAtMs) : null;
+};
+// Factory：triggeredAt 必须在真正发起新的 provider cancel 调用时才生成。工厂只闭包
+// 不可变标量，不持有任何可变 state 引用，也不产生持久化副本。
+const cancellationContextFactory = ({ runId, role, missionId = null, trigger, budgetMs = null, elapsedMs = null, stallTimeoutMs = null, idleMs = null }) => () => ({
+  schemaVersion: CANCELLATION_CONTEXT_SCHEMA_VERSION,
+  runId,
+  missionId: isNonBlankString(missionId) ? missionId : null,
+  role,
+  trigger,
+  triggeredAt: new Date().toISOString(),
+  budgetMs: finiteNonNegativeOrNull(budgetMs),
+  elapsedMs: finiteNonNegativeOrNull(elapsedMs),
+  stallTimeoutMs: finitePositiveOrNull(stallTimeoutMs),
+  idleMs: finiteNonNegativeOrNull(idleMs),
+});
+// 触发分支只读取既有 boolean 与既有状态条件，不重算优先级或阈值：
+// 过期用调用方给出的既有触发；未过期按 logical_completion → prior_cancel_requested
+// → terminal_unreleased → release_pending 的既有条件顺序选择。
+const cancellationTriggerFor = ({ expired, logicalDone, previous, run, cancellation }) => {
+  if (expired) return cancellation?.expiryTrigger || 'budget_exceeded';
+  if (logicalDone) return 'logical_completion';
+  if (previous?.status === 'cancel_requested') return 'prior_cancel_requested';
+  if (['completed', 'failed', 'cancelled'].includes(run?.status)) return 'terminal_unreleased';
+  return 'release_pending';
+};
+const roleMissionIdFor = (role, state) => (isNonBlankString(role?.missionId)
+  ? role.missionId
+  : isNonBlankString(state?.activeMissionId) ? state.activeMissionId : null);
+// §model-observation: project only an exact current provider/run/mission/session
+// bound DTO, deep detached by the shared validation authority. Missing, foreign,
+// malformed or stale evidence clears the projected value; the observation is
+// diagnostic metadata and never a control gate for candidates or release.
+//
+// The expected identity comes from the current agent + active Mission, never from
+// the run record: a record claiming another run/mission/provider is foreign and is
+// rejected instead of being re-labelled onto the current identity.
+//
+// The expected session is an independent identity owned by the run record: its
+// actual `sessionId`, or the compatible `threadId` when no session was recorded.
+// When both are present they must be byte-equal. The DTO's own `sessionId` is
+// never an authority — accepting it would let an observation bind itself,
+// including in cancellation settlement, so there is no such fallback.
+const projectRunModelObservation = ({ provider, run, runId, missionId }) => {
+  if (!run || typeof run !== 'object' || run.runId !== runId) return null;
+  if (run.missionId != null && run.missionId !== missionId) return null;
+  if (run.provider != null && run.provider !== provider) return null;
+  const recordedSession = isNonBlankString(run.sessionId) ? run.sessionId : null;
+  const recordedThread = isNonBlankString(run.threadId) ? run.threadId : null;
+  if (recordedSession && recordedThread && recordedSession !== recordedThread) return null;
+  const expectedSession = recordedSession || recordedThread;
+  if (!expectedSession) return null;
+  return bindModelObservation(run.modelObservation, { provider, runId, missionId, sessionId: expectedSession });
+};
+// 只投递绑定当前 Mission 与当前 Round 的选择清单，不泄漏别轮/别 Mission 的审计元数据。
+const promptAuditSelection = (state, { missionId, projectId, roundId, experienceContext }) => {
+  const selection = state?.iterationStats?.roundExperienceSelection;
+  if (!selection || !experienceContext || !roundId || selection.roundId !== roundId
+    || selection.missionId !== missionId || selection.projectId !== projectId
+    || selection.contextId !== experienceContext.contextId
+    || !Array.isArray(selection.selected) || selection.selected.length !== experienceContext.items.length
+    || !selection.selected.every((item, index) => item.id === experienceContext.items[index].id
+      && item.version === experienceContext.items[index].version && item.source === experienceContext.items[index].source)) return null;
+  return structuredClone(selection);
+};
+const writePromptAudit = async ({ bridgeDir, runId, prompt, missionId, projectId, roundId, runtimeMode, roundFacts, selection }) => {
+  if (!safeAuditRunId(runId)) throw auditFailure(`Prompt audit runId is not a safe file name: ${runId}`, 'PROMPT_AUDIT_RUN_ID_INVALID');
+  try {
+    const auditsDir = path.join(bridgeDir, 'prompt-audits');
+    const auditPath = path.join(auditsDir, `${runId}.json`);
+    const audit = {
+      schemaVersion: PROMPT_AUDIT_SCHEMA_VERSION,
+      deliveryStage: 'prepared-before-send',
+      prompt,
+      promptDigest: 'sha256:' + createHash('sha256').update(prompt, 'utf8').digest('hex'),
+      promptBytes: Buffer.byteLength(prompt, 'utf8'),
+      missionId: missionId ?? null,
+      projectId: projectId ?? null,
+      roundId: roundId ?? null,
+      runId,
+      runtimeMode,
+      createdAt: new Date().toISOString(),
+      roundFacts: roundFacts ?? null,
+      selection: selection ?? null,
+    };
+    await mkdir(auditsDir, { recursive: true });
+    const temporary = `${auditPath}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, `${JSON.stringify(audit, null, 2)}\n`, 'utf8');
+      // Windows 上短暂持有的句柄会让 rename 报 EPERM/EBUSY；沿用既有有界替换重试，
+      // 只有全部重试耗尽才算写入失败。
+      for (let attempt = 0; ; attempt += 1) {
+        try { await rename(temporary, auditPath); break; }
+        catch (error) {
+          if (!AUDIT_REPLACE_RETRY_CODES.includes(error.code) || attempt === 11) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+        }
+      }
+    } finally { await rm(temporary, { force: true }).catch(() => {}); }
+    return { schemaVersion: PROMPT_AUDIT_SCHEMA_VERSION, path: auditPath, digest: audit.promptDigest, bytes: audit.promptBytes };
+  } catch (error) {
+    if (error?.code === 'PROMPT_AUDIT_RUN_ID_INVALID') throw error;
+    throw auditFailure(`Prompt audit write failed before provider send: ${error.message}`, 'PROMPT_AUDIT_WRITE_FAILED', error);
+  }
 };
 
 const directoryExists = async (target) => {
@@ -618,7 +749,7 @@ export function createAgentRuntime(options = {}) {
     return { ready: true, code: 'AGENT_RUNTIME_READY', runtime: descriptor, workspace };
   };
 
-  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null }) => {
+  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null, roundId = null }) => {
     assertResourcesReleased(state);
     const activeStartAt = activeStartMissions.get(mission.id);
     if (activeStartAt && Date.now() - activeStartAt < 120_000) {
@@ -633,6 +764,9 @@ export function createAgentRuntime(options = {}) {
     startGuardTimer.unref?.();
     try {
     if (mode === 'reference-fixture') { activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer); return { handled: false }; }
+    // 新 run 显式绑定它启动时所属的 Round。归档上一轮时以 agent.roundId 还原原 round
+    // 身份，而不是读取可能已经前移的 roundBudget。
+    const activeRoundId = roundId || state.iterationStats?.roundBudget?.roundId || null;
     const experienceInstruction = experienceContext ? formatExperienceContext(experienceContext, {
       projectId: mission.projectId, missionId: mission.id, roundId: state.iterationStats?.roundBudget?.roundId,
     }) : '';
@@ -661,6 +795,13 @@ export function createAgentRuntime(options = {}) {
         'Inspect the current OpenCode project in planning mode. Do not edit files in this pass.',
         'Return a concrete diagnosis, tool evidence, candidate options, risks, and the recommended next action.',
       ].join('\n');
+      // 审计的是真正交给 provider 的 text；OpenCode 分支的 prompt 内容不含轮次事实。
+      const promptAudit = await writePromptAudit({
+        bridgeDir, runId: session.id, prompt,
+        missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+        runtimeMode: 'opencode-server', roundFacts: null,
+        selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
+      });
       try {
         await runtimeEngine.invoke(mode, 'prompt', session.id, { text: prompt, agent: openCodeAgent, model: openCodeModel });
       } catch (error) {
@@ -676,9 +817,11 @@ export function createAgentRuntime(options = {}) {
         progress: 5,
         missionId: mission.id,
         runId: session.id,
+        roundId: activeRoundId,
         runtimeKind: 'opencode',
         profileId: 'profile.operator-orchestrator',
         goal,
+        promptAudit,
         startedAt: new Date().toISOString(),
         currentAction: null,
         toolCalls: [],
@@ -739,8 +882,13 @@ export function createAgentRuntime(options = {}) {
         ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
         workspace,
       ).then((result) => result.stdout.split('\0').map((file) => file.replaceAll('\\', '/')).filter(Boolean).sort());
+      // 已归档轮次的必需事实经既有 iterationContext 通道进入 prompt：深拷贝投影到
+      // 局部 mission 副本，用户 Mission 定义不被修改；绑定不匹配（Mission 切换、Round
+      // 已前移、旧版本快照）时 selectRoundFactsForPrompt 返回 null，不泄漏事实。
+      const roundFacts = selectRoundFactsForPrompt(state, mission);
+      const promptMission = roundFacts ? { ...mission, iterationContext: roundFacts } : mission;
       const prompt = buildCandidateGenerationPrompt({
-        mission,
+        mission: promptMission,
         goal,
         workspace,
         baseline,
@@ -748,6 +896,14 @@ export function createAgentRuntime(options = {}) {
         workspaceInventory,
         experienceInstruction,
         boundaryInstruction: boundary.toolInstruction,
+      });
+      // Claude/Codex 共用同一发送前 helper：先落盘审计件（此时尚未调用 provider），
+      // 写入失败直接抛出，provider start 不会发生。审计 prompt 就是 start.goal 原文。
+      const promptAudit = await writePromptAudit({
+        bridgeDir, runId, prompt,
+        missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+        runtimeMode: mode, roundFacts: roundFacts ?? null,
+        selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
       });
       const run = await runtimeEngine.invoke(mode, 'start', { runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
       state.stage = 'diagnosis';
@@ -758,10 +914,12 @@ export function createAgentRuntime(options = {}) {
         progress: 5,
         missionId: mission.id,
         runId,
+        roundId: activeRoundId,
         runtimeKind: mode,
         threadId: run.threadId || resumeThreadId || null,
         profileId: 'profile.operator-orchestrator',
         goal,
+        promptAudit,
         startedAt: run.startedAt,
         budgetMs: mainAgentBudgetMs,
         eventCount: 0,
@@ -801,6 +959,14 @@ export function createAgentRuntime(options = {}) {
       status: 'requested',
       createdAt: new Date().toISOString(),
     };
+    // cli-file 实际交付给 CLI Agent 的是 request.goal；审计先于 Bridge 请求落盘，
+    // 失败即阻止请求写出。不把只存在于内存的字符串谎称为已发送。
+    const promptAudit = await writePromptAudit({
+      bridgeDir, runId, prompt: goal,
+      missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+      runtimeMode: 'cli-file', roundFacts: null,
+      selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
+    });
     const requestsDir = path.join(bridgeDir, 'requests');
     await mkdir(requestsDir, { recursive: true });
     const requestPath = path.join(requestsDir, `${runId}.json`);
@@ -815,8 +981,10 @@ export function createAgentRuntime(options = {}) {
       progress: 0,
       missionId: mission.id,
       runId,
+      roundId: activeRoundId,
       profileId: 'profile.operator-orchestrator',
       goal,
+      promptAudit,
       startedAt: request.createdAt,
       currentAction: null,
       toolCalls: [{ id: `adapter-${runId}`, toolId: 'adapter.cli-file', name: 'CLI File Adapter', version: 'v0.1.0', skillId: 'skill.context-snapshot', status: 'running', summary: 'Mission 请求已写入 Bridge，等待 CLI 状态文件更新', permission: 'bridge:write' }],
@@ -1109,10 +1277,20 @@ export function createAgentRuntime(options = {}) {
   const cancellationCalls = new Map();
   const cancellationRetries = new Map();
   const cancellationTimeoutMs = Math.max(20, Number(options.cancellationTimeoutMs) || 5_000);
-  const requestCancellation = async (runId) => {
+  // D3：provider cancel 端口只在 Claude Code 上接收第二个诊断 context 参数；其余
+  // provider 保持原有的单参数调用形状（旧 provider 调用形状兼容）。
+  const invokeProviderCancel = (runId, context) => (mode === 'claude-code'
+    ? runtimeEngine.invoke(mode, 'cancel', runId, context)
+    : runtimeEngine.invoke(mode, 'cancel', runId));
+  const requestCancellation = async (runId, contextFactory = null) => {
     let operation = cancellationCalls.get(runId);
     if (!operation) {
-      operation = Promise.resolve().then(() => runtimeEngine.invoke(mode, 'cancel', runId));
+      // 单飞：只有真正新建 provider 调用时才构造 context 与 triggeredAt。已存在的
+      // operation 直接复用，不重新调用 provider，也不生成替代 context。
+      operation = Promise.resolve().then(() => invokeProviderCancel(
+        runId,
+        typeof contextFactory === 'function' ? contextFactory() : null,
+      ));
       cancellationCalls.set(runId, operation);
       operation.finally(() => { if (cancellationCalls.get(runId) === operation) cancellationCalls.delete(runId); }).catch(() => {});
     }
@@ -1147,7 +1325,7 @@ export function createAgentRuntime(options = {}) {
           ? previous.resourceRelease.status
           : 'pending', confirmed: false },
   });
-  const settleCancellation = async (previous, run, expired = false, logicalDone = false, { primaryFailure = null } = {}) => {
+  const settleCancellation = async (previous, run, expired = false, logicalDone = false, { primaryFailure = null, cancellation = null } = {}) => {
     const previousWithFailure = primaryFailure
       ? { ...previous, primaryFailure, resourceRelease: { ...(previous.resourceRelease || {}), primaryFailure } }
       : previous;
@@ -1164,7 +1342,17 @@ export function createAgentRuntime(options = {}) {
     const shouldRequest = (previousWithFailure.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') || releasePending;
     if (shouldRequest && retryCount < MAX_CANCELLATION_RETRIES) {
       cancellationRetries.set(previousWithFailure.runId, retryCount + 1);
-      outcome = await requestCancellation(previousWithFailure.runId);
+      const trigger = cancellationTriggerFor({ expired, logicalDone, previous: previousWithFailure, run, cancellation });
+      outcome = await requestCancellation(previousWithFailure.runId, cancellation ? cancellationContextFactory({
+        runId: previousWithFailure.runId,
+        role: cancellation.role,
+        missionId: cancellation.missionId,
+        trigger,
+        budgetMs: cancellation.budgetMs,
+        elapsedMs: cancellation.elapsedMs,
+        stallTimeoutMs: cancellation.stallTimeoutMs,
+        idleMs: cancellation.idleMs,
+      }) : null);
       if (isExecutionReleased(outcome)) return { run: { ...run, ...outcome }, projection: null };
     }
     const exhausted = releasePending && (cancellationRetries.get(previousWithFailure.runId) || 0) >= MAX_CANCELLATION_RETRIES;
@@ -1197,7 +1385,10 @@ export function createAgentRuntime(options = {}) {
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await requestCancellation(runId);
+      // D3：明确 cancelRun 记录 explicit_cancel；它不评估过期，时序/预算保持 null。
+      const result = await requestCancellation(runId, cancellationContextFactory({
+        runId, role: 'materializer', missionId: roleMissionIdFor(state.baseline.materializer, state), trigger: 'explicit_cancel',
+      }));
       state.baseline = {
         ...(state.baseline || {}),
         materializer: { ...state.baseline.materializer, status: isExecutionReleased(result) ? result.status : 'cancel_requested', phase: 'Baseline materializer 取消已请求', resourceRelease: cancellationRelease(state.baseline.materializer, result) },
@@ -1212,7 +1403,9 @@ export function createAgentRuntime(options = {}) {
         error.code = 'AGENT_CANCEL_UNAVAILABLE';
         throw error;
       }
-      const result = await requestCancellation(runId);
+      const result = await requestCancellation(runId, cancellationContextFactory({
+        runId, role: 'research', missionId: roleMissionIdFor(state.researchAgent, state), trigger: 'explicit_cancel',
+      }));
       state.researchAgent = { ...state.researchAgent, status: isExecutionReleased(result) ? result.status : 'cancel_requested', phase: '研究员取消已请求', resourceRelease: cancellationRelease(state.researchAgent, result) };
       appendRuntimeEvent(state, 'research.cancel_requested', { runId }, { kind: 'research', mode });
       return { state, result };
@@ -1224,7 +1417,9 @@ export function createAgentRuntime(options = {}) {
       throw error;
     }
     let result;
-    if (runtimeDefinition && runtimeEngine.supports(mode, 'cancellation')) result = await requestCancellation(runId);
+    if (runtimeDefinition && runtimeEngine.supports(mode, 'cancellation')) result = await requestCancellation(runId, cancellationContextFactory({
+      runId, role: 'main', missionId: roleMissionIdFor(state.agent, state), trigger: 'explicit_cancel',
+    }));
     else {
       const error = new Error(`Agent cancellation is not supported by runtime mode ${mode}.`);
       error.status = 409;
@@ -1344,7 +1539,18 @@ export function createAgentRuntime(options = {}) {
         const budgetExceeded = Number(prev.budgetMs) > 0
           && prev.startedAt
           && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
-        const settlement = await settleCancellation(prev, run, budgetExceeded, events.some(event => event.type === 'turn.completed'));
+        // D3：materializer 过期只记录 budget_exceeded；stall 值保持 null。
+        const settlement = await settleCancellation(prev, run, budgetExceeded, events.some(event => event.type === 'turn.completed'), {
+          cancellation: {
+            role: 'materializer',
+            missionId: roleMissionIdFor(prev, state),
+            budgetMs: typeof prev.budgetMs === 'number' ? prev.budgetMs : null,
+            elapsedMs: elapsedSince(prev.startedAt),
+            stallTimeoutMs: null,
+            idleMs: null,
+            expiryTrigger: budgetExceeded ? 'budget_exceeded' : null,
+          },
+        });
         if (settlement.projection) {
           const changed = runtimeChanged || JSON.stringify(settlement.projection) !== JSON.stringify(prev);
           state.baseline = { ...state.baseline, materializer: settlement.projection };
@@ -1493,7 +1699,18 @@ export function createAgentRuntime(options = {}) {
         const budgetExceeded = Number(prev.budgetMs) > 0
           && prev.startedAt
           && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
-        const settlement = await settleCancellation(prev, run, budgetExceeded, false);
+        // D3：researcher 过期只记录 budget_exceeded；stall 值保持 null。
+        const settlement = await settleCancellation(prev, run, budgetExceeded, false, {
+          cancellation: {
+            role: 'research',
+            missionId: roleMissionIdFor(prev, state),
+            budgetMs: typeof prev.budgetMs === 'number' ? prev.budgetMs : null,
+            elapsedMs: elapsedSince(prev.startedAt),
+            stallTimeoutMs: null,
+            idleMs: null,
+            expiryTrigger: budgetExceeded ? 'budget_exceeded' : null,
+          },
+        });
         if (settlement.projection) {
           const changed = runtimeChanged || usageChanged || JSON.stringify(settlement.projection) !== JSON.stringify(prev);
           state.researchAgent = settlement.projection;
@@ -1592,9 +1809,26 @@ export function createAgentRuntime(options = {}) {
     }
     if (managedCliMode && state.agent?.runtimeKind === mode && state.agent?.runId) {
       let observedRun = null;
+      // Current-agent identity is fixed for this projection; the run record must
+      // match it, never define it. The expected Mission must agree with both the
+      // current agent and the active Mission: an agent still labelled with an old
+      // Mission while another is active is a foreign identity, not a hint.
+      const agentMissionId = isNonBlankString(state.agent.missionId) ? state.agent.missionId : null;
+      const activeMissionId = isNonBlankString(state.activeMissionId) ? state.activeMissionId : null;
+      const expectedMissionId = agentMissionId && activeMissionId && agentMissionId !== activeMissionId
+        ? null
+        : (activeMissionId ?? agentMissionId);
+      const observationContext = {
+        provider: mode,
+        runId: state.agent.runId,
+        missionId: expectedMissionId,
+      };
       try {
         let run = await runtimeEngine.invoke(mode, 'readRun', state.agent.runId);
         observedRun = run;
+        let projectedModelObservation = mode === 'claude-code'
+          ? projectRunModelObservation({ ...observationContext, run })
+          : null;
         const events = await runtimeEngine.invoke(mode, 'readEvents', state.agent.runId);
         const usageBefore = JSON.stringify(state.tokenUsage || null);
         recordRunTokenUsage(state, { runId: state.agent.runId, phase: 'iteration', provider: mode, events });
@@ -1607,7 +1841,12 @@ export function createAgentRuntime(options = {}) {
         // contain failed tool calls or recoverable error events without failing the run.
         let failed = run.status === 'failed';
         let completed = run.status === 'completed';
-        const workflowAdvanced = state.patchApplied || ['validation', 'evidence', 'curation', 'published'].includes(state.stage);
+        const rejection = state.agent.patchPolicyRejection;
+        const patchPolicyBlocked = state.iterationStats?.loopStatus === 'needs_human'
+          && state.iterationStats?.loopStatusReason === 'patch_policy_rejected'
+          && rejection?.missionId === state.activeMissionId
+          && rejection?.sourceRunId === state.agent.runId;
+        const workflowAdvanced = patchPolicyBlocked || state.patchApplied || ['validation', 'evidence', 'curation', 'published'].includes(state.stage);
         // 取消后进程未必立即死透：run.status 仍为 running，不能把已请求的取消覆盖回 running
         // （与研究分支同法：保留 cancel_requested，直到进程真正终结为 cancelled）。
         const eventCount = events.length;
@@ -1630,13 +1869,34 @@ export function createAgentRuntime(options = {}) {
           : !completed && !turnCompletedObserved && providerFailureSignal
             ? classifyManagedFailure(run, events)
             : null;
-        const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded, false, { primaryFailure: preSettlementFailure });
+        // D3：主线程使用本分支已有的有效预算/已用时/停滞阈值与实测空闲；两个既有
+        // boolean 同时为真时记录 budget_and_stall，否则记录真正触发的那个。
+        const mainCancellationMissionId = roleMissionIdFor(state.agent, state);
+        const measuredIdleMs = Number.isFinite(lastEventAt) && lastEventAt > 0 ? Math.max(0, Date.now() - lastEventAt) : null;
+        const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded, false, {
+          primaryFailure: preSettlementFailure,
+          cancellation: {
+            role: 'main',
+            missionId: mainCancellationMissionId,
+            budgetMs: state.agent.budgetMs || mainAgentBudgetMs,
+            elapsedMs: elapsed,
+            stallTimeoutMs: mainAgentStallMs,
+            idleMs: measuredIdleMs,
+            expiryTrigger: stalled && budgetExceeded ? 'budget_and_stall' : budgetExceeded ? 'budget_exceeded' : stalled ? 'stall_timeout' : null,
+          },
+        });
         if (settlement.projection) {
-          const changed = runtimeChanged || usageChanged || JSON.stringify(settlement.projection) !== JSON.stringify(state.agent);
-          state.agent = settlement.projection;
+          // Cancellation settlement must not drop the latest exact-bound observation,
+          // and must not keep one that the current run no longer supports.
+          const projection = mode === 'claude-code'
+            ? { ...settlement.projection, modelObservation: projectedModelObservation }
+            : settlement.projection;
+          const changed = runtimeChanged || usageChanged || JSON.stringify(projection) !== JSON.stringify(state.agent);
+          state.agent = projection;
           return { state, changed };
         }
         run = settlement.run; observedRun = run;
+        if (mode === 'claude-code') projectedModelObservation = projectRunModelObservation({ ...observationContext, run });
         failed = run.status === 'failed'; completed = run.status === 'completed';
         const timedOut = isExecutionReleased(run) && (stalled || budgetExceeded || (run.status === 'cancelled' && state.agent.timedOut === true));
         const nextStatus = failed ? 'failed' : completed ? 'completed' : timedOut ? 'completed' : run.status === 'cancelled' ? 'cancelled' : state.agent.status === 'cancel_requested' ? 'cancel_requested' : 'running';
@@ -1653,7 +1913,15 @@ export function createAgentRuntime(options = {}) {
           && failure.retryable !== false
           && !NON_RECOVERABLE_MANAGED_FAILURE_CODES.has(failure.code));
         let candidateValidation = null;
-        let verifiedCandidates = agentResult.candidates;
+        // Fail-closed：候选绝不能从原始解析结果直接进入候选池。只有 inspectCandidateDiff
+        // （以工作区 Git Diff 为准入权威）产出的候选才允许进入下面的准入判断。
+        let verifiedCandidates = [];
+        let generationPath = null;
+        let patchFallbackRejected = false;
+        let patchFallbackWithoutDiff = false;
+        // 「编辑工具失败」与「编辑工具缺失」是两件事：Agent 用普通 shell 写盘属于合法
+        // 生成路径，缺失从来不判降级。该信号只作为事实标记透传，不参与任何 passed 判定。
+        const editToolStatus = editToolSignal(events);
         const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
         const candidateInspectionEligible = terminalCompleted || recoverableGenerationFailure;
         if (candidateInspectionEligible && (agentResult.candidates.length || !workflowAdvanced)) {
@@ -1663,18 +1931,65 @@ export function createAgentRuntime(options = {}) {
               const applied = await workspaceManager.applyWorkspacePatch({ repository: run.workspace, patch: agentResult.patch });
               appendRuntimeEvent(state, 'candidate.patch_applied_from_result', { runId: state.agent.runId, files: applied.files }, { kind: 'candidate', mode });
               manifest = await workspaceManager.captureDiff(run.workspace);
+              // patch 回退不再静默成功：生成路径、编辑工具状态、patch 校验与工作区准入
+              // 结果全部落账。降级标记只描述生成路径，不放宽 correctness / oracle / Gate。
+              generationPath = describeGenerationPath({
+                path: CANDIDATE_GENERATION_PATH.PATCH_FALLBACK,
+                editToolStatus,
+                degraded: editToolStatus === 'failed',
+                degradationReason: editToolStatus === 'failed' ? 'structured_edit_failed' : null,
+              });
+              patchFallbackWithoutDiff = !manifest.changedFiles?.length;
+              appendRuntimeEvent(state, generationPath.degraded ? 'candidate.degraded_generation' : 'candidate.patch_fallback_generation', {
+                runId: state.agent.runId,
+                roundId: state.iterationStats?.roundBudget?.roundId || null,
+                ...generationPath,
+                patchValidation: patchFallbackWithoutDiff ? 'rejected' : 'passed',
+                workspaceAdmission: patchFallbackWithoutDiff ? 'failed' : 'passed',
+                detail: generationPath.degraded
+                  ? '结构化编辑工具失败，改用结果内 patch 回退生成候选 Diff；生成路径降级，准入标准不变。'
+                  : '工作区没有 Diff，改用结果内 patch 回退生成候选 Diff。',
+              }, { kind: 'candidate', mode });
             } catch (error) {
+              patchFallbackRejected = true;
               appendRuntimeEvent(state, 'candidate.patch_result_rejected', { runId: state.agent.runId, errorCode: error.code || 'AGENT_PATCH_REJECTED', detail: error.message }, { kind: 'policy', mode });
             }
           }
           const stableDigest = state.workflowRecovery?.checkpoints?.at(-1)?.stableDigest || null;
+          // patch 存在但不合法，同样算准入失败：结果内 patch 既抛错、也没能产出 Diff。
+          const patchRejected = patchFallbackRejected || patchFallbackWithoutDiff;
           ({ candidateValidation, verifiedCandidates } = inspectCandidateDiff({
             agentResult,
             manifest,
             stableDigest,
             provider: managedMeta,
             runId: state.agent.runId,
+            generationPath: {
+              path: generationPath?.candidateGenerationPath || CANDIDATE_GENERATION_PATH.STRUCTURED_EDIT,
+              editToolStatus,
+              degraded: generationPath?.degraded === true,
+              degradationReason: generationPath?.degradationReason || null,
+              patchRejected,
+            },
           }));
+        }
+        // Fail-closed 守卫：Provider 未正常终结时（不可恢复失败，例如 TLS 信任链失败或
+        // 认证失败），声明的候选从未经过工作区 Git Diff 校验，一个都不许进候选池。
+        if (terminalReached && !candidateInspectionEligible && agentResult.candidates.length && !workflowAdvanced) {
+          verifiedCandidates = [];
+          candidateValidation = {
+            passed: false,
+            code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_INSPECTION_SKIPPED`,
+            classification: CANDIDATE_OUTCOME.CANDIDATE_INSPECTION_SKIPPED,
+            detail: `${managedMeta.name} 未正常终结（${observedFailure?.code || 'unknown'}），声明的 ${agentResult.candidates.length} 个候选未经工作区 Git Diff 准入校验，已全部丢弃。`,
+            declaredCandidateCount: agentResult.candidates.length,
+            degraded: true,
+            degradationReason: 'admission_inspection_not_reached',
+            editToolStatus,
+            candidateGenerationPath: null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
         }
         if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
           const { requiredWorkspaceFiles, contentFiles } = candidateWorkspaceRequirements(activeMission);
@@ -1715,6 +2030,7 @@ export function createAgentRuntime(options = {}) {
           eventCount,
           lastEventAt,
           timedOut: timedOut || undefined,
+          ...(mode === 'claude-code' ? { modelObservation: projectedModelObservation } : {}),
         };
         if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
           state.candidateEvaluations = verifiedCandidates;
@@ -1747,22 +2063,71 @@ export function createAgentRuntime(options = {}) {
           nextAgent.status = 'completed';
           nextAgent.phase = failed ? `${managedMeta.name} 执行失败，等待同轮重试` : `${managedMeta.name} 分析完成，未生成候选`;
           nextAgent.currentAction = null;
+          // `candidates: []` 只是结果表现，不是根因。这里按固定优先级重放原始结果与
+          // 工作区观测，给出唯一根因码，让该事件从「无因标签」变成可判定证据。
+          const generationEvidence = agentResult.candidateGeneration || {};
+          const emptyClassification = classifyEmptyCandidateOutcome({
+            providerFinishedNormally: true,
+            droppedCandidateCount: generationEvidence.droppedCandidateCount || 0,
+            structuredEditFailed: editToolStatus === 'failed',
+            patchRejected: patchFallbackRejected || patchFallbackWithoutDiff,
+            textOnly: agentResult.format === 'text-fallback' && !agentResult.patch,
+          });
+          candidateValidation = {
+            passed: null,
+            code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_NOT_PROPOSED`,
+            classification: emptyClassification,
+            detail: `${managedMeta.name} 正常终结但未产生可准入候选：${emptyClassification}。`,
+            declaredCandidateCount: generationEvidence.rawCandidateCount ?? 0,
+            droppedCandidateCount: generationEvidence.droppedCandidateCount ?? 0,
+            patchProvided: Boolean(agentResult.patch),
+            degraded: emptyClassification === CANDIDATE_OUTCOME.TOOL_FAILED_PATCH_PENDING,
+            degradationReason: emptyClassification === CANDIDATE_OUTCOME.TOOL_FAILED_PATCH_PENDING ? 'structured_edit_failed' : null,
+            editToolStatus,
+            candidateGenerationPath: generationPath?.candidateGenerationPath || null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
+          nextAgent.candidateValidation = candidateValidation;
           if (!state.runtimeEvents?.some((event) => event.type === 'candidate.not_proposed' && event.payload?.runId === state.agent.runId)) {
             appendRuntimeEvent(state, 'candidate.not_proposed', {
               runId: state.agent.runId,
               summary: agentResult.summary,
+              format: agentResult.format,
+              classification: emptyClassification,
+              declaredCandidateCount: candidateValidation.declaredCandidateCount,
+              droppedCandidateCount: candidateValidation.droppedCandidateCount,
+              patchProvided: candidateValidation.patchProvided,
+              editToolStatus,
               recoverable: recoverableGenerationFailure,
               errorCode: failure?.code || null,
               error: failure?.detail || null,
             }, { kind: 'agent', mode });
           }
+        } else if (terminalReached && !agentResult.candidates.length && !workflowAdvanced) {
+          // 上游失败（专家七类表的行 1）：这不是候选生成失败。既不写候选池，也不发
+          // candidate.not_proposed —— 否则上层会把它当成「生成了一轮但没有产出」。
+          candidateValidation = {
+            passed: null,
+            code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_UPSTREAM_FAILURE`,
+            classification: CANDIDATE_OUTCOME.UPSTREAM_FAILURE_NO_CANDIDATE,
+            detail: `上游失败（${failure?.code || observedFailure?.code || 'unknown'}）：该结果不是候选生成失败，不写入候选池也不发 candidate.not_proposed。`,
+            declaredCandidateCount: agentResult.candidates.length,
+            degraded: false,
+            degradationReason: null,
+            editToolStatus,
+            candidateGenerationPath: null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
+          nextAgent.candidateValidation = candidateValidation;
         }
         if (workflowAdvanced) {
           nextAgent.status = state.agent.status;
           nextAgent.phase = state.agent.phase;
           nextAgent.currentAction = state.agent.currentAction;
         }
-        if (run.status === 'cancelled'
+        if (!patchPolicyBlocked && run.status === 'cancelled'
             && state.stage === 'candidate'
             && !state.patchApplied
             && Array.isArray(state.candidateEvaluations)
@@ -1790,13 +2155,20 @@ export function createAgentRuntime(options = {}) {
         if (nextStatus !== previousStatus && !lifecycleEventRecorded) appendRuntimeEvent(state, lifecycleEventType, { runId: state.agent.runId, threadId: nextAgent.threadId, eventCount: events.length, errorCode: failure?.code || null }, { kind: 'agent', mode });
         return { state, changed };
       } catch (error) {
+        // A failed/partial read cannot confirm that any previously projected
+        // observation still matches the current run's actual session. Rebind only
+        // when the run record itself was read; otherwise clear the stale value.
+        const survivedObservation = mode === 'claude-code' && observedRun
+          ? projectRunModelObservation({ ...observationContext, run: observedRun })
+          : null;
         if (!isExecutionReleased(observedRun || {})) {
-          state.agent = cancellationProjection(state.agent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message }, {
+          const projection = cancellationProjection(state.agent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message }, {
             primaryFailure: state.agent.primaryFailure || { code: error.code || 'AGENT_STATUS_UNAVAILABLE', detail: error.message, phase: 'Agent runtime status unavailable' },
           });
+          state.agent = mode === 'claude-code' ? { ...projection, modelObservation: survivedObservation } : projection;
           return { state, changed: true };
         }
-        const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }] };
+        const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }], ...(mode === 'claude-code' ? { modelObservation: survivedObservation } : {}) };
         state.agent = nextAgent;
         return { state, changed: true };
       }

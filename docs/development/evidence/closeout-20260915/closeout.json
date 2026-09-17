@@ -1,0 +1,824 @@
+{
+  "schemaVersion": "acagemm.closeout/v1",
+  "status": "completed",
+  "scope": "documentation, portable offline evidence and obsolete task disposition; no production change/live tests/network publication",
+  "acceptedSource": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948",
+  "facts": {
+    "affineN20": "20/20 full_success/comparable,44/44 models",
+    "coverage": "reduction/normalization each two rounds,4/4 models",
+    "evidenceCommits": [
+      "212e5a8",
+      "4e78a6d"
+    ]
+  },
+  "historicalTaskDispositions": [
+    {
+      "id": "task_44338a002ba04dc4b366153587a55704",
+      "title": "真实GPU全新20次affine两轮验收（83b91d6冻结版）",
+      "beforeStatus": "failed",
+      "attemptId": "run_76cc2f681aa74985a1113187b36728dc",
+      "artifactDigest": "e790e6e9294bca1a5f76042d0bd882fc9ef8882e001e6c1c7c33c55bc076cdb1",
+      "platformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_76cc2f681aa74985a1113187b36728dc",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "e790e6e9294bca1a5f76042d0bd882fc9ef8882e001e6c1c7c33c55bc076cdb1",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      },
+      "reason": "旧任务停止继续执行/重试。原失败样本与真实退出码保留，不改成成功、不并入新N20；已由修正调用后的独立新smoke和新N20完成当前验收。取消只是旧任务结案，不算集成；保持原阶段与历史。",
+      "disposition": "cancelled_stop_retry",
+      "afterStatus": "cancelled",
+      "afterPlatformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_76cc2f681aa74985a1113187b36728dc",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "e790e6e9294bca1a5f76042d0bd882fc9ef8882e001e6c1c7c33c55bc076cdb1",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      }
+    },
+    {
+      "id": "task_f39cb784cf5943cc85d32f3a7232eb43",
+      "title": "21c6d78：真实 affine 两轮与安全诊断观测",
+      "beforeStatus": "failed",
+      "attemptId": "run_189b972e6c6a45d6baef54781ee7b0f1",
+      "artifactDigest": "aac3624def495b489cde6e89a2df4a0f0f542ff4f799f1ddedc9355b8936c4db",
+      "platformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_189b972e6c6a45d6baef54781ee7b0f1",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "aac3624def495b489cde6e89a2df4a0f0f542ff4f799f1ddedc9355b8936c4db",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      },
+      "reason": "旧任务停止继续执行/重试。原失败样本与真实退出码保留，不改成成功、不并入新N20；已由修正调用后的独立新smoke和新N20完成当前验收。取消只是旧任务结案，不算集成；保持原阶段与历史。",
+      "disposition": "cancelled_stop_retry",
+      "afterStatus": "cancelled",
+      "afterPlatformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_189b972e6c6a45d6baef54781ee7b0f1",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "aac3624def495b489cde6e89a2df4a0f0f542ff4f799f1ddedc9355b8936c4db",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      }
+    },
+    {
+      "id": "task_8e34a7473a4d4e999b0e1daa1a9c0094",
+      "title": "限定Git信任与60秒Claude渠道探针",
+      "beforeStatus": "failed",
+      "attemptId": "run_74455441305745e1b3ceb74c27686555",
+      "artifactDigest": "5b414726fcd994cfee2ebe43d6f7e66fe7d7c72a5b73c5f2e1db76cf9d1697a6",
+      "platformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_74455441305745e1b3ceb74c27686555",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "5b414726fcd994cfee2ebe43d6f7e66fe7d7c72a5b73c5f2e1db76cf9d1697a6",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      },
+      "reason": "旧任务停止继续执行/重试。原失败样本与真实退出码保留，不改成成功、不并入新N20；已由修正调用后的独立新smoke和新N20完成当前验收。取消只是旧任务结案，不算集成；保持原阶段与历史。",
+      "disposition": "cancelled_stop_retry",
+      "afterStatus": "cancelled",
+      "afterPlatformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_74455441305745e1b3ceb74c27686555",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "5b414726fcd994cfee2ebe43d6f7e66fe7d7c72a5b73c5f2e1db76cf9d1697a6",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      }
+    },
+    {
+      "id": "task_913ee21508464351b3eb77b872c2121f",
+      "title": "复用Acagemm现有Git环境后核对Claude渠道",
+      "beforeStatus": "failed",
+      "attemptId": "run_a7020d103f0d4248a247ced0456a63b3",
+      "artifactDigest": null,
+      "platformVerification": {
+        "source": "platform_records",
+        "state": "unavailable",
+        "attempt_id": "run_a7020d103f0d4248a247ced0456a63b3",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "没有当前尝试的平台程序证据（固定配方/命令退出码/组合验证）；worker 自报检查不构成程序证据",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": null,
+        "artifact_digest": null,
+        "digest_matches_task": false,
+        "checks": [],
+        "checks_passed": null,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      },
+      "reason": "旧任务停止继续执行/重试。原失败样本与真实退出码保留，不改成成功、不并入新N20；已由修正调用后的独立新smoke和新N20完成当前验收。取消只是旧任务结案，不算集成；保持原阶段与历史。",
+      "disposition": "cancelled_stop_retry",
+      "afterStatus": "cancelled",
+      "afterPlatformVerification": {
+        "source": "platform_records",
+        "state": "unavailable",
+        "attempt_id": "run_a7020d103f0d4248a247ced0456a63b3",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "没有当前尝试的平台程序证据（固定配方/命令退出码/组合验证）；worker 自报检查不构成程序证据",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": null,
+        "artifact_digest": null,
+        "digest_matches_task": false,
+        "checks": [],
+        "checks_passed": null,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      }
+    },
+    {
+      "id": "task_91991f437dfb474986a70bf24afb18d4",
+      "title": "代理修复后：21c6d78真实affine两轮",
+      "beforeStatus": "failed",
+      "attemptId": "run_223e1478557e49aca5e862751065eb53",
+      "artifactDigest": "4fb09c22567877d1427f946f88aa4f4bd8239b99324efbd62f1a727560b9b006",
+      "platformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_223e1478557e49aca5e862751065eb53",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "4fb09c22567877d1427f946f88aa4f4bd8239b99324efbd62f1a727560b9b006",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      },
+      "reason": "旧任务停止继续执行/重试。原失败样本与真实退出码保留，不改成成功、不并入新N20；已由修正调用后的独立新smoke和新N20完成当前验收。取消只是旧任务结案，不算集成；保持原阶段与历史。",
+      "disposition": "cancelled_stop_retry",
+      "afterStatus": "cancelled",
+      "afterPlatformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_223e1478557e49aca5e862751065eb53",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "4fb09c22567877d1427f946f88aa4f4bd8239b99324efbd62f1a727560b9b006",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      }
+    },
+    {
+      "id": "task_f3f77f37ca284314a58460e8e6478a4b",
+      "title": "本地代理直连对照：一次60秒Claude检查",
+      "beforeStatus": "failed",
+      "attemptId": "run_06e6e8b5f2f2458e990d1b84f1aff2fc",
+      "artifactDigest": "eab2980969f9dc31832864e1f6134dc36dde2338f50ee6f4277e12f789aaef0d",
+      "platformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_06e6e8b5f2f2458e990d1b84f1aff2fc",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "eab2980969f9dc31832864e1f6134dc36dde2338f50ee6f4277e12f789aaef0d",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      },
+      "reason": "旧任务停止继续执行/重试。原失败样本与真实退出码保留，不改成成功、不并入新N20；已由修正调用后的独立新smoke和新N20完成当前验收。取消只是旧任务结案，不算集成；保持原阶段与历史。",
+      "disposition": "cancelled_stop_retry",
+      "afterStatus": "cancelled",
+      "afterPlatformVerification": {
+        "source": "platform_records",
+        "state": "failed",
+        "attempt_id": "run_06e6e8b5f2f2458e990d1b84f1aff2fc",
+        "bound_to_current_attempt": true,
+        "attempt_status": "failed",
+        "state_reason": "命令退出码 1",
+        "program_evidence": [],
+        "checks_omitted": 0,
+        "exit_code": 1,
+        "artifact_digest": "eab2980969f9dc31832864e1f6134dc36dde2338f50ee6f4277e12f789aaef0d",
+        "digest_matches_task": true,
+        "checks": [
+          {
+            "name": "命令退出码",
+            "source": "platform_command",
+            "exit_code": 1,
+            "elapsed_seconds": null,
+            "passed": false,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "launch_error": null,
+            "argv": [],
+            "argv_omitted": 0,
+            "args_truncated": false
+          }
+        ],
+        "checks_passed": false,
+        "worker_reported_checks": 0,
+        "checks_are_platform_verified": false,
+        "worker_report_only": false,
+        "recipe": null,
+        "candidate_verification": null
+      }
+    }
+  ],
+  "portable": {
+    "status": "verified",
+    "taskId": "task_743adf6305ab4981a55598453ba123be",
+    "attemptId": "run_12cfb40404cd4a2e839076b0f485564a",
+    "artifactDigest": "1e128997ec022a390ae32cfae4a3991b153f85a4a40a8262afc3503b98f7ae00",
+    "toolSha256": "bdbf04d4f99dcc7fce61d85494b8ef5954cc6876e064d0ec6993788781d7f4ce",
+    "offlineReport": "offline-verification.json",
+    "negativeReport": "negative-verification.json",
+    "junctionNegativeReport": "junction-negative.json",
+    "readerOutputs": "offline-reader/",
+    "relocatedOutsideSource": true,
+    "environmentKeys": [
+      "SYSTEMROOT",
+      "WINDIR",
+      "TEMP",
+      "TMP",
+      "PATH"
+    ],
+    "integratedRebuildMatchesVerifiedCandidateBytes": true,
+    "exitCode": 0,
+    "archiveCount": 8,
+    "manifestEntries": 15,
+    "groups": {
+      "coverage": {
+        "group": "coverage",
+        "expected": {
+          "runs": 1,
+          "candidates": 4,
+          "modelRuns": 4,
+          "strictN20": false
+        },
+        "runRoots": 1,
+        "observed": {
+          "invocations": 1,
+          "candidateTasks": 4,
+          "distinctCandidateDigests": 4,
+          "modelRuns": 4,
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "familyCount": 2,
+          "runCount": 1,
+          "fullSuccessRuns": 1,
+          "verifiedRuns": 1,
+          "readerOk": true,
+          "strictN20Eligible": false,
+          "strictN20RequiredRuns": 20,
+          "exitCode": 0
+        },
+        "checks": [
+          {
+            "name": "reader_exit_code",
+            "passed": true,
+            "evidence": "observed=0 expected=0"
+          },
+          {
+            "name": "reader_ok",
+            "passed": true,
+            "evidence": "observed=True expected=True"
+          },
+          {
+            "name": "invocations",
+            "passed": true,
+            "evidence": "observed=1 expected=1"
+          },
+          {
+            "name": "run_count",
+            "passed": true,
+            "evidence": "observed=1 expected=1"
+          },
+          {
+            "name": "verified_runs",
+            "passed": true,
+            "evidence": "observed=1 expected=1"
+          },
+          {
+            "name": "full_success_runs",
+            "passed": true,
+            "evidence": "observed=1 expected=1"
+          },
+          {
+            "name": "candidates",
+            "passed": true,
+            "evidence": "observed=4 expected=4"
+          },
+          {
+            "name": "distinct_candidate_digests",
+            "passed": true,
+            "evidence": "observed=4 expected=4"
+          },
+          {
+            "name": "model_runs",
+            "passed": true,
+            "evidence": "observed=4 expected=4"
+          },
+          {
+            "name": "strict_n20",
+            "passed": true,
+            "evidence": "observed=False expected=False"
+          },
+          {
+            "name": "strict_n20_required_runs",
+            "passed": true,
+            "evidence": "observed=20 expected=20"
+          },
+          {
+            "name": "observed_models",
+            "passed": true,
+            "evidence": "models=['deepseek-v4-flash']"
+          },
+          {
+            "name": "families",
+            "passed": true,
+            "evidence": "families=['normalization', 'reduction']"
+          }
+        ],
+        "passed": true
+      },
+      "n20": {
+        "group": "n20",
+        "expected": {
+          "runs": 20,
+          "candidates": 40,
+          "modelRuns": 44,
+          "strictN20": true
+        },
+        "runRoots": 20,
+        "observed": {
+          "invocations": 20,
+          "candidateTasks": 40,
+          "distinctCandidateDigests": 40,
+          "modelRuns": 44,
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "familyCount": 1,
+          "runCount": 20,
+          "fullSuccessRuns": 20,
+          "verifiedRuns": 20,
+          "readerOk": true,
+          "strictN20Eligible": true,
+          "strictN20RequiredRuns": 20,
+          "exitCode": 0
+        },
+        "checks": [
+          {
+            "name": "reader_exit_code",
+            "passed": true,
+            "evidence": "observed=0 expected=0"
+          },
+          {
+            "name": "reader_ok",
+            "passed": true,
+            "evidence": "observed=True expected=True"
+          },
+          {
+            "name": "invocations",
+            "passed": true,
+            "evidence": "observed=20 expected=20"
+          },
+          {
+            "name": "run_count",
+            "passed": true,
+            "evidence": "observed=20 expected=20"
+          },
+          {
+            "name": "verified_runs",
+            "passed": true,
+            "evidence": "observed=20 expected=20"
+          },
+          {
+            "name": "full_success_runs",
+            "passed": true,
+            "evidence": "observed=20 expected=20"
+          },
+          {
+            "name": "candidates",
+            "passed": true,
+            "evidence": "observed=40 expected=40"
+          },
+          {
+            "name": "distinct_candidate_digests",
+            "passed": true,
+            "evidence": "observed=40 expected=40"
+          },
+          {
+            "name": "model_runs",
+            "passed": true,
+            "evidence": "observed=44 expected=44"
+          },
+          {
+            "name": "strict_n20",
+            "passed": true,
+            "evidence": "observed=True expected=True"
+          },
+          {
+            "name": "strict_n20_required_runs",
+            "passed": true,
+            "evidence": "observed=20 expected=20"
+          },
+          {
+            "name": "observed_models",
+            "passed": true,
+            "evidence": "models=['deepseek-v4-flash']"
+          },
+          {
+            "name": "families",
+            "passed": true,
+            "evidence": "families=['affine']"
+          }
+        ],
+        "passed": true
+      },
+      "smoke": {
+        "group": "smoke",
+        "expected": {
+          "runs": 1,
+          "candidates": 2,
+          "modelRuns": 2,
+          "strictN20": false
+        },
+        "runRoots": 1,
+        "observed": {
+          "invocations": 1,
+          "candidateTasks": 2,
+          "distinctCandidateDigests": 2,
+          "modelRuns": 2,
+          "models": [
+            "deepseek-v4-flash"
+          ],
+          "familyCount": 1,
+          "runCount": 1,
+          "fullSuccessRuns": 1,
+          "verifiedRuns": 1,
+          "readerOk": true,
+          "strictN20Eligible": false,
+          "strictN20RequiredRuns": 20,
+          "exitCode": 0
+        },
+        "checks": [
+          {
+            "name": "reader_exit_code",
+            "passed": true,
+            "evidence": "observed=0 expected=0"
+          },
+          {
+            "name": "reader_ok",
+            "passed": true,
+            "evidence": "observed=True expected=True"
+          },
+          {
+            "name": "invocations",
+            "passed": true,
+            "evidence": "observed=1 expected=1"
+          },
+          {
+            "name": "run_count",
+            "passed": true,
+            "evidence": "observed=1 expected=1"
+          },
+          {
+            "name": "verified_runs",
+            "passed": true,
+            "evidence": "observed=1 expected=1"
+          },
+          {
+            "name": "full_success_runs",
+            "passed": true,
+            "evidence": "observed=1 expected=1"
+          },
+          {
+            "name": "candidates",
+            "passed": true,
+            "evidence": "observed=2 expected=2"
+          },
+          {
+            "name": "distinct_candidate_digests",
+            "passed": true,
+            "evidence": "observed=2 expected=2"
+          },
+          {
+            "name": "model_runs",
+            "passed": true,
+            "evidence": "observed=2 expected=2"
+          },
+          {
+            "name": "strict_n20",
+            "passed": true,
+            "evidence": "observed=False expected=False"
+          },
+          {
+            "name": "strict_n20_required_runs",
+            "passed": true,
+            "evidence": "observed=20 expected=20"
+          },
+          {
+            "name": "observed_models",
+            "passed": true,
+            "evidence": "models=['deepseek-v4-flash']"
+          },
+          {
+            "name": "families",
+            "passed": true,
+            "evidence": "families=['affine']"
+          }
+        ],
+        "passed": true
+      }
+    },
+    "negativeChecksPassed": 6
+  },
+  "documentation": {
+    "status": "verified",
+    "taskId": "task_cc82d9c162054139a6d8c45d43b127ab",
+    "attemptId": "run_994170b57e5e4fc981be4d203ee379ba",
+    "artifactDigest": "3406a2e9f5ec9ebeab9e718eeadf3615a9c256a49fbeaa2237b02507f8078b03",
+    "report": "documentation-verification.json",
+    "entryDocuments": 5,
+    "linksChecked": 30,
+    "expertSection6BytesUnchanged": true,
+    "upstreamMinorEdit": "Explicit historical date labels for TEAM_HANDOFF page head and section 1; no historical body changes."
+  },
+  "userWorkspace": {
+    "excluded": [
+      "AGENTS.md",
+      ".codex/",
+      ".dispatch/",
+      ".dispatch-backups/"
+    ],
+    "includedHistoricalHandoff": "docs/development/TEAM_HANDOFF.md",
+    "originalHandoffSha256": "894329aeaac7b5da572a24a0958d4042058307315db143bcd1be23551f007d1d"
+  },
+  "knownLimitations": [
+    "本机共享GPU开发证据不可发布；不能外推其他模型/硬件稳定性。",
+    "旧无响应精确根因及间歇metadata.lock EPERM未由本轮修复。",
+    "远程未推送；交付目标为本地可搬迁包。"
+  ],
+  "completedAt": "2026-09-15T03:26:07Z",
+  "platform": {
+    "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+    "stageId": "operator-real-regression",
+    "state": "completed",
+    "roadmapRevision": 22,
+    "capacityReason": "scope_completed",
+    "queued": 0,
+    "running": 0,
+    "awaitingReview": 0,
+    "pendingReleases": 0,
+    "pendingCleanups": 0,
+    "phase3": "planned_not_started"
+  },
+  "delivery": {
+    "directory": ".operator-studio-local/closeout-20260915/delivery",
+    "evidence": "evidence/",
+    "repositoryBundle": "repository.bundle",
+    "envelopeManifest": "DELIVERY.json",
+    "note": "Final commit identity and git-bundle SHA are recorded in DELIVERY.json after this commit is packaged, avoiding a self-referential checksum. Evidence already independently verified; no remote push."
+  }
+}

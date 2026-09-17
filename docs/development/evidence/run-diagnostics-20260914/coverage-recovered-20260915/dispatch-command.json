@@ -1,0 +1,36 @@
+{
+  "execution_kind": "command",
+  "argv": [
+    "node",
+    "--input-type=module",
+    "-e",
+    "import cp from 'node:child_process';import path from 'node:path';import {pathToFileURL} from 'node:url';const p='F:/设计/快速项目/acagemm原型/.operator-studio-local/frozen-live-21c6d78';process.env.OPERATOR_RUNTIME_DIR=path.join(process.argv[1],'bootstrap-runtime');const {createScopedGitEnvironment}=await import(pathToFileURL(p+'/client-runtime/git-environment.mjs'));const env=await createScopedGitEnvironment(p,process.env,{configDir:path.join(process.argv[1],'git-trust')});for(const a of [['rev-parse','HEAD'],['status','--porcelain']]){const r=cp.spawnSync('git',a,{cwd:p,env,encoding:'utf8',windowsHide:true});if(r.status!==0||a[0]==='rev-parse'&&r.stdout.trim()!=='21c6d7868bd3c5aa74dfcc098f87e3ad4236f948'||a[0]==='status'&&r.stdout.trim())throw Error('frozen git identity failed: '+r.stderr);}const child=cp.spawn(process.execPath,[p+'/scripts/run-shared-gpu-regression-batch.mjs',...process.argv.slice(2)],{cwd:p,env,stdio:'inherit',windowsHide:true,shell:false});child.on('error',e=>{console.error(e.message);process.exitCode=1;});child.on('close',(code,signal)=>{if(signal)console.error('batch signal: '+signal);process.exitCode=code===0?0:1;});",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_1452e3c488ae4a59b6c1c77aa826f719\\scratch",
+    "--mode",
+    "smoke",
+    "--families",
+    "reduction,normalization",
+    "--artifact-dir",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_1452e3c488ae4a59b6c1c77aa826f719\\scratch/real-runs",
+    "--report-dir",
+    "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_1452e3c488ae4a59b6c1c77aa826f719\\workspace/docs/development/evidence/run-diagnostics-20260914/coverage-recovered-20260915",
+    "--gpu-python",
+    "F:/设计/快速项目/acagemm原型/.gpu-venv/Scripts/python.exe"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 430.547,
+  "cancelled": false,
+  "timeout": false,
+  "progress": {
+    "reported": true,
+    "phase": "finish",
+    "message": "batch passed",
+    "completed": 1,
+    "total": 1,
+    "percent": 100.0,
+    "at": "2026-09-15T02:49:43.328+00:00"
+  },
+  "log_truncated": false,
+  "started_at": "2026-09-15T02:42:33.070+00:00",
+  "ended_at": "2026-09-15T02:49:43.625+00:00"
+}

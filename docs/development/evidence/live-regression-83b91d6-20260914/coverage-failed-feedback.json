@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "operator-studio.live-failed-feedback-audit/v1",
+  "mode": "read-only-retained-originals",
+  "runs": [
+    {
+      "runRoot": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_fd9462bbac17432ebe42ca5a636b6dfe\\scratch\\real-runs\\shared-gpu-Lysk0G",
+      "eligibleFailedCandidates": 0,
+      "observed": false,
+      "rows": [],
+      "passed": true
+    }
+  ],
+  "eligibleFailedCandidates": 0,
+  "passed": true
+}

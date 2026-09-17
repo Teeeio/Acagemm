@@ -1,0 +1,44 @@
+{
+  "preparedAt": "2026-09-12T19:33:20.329Z",
+  "codeCommit": "b85c2f709811b00bde547ff1fc256ad0bfffb66b",
+  "status": "approval-required-not-started",
+  "runtime": "claude-code",
+  "configuredFrontEndpoint": "http://127.0.0.1:15721/",
+  "upstreamDestination": "not independently confirmed; existing proxy configuration",
+  "responseModel": "must be observed per run; historical response was deepseek-v4-flash",
+  "candidateTasks": 2,
+  "missionBudgetMs": 720000,
+  "mainAgentBudgetMs": 180000,
+  "plannedRuns": [
+    [
+      "affine"
+    ],
+    [
+      "reduction",
+      "normalization"
+    ]
+  ],
+  "payloadScope": [
+    "new Mission Workspace run.py and candidate changes",
+    "optimization goal and production prompt instructions",
+    "baseline, test matrix, GPU results, round facts and selected experiences",
+    "workspace paths and context added by the existing Claude CLI configuration"
+  ],
+  "fixtures": [
+    {
+      "family": "affine",
+      "goal": "优化 affine GPU 算子 run.py 的 run(inputs)，FP32，shape=32x256，latency p50 相对 baseline 提升至少 99.9999%，通过 4/4 Correctness 和 Full Benchmark。只修改 run.py 中的实现，不改 reference/get_test_cases/get_benchmark_inputs，不改测试矩阵；禁止本地跑测试、安装依赖、使用网络、修改工作区外文件。候选必须是有界真实 Diff，立即完成一个小优化（例如消除冗余 copy），由系统统一 GPU 队列验证。后续轮次根据真实反馈尝试另一个不同 Diff，不能只给分析。",
+      "baselineSource": "import torch\n\ndef inputs_for(rows, cols):\n    x = (torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32) + 3).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)\n\ndef run(inputs):\n    # Initial implementation deliberately does one redundant device copy.\n    value = torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)\n    return value.clone()\n"
+    },
+    {
+      "family": "reduction",
+      "goal": "优化 reduction GPU 算子 run.py 的 run(inputs)，FP32，shape=32x256，latency p50 相对 baseline 提升至少 99.9999%，通过 4/4 Correctness 和 Full Benchmark。只修改 run.py 中的实现，不改 reference/get_test_cases/get_benchmark_inputs，不改测试矩阵；禁止本地跑测试、安装依赖、使用网络、修改工作区外文件。候选必须是有界真实 Diff，立即完成一个小优化（例如消除冗余 copy），由系统统一 GPU 队列验证。后续轮次根据真实反馈尝试另一个不同 Diff，不能只给分析。",
+      "baselineSource": "import torch\n\ndef inputs_for(rows, cols):\n    x = (torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32) + 3).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return (inputs['x'] * inputs['y']).sum(dim=-1)\n\ndef run(inputs):\n    # Initial implementation deliberately does one redundant device copy.\n    value = (inputs['x'] * inputs['y']).sum(dim=-1)\n    return value.clone()\n"
+    },
+    {
+      "family": "normalization",
+      "goal": "优化 normalization GPU 算子 run.py 的 run(inputs)，FP32，shape=32x256，latency p50 相对 baseline 提升至少 99.9999%，通过 4/4 Correctness 和 Full Benchmark。只修改 run.py 中的实现，不改 reference/get_test_cases/get_benchmark_inputs，不改测试矩阵；禁止本地跑测试、安装依赖、使用网络、修改工作区外文件。候选必须是有界真实 Diff，立即完成一个小优化（例如消除冗余 copy），由系统统一 GPU 队列验证。后续轮次根据真实反馈尝试另一个不同 Diff，不能只给分析。",
+      "baselineSource": "import torch\n\ndef inputs_for(rows, cols):\n    x = (torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32) + 3).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return inputs['x'] * torch.rsqrt((inputs['x'] * inputs['x']).mean(dim=-1, keepdim=True) + 1e-5)\n\ndef run(inputs):\n    # Initial implementation deliberately does one redundant device copy.\n    value = inputs['x'] * torch.rsqrt((inputs['x'] * inputs['x']).mean(dim=-1, keepdim=True) + 1e-5)\n    return value.clone()\n"
+    }
+  ]
+}

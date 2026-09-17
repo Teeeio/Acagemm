@@ -200,7 +200,75 @@ try {
   assert.equal(executedOraclePy, baselineRunPy);
   assert.equal(completed.decisionReview.resolution.source, 'policy');
   assert.equal(completed.currentBest.verified, false);
-  assert.equal(completed.knowledgeMaintenance.changes.every((change) => change.outcome === 'simulation_only'), true);
+  // Unified decision contract: the canonical CPU decision must survive unchanged
+  // across benchmark, candidate Gate, decision review and currentBest. Every copy
+  // is explicit CPU/non-live/non-publishable; no copy may drift in meaning.
+  const adoptedCandidate = completed.candidateEvaluations.find((item) => item.id === candidate.id);
+  const benchmarkDecision = completed.benchmark.evidenceDecision;
+  const decisionCopies = [
+    ['benchmark.evidenceDecision', benchmarkDecision],
+    ['candidate.acceptGate.decision', adoptedCandidate?.acceptGate?.decision],
+    ['decisionReview.gate.decision', completed.decisionReview.gate?.decision],
+    ['currentBest.evidenceDecision', completed.currentBest.evidenceDecision],
+  ];
+  for (const [label, decision] of decisionCopies) {
+    assert.ok(decision, `${label} must retain the unified evidence decision`);
+    assert.equal(decision.schemaVersion, 'operator-studio.evidence-decision/v1', `${label} schemaVersion`);
+    assert.equal(decision.execution.kind, 'cpu', `${label} execution kind`);
+    assert.equal(decision.execution.liveHardware, false, `${label} liveHardware`);
+    assert.equal(decision.execution.source, 'cpu-e2e', `${label} execution source`);
+    assert.equal(decision.correctness.passed, true, `${label} correctness`);
+    assert.equal(decision.benchmark.valid, true, `${label} benchmark valid`);
+    assert.equal(decision.adoption.status, 'allowed', `${label} adoption status`);
+    assert.equal(decision.publication.status, 'blocked', `${label} publication status`);
+    assert.ok(decision.publication.reasons.includes('publication.execution_not_live'), `${label} publication reason`);
+    assert.deepEqual(decision, benchmarkDecision, `${label} must equal the canonical decision`);
+  }
+  assert.equal(benchmarkDecision.binding.candidateId, candidate.id);
+  assert.equal(benchmarkDecision.binding.candidateDigest, candidate.patchDigest);
+  assert.equal(benchmarkDecision.binding.taskId, queueTask.remoteTaskId);
+  assert.equal(benchmarkDecision.binding.runId, queueTask.payload.requestId);
+
+  // Historical fixture drafts carry no own complete evidenceBinding (only a
+  // display sourceCandidate label), so the current CPU decision must not be
+  // backfilled into them. Each stays unknown / review_required and must never
+  // be stamped with a fabricated CPU or real provenance.
+  const expectedDraftIds = [
+    'exp.async-plan-cache',
+    'exp.c550-plan-cache-boundary',
+    'exp.cross-platform-adoption-gate',
+  ];
+  const maintainedDrafts = completed.knowledgeDrafts;
+  assert.equal(maintainedDrafts.length, expectedDraftIds.length);
+  assert.deepEqual(maintainedDrafts.map((draft) => draft.id), expectedDraftIds);
+  for (const draft of maintainedDrafts) {
+    assert.ok(!draft.evidenceBinding, `draft ${draft.id} must not gain a fabricated binding`);
+    assert.equal(draft.evidenceDecision, null, `draft ${draft.id} must not inherit the current CPU decision`);
+    assert.equal(draft.status, 'unknown', `draft ${draft.id} draft status`);
+    assert.equal(draft.publication, 'blocked', `draft ${draft.id} publication`);
+    assert.equal(draft.publishable, false, `draft ${draft.id} publishable`);
+  }
+  assert.deepEqual(completed.knowledgeMaintenance.summary, {
+    extracted: 3, matched: 2, created: 1, autoPublished: 0, reviewRequired: 3,
+  });
+  assert.deepEqual(
+    completed.knowledgeMaintenance.changes.map((change) => [change.draftId, change.outcome]),
+    [
+      ['exp.async-plan-cache', 'review_required'],
+      ['exp.c550-plan-cache-boundary', 'review_required'],
+      ['exp.cross-platform-adoption-gate', 'review_required'],
+    ],
+  );
+  assert.deepEqual(
+    completed.publishedAssets.map((asset) => [asset.id, asset.status, asset.publication, asset.evidenceLevel]),
+    [
+      ['exp.async-plan-cache', 'unknown', 'blocked', '未知证据'],
+      ['exp.c550-plan-cache-boundary', 'unknown', 'blocked', '未知证据'],
+      ['exp.cross-platform-adoption-gate', 'unknown', 'blocked', '未知证据'],
+    ],
+  );
+  assert.equal(completed.publishedAssets.every((asset) => asset.publishable === false), true);
+  assert.ok(completed.publishedAssets.every((asset) => asset.evidenceDecision === null));
   assert.ok(completed.runtimeEvents.some((event) => event.type === 'operator_test.completed'));
   assert.ok(completed.runtimeEvents.some((event) => event.type === 'decision.auto_adopted'));
 
@@ -215,7 +283,15 @@ try {
     candidateUs: completed.benchmark.result.benchmark[0].value,
     correctness: completed.benchmark.result.benchmark[0].correctness,
     gate: completed.decisionReview.gate?.result || completed.decisionReview.resolution.outcome,
+    execution: {
+      kind: benchmarkDecision.execution.kind,
+      liveHardware: benchmarkDecision.execution.liveHardware,
+      source: benchmarkDecision.execution.source,
+    },
+    publication: benchmarkDecision.publication,
+    adoption: benchmarkDecision.adoption,
     knowledge: completed.knowledgeMaintenance.summary,
+    knowledgeOutcomes: completed.knowledgeMaintenance.changes.map((change) => `${change.draftId}:${change.outcome}`),
     liveHardware: false,
   }, null, 2));
 } finally {

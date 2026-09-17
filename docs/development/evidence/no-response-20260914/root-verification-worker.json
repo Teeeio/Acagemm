@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "operator-studio.no-response-root-verification/v1",
+  "taskId": "task_2a4cfe3fd9814151bce3f72190b4142f",
+  "attemptId": "run_3e0a93184ff341c4b02c10f8fc74d4c1",
+  "artifactDigest": "c22e97630c951d6f65fa941402eaa5f891ace0bc0788cd84fd0cccf858a77eb0",
+  "verifiedAt": "2026-09-14T13:28:02.356962+00:00",
+  "candidateFiles": [
+    {
+      "path": "docs/development/evidence/no-response-20260914/client-review.json",
+      "sha256": "fc2c3f47e2891ec02597afd615ca0f34fabecedd2f1c8bcb20e53c9eda62c87b",
+      "size": 37319
+    },
+    {
+      "path": "docs/development/evidence/no-response-20260914/client-review.md",
+      "sha256": "1c72ca407d32a8654d614615fa93af4f74721336d6911e5d4faaf350fd5e4e88",
+      "size": 19782
+    }
+  ],
+  "lockedInputHashesMatched": 16,
+  "sourceAndTestFilesUnchanged": 429,
+  "checks": [
+    {
+      "name": "report-json-shape",
+      "argv": [
+        "node",
+        "-e",
+        "const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('docs/development/evidence/no-response-20260914/client-review.json','utf8')); if(!p.schemaVersion||!Array.isArray(p.findings)||!Array.isArray(p.limitations)||!Array.isArray(p.verification)||!Object.hasOwn(p,'decisionRequest')||p.findings.some(f=>!f.claim||!['fact','inference','unknown'].includes(f.classification)||!Array.isArray(f.evidence))) process.exit(1);"
+      ],
+      "exitCode": 0,
+      "passed": true
+    }
+  ],
+  "productionBehaviorChanged": false,
+  "newBusinessE2ERuns": 0,
+  "strictN20Passed": false,
+  "scope": "Root independent validation of diagnostic reports; no production module test suite was run."
+}

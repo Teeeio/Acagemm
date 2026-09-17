@@ -1,0 +1,2230 @@
+{"type": "output", "text": "[diagnostics-verification] START offline-dependencies"}
+{"type": "output", "text": "[offline-deps] checking source"}
+{"type": "output", "text": "[offline-deps] source verified"}
+{"type": "output", "text": "[offline-deps] copying verified files"}
+{"type": "output", "text": "[offline-deps] copied 10422 files; verifying destination"}
+{"type": "output", "text": "{\"source\":\"F:/设计/快速项目/acagemm原型/node_modules\",\"files\":10422,\"sha256\":\"cb358cc2bb5bdcadf0f0a8de0293b8e58397a16763750a8d09ba42b23bab1bac\",\"offline\":true}"}
+{"type": "output", "text": "[diagnostics-verification] END offline-dependencies {\"status\":0,\"signal\":null,\"error\":null}"}
+{"type": "output", "text": "[diagnostics-verification] START nonhardware-including-release"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 verify:non-hardware-robustness"}
+{"type": "output", "text": "> node scripts/verify-non-hardware-robustness.mjs"}
+{"type": "output", "text": "[non-hardware-check] runtime v22.23.2; physical hardware execution is disabled"}
+{"type": "output", "text": "[non-hardware-check] verify:local-c500-release"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 verify:local-c500-release"}
+{"type": "output", "text": "> node scripts/verify-local-c500-release.mjs"}
+{"type": "output", "text": "[release-check] runtime v22.23.2"}
+{"type": "output", "text": "[release-check] test:execution-package-contract"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:execution-package-contract"}
+{"type": "output", "text": "> node tests/execution-package-contract-test.mjs"}
+{"type": "output", "text": "[execution-package-contract] 58 language-neutral, path, binding, admission and pure digest compatibility checks passed"}
+{"type": "output", "text": "[release-check] test:execution-package-store"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:execution-package-store"}
+{"type": "output", "text": "> node tests/execution-package-store-test.mjs"}
+{"type": "output", "text": "[execution-package-store] 47 content/admission/backend/timeout checks passed (contract doubles; no OS isolation claim)"}
+{"type": "output", "text": "[release-check] test:execution-package-import"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:execution-package-import"}
+{"type": "output", "text": "> node tests/execution-package-import-test.mjs"}
+{"type": "output", "text": "[execution-package-import] directory/archive import, dependency closure and unsafe-link checks passed"}
+{"type": "output", "text": "[release-check] test:execution-package-import-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:execution-package-import-service"}
+{"type": "output", "text": "> node tests/execution-package-import-service-test.mjs"}
+{"type": "output", "text": "[execution-package-import-service] binding, import and admission orchestration passed"}
+{"type": "output", "text": "[release-check] test:execution-package-routes"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:execution-package-routes"}
+{"type": "output", "text": "> node tests/execution-package-routes-test.mjs"}
+{"type": "output", "text": "[execution-package-routes] import route mapping passed"}
+{"type": "output", "text": "[release-check] test:shared-gpu-runtime"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-runtime"}
+{"type": "output", "text": "> node tests/shared-gpu-runtime-test.mjs"}
+{"type": "output", "text": "[shared-gpu-runtime] probe, policy, parser and failure-boundary checks passed"}
+{"type": "output", "text": "[release-check] test:platform-runtime"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:platform-runtime"}
+{"type": "output", "text": "> node tests/platform-runtime-test.mjs"}
+{"type": "output", "text": "[platform-runtime] cross-platform Python resolution and shell quoting passed"}
+{"type": "output", "text": "[release-check] test:shared-gpu-package-adapter"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-package-adapter"}
+{"type": "output", "text": "> node tests/local-shared-gpu-package-adapter-test.mjs"}
+{"type": "output", "text": "[shared-gpu-package-adapter] package-only materialization and admission verification passed"}
+{"type": "output", "text": "[release-check] test:experience-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:experience-service"}
+{"type": "output", "text": "> node tests/experience-service-test.mjs"}
+{"type": "output", "text": "PASS dependencies and absolute storage root are explicit"}
+{"type": "output", "text": "PASS empty reads do not create storage and human advice stays unverified"}
+{"type": "output", "text": "PASS versions are append-only and an old round context does not change"}
+{"type": "output", "text": "PASS scope, expiry, lifecycle, and project authorization filter retrieval"}
+{"type": "output", "text": "PASS structured shape arrays retain repeated dimensions and require exact array matches"}
+{"type": "output", "text": "PASS execution observations bind all credentials and never authorize GPU publication"}
+{"type": "output", "text": "PASS same evidence is idempotent across instances and changed evidence conflicts"}
+{"type": "output", "text": "PASS process-wide transactions serialize independent repository instances"}
+{"type": "output", "text": "PASS strict input whitelist, bounded values, unsafe keys, and paths are rejected"}
+{"type": "output", "text": "PASS corruption is explicit and never silently replaced by an empty store"}
+{"type": "output", "text": "PASS failed atomic replacement preserves prior bytes and cleans temporary files"}
+{"type": "output", "text": "PASS repository transactions cannot rewrite history or commit asynchronous/no-op mutations"}
+{"type": "output", "text": "PASS storage root junctions cannot redirect writes outside the injected root"}
+{"type": "output", "text": "PASS context limits do not return partial claims or mutate persisted records"}
+{"type": "output", "text": "Experience service: 14 contract checks passed."}
+{"type": "output", "text": "[release-check] test:experience-api-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:experience-api-service"}
+{"type": "output", "text": "> node tests/experience-api-service-test.mjs"}
+{"type": "output", "text": "[experience-api-service] local project scope, human-only writes, history, conflicts and route mapping passed"}
+{"type": "output", "text": "[release-check] test:round-experience-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-experience-service"}
+{"type": "output", "text": "> node tests/round-experience-service-test.mjs"}
+{"type": "output", "text": "PASS all effect and authority ports are explicit"}
+{"type": "output", "text": "PASS one round freezes source/version/scope; updates are visible only in the next round"}
+{"type": "output", "text": "PASS restored contexts are validated and frozen without re-querying or crossing projects"}
+{"type": "output", "text": "PASS domain prompt formatter checks identities, digest and source limitations once"}
+{"type": "output", "text": "PASS concurrent same-round retrieval is deduplicated and ordinary advice reads start no Agent"}
+{"type": "output", "text": "PASS retrieval errors/timeouts are explicit and late results cannot mutate the round"}
+{"type": "output", "text": "PASS legacy evidence is explicitly skipped and cannot self-claim verification"}
+{"type": "output", "text": "PASS only matching verified complete evidence is written, idempotently and never publishable"}
+{"type": "output", "text": "PASS observation collection is bounded and storage uncertainty is not silently ignored"}
+{"type": "output", "text": "PASS batch cancellation reaches a slow second verifier and prevents a late repository write"}
+{"type": "output", "text": "Round experience service: 10 checks passed."}
+{"type": "output", "text": "[release-check] test:shared-gpu-experience-verifier"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-experience-verifier"}
+{"type": "output", "text": "> node tests/shared-gpu-experience-verifier-test.mjs"}
+{"type": "output", "text": "[shared-gpu-experience-verifier] admission, artifact, candidate and worker-flag checks passed"}
+{"type": "output", "text": "[shared-gpu-experience-verifier] real runner key order and fail-closed architecture checks passed"}
+{"type": "output", "text": "[release-check] test:experience-architecture"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:experience-architecture"}
+{"type": "output", "text": "> node tests/experience-architecture-test.mjs"}
+{"type": "output", "text": "TAP version 13"}
+{"type": "output", "text": "# Subtest: cross-dimension AND rejects an nvidia-gpu+sm100 record for an nvidia-gpu+sm86 query"}
+{"type": "output", "text": "ok 1 - cross-dimension AND rejects an nvidia-gpu+sm100 record for an nvidia-gpu+sm86 query"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 7.3832"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: within-dimension OR is preserved for architecture and hardware"}
+{"type": "output", "text": "ok 2 - within-dimension OR is preserved for architecture and hardware"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 12.6785"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: an undeclared architecture dimension does not constrain historical records"}
+{"type": "output", "text": "ok 3 - an undeclared architecture dimension does not constrain historical records"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 0.7128"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: execution architecture is stamped only from the declared evidence"}
+{"type": "output", "text": "ok 4 - execution architecture is stamped only from the declared evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1.1863"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: an execution caller cannot stamp an architecture the evidence never declared"}
+{"type": "output", "text": "ok 5 - an execution caller cannot stamp an architecture the evidence never declared"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1.0961"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: historical canonical stores without architecture validate with zero migration and stay readable"}
+{"type": "output", "text": "ok 6 - historical canonical stores without architecture validate with zero migration and stay readable"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1.6177"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: frozen historical snapshots never gain an architecture attribute"}
+{"type": "output", "text": "ok 7 - frozen historical snapshots never gain an architecture attribute"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 0.7581"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..7"}
+{"type": "output", "text": "# tests 7"}
+{"type": "output", "text": "# suites 0"}
+{"type": "output", "text": "# pass 7"}
+{"type": "output", "text": "# fail 0"}
+{"type": "output", "text": "# cancelled 0"}
+{"type": "output", "text": "# skipped 0"}
+{"type": "output", "text": "# todo 0"}
+{"type": "output", "text": "# duration_ms 37.5032"}
+{"type": "output", "text": "[release-check] test:shared-gpu-target-probe"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-target-probe"}
+{"type": "output", "text": "> node tests/shared-gpu-target-probe-test.mjs"}
+{"type": "output", "text": "[shared-gpu-target-probe] 15 hardware-free driver-probe checks passed"}
+{"type": "output", "text": "[release-check] test:shared-gpu-acceptance"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-acceptance"}
+{"type": "output", "text": "> node tests/shared-gpu-acceptance-test.mjs"}
+{"type": "output", "text": "[shared-gpu-acceptance] archived P1 audit replayed read-only"}
+{"type": "output", "text": "[shared-gpu-acceptance] continuation audit, safe budget terminal, family outcome, config fingerprint and run ledger contracts passed without GPU or Agent"}
+{"type": "output", "text": "[release-check] test:model-observation"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:model-observation"}
+{"type": "output", "text": "> node tests/model-observation-test.mjs"}
+{"type": "output", "text": "ok - pure: one matching assistant model is observed; init/usage labels stay separate"}
+{"type": "output", "text": "ok - pure: zero assistant responses and init-only streams stay unknown"}
+{"type": "output", "text": "ok - pure: missing/blank/synthetic response labels are never observed"}
+{"type": "output", "text": "ok - pure: two concrete response models are a conflict, never a pick"}
+{"type": "output", "text": "ok - pure: absent or foreign assistant sessions invalidate completeness without replacing identity"}
+{"type": "output", "text": "ok - pure: session identity is exact and run/mission identity must be nonblank before a response is observed"}
+{"type": "output", "text": "ok - pure: a valid response cannot mask a missing/blank model or missing session in the same stream"}
+{"type": "output", "text": "ok - pure: thinking-only metadata is observed without leaking thinking content"}
+{"type": "output", "text": "ok - pure: unrelated model fields and prose are ignored"}
+{"type": "output", "text": "ok - pure: DTO JSON round-trip stays a valid observable DTO"}
+{"type": "output", "text": "ok - pure: bind detaches a valid observation and rejects all four identity swaps"}
+{"type": "output", "text": "ok - pure: bind rejects malformed and internally inconsistent DTOs but accepts unknown/conflict shapes"}
+{"type": "output", "text": "ok - pure: bind refuses observed error reasons, unlisted conflict evidence and duplicate event indexes"}
+{"type": "output", "text": "ok - pure: summary of an empty required set is unknown"}
+{"type": "output", "text": "ok - pure: summary is observed only when every required run reports the same model"}
+{"type": "output", "text": "ok - pure: foreign, non-observed, malformed and duplicate evidence fails closed"}
+{"type": "output", "text": "ok - pure: duplicate evidence differing only in object key order is one run, counted once"}
+{"type": "output", "text": "ok - adapter: fake-child stream persists a provider-reported response observation"}
+{"type": "output", "text": "ok - adapter: a resume hint is not an observation; init-only/empty streams stay unknown"}
+{"type": "output", "text": "ok - adapter: thinking-only assistant metadata is observed and private reasoning is not persisted"}
+{"type": "output", "text": "ok - adapter: an unterminated final JSON line is still observed on physical close"}
+{"type": "output", "text": "ok - adapter: mixed/foreign/synthetic response metadata fails closed"}
+{"type": "output", "text": "ok - adapter: a valid response followed by incomplete assistant metadata stays unknown"}
+{"type": "output", "text": "ok - adapter: cancellation retains the observed metadata"}
+{"type": "output", "text": "ok - projection: exact current-run binding is exposed and metadata-only change flips changed=true"}
+{"type": "output", "text": "ok - projection: missing, foreign or wrongly bound observations clear a stale value"}
+{"type": "output", "text": "ok - projection: cancellation settlement retains observation without weakening release"}
+{"type": "output", "text": "ok - projection: a record/DTO bound to a foreign mission never projects into the current mission"}
+{"type": "output", "text": "ok - projection: a cancelled run whose DTO session disagrees with the record is refused, release stays authoritative"}
+{"type": "output", "text": "ok - projection: a run record claiming another provider never projects a claude-code observation"}
+{"type": "output", "text": "ok - projection: a failing readRun clears a previously projected observation instead of leaving stale evidence"}
+{"type": "output", "text": "ok - archive: reset preserves the bound observation as a detached runHistory entry and clears the live run"}
+{"type": "output", "text": "ok - archive: a foreign observation binding is rejected instead of archived"}
+{"type": "output", "text": "ok - archive: a brand-new run never inherits the archived observation"}
+{"type": "output", "text": "[model-observation] hardware-free: no real Claude CLI, Python, network or GPU process was started."}
+{"type": "output", "text": "[model-observation] 34 passed, 0 failed"}
+{"type": "output", "text": "[release-check] test:model-observation-acceptance"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:model-observation-acceptance"}
+{"type": "output", "text": "> node tests/model-observation-acceptance-test.mjs"}
+{"type": "output", "text": "[model-observation-acceptance] response-model observation, required-run coverage, fingerprint and ledger comparability contracts are exercised without GPU or Agent"}
+{"type": "output", "text": "[release-check] test:shared-gpu-model-collector"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-model-collector"}
+{"type": "output", "text": "> node tests/shared-gpu-model-collector-test.mjs"}
+{"type": "output", "text": "[shared-gpu-model-collector] 65/65 independent cases passed; 0 expected-red pending the frozen collect/stop-receipt helpers and the ledger model-proof boundaries"}
+{"type": "output", "text": "[release-check] test:generic-mission-import"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:generic-mission-import"}
+{"type": "output", "text": "> node tests/generic-mission-import-test.mjs"}
+{"type": "output", "text": "generic mission import contract passed"}
+{"type": "output", "text": "[release-check] test:agent-start-context"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-start-context"}
+{"type": "output", "text": "> node tests/agent-start-context-test.mjs"}
+{"type": "output", "text": "[agent-start-context] first/manual-settled runs freeze distinct contexts; replay/retry cannot refresh deadlines or counters"}
+{"type": "output", "text": "[release-check] test:round-budget"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-budget"}
+{"type": "output", "text": "> node tests/round-budget-test.mjs"}
+{"type": "output", "text": "[round-budget] exact deadline, stable same-round clock, pause/restart compatibility and real-release barriers passed"}
+{"type": "output", "text": "[release-check] test:codex-cancellation"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:codex-cancellation"}
+{"type": "output", "text": "> node tests/codex-cancellation-test.mjs"}
+{"type": "output", "text": "[codex-cancellation] force escalation, true exit, orphan isolation, read-only recovery and real process-tree cleanup passed"}
+{"type": "output", "text": "[release-check] test:agent-cancellation-liveness"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-cancellation-liveness"}
+{"type": "output", "text": "> node tests/agent-cancellation-liveness-test.mjs"}
+{"type": "output", "text": "[agent-cancellation-liveness] pending exit blocks artifacts; Mission stop covers all resources and exposes failures"}
+{"type": "output", "text": "[agent-cancellation-liveness] reusable release is bounded, late-state isolated and barrier-safe"}
+{"type": "output", "text": "[release-check] test:generic-runtime-safety"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:generic-runtime-safety"}
+{"type": "output", "text": "> node tests/generic-runtime-safety-test.mjs"}
+{"type": "output", "text": "[generic-runtime-safety] CPU identity/oracle, no false live evidence, resource barriers and pre-dispatch budget shutdown passed"}
+{"type": "output", "text": "[release-check] test:test-service-client"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:test-service-client"}
+{"type": "output", "text": "> node tests/test-service-client-test.mjs"}
+{"type": "output", "text": "PASS legacy methods retain endpoints, JSON bodies, and encoded identifiers"}
+{"type": "output", "text": "PASS malformed JSON and non-object envelopes have stable errors"}
+{"type": "output", "text": "PASS a true AbortController bounds both headers and the response body"}
+{"type": "output", "text": "PASS caller cancellation composes with deadlines, including pre-aborted signals"}
+{"type": "output", "text": "PASS timed-out POST is never implicitly retried"}
+{"type": "output", "text": "PASS HTTP redirects cannot implicitly resend a POST"}
+{"type": "output", "text": "PASS injected fetch receives a separate live signal and no retry on transport failure"}
+{"type": "output", "text": "PASS invalid timeouts fail before making a request"}
+{"type": "output", "text": "Test service client: 8 checks passed."}
+{"type": "output", "text": "[release-check] test:http-request-liveness"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:http-request-liveness"}
+{"type": "output", "text": "> node tests/http-request-liveness-test.mjs"}
+{"type": "output", "text": "PASS same request shares one parsing Promise, including resolved/error cache"}
+{"type": "output", "text": "PASS empty bodies, JSON compatibility, and byte limits are retained"}
+{"type": "output", "text": "PASS never-ending and continuously slow in-memory bodies time out and are destroyed"}
+{"type": "output", "text": "PASS premature body close returns a stable terminal error"}
+{"type": "output", "text": "PASS default body deadline is finite and remains five seconds"}
+{"type": "output", "text": "PASS 408 response is delivered before closing a never-ending HTTP connection"}
+{"type": "output", "text": "PASS oversized incomplete bodies also respond and close, and unrelated requests stay live"}
+{"type": "output", "text": "HTTP request liveness: 7 checks passed."}
+{"type": "output", "text": "[release-check] test:queue-liveness"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:queue-liveness"}
+{"type": "output", "text": "> node tests/queue-liveness-test.mjs"}
+{"type": "output", "text": "TAP version 13"}
+{"type": "output", "text": "# Subtest: queue liveness and resource ownership"}
+{"type": "output", "text": "# Subtest: waiting tasks also have a total deadline without any worker start"}
+{"type": "output", "text": "ok 1 - waiting tasks also have a total deadline without any worker start"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 87.274"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: partial or foreign not-started proofs never authorize a retry"}
+{"type": "output", "text": "ok 2 - partial or foreign not-started proofs never authorize a retry"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 202.1173"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: allowStart=false neither claims waiting work nor invokes a worker-starting advance"}
+{"type": "output", "text": "ok 3 - allowStart=false neither claims waiting work nor invokes a worker-starting advance"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 59.3427"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: dispatch freezes content before await and does not hold locks while submit hangs"}
+{"type": "output", "text": "ok 4 - dispatch freezes content before await and does not hold locks while submit hangs"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 108.3133"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: hung get cannot prevent confirmed cancellation or admit the next task early"}
+{"type": "output", "text": "ok 5 - hung get cannot prevent confirmed cancellation or admit the next task early"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 161.3118"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: terminal status without explicit release is quarantined"}
+{"type": "output", "text": "ok 6 - terminal status without explicit release is quarantined"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 50.392"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: lost submit response reconciles frozen request identity without another submit"}
+{"type": "output", "text": "ok 7 - lost submit response reconciles frozen request identity without another submit"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 54.625"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: a late accepted response is retained and cancelled once"}
+{"type": "output", "text": "ok 8 - a late accepted response is retained and cancelled once"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 137.4887"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: task deadline cancels independently of a stalled get"}
+{"type": "output", "text": "ok 9 - task deadline cancels independently of a stalled get"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 132.1609"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: two queue instances share one durable submission claim"}
+{"type": "output", "text": "ok 10 - two queue instances share one durable submission claim"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 32.5718"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..10"}
+{"type": "output", "text": "ok 1 - queue liveness and resource ownership"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1412.4253"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..1"}
+{"type": "output", "text": "# tests 11"}
+{"type": "output", "text": "# suites 0"}
+{"type": "output", "text": "# pass 11"}
+{"type": "output", "text": "# fail 0"}
+{"type": "output", "text": "# cancelled 0"}
+{"type": "output", "text": "# skipped 0"}
+{"type": "output", "text": "# todo 0"}
+{"type": "output", "text": "# duration_ms 1417.5338"}
+{"type": "output", "text": "[release-check] test:local-c500-recovery"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-recovery"}
+{"type": "output", "text": "> node tests/local-c500-recovery-test.mjs"}
+{"type": "output", "text": "TAP version 13"}
+{"type": "output", "text": "# Subtest: local durable execution ownership"}
+{"type": "output", "text": "# Subtest: submit is content-bound and idempotent before and after adapter restart"}
+{"type": "output", "text": "ok 1 - submit is content-bound and idempotent before and after adapter restart"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1552.6502"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: result written before process exit is not terminal evidence"}
+{"type": "output", "text": "ok 2 - result written before process exit is not terminal evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1736.8976"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: actual parent process restart cannot spawn a claimed task twice"}
+{"type": "output", "text": "ok 3 - actual parent process restart cannot spawn a claimed task twice"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 2237.4441"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: lost submit response is recovered across queue recreation and executes once"}
+{"type": "output", "text": "ok 4 - lost submit response is recovered across queue recreation and executes once"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1525.4611"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: unknown orphan is quarantined and cannot relaunch, even with result bytes"}
+{"type": "output", "text": "ok 5 - unknown orphan is quarantined and cannot relaunch, even with result bytes"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 157.6108"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: cancel kills and confirms a real descendant tree before terminal status"}
+{"type": "output", "text": "ok 6 - cancel kills and confirms a real descendant tree before terminal status"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 2332.6567"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: POSIX process-group cleanup reaps descendants after leader exit"}
+{"type": "output", "text": "ok 7 - POSIX process-group cleanup reaps descendants after leader exit # SKIP"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 0.1622"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: supervisor enforces total deadline independently of Runtime polling"}
+{"type": "output", "text": "ok 8 - supervisor enforces total deadline independently of Runtime polling"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1596.2167"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: structured CPU correctness errors retain category, phase and role"}
+{"type": "output", "text": "ok 9 - structured CPU correctness errors retain category, phase and role"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1470.9927"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: cancel racing completion has one irreversible atomic terminal record"}
+{"type": "output", "text": "ok 10 - cancel racing completion has one irreversible atomic terminal record"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 2050.1416"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..10"}
+{"type": "output", "text": "ok 1 - local durable execution ownership"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 14894.8677"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..1"}
+{"type": "output", "text": "# tests 11"}
+{"type": "output", "text": "# suites 0"}
+{"type": "output", "text": "# pass 10"}
+{"type": "output", "text": "# fail 0"}
+{"type": "output", "text": "# cancelled 0"}
+{"type": "output", "text": "# skipped 1"}
+{"type": "output", "text": "# todo 0"}
+{"type": "output", "text": "# duration_ms 14900.4217"}
+{"type": "output", "text": "[release-check] test:windows-job-object"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:windows-job-object"}
+{"type": "output", "text": "> node tests/windows-job-object-test.mjs"}
+{"type": "output", "text": "TAP version 13"}
+{"type": "output", "text": "# Subtest: job object helper manages and terminates a child process tree"}
+{"type": "output", "text": "ok 1 - job object helper manages and terminates a child process tree"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 2003.4959"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: job object termination releases descendants and helper failures fail closed"}
+{"type": "output", "text": "ok 2 - job object termination releases descendants and helper failures fail closed"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 3733.9041"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: job object supervisor bridges stdin and tails JSONL before the receipt"}
+{"type": "output", "text": "ok 3 - job object supervisor bridges stdin and tails JSONL before the receipt"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1113.7565"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..3"}
+{"type": "output", "text": "# tests 3"}
+{"type": "output", "text": "# suites 0"}
+{"type": "output", "text": "# pass 3"}
+{"type": "output", "text": "# fail 0"}
+{"type": "output", "text": "# cancelled 0"}
+{"type": "output", "text": "# skipped 0"}
+{"type": "output", "text": "# todo 0"}
+{"type": "output", "text": "# duration_ms 6858.7913"}
+{"type": "output", "text": "[release-check] test:generic-iteration-fault-injection"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:generic-iteration-fault-injection"}
+{"type": "output", "text": "> node tests/generic-iteration-fault-injection-test.mjs"}
+{"type": "output", "text": "[generic-iteration-fault-injection] package timeout, lost submit, runner failure, cancellation quarantine, and command replay passed"}
+{"type": "output", "text": "[release-check] test:cli-command"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:cli-command"}
+{"type": "output", "text": "> node tests/cli-command-test.mjs"}
+{"type": "output", "text": "[cli-command] Windows npm shims and direct commands resolve to executable invocations"}
+{"type": "output", "text": "[release-check] test:workflow-kernel"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:workflow-kernel"}
+{"type": "output", "text": "> node tests/workflow-kernel-test.mjs"}
+{"type": "output", "text": "[workflow-kernel] outcomes, invariants, effects, and idempotent reconciliation passed"}
+{"type": "output", "text": "[release-check] test:candidate-generation"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:candidate-generation"}
+{"type": "output", "text": "> node tests/candidate-generation-test.mjs"}
+{"type": "output", "text": "[candidate-generation] prompt, diff admission, language contract, repeat guard, and generation-path classification passed"}
+{"type": "output", "text": "[release-check] test:agent-runtime-candidate-admission"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-runtime-candidate-admission"}
+{"type": "output", "text": "> node tests/agent-runtime-candidate-admission-test.mjs"}
+{"type": "output", "text": "[agent-runtime-candidate-admission] fail-open guard, empty-candidate root causes and degraded generation paths passed"}
+{"type": "output", "text": "[release-check] test:round-settlement-interleaving"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-settlement-interleaving"}
+{"type": "output", "text": "> node tests/round-settlement-interleaving-test.mjs"}
+{"type": "output", "text": "[round-settlement-interleaving] run-history dedupe, recovery attribution, idempotent queue replay and settled-round barriers passed"}
+{"type": "output", "text": "[release-check] test:candidate-generation-eval-report"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:candidate-generation-eval-report"}
+{"type": "output", "text": "> node tests/candidate-generation-eval-report-test.mjs"}
+{"type": "output", "text": "[candidate-generation-eval-report] timing, token uncertainty, correctness gating, and profile speedup passed"}
+{"type": "output", "text": "[release-check] test:module-boundary"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:module-boundary"}
+{"type": "output", "text": "> node tests/module-boundary-test.mjs"}
+{"type": "output", "text": "[module-boundary] production path, dependency direction, and local contracts passed"}
+{"type": "output", "text": "[release-check] test:state-domain-boundary"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:state-domain-boundary"}
+{"type": "output", "text": "> node --experimental-vm-modules tests/state-domain-boundary-test.mjs"}
+{"type": "stderr", "text": "(node:96800) ExperimentalWarning: VM Modules is an experimental feature and might change at any time"}
+{"type": "stderr", "text": "(Use `node --trace-warnings ...` to show where the warning was created)"}
+{"type": "output", "text": "[state-domain-boundary] 33 domain nodes, 78 application closure nodes, explicit ports, pure factories, and compatibility passed"}
+{"type": "output", "text": "[release-check] test:state-storage-adapters"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:state-storage-adapters"}
+{"type": "output", "text": "> node tests/state-storage-adapters-test.mjs"}
+{"type": "output", "text": "[state-storage-adapters] atomic writes, exact retries, read isolation, initialization ports, and checkpoint recovery passed"}
+{"type": "output", "text": "[release-check] test:mission-project-state"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:mission-project-state"}
+{"type": "output", "text": "> node tests/mission-project-state-test.mjs"}
+{"type": "output", "text": "TAP version 13"}
+{"type": "output", "text": "# Subtest: Mission creation exposes clean defaults and registers its Project in memory"}
+{"type": "output", "text": "ok 1 - Mission creation exposes clean defaults and registers its Project in memory"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 30.1986"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: Mission creation inherits the selected Project paths and honors input defaults"}
+{"type": "output", "text": "ok 2 - Mission creation inherits the selected Project paths and honors input defaults"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1.8762"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: Mission switching preserves each runtime projection and isolates mutable evidence"}
+{"type": "output", "text": "ok 3 - Mission switching preserves each runtime projection and isolates mutable evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 9.9782"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: fixed Profile, objective, retry budgets, and frozen semantics survive Mission switches"}
+{"type": "output", "text": "ok 4 - fixed Profile, objective, retry budgets, and frozen semantics survive Mission switches"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 9.4834"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: Mission budget aliases, precedence, fractional values, and unlimited defaults remain compatible"}
+{"type": "output", "text": "ok 5 - Mission budget aliases, precedence, fractional values, and unlimited defaults remain compatible"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 0.4363"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: candidate selection restores its pending action without overwriting the Mission goal"}
+{"type": "output", "text": "ok 6 - candidate selection restores its pending action without overwriting the Mission goal"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 2.9713"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: active Mission status preserves running, approval, failure, and completion precedence"}
+{"type": "output", "text": "ok 7 - active Mission status preserves running, approval, failure, and completion precedence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 13.9989"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: resume restarts stopped and human-review loops once while preserving work and consumed budgets"}
+{"type": "output", "text": "ok 8 - resume restarts stopped and human-review loops once while preserving work and consumed budgets"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 6.5797"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: resume preserves non-resumable loop outcomes and terminal Mission statuses"}
+{"type": "output", "text": "ok 9 - resume preserves non-resumable loop outcomes and terminal Mission statuses"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 5.7181"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: Project create and update normalize metadata without changing its linked Mission"}
+{"type": "output", "text": "ok 10 - Project create and update normalize metadata without changing its linked Mission"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 2.3628"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: invalid selections and Project conflicts retain 400, 404, and 409 status contracts"}
+{"type": "output", "text": "ok 11 - invalid selections and Project conflicts retain 400, 404, and 409 status contracts"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 3.1735"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: Project selection prefers running, then unfinished, then completed linked Missions"}
+{"type": "output", "text": "ok 12 - Project selection prefers running, then unfinished, then completed linked Missions"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 3.4884"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: selecting an empty Project retains the active Mission and records the switch"}
+{"type": "output", "text": "ok 13 - selecting an empty Project retains the active Mission and records the switch"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 2.1073"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: deleting an unlinked Project selects an active fallback, then an archive, then null"}
+{"type": "output", "text": "ok 14 - deleting an unlinked Project selects an active fallback, then an archive, then null"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 0.4655"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..14"}
+{"type": "output", "text": "# tests 14"}
+{"type": "output", "text": "# suites 0"}
+{"type": "output", "text": "# pass 14"}
+{"type": "output", "text": "# fail 0"}
+{"type": "output", "text": "# cancelled 0"}
+{"type": "output", "text": "# skipped 0"}
+{"type": "output", "text": "# todo 0"}
+{"type": "output", "text": "# duration_ms 108.9141"}
+{"type": "output", "text": "[release-check] test:knowledge-state"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:knowledge-state"}
+{"type": "output", "text": "> node tests/knowledge-state-test.mjs"}
+{"type": "output", "text": "[knowledge-state] decision-driven adoption, source isolation, draft eligibility, maximize, idempotence, and bounded event contracts passed"}
+{"type": "output", "text": "[release-check] test:workflow-error"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:workflow-error"}
+{"type": "output", "text": "> node tests/workflow-error-test.mjs"}
+{"type": "output", "text": "[workflow-error] unified classification, retry policy, status normalization, serialization and recovery actions passed"}
+{"type": "output", "text": "[release-check] test:state-corruption-recovery"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:state-corruption-recovery"}
+{"type": "output", "text": "> node tests/state-corruption-recovery-test.mjs"}
+{"type": "output", "text": "[state-corruption-recovery] corrupt snapshots are preserved and recovered as explicit needs_human state"}
+{"type": "output", "text": "[release-check] test:state-repository"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:state-repository"}
+{"type": "output", "text": "> node tests/state-repository-test.mjs"}
+{"type": "output", "text": "[state-repository] serialization, version conflicts, recovery, and snapshot isolation passed"}
+{"type": "output", "text": "[release-check] test:command-recovery"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:command-recovery"}
+{"type": "output", "text": "> node tests/command-recovery-test.mjs"}
+{"type": "output", "text": "[command-recovery] write failures, restart recovery, unknown effects, frozen Benchmark identity and read-only queue lookup passed"}
+{"type": "output", "text": "[release-check] test:workflow-commands"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:workflow-commands"}
+{"type": "output", "text": "> node tests/workflow-commands-test.mjs"}
+{"type": "output", "text": "[workflow-commands] Candidate admission, effect boundaries, Agent launch, review transitions and budget guards passed"}
+{"type": "output", "text": "[release-check] test:server-routes"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:server-routes"}
+{"type": "output", "text": "> node tests/server-routes-test.mjs"}
+{"type": "output", "text": "[server-routes] HTTP envelope, body guards, system routes, and filesystem routes passed"}
+{"type": "output", "text": "[release-check] test:projects-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:projects-service"}
+{"type": "output", "text": "> node tests/projects-service-test.mjs"}
+{"type": "output", "text": "[projects-service] Project use cases, migration commands, injected ports, and route mapping passed"}
+{"type": "output", "text": "[release-check] test:missions-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:missions-service"}
+{"type": "output", "text": "> node tests/missions-service-test.mjs"}
+{"type": "output", "text": "[missions-service] Mission list/create contracts, validation, workspace initialization, and route mapping passed"}
+{"type": "output", "text": "[release-check] test:mission-query-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:mission-query-service"}
+{"type": "output", "text": "> node tests/mission-query-service-test.mjs"}
+{"type": "output", "text": "[mission-query-service] Mission selection, event cursor queries, and SSE route delegation passed"}
+{"type": "output", "text": "[release-check] test:semantic-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:semantic-service"}
+{"type": "output", "text": "> node tests/semantic-service-test.mjs"}
+{"type": "output", "text": "[semantic-service] semantic freeze projection, event/audit effects, errors, and route mapping passed"}
+{"type": "output", "text": "[release-check] test:research-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:research-service"}
+{"type": "output", "text": "> node tests/research-service-test.mjs"}
+{"type": "output", "text": "[research-service] research start/cancel commands, mismatch guards, and route mapping passed"}
+{"type": "output", "text": "[release-check] test:run-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:run-service"}
+{"type": "output", "text": "> node tests/run-service-test.mjs"}
+{"type": "output", "text": "[run-service] route/service integration passed: fixed synchronous rejection, frozen arming, actual Autopilot/AgentRound with injected effects, and ordinary starts"}
+{"type": "output", "text": "[release-check] test:review-action-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:review-action-service"}
+{"type": "output", "text": "> node tests/review-action-service-test.mjs"}
+{"type": "output", "text": "[review-action-service] resume and decision-review action contracts passed"}
+{"type": "output", "text": "[release-check] test:decision-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:decision-service"}
+{"type": "output", "text": "> node tests/decision-service-test.mjs"}
+{"type": "output", "text": "[decision-service] adoption, rejection, reversal, idempotency, and route contracts passed"}
+{"type": "output", "text": "[release-check] test:candidate-validation-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:candidate-validation-service"}
+{"type": "output", "text": "> node tests/candidate-validation-service-test.mjs"}
+{"type": "output", "text": "[candidate-validation-service] patch, benchmark, rollback, validation, and route contracts passed"}
+{"type": "output", "text": "[release-check] test:baseline-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-service"}
+{"type": "output", "text": "> node tests/baseline-service-test.mjs"}
+{"type": "output", "text": "[baseline-service] materialization orchestration, guards, command, and route contracts passed"}
+{"type": "output", "text": "[release-check] test:operator-test-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:operator-test-service"}
+{"type": "output", "text": "> node tests/operator-test-service-test.mjs"}
+{"type": "output", "text": "[operator-test-service] queue projection and HTTP route contracts passed"}
+{"type": "output", "text": "[release-check] test:mission-control-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:mission-control-service"}
+{"type": "output", "text": "> node tests/mission-control-service-test.mjs"}
+{"type": "output", "text": "[mission-control-service] cancellation, feedback, stop, and route contracts passed"}
+{"type": "output", "text": "[release-check] test:knowledge-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:knowledge-service"}
+{"type": "output", "text": "> node tests/knowledge-service-test.mjs"}
+{"type": "output", "text": "[knowledge-service] draft, immutability, reference, retirement, and route contracts passed"}
+{"type": "output", "text": "[release-check] test:runtime-query-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime-query-service"}
+{"type": "output", "text": "> node tests/runtime-query-service-test.mjs"}
+{"type": "output", "text": "[runtime-query-service] preflight, state, workspace, simulation, and route contracts passed"}
+{"type": "output", "text": "[release-check] test:runtime-state-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime-state-service"}
+{"type": "output", "text": "> node tests/runtime-state-service-test.mjs"}
+{"type": "output", "text": "[runtime-state-service] matrix, budget, pause/resume, and route contracts passed"}
+{"type": "output", "text": "[release-check] test:reset-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:reset-service"}
+{"type": "output", "text": "> node tests/reset-service-test.mjs"}
+{"type": "output", "text": "[reset-service] guard ordering, reset result, rejection, and route contracts passed"}
+{"type": "output", "text": "[release-check] test:source-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:source-service"}
+{"type": "output", "text": "> node tests/source-service-test.mjs"}
+{"type": "output", "text": "[source-service] registration, counting, and missing-root contracts passed"}
+{"type": "output", "text": "[release-check] test:iteration-research-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:iteration-research-service"}
+{"type": "output", "text": "> node tests/iteration-research-service-test.mjs"}
+{"type": "output", "text": "[iteration-research-service] managed start, cancellation, and unmanaged no-op contracts passed"}
+{"type": "output", "text": "[release-check] test:round-recovery-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-recovery-service"}
+{"type": "output", "text": "> node tests/round-recovery-service-test.mjs"}
+{"type": "output", "text": "[round-recovery-service] restore guard and unmanaged no-op contracts passed"}
+{"type": "output", "text": "[release-check] test:agent-round-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-round-service"}
+{"type": "output", "text": "> node tests/agent-round-service-test.mjs"}
+{"type": "output", "text": "[agent-round-service] budget start, frozen experience, failure barriers, managed and fixture launch contracts passed"}
+{"type": "output", "text": "[release-check] test:round-feedback-integration"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-feedback-integration"}
+{"type": "output", "text": "> node tests/round-feedback-integration-test.mjs"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"ok\": true,"}
+{"type": "output", "text": "\"results\": ["}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"two-round-connectivity\","}
+{"type": "output", "text": "\"provider\": \"claude-code\","}
+{"type": "output", "text": "\"experience\": {"}
+{"type": "output", "text": "\"id\": \"exp_connectivity_1\","}
+{"type": "output", "text": "\"version\": 1"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"factsBinding\": {"}
+{"type": "output", "text": "\"previousRunId\": \"agent_round_1\","}
+{"type": "output", "text": "\"previousRoundId\": \"MIS_MU1KXS55:round:1\","}
+{"type": "output", "text": "\"candidateId\": \"candidate-r1\","}
+{"type": "output", "text": "\"candidateDigest\": \"sha256:cd1c94712f55bf460afe61abdaf88ad3d5857f8a1e21555ab20052960ef26827\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"audit\": {"}
+{"type": "output", "text": "\"path\": \"C:\\\\Users\\\\棉被暖~3\\\\AppData\\\\Local\\\\Temp\\\\operator-round-feedback-2NrH0M\\\\bridges\\\\connectivity\\\\prompt-audits\\\\claude_MU1KXS75_361F78BA.json\","}
+{"type": "output", "text": "\"digest\": \"sha256:52809fe67e4bfc1f3a7a20b5f104b98dbdc673400a8f4df250d616854d74f925\","}
+{"type": "output", "text": "\"bytes\": 19092,"}
+{"type": "output", "text": "\"selectionContextId\": \"EXPCTX_bd3fcae25a8b5af706a8ed0ae420043500d07d41aa9980fc45acda2637ffd217\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"two-round-connectivity\","}
+{"type": "output", "text": "\"provider\": \"codex-cli\","}
+{"type": "output", "text": "\"experience\": {"}
+{"type": "output", "text": "\"id\": \"exp_codex_3\","}
+{"type": "output", "text": "\"version\": 1"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"audit\": {"}
+{"type": "output", "text": "\"digest\": \"sha256:11bce230fbdbc1fcb0e91d5bdb0b1cecef6456feaa4144625dca0dcc979d6504\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"backend-as-hardware-fails-explicitly\","}
+{"type": "output", "text": "\"code\": \"ROUND_EXPERIENCE_TARGET_INVALID\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"architecture-dimension-separated\","}
+{"type": "output", "text": "\"excludedReason\": \"scope\","}
+{"type": "output", "text": "\"mismatchIssues\": 1"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"task-and-mission-isolation\","}
+{"type": "output", "text": "\"codes\": ["}
+{"type": "output", "text": "\"no-op-snapshot\","}
+{"type": "output", "text": "\"ROUND_EXPERIENCE_EVIDENCE_CONFLICT\""}
+{"type": "output", "text": "]"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"baseline-clears-benchmark-keeps-target\","}
+{"type": "output", "text": "\"target\": ["}
+{"type": "output", "text": "\"nvidia-gpu\""}
+{"type": "output", "text": "]"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"zero-experience-facts-complete\","}
+{"type": "output", "text": "\"items\": 0,"}
+{"type": "output", "text": "\"gate\": \"reference\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"item-cap\","}
+{"type": "output", "text": "\"items\": 20,"}
+{"type": "output", "text": "\"maxItems\": 20,"}
+{"type": "output", "text": "\"excludedByLimit\": 2"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"byte-budget-facts-complete\","}
+{"type": "output", "text": "\"items\": 7,"}
+{"type": "output", "text": "\"contextBytes\": 60342,"}
+{"type": "output", "text": "\"maxItems\": 20,"}
+{"type": "output", "text": "\"maxBytes\": 65536"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"operator-failure-channel\","}
+{"type": "output", "text": "\"classification\": \"operator\","}
+{"type": "output", "text": "\"code\": \"OPERATOR_TEST_FAILED\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"infrastructure-failure-classification\","}
+{"type": "output", "text": "\"classification\": \"infrastructure\","}
+{"type": "output", "text": "\"recorded\": 0"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"archive-determinism\","}
+{"type": "output", "text": "\"duplicateRunEntries\": 1,"}
+{"type": "output", "text": "\"legacyRoundIdSource\": \"unknown\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"manual-capture-replay\","}
+{"type": "output", "text": "\"roundId\": \"MIS_MU1KXWEE:round:2\","}
+{"type": "output", "text": "\"replayIdentical\": true,"}
+{"type": "output", "text": "\"experienceId\": \"exp_manual-replay_42\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "]"}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "[release-check] test:prompt-audit"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:prompt-audit"}
+{"type": "output", "text": "> node tests/prompt-audit-test.mjs"}
+{"type": "output", "text": "[prompt-audit] provider-neutral pre-send audit, UTF-8/SHA-256, fail-closed write, version freeze, selection exclusions and contextId mismatch contracts passed"}
+{"type": "output", "text": "[release-check] test:round-preflight-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-preflight-service"}
+{"type": "output", "text": "> node tests/round-preflight-service-test.mjs"}
+{"type": "output", "text": "[round-preflight-service] settlement, preflight, and blocked contracts passed"}
+{"type": "output", "text": "[release-check] test:round-artifact-guard"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-artifact-guard"}
+{"type": "output", "text": "> node tests/round-artifact-guard-test.mjs"}
+{"type": "output", "text": "[round-artifact-guard] strict artifact contract passed"}
+{"type": "output", "text": "[release-check] test:baseline-source-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-source-service"}
+{"type": "output", "text": "> node tests/baseline-source-service-test.mjs"}
+{"type": "output", "text": "[baseline-source-service] source selection contract passed"}
+{"type": "output", "text": "[release-check] test:materializer-policy-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:materializer-policy-service"}
+{"type": "output", "text": "> node tests/materializer-policy-service-test.mjs"}
+{"type": "output", "text": "[materializer-policy-service] state policy contracts passed"}
+{"type": "output", "text": "[release-check] test:baseline-failure-projection"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-failure-projection"}
+{"type": "output", "text": "> node tests/baseline-failure-projection-test.mjs"}
+{"type": "output", "text": "[baseline-failure-projection] idempotent projection contract passed"}
+{"type": "output", "text": "[release-check] test:benchmark-projection-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:benchmark-projection-service"}
+{"type": "output", "text": "> node tests/benchmark-projection-service-test.mjs"}
+{"type": "output", "text": "[benchmark-projection-service] queue projection and visible terminal experience failures passed"}
+{"type": "output", "text": "[release-check] test:repository-adoption-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:repository-adoption-service"}
+{"type": "output", "text": "> node tests/repository-adoption-service-test.mjs"}
+{"type": "output", "text": "[repository-adoption-service] eligibility and adoption contract passed"}
+{"type": "output", "text": "[release-check] test:autopilot-candidate-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:autopilot-candidate-service"}
+{"type": "output", "text": "> node tests/autopilot-candidate-service-test.mjs"}
+{"type": "output", "text": "[autopilot-candidate-service] priority selection contract passed"}
+{"type": "output", "text": "[release-check] test:autopilot-context-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:autopilot-context-service"}
+{"type": "output", "text": "> node tests/autopilot-context-service-test.mjs"}
+{"type": "output", "text": "[autopilot-context-service] auto-tick context contract passed"}
+{"type": "output", "text": "[release-check] test:autopilot-candidate-action-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:autopilot-candidate-action-service"}
+{"type": "output", "text": "> node tests/autopilot-candidate-action-service-test.mjs"}
+{"type": "output", "text": "[autopilot-candidate-action-service] patch and recovery contracts passed"}
+{"type": "output", "text": "[release-check] test:autopilot-validation-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:autopilot-validation-service"}
+{"type": "output", "text": "> node tests/autopilot-validation-service-test.mjs"}
+{"type": "output", "text": "[autopilot-validation-service] candidate benchmark contract passed"}
+{"type": "output", "text": "[release-check] test:autopilot-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:autopilot-service"}
+{"type": "output", "text": "> node tests/autopilot-service-test.mjs"}
+{"type": "output", "text": "[autopilot-service] application boundary contract passed"}
+{"type": "output", "text": "[release-check] test:autopilot-fixed-profile-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:autopilot-fixed-profile-service"}
+{"type": "output", "text": "> node tests/autopilot-fixed-profile-service-test.mjs"}
+{"type": "output", "text": "[autopilot-fixed-profile-service] fixed profile advance contract passed"}
+{"type": "output", "text": "[release-check] test:autopilot-strict-source-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:autopilot-strict-source-service"}
+{"type": "output", "text": "> node tests/autopilot-strict-source-service-test.mjs"}
+{"type": "output", "text": "[autopilot-strict-source-service] strict source research contract passed"}
+{"type": "output", "text": "[release-check] test:autopilot-candidate-baseline-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:autopilot-candidate-baseline-service"}
+{"type": "output", "text": "> node tests/autopilot-candidate-baseline-service-test.mjs"}
+{"type": "output", "text": "[autopilot-candidate-baseline-service] baseline research contract passed"}
+{"type": "output", "text": "[release-check] test:baseline-benchmark-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-benchmark-service"}
+{"type": "output", "text": "> node tests/baseline-benchmark-service-test.mjs"}
+{"type": "output", "text": "[baseline-benchmark-service] command contract passed"}
+{"type": "output", "text": "[release-check] test:baseline-materializer-command-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-materializer-command-service"}
+{"type": "output", "text": "> node tests/baseline-materializer-command-service-test.mjs"}
+{"type": "output", "text": "[baseline-materializer-command-service] command contract passed"}
+{"type": "output", "text": "[release-check] test:baseline-source-inspection-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-source-inspection-service"}
+{"type": "output", "text": "> node tests/baseline-source-inspection-service-test.mjs"}
+{"type": "output", "text": "[baseline-source-inspection-service] invalid source contract passed"}
+{"type": "output", "text": "[release-check] test:baseline-materializer-recovery-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-materializer-recovery-service"}
+{"type": "output", "text": "> node tests/baseline-materializer-recovery-service-test.mjs"}
+{"type": "output", "text": "[baseline-materializer-recovery-service] redirect and recovery contract passed"}
+{"type": "output", "text": "[release-check] test:iteration-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:iteration-service"}
+{"type": "output", "text": "> node tests/iteration-service-test.mjs"}
+{"type": "output", "text": "[iteration-service] public dependency contract passed"}
+{"type": "output", "text": "[release-check] test:runtime-projection-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime-projection-service"}
+{"type": "output", "text": "> node tests/runtime-projection-service-test.mjs"}
+{"type": "output", "text": "[runtime-projection-service] ordering and projection contract passed"}
+{"type": "output", "text": "[release-check] test:runtime-advance-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime-advance-service"}
+{"type": "output", "text": "> node tests/runtime-advance-service-test.mjs"}
+{"type": "output", "text": "[runtime-advance-service] ordered progression contract passed"}
+{"type": "output", "text": "[release-check] test:baseline-orchestration-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-orchestration-service"}
+{"type": "output", "text": "> node tests/baseline-orchestration-service-test.mjs"}
+{"type": "output", "text": "[baseline-orchestration-service] branch progression contracts passed"}
+{"type": "output", "text": "[release-check] test:runtime-state-pipeline-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime-state-pipeline-service"}
+{"type": "output", "text": "> node tests/runtime-state-pipeline-service-test.mjs"}
+{"type": "output", "text": "[runtime-state-pipeline-service] ordered advancement and queue contention contract passed"}
+{"type": "output", "text": "[release-check] test:runtime-lifecycle-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime-lifecycle-service"}
+{"type": "output", "text": "> node tests/runtime-lifecycle-service-test.mjs"}
+{"type": "output", "text": "[runtime-lifecycle] isolated reads, explicit advancement, serialization and owner guard passed"}
+{"type": "output", "text": "[release-check] test:runtime-maintenance-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime-maintenance-service"}
+{"type": "output", "text": "> node tests/runtime-maintenance-service-test.mjs"}
+{"type": "output", "text": "[runtime-maintenance] extracted policy and fixture isolation passed"}
+{"type": "output", "text": "[release-check] test:runtime-read-isolation"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime-read-isolation"}
+{"type": "output", "text": "> node tests/runtime-read-isolation-test.mjs"}
+{"type": "output", "text": "[runtime-read-isolation] GET/SSE/queue inspection, journal safety and autonomous tick passed"}
+{"type": "output", "text": "[release-check] test:main-round-orchestration-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:main-round-orchestration-service"}
+{"type": "output", "text": "> node tests/main-round-orchestration-service-test.mjs"}
+{"type": "output", "text": "[main-round-orchestration-service] launch and blocked contracts passed"}
+{"type": "output", "text": "[release-check] test:queue-stop-race"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:queue-stop-race"}
+{"type": "output", "text": "> node tests/queue-stop-race-test.mjs"}
+{"type": "output", "text": "[queue-stop-race] unknown timeout retains its slot; confirmed cancellation has one terminal outcome"}
+{"type": "output", "text": "[release-check] test:operator-test-resilience"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:operator-test-resilience"}
+{"type": "output", "text": "> node tests/operator-test-resilience-test.mjs"}
+{"type": "output", "text": "[operator-test-resilience] idempotency and bounded outcome-class retries passed"}
+{"type": "output", "text": "[release-check] test:intent"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:intent"}
+{"type": "output", "text": "> node tests/mission-intent-test.mjs"}
+{"type": "output", "text": "[intent] mission input gate passed"}
+{"type": "output", "text": "[release-check] test:research"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:research"}
+{"type": "output", "text": "> node tests/research-test.mjs"}
+{"type": "output", "text": "[research] researcher sub-agent run lifecycle passed"}
+{"type": "output", "text": "[release-check] test:baseline-materializer-agent"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-materializer-agent"}
+{"type": "output", "text": "> node tests/baseline-materializer-agent-test.mjs"}
+{"type": "output", "text": "[baseline-materializer-agent] lifecycle passed"}
+{"type": "output", "text": "[release-check] test:agent-runtime-registry"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-runtime-registry"}
+{"type": "output", "text": "> node tests/agent-runtime-registry-test.mjs"}
+{"type": "output", "text": "[agent-runtime-registry] declarative definitions, capabilities and operation dispatch passed"}
+{"type": "output", "text": "[release-check] test:agent-runtime-timeout-recovery"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-runtime-timeout-recovery"}
+{"type": "output", "text": "> node tests/agent-runtime-timeout-recovery-test.mjs"}
+{"type": "output", "text": "[agent-runtime-timeout-recovery] timeout-triggered cancellation converges to a retryable terminal projection"}
+{"type": "output", "text": "[release-check] test:agent-run-diagnostics"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-run-diagnostics"}
+{"type": "output", "text": "> node tests/agent-run-diagnostics-test.mjs"}
+{"type": "output", "text": "ok - T1 new runs carry exact defaults and two simultaneous runs keep separate identities/counts"}
+{"type": "output", "text": "ok - T2 init + thinking telemetry then cancel with no assistant stays unknown without leaking body bytes"}
+{"type": "output", "text": "ok - T3 thinking-only assistant and unterminated tail observe once; init/usage alone never observe"}
+{"type": "output", "text": "ok - T4 byte/time counters, blank/invalid/primitive/unknown classes, fixed keys and durable JSON reload"}
+{"type": "output", "text": "ok - T5 first cancellation is durable while termination is pending; repeat/invalid/foreign contexts never replace it"}
+{"type": "output", "text": "ok - T6a main automatic budget expiry delivers budget_exceeded scalars without premature release"}
+{"type": "output", "text": "ok - T6b main stall-only expiry delivers stall_timeout without premature release"}
+{"type": "output", "text": "ok - T6c main budget-and-stall expiry delivers budget_and_stall"}
+{"type": "output", "text": "ok - T6d research automatic budget expiry delivers the research role with null stall values"}
+{"type": "output", "text": "ok - T6e materializer automatic budget expiry delivers the materializer role with null stall values"}
+{"type": "output", "text": "ok - T7 explicit cancelRun records explicit_cancel with the selected role identity"}
+{"type": "output", "text": "ok - T8 held cancel crosses the caller deadline, is reused, exhausts retries blocked and converges on release"}
+{"type": "output", "text": "[agent-run-diagnostics] hardware-free: no live Claude CLI, model, network or GPU process was started."}
+{"type": "output", "text": "[agent-run-diagnostics] 12 passed, 0 failed"}
+{"type": "output", "text": "[release-check] test:agent-runtime-hardware-mock-e2e-contract"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-runtime-hardware-mock-e2e-contract"}
+{"type": "output", "text": "> node tests/agent-runtime-hardware-mock-e2e-contract-test.mjs"}
+{"type": "output", "text": "[agent-runtime-hardware-mock-e2e-contract] completion, repair, evidence and exact-token guards passed"}
+{"type": "output", "text": "[release-check] test:claude"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:claude"}
+{"type": "output", "text": "> node tests/claude-runtime-test.mjs"}
+{"type": "output", "text": "[claude-runtime] CLI lifecycle and normalized event contract passed"}
+{"type": "output", "text": "[release-check] test:claude-workflow"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:claude-workflow"}
+{"type": "output", "text": "> node tests/claude-workflow-compat-test.mjs"}
+{"type": "output", "text": "[claude-workflow-compat] research, materializer, and candidate diff loop passed"}
+{"type": "output", "text": "[release-check] test:loop"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:loop"}
+{"type": "output", "text": "> node tests/loop-test.mjs"}
+{"type": "output", "text": "[loop] researcher iteration loop policy passed"}
+{"type": "output", "text": "[release-check] test:gate"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:gate"}
+{"type": "output", "text": "> node tests/accept-gate-test.mjs"}
+{"type": "output", "text": "[accept-gate] provenance, target, eligible, reference, hard-failure, snapshot-replay and diagnostic-wait dispositions passed"}
+{"type": "output", "text": "[release-check] test:evidence-decision"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:evidence-decision"}
+{"type": "output", "text": "> node tests/evidence-decision-test.mjs"}
+{"type": "output", "text": "[evidence-decision] diagnostic predicates, four provenance groups, all completeEvidence branches, and publication authorization passed"}
+{"type": "output", "text": "[release-check] test:evidence-governance-integration"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:evidence-governance-integration"}
+{"type": "output", "text": "> node tests/evidence-governance-integration-test.mjs"}
+{"type": "output", "text": "[evidence-governance] shared-GPU development yields a development asset with 0 autoPublished"}
+{"type": "output", "text": "[evidence-governance] simulation yields a simulation asset with 0 autoPublished"}
+{"type": "output", "text": "[evidence-governance] controlled real double with eligible diagnostics is the only published path"}
+{"type": "output", "text": "[evidence-governance] maintenance is idempotent across repeat/restore and reprocesses changed inputs once"}
+{"type": "output", "text": "[evidence-governance] legacy Level 3 without a decision stays unknown and unpublishable"}
+{"type": "output", "text": "[evidence-governance] a misbound draft is never promoted by its Level 3 label"}
+{"type": "output", "text": "[evidence-governance] missing required diagnostics wait recoverably with candidate/budget/barrier retained and 0 ports"}
+{"type": "output", "text": "[evidence-governance-integration] decision projection, governance idempotence, and external wait contracts passed"}
+{"type": "output", "text": "[release-check] test:diagnostic-runner"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:diagnostic-runner"}
+{"type": "output", "text": "> node tests/diagnostic-runner-test.mjs"}
+{"type": "output", "text": "[diagnostic-runner] 24 hardware-free runner fact-production checks passed"}
+{"type": "output", "text": "[release-check] test:workspace"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:workspace"}
+{"type": "output", "text": "> node tests/workspace-manager-test.mjs"}
+{"type": "output", "text": "[workspace] managed snapshot, authoritative diff, and project-local isolation contracts passed"}
+{"type": "output", "text": "[release-check] test:queue"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:queue"}
+{"type": "output", "text": "> node tests/operator-test-queue-test.mjs"}
+{"type": "output", "text": "[operator-test-queue] submit, serial processing, persistence, and cancellation passed"}
+{"type": "output", "text": "[release-check] test:strict-zero-source"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:strict-zero-source"}
+{"type": "output", "text": "> node tests/strict-zero-source-test.mjs"}
+{"type": "output", "text": "[strict-zero-source] strict authority, semantic fallback, and relative gate passed"}
+{"type": "output", "text": "[release-check] test:local-c500-production-backend"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-production-backend"}
+{"type": "output", "text": "> node tests/local-c500-production-backend-test.mjs"}
+{"type": "output", "text": "local-c500 production backend test passed"}
+{"type": "output", "text": "[release-check] test:local-c500-runtime-guard"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-runtime-guard"}
+{"type": "output", "text": "> node tests/local-c500-runtime-guard-test.mjs"}
+{"type": "output", "text": "[local-c500-runtime-guard] duplicate runtime exits without PID overwrite"}
+{"type": "output", "text": "[release-check] test:local-c500-existing-runtime"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-existing-runtime"}
+{"type": "output", "text": "> node tests/local-c500-existing-runtime-test.mjs"}
+{"type": "output", "text": "[local-c500-existing-runtime] cancel, reuse, and replace ownership paths passed"}
+{"type": "output", "text": "[release-check] test:local-c500-service-async"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-service-async"}
+{"type": "output", "text": "> node tests/local-c500-service-async-test.mjs"}
+{"type": "output", "text": "[local-c500-service-async] atomic task state, single runner start, progress and completion passed"}
+{"type": "output", "text": "[release-check] test:local-c500-launch-mode"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-launch-mode"}
+{"type": "output", "text": "> node tests/local-c500-launch-mode-test.mjs"}
+{"type": "output", "text": "[local-c500-launch-mode] real hardware default and explicit simulation passed"}
+{"type": "output", "text": "[release-check] test:local-c500-environment-entry"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-environment-entry"}
+{"type": "output", "text": "> node tests/local-c500-environment-entry-test.mjs"}
+{"type": "output", "text": "[local-c500-environment-entry] relocatable bootstrap and scoped runtime replacement passed"}
+{"type": "output", "text": "[release-check] test:muxi-device"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:muxi-device"}
+{"type": "output", "text": "> node tests/muxi-device-test.mjs"}
+{"type": "output", "text": "[muxi-device] C550 detection and production preflight passed"}
+{"type": "output", "text": "[release-check] test:fixed-operator-profile"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:fixed-operator-profile"}
+{"type": "output", "text": "> node tests/fixed-operator-profile-test.mjs"}
+{"type": "output", "text": "[fixed-operator-profile] generated Python metadata is syntax-valid"}
+{"type": "output", "text": "[release-check] test:local-c500-state-migration"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-state-migration"}
+{"type": "output", "text": "> node tests/local-c500-state-migration-test.mjs"}
+{"type": "output", "text": "[local-c500-state-migration] legacy source blocker recovery passed"}
+{"type": "output", "text": "[release-check] test:source-mirror-policy"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:source-mirror-policy"}
+{"type": "output", "text": "> node tests/source-mirror-policy-test.mjs"}
+{"type": "output", "text": "[source-mirror-policy] canonical identity, pinned transport, and registry verification passed"}
+{"type": "output", "text": "[release-check] test:operator-language"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:operator-language"}
+{"type": "output", "text": "> node tests/operator-language-test.mjs"}
+{"type": "output", "text": "[operator-language] adapter selection and candidate admission passed"}
+{"type": "output", "text": "[release-check] test:test-spec"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:test-spec"}
+{"type": "output", "text": "> node tests/test-spec-test.mjs && python tests/local-c500-runner-contract-test.py"}
+{"type": "output", "text": "[test-spec] generated matrix and executable contract passed"}
+{"type": "output", "text": "[local-c500-runner-contract] generated correctness and benchmark profiles passed"}
+{"type": "output", "text": "[release-check] test:token-usage"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:token-usage"}
+{"type": "output", "text": "> node tests/token-usage-test.mjs"}
+{"type": "output", "text": "[token-usage] provider semantics, failure accounting, idempotence, coverage and exact TUI projection passed"}
+{"type": "output", "text": "[release-check] test:bundled-node-package"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:bundled-node-package"}
+{"type": "output", "text": "> node tests/bundled-node-package-test.mjs"}
+{"type": "output", "text": "[bundled-node-package] official archive, checksum, installer, and wrapper passed"}
+{"type": "output", "text": "[release-check] test:local-c500-mock-sequence"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-mock-sequence"}
+{"type": "output", "text": "> node tests/local-c500-mock-sequence-test.mjs"}
+{"type": "output", "text": "[local-c500-mock-sequence] persistent 100/92/84/75 sequence passed"}
+{"type": "output", "text": "[release-check] test:local-c500-simulation"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-simulation"}
+{"type": "output", "text": "> node tests/local-c500-simulation-mode-test.mjs"}
+{"type": "output", "text": "[local-c500-simulation] reference Agent and production launch mode are isolated from model/hardware probes"}
+{"type": "output", "text": "[release-check] test:local-c500-simulation-artifact"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-simulation-artifact"}
+{"type": "output", "text": "> node tests/local-c500-simulation-artifact-test.mjs"}
+{"type": "output", "text": "[local-c500-simulation-artifact] generated bridge satisfies scripted operator identity contract"}
+{"type": "output", "text": "[release-check] test:local-c500-production-tui"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-production-tui"}
+{"type": "output", "text": "> node tests/local-c500-production-tui-test.mjs"}
+{"type": "output", "text": "local-c500 production TUI architecture test passed"}
+{"type": "output", "text": "[release-check] test:local-c500-tui-logic"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-tui-logic"}
+{"type": "output", "text": "> node tests/local-c500-tui-logic-test.mjs"}
+{"type": "output", "text": "[local-c500-tui-logic] decision-bound Evidence block shows all six items and its blocking reason"}
+{"type": "output", "text": "[local-c500-tui-logic] simulation decision drives the simulation banner without a live boolean"}
+{"type": "output", "text": "[local-c500-tui-logic] state policy, commands, terminal UX, and 300 randomized snapshots passed"}
+{"type": "output", "text": "[release-check] test:local-c500-tui-spinner"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-tui-spinner"}
+{"type": "output", "text": "> node tests/local-c500-tui-spinner-test.mjs"}
+{"type": "output", "text": "[local-c500-tui-spinner] observed 5 rotating frames and static pause state"}
+{"type": "output", "text": "[release-check] test:local-c500-tui-viewport"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-tui-viewport"}
+{"type": "output", "text": "> node tests/local-c500-tui-viewport-test.mjs"}
+{"type": "output", "text": "[local-c500-tui-viewport] bounded renders and retry candidates produce no terminal warnings"}
+{"type": "output", "text": "[release-check] test:local-c500-tui-refresh"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-tui-refresh"}
+{"type": "output", "text": "> node tests/local-c500-tui-refresh-test.mjs"}
+{"type": "output", "text": "[local-c500-tui-refresh] no-op refresh suppression and response ordering passed"}
+{"type": "output", "text": "[release-check] test:local-c500-terminal-screen"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-terminal-screen"}
+{"type": "output", "text": "> node tests/local-c500-terminal-screen-test.mjs"}
+{"type": "output", "text": "[local-c500-terminal-screen] alternate screen lifecycle passed"}
+{"type": "output", "text": "[release-check] build"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 build"}
+{"type": "output", "text": "> vite build"}
+{"type": "output", "text": "vite v5.4.21 building for production..."}
+{"type": "output", "text": "transforming..."}
+{"type": "output", "text": "✓ 1582 modules transformed."}
+{"type": "output", "text": "rendering chunks..."}
+{"type": "output", "text": "computing gzip size..."}
+{"type": "output", "text": "dist/index.html                   0.45 kB │ gzip:   0.30 kB"}
+{"type": "output", "text": "dist/assets/index-BIrJ56PY.css  178.14 kB │ gzip:  30.14 kB"}
+{"type": "output", "text": "dist/assets/index-KY4VuYpn.js   358.03 kB │ gzip: 113.49 kB"}
+{"type": "output", "text": "✓ built in 4.57s"}
+{"type": "output", "text": "[release-check] test:shared-gpu-failure-result"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-failure-result"}
+{"type": "output", "text": "> python tests/shared-gpu-failure-result-test.py"}
+{"type": "stderr", "text": "\u001b[?25h\u001b[?25hcorrectness failed on case 1: Tensor-likes are not close at element 0: -1.0 vs 2.0 (atol=0.001, rtol=0.001)"}
+{"type": "stderr", "text": "correctness failed on case 3: Tensor-likes are not close at element 0: -5.0 vs 10.0 (atol=0.001, rtol=0.001)"}
+{"type": "stderr", "text": "correctness failed on case 2: addcmul(): argument 'tensor2' (position 1) must be Tensor, not float"}
+{"type": "stderr", "text": "correctness failed on case 2: oracle reference failed: simulated input-generation error"}
+{"type": "stderr", "text": "simulated benchmark stage failure"}
+{"type": "stderr", "text": "correctness failed on case 2: Tensor-likes are not close at element 0: -3.0 vs 6.0 (atol=0.001, rtol=0.001)"}
+{"type": "stderr", "text": "correctness failed on case 2: oracle reference failed: simulated input-generation error"}
+{"type": "stderr", "text": "nvidia-smi failed: simulated nvidia-smi failure"}
+{"type": "stderr", "text": "correctness failed on case 2: addcmul(): argument 'tensor2' (position 1) must be Tensor, not float"}
+{"type": "output", "text": "[PASS] frozen-contract-sha256"}
+{"type": "output", "text": "[PASS] base-success-requested-counts"}
+{"type": "output", "text": "[PASS] base-first-case-mismatch"}
+{"type": "output", "text": "[PASS] base-later-case-mismatch"}
+{"type": "output", "text": "[PASS] base-candidate-exception"}
+{"type": "output", "text": "[PASS] base-oracle-exception"}
+{"type": "output", "text": "[PASS] base-benchmark-failure-preserves-correctness"}
+{"type": "output", "text": "[PASS] shared-success"}
+{"type": "output", "text": "[PASS] shared-success-atomic-writes"}
+{"type": "output", "text": "[PASS] shared-candidate-mismatch-preserved"}
+{"type": "output", "text": "[PASS] shared-oracle-exception-not-learned"}
+{"type": "output", "text": "[PASS] shared-preflight-probe-failure-stale-result"}
+{"type": "output", "text": "[PASS] shared-atomic-writes-and-preservation"}
+{"type": "output", "text": "__SHARED_GPU_FAILURE_RESULT__{\"total\": 13, \"passed\": 13, \"failed\": 0, \"cases\": [{\"name\": \"frozen-contract-sha256\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-success-requested-counts\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-first-case-mismatch\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-later-case-mismatch\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-candidate-exception\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-oracle-exception\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-benchmark-failure-preserves-correctness\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-success\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-success-atomic-writes\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-candidate-mismatch-preserved\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-oracle-exception-not-learned\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-preflight-probe-failure-stale-result\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-atomic-writes-and-preservation\", \"passed\": true, \"detail\": \"\"}]}"}
+{"type": "output", "text": "[release-check] test:failed-execution-feedback"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:failed-execution-feedback"}
+{"type": "output", "text": "> node tests/failed-execution-feedback-test.mjs"}
+{"type": "output", "text": "[failed-execution-feedback] verifier failed-candidate matrix passed (positive, bounded summary, negatives fail closed)"}
+{"type": "output", "text": "[failed-execution-feedback] production failed-correctness pipeline passed (archive -> prompt -> audit -> idempotent experience)"}
+{"type": "output", "text": "[failed-execution-feedback] stale success rows cannot override the top-level failed correctness"}
+{"type": "output", "text": "[failed-execution-feedback] not_run stays not_observed without a fabricated failed case"}
+{"type": "output", "text": "[failed-execution-feedback] failed-round archive replay is idempotent"}
+{"type": "output", "text": "[failed-execution-feedback] a rejected failed observation does not grow the repository"}
+{"type": "output", "text": "{\"ok\":true,\"cases\":[\"verifier-failed-matrix\",\"failed-correctness-pipeline\",\"stale-success-rows\",\"not-run\",\"archive-replay\",\"rejected-no-write\"]}"}
+{"type": "output", "text": "[release-check] test:failed-execution-boundary"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:failed-execution-boundary"}
+{"type": "output", "text": "> node tests/failed-execution-boundary-test.mjs"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"ok\": true,"}
+{"type": "output", "text": "\"counts\": {"}
+{"type": "output", "text": "\"total\": 16,"}
+{"type": "output", "text": "\"passed\": 16,"}
+{"type": "output", "text": "\"failed\": 0,"}
+{"type": "output", "text": "\"blocked\": 0"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"cases\": ["}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"control-failed-candidate-positive\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"verified; summary length 355\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"success-legacy-positive\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"legacy success path verifies and still rejects a wrong candidate\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"bounded-overall-summary\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"verified; summary length 2123; failure-detail length 2000; longest runs Q:1466 N:188 C:184\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-environment-source-mock\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-environment-hardware-cpu\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-environment-publishable-true\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-environment-live-hardware-false\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-payload-target-mismatch\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-payload-build-mismatch\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-payload-adapter-mismatch\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-payload-purpose-baseline\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-typed-error-retryable-true\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-typed-error-empty-message\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-typed-error-missing-details\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-preceding-case-missing-name\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"passed-correctness-archive\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"archived correctness passed with 4 cases; failure stayed SHARED_GPU_BENCHMARK_FAILED\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "],"}
+{"type": "output", "text": "\"note\": \"blocked means the control failed-candidate positive did not verify, so a rejection cannot be attributed to the mutated boundary and is never reported green. A red case is always reported as failed, never silently accepted.\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "[release-check] test:queue-prepared-binding"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:queue-prepared-binding"}
+{"type": "output", "text": "> node tests/queue-prepared-binding-test.mjs"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"ok\": true,"}
+{"type": "output", "text": "\"counts\": {"}
+{"type": "output", "text": "\"total\": 7,"}
+{"type": "output", "text": "\"passed\": 7,"}
+{"type": "output", "text": "\"failed\": 0,"}
+{"type": "output", "text": "\"blocked\": 0"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"cases\": ["}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"trusted-admission-digest-propagation\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"identical trusted digest in port request, recorded intent, persisted payload and applied binding\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"caller-digest-conflict-overwritten\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"caller conflict overwritten by the admission digest; unrelated fields preserved\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"preparation-failure-no-submission\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"PACKAGE_TEST_SPEC_REQUIRED and PACKAGE_ORACLE_INVALID preserved with zero queue submissions\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"strict-failed-verifier-positive\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"strict failed-candidate verifier accepted the production-created queue request\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"persisted-digest-deleted-rejected\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH; request/result/evidence unchanged\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"persisted-digest-changed-rejected\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH; request/result/evidence unchanged\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"composition-root-wiring\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"composition root constructs the exported preparer with the frozen identity constant and injects it into the Benchmark command\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "],"}
+{"type": "output", "text": "\"note\": \"Hardware-free contract/integration evidence only: package storage/admission/artifact and the queue backend are declared port doubles; no GPU, driver, model, provider, network call or Python runner is started. blocked means the control failed-candidate positive did not verify, so a persisted-digest rejection is not attributable to the mutation and is never reported green. A red case is always reported as failed.\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "[release-check] PASS: 144 checks completed"}
+{"type": "output", "text": "[non-hardware-check] test:test-service"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:test-service"}
+{"type": "output", "text": "> node test-service/contract-test.mjs"}
+{"type": "output", "text": "test-service contract: PASS"}
+{"type": "output", "text": "[non-hardware-check] e2e:cpu-iteration"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 e2e:cpu-iteration"}
+{"type": "output", "text": "> node scripts/e2e-cpu-iteration.mjs"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"status\": \"passed\","}
+{"type": "output", "text": "\"executionMode\": \"cpu-e2e\","}
+{"type": "output", "text": "\"missionId\": \"MIS_MU1L3S8F\","}
+{"type": "output", "text": "\"candidateId\": \"candidate-02\","}
+{"type": "output", "text": "\"candidateDigest\": \"sha256:b39a2682390d05e9f24e6ffebb56f6ba2b4eb2168b0ba695ebc0ec2c530049ee\","}
+{"type": "output", "text": "\"testedArtifactMatchesWorkspace\": true,"}
+{"type": "output", "text": "\"baselineUs\": 2.3,"}
+{"type": "output", "text": "\"candidateUs\": 1.8,"}
+{"type": "output", "text": "\"correctness\": {"}
+{"type": "output", "text": "\"status\": \"passed\","}
+{"type": "output", "text": "\"passed\": true,"}
+{"type": "output", "text": "\"total\": 1,"}
+{"type": "output", "text": "\"executedCases\": 1,"}
+{"type": "output", "text": "\"passedCases\": 1,"}
+{"type": "output", "text": "\"failedCases\": 0,"}
+{"type": "output", "text": "\"categories\": ["}
+{"type": "output", "text": "\"minimal\""}
+{"type": "output", "text": "],"}
+{"type": "output", "text": "\"caseNames\": ["}
+{"type": "output", "text": "\"small-vector\""}
+{"type": "output", "text": "],"}
+{"type": "output", "text": "\"caseResults\": ["}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"small-vector\","}
+{"type": "output", "text": "\"category\": \"minimal\","}
+{"type": "output", "text": "\"passed\": true"}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "],"}
+{"type": "output", "text": "\"atol\": 0,"}
+{"type": "output", "text": "\"rtol\": 0,"}
+{"type": "output", "text": "\"durationMs\": 0.108,"}
+{"type": "output", "text": "\"source\": \"cpu-e2e\","}
+{"type": "output", "text": "\"liveHardware\": false"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"gate\": \"eligible\","}
+{"type": "output", "text": "\"execution\": {"}
+{"type": "output", "text": "\"kind\": \"cpu\","}
+{"type": "output", "text": "\"liveHardware\": false,"}
+{"type": "output", "text": "\"source\": \"cpu-e2e\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"publication\": {"}
+{"type": "output", "text": "\"status\": \"blocked\","}
+{"type": "output", "text": "\"reasons\": ["}
+{"type": "output", "text": "\"publication.execution_not_live\""}
+{"type": "output", "text": "]"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"adoption\": {"}
+{"type": "output", "text": "\"status\": \"allowed\","}
+{"type": "output", "text": "\"reasons\": []"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"knowledge\": {"}
+{"type": "output", "text": "\"extracted\": 3,"}
+{"type": "output", "text": "\"matched\": 2,"}
+{"type": "output", "text": "\"created\": 1,"}
+{"type": "output", "text": "\"autoPublished\": 0,"}
+{"type": "output", "text": "\"reviewRequired\": 3"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"knowledgeOutcomes\": ["}
+{"type": "output", "text": "\"exp.async-plan-cache:review_required\","}
+{"type": "output", "text": "\"exp.c550-plan-cache-boundary:review_required\","}
+{"type": "output", "text": "\"exp.cross-platform-adoption-gate:review_required\""}
+{"type": "output", "text": "],"}
+{"type": "output", "text": "\"liveHardware\": false"}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "[non-hardware-check] test:local-cpu-runner"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-cpu-runner"}
+{"type": "output", "text": "> node tests/local-cpu-runner-test.mjs"}
+{"type": "output", "text": "TAP version 13"}
+{"type": "output", "text": "# Subtest: strict CPU runner contracts"}
+{"type": "output", "text": "# Subtest: bare run-only candidates use independent oracle inputs, real timings, and exact zero warmup"}
+{"type": "output", "text": "ok 1 - bare run-only candidates use independent oracle inputs, real timings, and exact zero warmup"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 548.3211"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: scalar, tuple, nested dictionary, boolean, string, None and large integer values execute"}
+{"type": "output", "text": "ok 2 - scalar, tuple, nested dictionary, boolean, string, None and large integer values execute"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 484.7548"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: candidate requires an explicit independent oracle"}
+{"type": "output", "text": "ok 3 - candidate requires an explicit independent oracle"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 897.0437"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: baseline requires an explicit independent oracle"}
+{"type": "output", "text": "ok 4 - baseline requires an explicit independent oracle"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 855.075"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: oracle rejects same file identity"}
+{"type": "output", "text": "ok 5 - oracle rejects same file identity"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 445.9216"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: oracle rejects hardlink file identity"}
+{"type": "output", "text": "ok 6 - oracle rejects hardlink file identity"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 636.7189"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: oracle rejects absent file identity"}
+{"type": "output", "text": "ok 7 - oracle rejects absent file identity"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 410.4987"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: no cases fallback"}
+{"type": "output", "text": "ok 8 - no cases fallback"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 382.7196"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: too few cases are not repeated"}
+{"type": "output", "text": "ok 9 - too few cases are not repeated"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 602.9605"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: extra cases are not discarded"}
+{"type": "output", "text": "ok 10 - extra cases are not discarded"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 556.2306"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: duplicate case names"}
+{"type": "output", "text": "ok 11 - duplicate case names"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 578.8043"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: missing required category"}
+{"type": "output", "text": "ok 12 - missing required category"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 444.2632"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: case must be a named record"}
+{"type": "output", "text": "ok 13 - case must be a named record"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 603.5177"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: case provider must return a concrete sequence"}
+{"type": "output", "text": "ok 14 - case provider must return a concrete sequence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 504.6334"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: case inputs are required"}
+{"type": "output", "text": "ok 15 - case inputs are required"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 496.252"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: no profiles fallback"}
+{"type": "output", "text": "ok 16 - no profiles fallback"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 449.5631"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: missing profile"}
+{"type": "output", "text": "ok 17 - missing profile"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 428.3045"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: extra profile"}
+{"type": "output", "text": "ok 18 - extra profile"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 461.9261"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: duplicate profile"}
+{"type": "output", "text": "ok 19 - duplicate profile"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 612.7151"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: wrong profile name"}
+{"type": "output", "text": "ok 20 - wrong profile name"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 476.4047"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: primary must be first"}
+{"type": "output", "text": "ok 21 - primary must be first"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 419.7873"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: profile inputs are required"}
+{"type": "output", "text": "ok 22 - profile inputs are required"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 434.9397"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: lazy inputs are materialized once and validated"}
+{"type": "output", "text": "ok 23 - lazy inputs are materialized once and validated"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 885.8666"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: missing frozen testSpec"}
+{"type": "output", "text": "ok 24 - missing frozen testSpec"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 564.2282"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: top-level count conflicts"}
+{"type": "output", "text": "ok 25 - top-level count conflicts"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 411.3286"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: top-level warmup conflicts"}
+{"type": "output", "text": "ok 26 - top-level warmup conflicts"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 605.0949"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: top-level repeats conflict"}
+{"type": "output", "text": "ok 27 - top-level repeats conflict"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 526.9622"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: negative tolerance"}
+{"type": "output", "text": "ok 28 - negative tolerance"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 493.7861"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: boolean tolerance"}
+{"type": "output", "text": "ok 29 - boolean tolerance"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 434.5661"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: missing tolerance"}
+{"type": "output", "text": "ok 30 - missing tolerance"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 543.0281"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: zero repeats"}
+{"type": "output", "text": "ok 31 - zero repeats"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 385.8602"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: fractional count"}
+{"type": "output", "text": "ok 32 - fractional count"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 761.3802"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: duplicate category specification"}
+{"type": "output", "text": "ok 33 - duplicate category specification"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 456.2074"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: undeclared primary profile"}
+{"type": "output", "text": "ok 34 - undeclared primary profile"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 648.2833"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: CPU cannot substitute for C550"}
+{"type": "output", "text": "ok 35 - CPU cannot substitute for C550"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 530.8684"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: unsupported tensor contracts are not weakened"}
+{"type": "output", "text": "ok 36 - unsupported tensor contracts are not weakened"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 475.485"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: invalid JSON non-finite constants are rejected before execution"}
+{"type": "output", "text": "ok 37 - invalid JSON non-finite constants are rejected before execution"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 878.7832"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: missing and failing providers never trigger compatibility inputs"}
+{"type": "output", "text": "ok 38 - missing and failing providers never trigger compatibility inputs"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1811.4213"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: NaN input"}
+{"type": "output", "text": "ok 39 - NaN input"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1003.0429"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: infinite input"}
+{"type": "output", "text": "ok 40 - infinite input"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 816.1515"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: unsupported input"}
+{"type": "output", "text": "ok 41 - unsupported input"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 852.5271"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: cyclic inputs are rejected without recursively executing the kernel"}
+{"type": "output", "text": "ok 42 - cyclic inputs are rejected without recursively executing the kernel"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 506.4442"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: numeric mismatch"}
+{"type": "output", "text": "ok 43 - numeric mismatch"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 452.6599"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: zero tolerances stay zero"}
+{"type": "output", "text": "ok 44 - zero tolerances stay zero"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 393.9366"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: result type mismatch"}
+{"type": "output", "text": "ok 45 - result type mismatch"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 399.5644"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: result shape mismatch"}
+{"type": "output", "text": "ok 46 - result shape mismatch"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 397.291"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: NaN result"}
+{"type": "output", "text": "ok 47 - NaN result"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 394.7912"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: infinite result"}
+{"type": "output", "text": "ok 48 - infinite result"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 416.0644"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: unsupported result"}
+{"type": "output", "text": "ok 49 - unsupported result"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 437.4501"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: finite nonzero tolerance is honored without weakening integer equality"}
+{"type": "output", "text": "ok 50 - finite nonzero tolerance is honored without weakening integer equality"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1050.5424"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: correct numeric value with wrong scalar/container type is rejected"}
+{"type": "output", "text": "ok 51 - correct numeric value with wrong scalar/container type is rejected"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1775.505"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: input mutation fails even if the returned answer matches the oracle"}
+{"type": "output", "text": "ok 52 - input mutation fails even if the returned answer matches the oracle"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1278.3954"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: kernel exceptions remain structured correctness failures, including SystemExit"}
+{"type": "output", "text": "ok 53 - kernel exceptions remain structured correctness failures, including SystemExit"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1536.5872"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: all declared cases settle even when the first candidate case fails"}
+{"type": "output", "text": "ok 54 - all declared cases settle even when the first candidate case fails"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 440.4499"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: oracle exceptions and non-finite oracle answers identify the oracle role"}
+{"type": "output", "text": "ok 55 - oracle exceptions and non-finite oracle answers identify the oracle role"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 879.527"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: missing dependencies stay separate from candidate numerical errors"}
+{"type": "output", "text": "ok 56 - missing dependencies stay separate from candidate numerical errors"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 432.1054"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: benchmark rejects exception and withholds partial timing evidence"}
+{"type": "output", "text": "ok 57 - benchmark rejects exception and withholds partial timing evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 614.5802"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: benchmark rejects non-finite output and withholds partial timing evidence"}
+{"type": "output", "text": "ok 58 - benchmark rejects non-finite output and withholds partial timing evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 503.8487"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: benchmark rejects wrong output and withholds partial timing evidence"}
+{"type": "output", "text": "ok 59 - benchmark rejects wrong output and withholds partial timing evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 528.1346"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: benchmark rejects wrong type and withholds partial timing evidence"}
+{"type": "output", "text": "ok 60 - benchmark rejects wrong type and withholds partial timing evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 425.7048"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: benchmark rejects input mutation and withholds partial timing evidence"}
+{"type": "output", "text": "ok 61 - benchmark rejects input mutation and withholds partial timing evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 471.0187"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: real Python execution is bounded by the caller timeout"}
+{"type": "output", "text": "ok 62 - real Python execution is bounded by the caller timeout"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1033.9996"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..62"}
+{"type": "output", "text": "ok 1 - strict CPU runner contracts"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 39392.705"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..1"}
+{"type": "output", "text": "# tests 63"}
+{"type": "output", "text": "# suites 0"}
+{"type": "output", "text": "# pass 63"}
+{"type": "output", "text": "# fail 0"}
+{"type": "output", "text": "# cancelled 0"}
+{"type": "output", "text": "# skipped 0"}
+{"type": "output", "text": "# todo 0"}
+{"type": "output", "text": "# duration_ms 39397.832"}
+{"type": "output", "text": "[non-hardware-check] test:local-c500-no-hardware-guard"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:local-c500-no-hardware-guard"}
+{"type": "output", "text": "> node tests/local-c500-no-hardware-guard-test.mjs"}
+{"type": "output", "text": "[local-c500-no-hardware-guard] default hardware runner is unreachable during software-only verification"}
+{"type": "output", "text": "[non-hardware-check] test:semantic-snapshot"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:semantic-snapshot"}
+{"type": "output", "text": "> node tests/semantic-snapshot-test.mjs"}
+{"type": "output", "text": "[semantic-snapshot] canonicalization, conflict gates, freeze, and task binding passed"}
+{"type": "output", "text": "[non-hardware-check] test:semantic-snapshot-extreme"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:semantic-snapshot-extreme"}
+{"type": "output", "text": "> node tests/semantic-snapshot-extreme-test.mjs"}
+{"type": "output", "text": "[semantic-snapshot-extreme] 10,000 canonicalization cases, blocker combinations, provenance conflicts, and digest tampering passed"}
+{"type": "output", "text": "[non-hardware-check] test:accept-gate-semantic-extreme"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:accept-gate-semantic-extreme"}
+{"type": "output", "text": "> node tests/accept-gate-semantic-extreme-test.mjs"}
+{"type": "output", "text": "[accept-gate-semantic-extreme] frozen snapshot binding is required and tamper resistant"}
+{"type": "output", "text": "[non-hardware-check] test:evidence-decision"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:evidence-decision"}
+{"type": "output", "text": "> node tests/evidence-decision-test.mjs"}
+{"type": "output", "text": "[evidence-decision] diagnostic predicates, four provenance groups, all completeEvidence branches, and publication authorization passed"}
+{"type": "output", "text": "[non-hardware-check] test:evidence-governance-integration"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:evidence-governance-integration"}
+{"type": "output", "text": "> node tests/evidence-governance-integration-test.mjs"}
+{"type": "output", "text": "[evidence-governance] shared-GPU development yields a development asset with 0 autoPublished"}
+{"type": "output", "text": "[evidence-governance] simulation yields a simulation asset with 0 autoPublished"}
+{"type": "output", "text": "[evidence-governance] controlled real double with eligible diagnostics is the only published path"}
+{"type": "output", "text": "[evidence-governance] maintenance is idempotent across repeat/restore and reprocesses changed inputs once"}
+{"type": "output", "text": "[evidence-governance] legacy Level 3 without a decision stays unknown and unpublishable"}
+{"type": "output", "text": "[evidence-governance] a misbound draft is never promoted by its Level 3 label"}
+{"type": "output", "text": "[evidence-governance] missing required diagnostics wait recoverably with candidate/budget/barrier retained and 0 ports"}
+{"type": "output", "text": "[evidence-governance-integration] decision projection, governance idempotence, and external wait contracts passed"}
+{"type": "output", "text": "[non-hardware-check] test:diagnostic-runner"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:diagnostic-runner"}
+{"type": "output", "text": "> node tests/diagnostic-runner-test.mjs"}
+{"type": "output", "text": "[diagnostic-runner] 24 hardware-free runner fact-production checks passed"}
+{"type": "output", "text": "[non-hardware-check] test:semantic-tui"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:semantic-tui"}
+{"type": "output", "text": "> node tests/semantic-tui-test.mjs"}
+{"type": "output", "text": "[semantic-tui] alignment status, blockers, and snapshot rendering passed"}
+{"type": "output", "text": "[non-hardware-check] test:semantic-tui-extreme"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:semantic-tui-extreme"}
+{"type": "output", "text": "> node tests/semantic-tui-extreme-test.mjs"}
+{"type": "output", "text": "[semantic-tui-extreme] viewport, long-field, queue, numeric-boundary, and missing-state cases passed"}
+{"type": "output", "text": "[non-hardware-check] test:module-extreme-contract"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:module-extreme-contract"}
+{"type": "output", "text": "> node tests/module-extreme-contract-test.mjs"}
+{"type": "output", "text": "[module-extreme-contract] token, source, test-spec, and workflow boundary cases passed"}
+{"type": "output", "text": "[non-hardware-check] test:experience-architecture"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:experience-architecture"}
+{"type": "output", "text": "> node tests/experience-architecture-test.mjs"}
+{"type": "output", "text": "TAP version 13"}
+{"type": "output", "text": "# Subtest: cross-dimension AND rejects an nvidia-gpu+sm100 record for an nvidia-gpu+sm86 query"}
+{"type": "output", "text": "ok 1 - cross-dimension AND rejects an nvidia-gpu+sm100 record for an nvidia-gpu+sm86 query"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 6.7918"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: within-dimension OR is preserved for architecture and hardware"}
+{"type": "output", "text": "ok 2 - within-dimension OR is preserved for architecture and hardware"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 11.2424"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: an undeclared architecture dimension does not constrain historical records"}
+{"type": "output", "text": "ok 3 - an undeclared architecture dimension does not constrain historical records"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 0.631"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: execution architecture is stamped only from the declared evidence"}
+{"type": "output", "text": "ok 4 - execution architecture is stamped only from the declared evidence"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1.1609"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: an execution caller cannot stamp an architecture the evidence never declared"}
+{"type": "output", "text": "ok 5 - an execution caller cannot stamp an architecture the evidence never declared"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1.0554"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: historical canonical stores without architecture validate with zero migration and stay readable"}
+{"type": "output", "text": "ok 6 - historical canonical stores without architecture validate with zero migration and stay readable"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 1.4882"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "# Subtest: frozen historical snapshots never gain an architecture attribute"}
+{"type": "output", "text": "ok 7 - frozen historical snapshots never gain an architecture attribute"}
+{"type": "output", "text": "---"}
+{"type": "output", "text": "duration_ms: 0.7578"}
+{"type": "output", "text": "type: 'test'"}
+{"type": "output", "text": "..."}
+{"type": "output", "text": "1..7"}
+{"type": "output", "text": "# tests 7"}
+{"type": "output", "text": "# suites 0"}
+{"type": "output", "text": "# pass 7"}
+{"type": "output", "text": "# fail 0"}
+{"type": "output", "text": "# cancelled 0"}
+{"type": "output", "text": "# skipped 0"}
+{"type": "output", "text": "# todo 0"}
+{"type": "output", "text": "# duration_ms 35.6738"}
+{"type": "output", "text": "[non-hardware-check] test:round-feedback-integration"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-feedback-integration"}
+{"type": "output", "text": "> node tests/round-feedback-integration-test.mjs"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"ok\": true,"}
+{"type": "output", "text": "\"results\": ["}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"two-round-connectivity\","}
+{"type": "output", "text": "\"provider\": \"claude-code\","}
+{"type": "output", "text": "\"experience\": {"}
+{"type": "output", "text": "\"id\": \"exp_connectivity_1\","}
+{"type": "output", "text": "\"version\": 1"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"factsBinding\": {"}
+{"type": "output", "text": "\"previousRunId\": \"agent_round_1\","}
+{"type": "output", "text": "\"previousRoundId\": \"MIS_MU1L5N8J:round:1\","}
+{"type": "output", "text": "\"candidateId\": \"candidate-r1\","}
+{"type": "output", "text": "\"candidateDigest\": \"sha256:cd1c94712f55bf460afe61abdaf88ad3d5857f8a1e21555ab20052960ef26827\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"audit\": {"}
+{"type": "output", "text": "\"path\": \"C:\\\\Users\\\\棉被暖~3\\\\AppData\\\\Local\\\\Temp\\\\operator-round-feedback-dNXE5w\\\\bridges\\\\connectivity\\\\prompt-audits\\\\claude_MU1L5NAH_86844F68.json\","}
+{"type": "output", "text": "\"digest\": \"sha256:3d7b8a566382822ac042147558f01b947ad6e6bb8ea5057f20bc0bb62ed8b86f\","}
+{"type": "output", "text": "\"bytes\": 19092,"}
+{"type": "output", "text": "\"selectionContextId\": \"EXPCTX_7bea8062f3732eee5e2b0464a97eee18e99041c0559fdaca246fef08409a4934\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"two-round-connectivity\","}
+{"type": "output", "text": "\"provider\": \"codex-cli\","}
+{"type": "output", "text": "\"experience\": {"}
+{"type": "output", "text": "\"id\": \"exp_codex_3\","}
+{"type": "output", "text": "\"version\": 1"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"audit\": {"}
+{"type": "output", "text": "\"digest\": \"sha256:b29a47da2e7469a534eeabab178750276622bcfdd58015f806e397f102eede4b\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"backend-as-hardware-fails-explicitly\","}
+{"type": "output", "text": "\"code\": \"ROUND_EXPERIENCE_TARGET_INVALID\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"architecture-dimension-separated\","}
+{"type": "output", "text": "\"excludedReason\": \"scope\","}
+{"type": "output", "text": "\"mismatchIssues\": 1"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"task-and-mission-isolation\","}
+{"type": "output", "text": "\"codes\": ["}
+{"type": "output", "text": "\"no-op-snapshot\","}
+{"type": "output", "text": "\"ROUND_EXPERIENCE_EVIDENCE_CONFLICT\""}
+{"type": "output", "text": "]"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"baseline-clears-benchmark-keeps-target\","}
+{"type": "output", "text": "\"target\": ["}
+{"type": "output", "text": "\"nvidia-gpu\""}
+{"type": "output", "text": "]"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"zero-experience-facts-complete\","}
+{"type": "output", "text": "\"items\": 0,"}
+{"type": "output", "text": "\"gate\": \"reference\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"item-cap\","}
+{"type": "output", "text": "\"items\": 20,"}
+{"type": "output", "text": "\"maxItems\": 20,"}
+{"type": "output", "text": "\"excludedByLimit\": 2"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"byte-budget-facts-complete\","}
+{"type": "output", "text": "\"items\": 7,"}
+{"type": "output", "text": "\"contextBytes\": 60342,"}
+{"type": "output", "text": "\"maxItems\": 20,"}
+{"type": "output", "text": "\"maxBytes\": 65536"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"operator-failure-channel\","}
+{"type": "output", "text": "\"classification\": \"operator\","}
+{"type": "output", "text": "\"code\": \"OPERATOR_TEST_FAILED\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"infrastructure-failure-classification\","}
+{"type": "output", "text": "\"classification\": \"infrastructure\","}
+{"type": "output", "text": "\"recorded\": 0"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"archive-determinism\","}
+{"type": "output", "text": "\"duplicateRunEntries\": 1,"}
+{"type": "output", "text": "\"legacyRoundIdSource\": \"unknown\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"case\": \"manual-capture-replay\","}
+{"type": "output", "text": "\"roundId\": \"MIS_MU1L5RNN:round:2\","}
+{"type": "output", "text": "\"replayIdentical\": true,"}
+{"type": "output", "text": "\"experienceId\": \"exp_manual-replay_42\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "]"}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "[non-hardware-check] test:prompt-audit"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:prompt-audit"}
+{"type": "output", "text": "> node tests/prompt-audit-test.mjs"}
+{"type": "output", "text": "[prompt-audit] provider-neutral pre-send audit, UTF-8/SHA-256, fail-closed write, version freeze, selection exclusions and contextId mismatch contracts passed"}
+{"type": "output", "text": "[non-hardware-check] test:shared-gpu-target-probe"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-target-probe"}
+{"type": "output", "text": "> node tests/shared-gpu-target-probe-test.mjs"}
+{"type": "output", "text": "[shared-gpu-target-probe] 15 hardware-free driver-probe checks passed"}
+{"type": "output", "text": "[non-hardware-check] test:shared-gpu-acceptance"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-acceptance"}
+{"type": "output", "text": "> node tests/shared-gpu-acceptance-test.mjs"}
+{"type": "output", "text": "[shared-gpu-acceptance] archived P1 audit replayed read-only"}
+{"type": "output", "text": "[shared-gpu-acceptance] continuation audit, safe budget terminal, family outcome, config fingerprint and run ledger contracts passed without GPU or Agent"}
+{"type": "output", "text": "[non-hardware-check] test:model-observation"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:model-observation"}
+{"type": "output", "text": "> node tests/model-observation-test.mjs"}
+{"type": "output", "text": "ok - pure: one matching assistant model is observed; init/usage labels stay separate"}
+{"type": "output", "text": "ok - pure: zero assistant responses and init-only streams stay unknown"}
+{"type": "output", "text": "ok - pure: missing/blank/synthetic response labels are never observed"}
+{"type": "output", "text": "ok - pure: two concrete response models are a conflict, never a pick"}
+{"type": "output", "text": "ok - pure: absent or foreign assistant sessions invalidate completeness without replacing identity"}
+{"type": "output", "text": "ok - pure: session identity is exact and run/mission identity must be nonblank before a response is observed"}
+{"type": "output", "text": "ok - pure: a valid response cannot mask a missing/blank model or missing session in the same stream"}
+{"type": "output", "text": "ok - pure: thinking-only metadata is observed without leaking thinking content"}
+{"type": "output", "text": "ok - pure: unrelated model fields and prose are ignored"}
+{"type": "output", "text": "ok - pure: DTO JSON round-trip stays a valid observable DTO"}
+{"type": "output", "text": "ok - pure: bind detaches a valid observation and rejects all four identity swaps"}
+{"type": "output", "text": "ok - pure: bind rejects malformed and internally inconsistent DTOs but accepts unknown/conflict shapes"}
+{"type": "output", "text": "ok - pure: bind refuses observed error reasons, unlisted conflict evidence and duplicate event indexes"}
+{"type": "output", "text": "ok - pure: summary of an empty required set is unknown"}
+{"type": "output", "text": "ok - pure: summary is observed only when every required run reports the same model"}
+{"type": "output", "text": "ok - pure: foreign, non-observed, malformed and duplicate evidence fails closed"}
+{"type": "output", "text": "ok - pure: duplicate evidence differing only in object key order is one run, counted once"}
+{"type": "output", "text": "ok - adapter: fake-child stream persists a provider-reported response observation"}
+{"type": "output", "text": "ok - adapter: a resume hint is not an observation; init-only/empty streams stay unknown"}
+{"type": "output", "text": "ok - adapter: thinking-only assistant metadata is observed and private reasoning is not persisted"}
+{"type": "output", "text": "ok - adapter: an unterminated final JSON line is still observed on physical close"}
+{"type": "output", "text": "ok - adapter: mixed/foreign/synthetic response metadata fails closed"}
+{"type": "output", "text": "ok - adapter: a valid response followed by incomplete assistant metadata stays unknown"}
+{"type": "output", "text": "ok - adapter: cancellation retains the observed metadata"}
+{"type": "output", "text": "ok - projection: exact current-run binding is exposed and metadata-only change flips changed=true"}
+{"type": "output", "text": "ok - projection: missing, foreign or wrongly bound observations clear a stale value"}
+{"type": "output", "text": "ok - projection: cancellation settlement retains observation without weakening release"}
+{"type": "output", "text": "ok - projection: a record/DTO bound to a foreign mission never projects into the current mission"}
+{"type": "output", "text": "ok - projection: a cancelled run whose DTO session disagrees with the record is refused, release stays authoritative"}
+{"type": "output", "text": "ok - projection: a run record claiming another provider never projects a claude-code observation"}
+{"type": "output", "text": "ok - projection: a failing readRun clears a previously projected observation instead of leaving stale evidence"}
+{"type": "output", "text": "ok - archive: reset preserves the bound observation as a detached runHistory entry and clears the live run"}
+{"type": "output", "text": "ok - archive: a foreign observation binding is rejected instead of archived"}
+{"type": "output", "text": "ok - archive: a brand-new run never inherits the archived observation"}
+{"type": "output", "text": "[model-observation] hardware-free: no real Claude CLI, Python, network or GPU process was started."}
+{"type": "output", "text": "[model-observation] 34 passed, 0 failed"}
+{"type": "output", "text": "[non-hardware-check] test:model-observation-acceptance"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:model-observation-acceptance"}
+{"type": "output", "text": "> node tests/model-observation-acceptance-test.mjs"}
+{"type": "output", "text": "[model-observation-acceptance] response-model observation, required-run coverage, fingerprint and ledger comparability contracts are exercised without GPU or Agent"}
+{"type": "output", "text": "[non-hardware-check] test:shared-gpu-model-collector"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-model-collector"}
+{"type": "output", "text": "> node tests/shared-gpu-model-collector-test.mjs"}
+{"type": "output", "text": "[shared-gpu-model-collector] 65/65 independent cases passed; 0 expected-red pending the frozen collect/stop-receipt helpers and the ledger model-proof boundaries"}
+{"type": "output", "text": "[non-hardware-check] test:runtime"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runtime"}
+{"type": "output", "text": "> node tests/agent-runtime-test.mjs"}
+{"type": "output", "text": "[runtime] adapter contract passed"}
+{"type": "output", "text": "[non-hardware-check] test:agent-runtime-candidate-admission"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-runtime-candidate-admission"}
+{"type": "output", "text": "> node tests/agent-runtime-candidate-admission-test.mjs"}
+{"type": "output", "text": "[agent-runtime-candidate-admission] fail-open guard, empty-candidate root causes and degraded generation paths passed"}
+{"type": "output", "text": "[non-hardware-check] test:round-settlement-interleaving"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:round-settlement-interleaving"}
+{"type": "output", "text": "> node tests/round-settlement-interleaving-test.mjs"}
+{"type": "output", "text": "[round-settlement-interleaving] run-history dedupe, recovery attribution, idempotent queue replay and settled-round barriers passed"}
+{"type": "output", "text": "[non-hardware-check] test:agent-boundary"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:agent-boundary"}
+{"type": "output", "text": "> node tests/agent-boundary-test.mjs"}
+{"type": "output", "text": "[agent-boundary] isolated cwd contract passed"}
+{"type": "output", "text": "[non-hardware-check] test:baseline-materializer"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-materializer"}
+{"type": "output", "text": "> node tests/baseline-materializer-test.mjs"}
+{"type": "output", "text": "[baseline-materializer] template materialization and validation passed"}
+{"type": "output", "text": "[non-hardware-check] test:baseline-resolver"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:baseline-resolver"}
+{"type": "output", "text": "> node tests/baseline-resolver-test.mjs"}
+{"type": "output", "text": "[baseline-resolver] authoritative, naive_v0 fallback, and reuse checks passed"}
+{"type": "output", "text": "[non-hardware-check] test:codex"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:codex"}
+{"type": "output", "text": "> node tests/codex-runtime-test.mjs"}
+{"type": "output", "text": "[codex] native CLI adapter contract passed"}
+{"type": "output", "text": "[non-hardware-check] test:opencode"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:opencode"}
+{"type": "output", "text": "> node tests/opencode-runtime-test.mjs"}
+{"type": "output", "text": "[opencode] server runtime contract passed"}
+{"type": "output", "text": "[non-hardware-check] test:boundary"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:boundary"}
+{"type": "output", "text": "> node tests/product-boundary-test.mjs"}
+{"type": "output", "text": "[boundary] client/runtime/test-service ownership passed"}
+{"type": "output", "text": "[non-hardware-check] test:three-layer"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:three-layer"}
+{"type": "output", "text": "> node tests/three-layer-model-test.mjs"}
+{"type": "output", "text": "[three-layer] source registry, iteration repository, and snapshot diff boundaries passed"}
+{"type": "output", "text": "[non-hardware-check] test:journal"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:journal"}
+{"type": "output", "text": "> node tests/command-journal-test.mjs"}
+{"type": "output", "text": "[journal] durable command journal passed"}
+{"type": "output", "text": "[non-hardware-check] test:mission-budget"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:mission-budget"}
+{"type": "output", "text": "> node tests/mission-budget-test.mjs"}
+{"type": "output", "text": "mission budget defaults and projection ok"}
+{"type": "output", "text": "[non-hardware-check] test:mission-panel"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:mission-panel"}
+{"type": "output", "text": "> node tests/mission-panel-test.mjs"}
+{"type": "output", "text": "[mission-panel] current TUI baseline, improvement, and simulation evidence projection passed"}
+{"type": "output", "text": "[non-hardware-check] test:native-directory-picker"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:native-directory-picker"}
+{"type": "output", "text": "> node tests/native-directory-picker-test.mjs"}
+{"type": "output", "text": "[native-directory-picker] native dialog contract passed"}
+{"type": "output", "text": "[non-hardware-check] test:runner-aliases"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:runner-aliases"}
+{"type": "output", "text": "> node tests/runner-aliases-test.mjs"}
+{"type": "output", "text": "[runner-aliases] normalization and matching passed"}
+{"type": "output", "text": "[non-hardware-check] test:state-store-projection"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:state-store-projection"}
+{"type": "output", "text": "> node tests/state-store-projection-test.mjs"}
+{"type": "output", "text": "[state-store] candidate currentAction projection recovery passed"}
+{"type": "output", "text": "[non-hardware-check] test:workflow-summary"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:workflow-summary"}
+{"type": "output", "text": "> node tests/workflow-summary-test.mjs"}
+{"type": "output", "text": "[workflow-summary] simulation decision renders adoption/publication and blocking reasons"}
+{"type": "output", "text": "[workflow-summary] shared-GPU development decision stays nonpublishable with its reason"}
+{"type": "output", "text": "[workflow-summary] legacy record without decision stays explicitly unknown and nonpublishable"}
+{"type": "output", "text": "[non-hardware-check] test:release"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:release"}
+{"type": "output", "text": "> node tests/release-guard-test.mjs"}
+{"type": "output", "text": "[release-guard] CLI authority and knowledge governance passed"}
+{"type": "output", "text": "[non-hardware-check] test:smoke"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:smoke"}
+{"type": "output", "text": "> node tests/client-runtime-smoke-test.mjs"}
+{"type": "output", "text": "[smoke] full mission workflow passed"}
+{"type": "output", "text": "[non-hardware-check] test:shared-gpu-failure-result"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:shared-gpu-failure-result"}
+{"type": "output", "text": "> python tests/shared-gpu-failure-result-test.py"}
+{"type": "stderr", "text": "correctness failed on case 1: Tensor-likes are not close at element 0: -1.0 vs 2.0 (atol=0.001, rtol=0.001)"}
+{"type": "stderr", "text": "correctness failed on case 3: Tensor-likes are not close at element 0: -5.0 vs 10.0 (atol=0.001, rtol=0.001)"}
+{"type": "stderr", "text": "correctness failed on case 2: addcmul(): argument 'tensor2' (position 1) must be Tensor, not float"}
+{"type": "stderr", "text": "correctness failed on case 2: oracle reference failed: simulated input-generation error"}
+{"type": "stderr", "text": "simulated benchmark stage failure"}
+{"type": "stderr", "text": "correctness failed on case 2: Tensor-likes are not close at element 0: -3.0 vs 6.0 (atol=0.001, rtol=0.001)"}
+{"type": "stderr", "text": "correctness failed on case 2: oracle reference failed: simulated input-generation error"}
+{"type": "stderr", "text": "nvidia-smi failed: simulated nvidia-smi failure"}
+{"type": "stderr", "text": "correctness failed on case 2: addcmul(): argument 'tensor2' (position 1) must be Tensor, not float"}
+{"type": "output", "text": "[PASS] frozen-contract-sha256"}
+{"type": "output", "text": "[PASS] base-success-requested-counts"}
+{"type": "output", "text": "[PASS] base-first-case-mismatch"}
+{"type": "output", "text": "[PASS] base-later-case-mismatch"}
+{"type": "output", "text": "[PASS] base-candidate-exception"}
+{"type": "output", "text": "[PASS] base-oracle-exception"}
+{"type": "output", "text": "[PASS] base-benchmark-failure-preserves-correctness"}
+{"type": "output", "text": "[PASS] shared-success"}
+{"type": "output", "text": "[PASS] shared-success-atomic-writes"}
+{"type": "output", "text": "[PASS] shared-candidate-mismatch-preserved"}
+{"type": "output", "text": "[PASS] shared-oracle-exception-not-learned"}
+{"type": "output", "text": "[PASS] shared-preflight-probe-failure-stale-result"}
+{"type": "output", "text": "[PASS] shared-atomic-writes-and-preservation"}
+{"type": "output", "text": "__SHARED_GPU_FAILURE_RESULT__{\"total\": 13, \"passed\": 13, \"failed\": 0, \"cases\": [{\"name\": \"frozen-contract-sha256\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-success-requested-counts\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-first-case-mismatch\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-later-case-mismatch\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-candidate-exception\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-oracle-exception\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"base-benchmark-failure-preserves-correctness\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-success\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-success-atomic-writes\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-candidate-mismatch-preserved\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-oracle-exception-not-learned\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-preflight-probe-failure-stale-result\", \"passed\": true, \"detail\": \"\"}, {\"name\": \"shared-atomic-writes-and-preservation\", \"passed\": true, \"detail\": \"\"}]}"}
+{"type": "output", "text": "[non-hardware-check] test:failed-execution-feedback"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:failed-execution-feedback"}
+{"type": "output", "text": "> node tests/failed-execution-feedback-test.mjs"}
+{"type": "output", "text": "[failed-execution-feedback] verifier failed-candidate matrix passed (positive, bounded summary, negatives fail closed)"}
+{"type": "output", "text": "[failed-execution-feedback] production failed-correctness pipeline passed (archive -> prompt -> audit -> idempotent experience)"}
+{"type": "output", "text": "[failed-execution-feedback] stale success rows cannot override the top-level failed correctness"}
+{"type": "output", "text": "[failed-execution-feedback] not_run stays not_observed without a fabricated failed case"}
+{"type": "output", "text": "[failed-execution-feedback] failed-round archive replay is idempotent"}
+{"type": "output", "text": "[failed-execution-feedback] a rejected failed observation does not grow the repository"}
+{"type": "output", "text": "{\"ok\":true,\"cases\":[\"verifier-failed-matrix\",\"failed-correctness-pipeline\",\"stale-success-rows\",\"not-run\",\"archive-replay\",\"rejected-no-write\"]}"}
+{"type": "output", "text": "[non-hardware-check] test:failed-execution-boundary"}
+{"type": "output", "text": "> operator-studio-mvp@0.1.0 test:failed-execution-boundary"}
+{"type": "output", "text": "> node tests/failed-execution-boundary-test.mjs"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"ok\": true,"}
+{"type": "output", "text": "\"counts\": {"}
+{"type": "output", "text": "\"total\": 16,"}
+{"type": "output", "text": "\"passed\": 16,"}
+{"type": "output", "text": "\"failed\": 0,"}
+{"type": "output", "text": "\"blocked\": 0"}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "\"cases\": ["}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"control-failed-candidate-positive\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"verified; summary length 355\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"success-legacy-positive\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"legacy success path verifies and still rejects a wrong candidate\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"bounded-overall-summary\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"verified; summary length 2123; failure-detail length 2000; longest runs Q:1466 N:188 C:184\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-environment-source-mock\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-environment-hardware-cpu\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-environment-publishable-true\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-environment-live-hardware-false\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_UNAVAILABLE\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-payload-target-mismatch\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-payload-build-mismatch\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-payload-adapter-mismatch\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-payload-purpose-baseline\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_QUEUE_RESULT_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-typed-error-retryable-true\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-typed-error-empty-message\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-typed-error-missing-details\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"boundary-preceding-case-missing-name\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"rejected with EXECUTION_PACKAGE_EVIDENCE_MISMATCH\""}
+{"type": "output", "text": "},"}
+{"type": "output", "text": "{"}
+{"type": "output", "text": "\"name\": \"passed-correctness-archive\","}
+{"type": "output", "text": "\"outcome\": \"passed\","}
+{"type": "output", "text": "\"detail\": \"archived correctness passed with 4 cases; failure stayed SHARED_GPU_BENCHMARK_FAILED\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "],"}
+{"type": "output", "text": "\"note\": \"blocked means the control failed-candidate positive did not verify, so a rejection cannot be attributed to the mutated boundary and is never reported green. A red case is always reported as failed, never silently accepted.\""}
+{"type": "output", "text": "}"}
+{"type": "output", "text": "[non-hardware-check] PASS: 44 checks completed without physical hardware"}
+{"type": "output", "text": "[diagnostics-verification] END nonhardware-including-release {\"status\":0,\"signal\":null,\"error\":null}"}
+{"type": "output", "text": "[diagnostics-verification] START cancellation-liveness"}
+{"type": "output", "text": "[agent-cancellation-liveness] pending exit blocks artifacts; Mission stop covers all resources and exposes failures"}
+{"type": "output", "text": "[agent-cancellation-liveness] reusable release is bounded, late-state isolated and barrier-safe"}
+{"type": "output", "text": "[diagnostics-verification] END cancellation-liveness {\"status\":0,\"signal\":null,\"error\":null}"}
+{"type": "output", "text": "[diagnostics-verification] START timeout-recovery"}
+{"type": "output", "text": "[agent-runtime-timeout-recovery] timeout-triggered cancellation converges to a retryable terminal projection"}
+{"type": "output", "text": "[diagnostics-verification] END timeout-recovery {\"status\":0,\"signal\":null,\"error\":null}"}

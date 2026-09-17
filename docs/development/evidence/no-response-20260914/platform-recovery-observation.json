@@ -1,0 +1,21 @@
+{
+  "observedAt": "2026-09-14T13:50:15.084777+00:00",
+  "servicePid": 110788,
+  "serviceUrl": "http://127.0.0.1:8765",
+  "readOnlyDatabaseObservation": {
+    "globalRunningTasks": 0,
+    "globalQueuedTasks": 0,
+    "reportTaskStatus": "accepted",
+    "commandTaskStatus": "submitted"
+  },
+  "integrationRequest": "request_timeout",
+  "receiptsRequest": "request_timeout",
+  "capacityRequest": "request_timeout",
+  "journalState": "applying",
+  "journalEntries": [
+    "pending",
+    "pending"
+  ],
+  "projectReportFilesPresent": false,
+  "reviewNoteCorrection": "The earlier report review notes prematurely stated that the combination command had been accepted and integrated. In fact its acceptance returned candidate_main_tree_changed and integration returned validation_required. The report was accepted based on Root independent content/byte/schema checks; final platform combination acceptance is outstanding. Do not treat that note as program proof."
+}

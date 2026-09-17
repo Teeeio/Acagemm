@@ -1,0 +1,218 @@
+{
+  "schemaVersion": "operator-studio.no-response-root-timeline/v1",
+  "provenance": "Root local read-only preflight; independent dispatch review not executed because host auto-review rejected submission",
+  "sourceState": {
+    "path": "F:\\设计\\快速项目\\deepseek劳务派遣\\.dispatch-data\\attempts\\run_76cc2f681aa74985a1113187b36728dc\\scratch\\real-runs\\shared-gpu-J08may\\affine-state.json",
+    "sha256": "61989042877bde4ec457f99d0af6dc4b11dd76e41901cb44485a617e9ce38514"
+  },
+  "verifiedOriginals": [
+    {
+      "runId": "claude_MU09PFJ0_33E6CFCA",
+      "kind": "record",
+      "sha256": "299b030296108fd0dc363153c4f8c46fab5161ef952c7b00de0d91a33d52d2ef"
+    },
+    {
+      "runId": "claude_MU09PFJ0_33E6CFCA",
+      "kind": "stream",
+      "sha256": "76ed835dafc62844b8bab5c4692f9c7702d0c9e702b27edcbf305f174fb4cf94"
+    },
+    {
+      "runId": "claude_MU09REFK_B0B56A2F",
+      "kind": "record",
+      "sha256": "e5c278d8611244af7ab3082374b804d99a0c699bbd86e9792597398f5639013c"
+    },
+    {
+      "runId": "claude_MU09REFK_B0B56A2F",
+      "kind": "stream",
+      "sha256": "df1ca3c5ea5c77899fe4539a1f09f747a1a5628f13a061ae734bbaa0e0ca8c5b"
+    },
+    {
+      "runId": "claude_MU09TRD5_8AB4CC30",
+      "kind": "record",
+      "sha256": "62bcb9b0c88b97f2da97d972f1af2705c16bad5bfc6b636f2c460690e8e09592"
+    },
+    {
+      "runId": "claude_MU09TRD5_8AB4CC30",
+      "kind": "stream",
+      "sha256": "71d4f16d14076d923f81abfeb8df510f3a9adf1f0b0f4580b10eb1d059bf4201"
+    },
+    {
+      "runId": "claude_research_MU09XVS0_2A885070",
+      "kind": "record",
+      "sha256": "bbbb20ac159b3f92b7d7c088cdbeec0f01661c5ddb49dd2df0a5f766f7b41b67"
+    },
+    {
+      "runId": "claude_research_MU09XVS0_2A885070",
+      "kind": "stream",
+      "sha256": "06c60b4be7e5b83876dc730cd1faf4e8225c5832779ef724a8e8052290affd94"
+    },
+    {
+      "runId": "claude_MU0A0WT7_0323BFE7",
+      "kind": "record",
+      "sha256": "f822262e25c5ff214a9258149faa4f37d6d5b10e4b4f66ed60b1d4014d188e6c"
+    },
+    {
+      "runId": "claude_MU0A0WT7_0323BFE7",
+      "kind": "stream",
+      "sha256": "7e3c4190866c2b60335ceec10de17ee5da2b692535c4fba77be843a4101fa1d6"
+    }
+  ],
+  "runs": [
+    {
+      "runId": "claude_MU09PFJ0_33E6CFCA",
+      "status": "completed",
+      "startedAt": "2026-09-13T20:29:43.367Z",
+      "lastActivityAt": "2026-09-13T20:30:39.307Z",
+      "completedAt": "2026-09-13T20:30:39.308Z",
+      "activityKind": "result"
+    },
+    {
+      "runId": "claude_MU09REFK_B0B56A2F",
+      "status": "completed",
+      "startedAt": "2026-09-13T20:31:15.250Z",
+      "lastActivityAt": "2026-09-13T20:32:22.183Z",
+      "completedAt": "2026-09-13T20:32:22.183Z",
+      "activityKind": "result"
+    },
+    {
+      "runId": "claude_MU09TRD5_8AB4CC30",
+      "status": "cancelled",
+      "startedAt": "2026-09-13T20:33:05.332Z",
+      "lastActivityAt": "2026-09-13T20:36:07.582Z",
+      "completedAt": "2026-09-13T20:36:07.636Z",
+      "activityKind": "thinking"
+    },
+    {
+      "runId": "claude_research_MU09XVS0_2A885070",
+      "status": "completed",
+      "startedAt": "2026-09-13T20:36:17.899Z",
+      "lastActivityAt": "2026-09-13T20:38:24.306Z",
+      "completedAt": "2026-09-13T20:38:24.306Z",
+      "activityKind": "result"
+    },
+    {
+      "runId": "claude_MU0A0WT7_0323BFE7",
+      "status": "completed",
+      "startedAt": "2026-09-13T20:38:38.975Z",
+      "lastActivityAt": "2026-09-13T20:39:53.533Z",
+      "completedAt": "2026-09-13T20:39:53.533Z",
+      "activityKind": "result"
+    }
+  ],
+  "runtimeEvents": [
+    {
+      "timestamp": "2026-09-13T20:33:04.360Z",
+      "type": "workflow.round_rolled_back",
+      "payload": {}
+    },
+    {
+      "timestamp": "2026-09-13T20:33:05.371Z",
+      "type": "claude.run_started",
+      "payload": {
+        "runId": "claude_MU09TRD5_8AB4CC30"
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:36:12.555Z",
+      "type": "candidate.not_proposed",
+      "payload": {
+        "runId": "claude_MU09TRD5_8AB4CC30",
+        "classification": "task_contract_unmet",
+        "errorCode": null,
+        "recoverable": true
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:36:12.555Z",
+      "type": "claude.run_completed",
+      "payload": {
+        "runId": "claude_MU09TRD5_8AB4CC30",
+        "errorCode": null
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:36:17.936Z",
+      "type": "research.run_started",
+      "payload": {
+        "runId": "claude_research_MU09XVS0_2A885070",
+        "runPhase": "acquire",
+        "synchronous": true
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:38:27.000Z",
+      "type": "research.acquire_failed",
+      "payload": {
+        "runId": "claude_research_MU09XVS0_2A885070",
+        "errorCode": "RESEARCH_SOURCE_SELECTION_INVALID"
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:38:32.590Z",
+      "type": "research.no_material_recorded",
+      "payload": {
+        "runId": "claude_research_MU09XVS0_2A885070",
+        "researchRounds": 1
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:38:39.013Z",
+      "type": "claude.run_started",
+      "payload": {
+        "runId": "claude_MU0A0WT7_0323BFE7"
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:39:57.717Z",
+      "type": "claude.run_completed",
+      "payload": {
+        "runId": "claude_MU0A0WT7_0323BFE7",
+        "errorCode": null
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:39:58.549Z",
+      "type": "patch.applied",
+      "payload": {}
+    },
+    {
+      "timestamp": "2026-09-13T20:40:06.908Z",
+      "type": "operator_test.queued",
+      "payload": {
+        "runId": "run_4361ED687AF8045E815CA532"
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:40:27.689Z",
+      "type": "operator_test.completed",
+      "payload": {
+        "runId": "run_4361ED687AF8045E815CA532"
+      }
+    },
+    {
+      "timestamp": "2026-09-13T20:40:27.689Z",
+      "type": "accept_gate.evaluated",
+      "payload": {}
+    }
+  ],
+  "durationsMs": {
+    "targetRun": 182304,
+    "targetEndToResearchStart": 10263,
+    "researchRun": 126407,
+    "researchEndToRecoveryStart": 14669,
+    "targetEndToRecoveryStart": 151339
+  },
+  "targetActualModel": "unknown",
+  "strictN20Passed": false,
+  "localChecks": {
+    "originalHashesMatched": 10,
+    "newModelCalls": 0,
+    "newGpuRuns": 0,
+    "productionFilesChanged": 0
+  },
+  "limitations": [
+    "No raw upstream transport trace; no proof of remote/network root cause.",
+    "Cancellation request timestamp and exact budget-vs-stall trigger are not retained in these originals.",
+    "This is Root preflight, not accepted independent worker review."
+  ]
+}

@@ -5,6 +5,11 @@ operator-test contract. It creates no execution worker; completed/cancelled
 snapshots therefore explicitly report resourceRelease.confirmed=true. Its
 measurements and diagnostics are not live evidence.
 
+The simulated `tracer`/`profiler` blocks carry `status=mocked`, `source=mock`
+and `simulated=true` alongside their simulated values. The values are kept
+unchanged for deterministic fixtures, but the labels mean they can never
+satisfy a rule that requires real diagnostic evidence.
+
 The process-only `TEST_SERVICE_MOCK_DURATION_MS` setting controls simulated work
 duration (integer 1–60000 ms, default 3000 ms). A task's `limits.timeoutSeconds`
 remains a deadline for the owning queue; it never sets mock workload duration.

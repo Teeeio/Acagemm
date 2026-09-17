@@ -1,0 +1,8 @@
+# The repository root ignores *.log; this archived evidence directory keeps its
+# retained run logs and copied logs on purpose, so re-include them here only.
+!*.log
+!logs/*.log
+
+# retained-runs.zip 本体 287197411 bytes，超过 GitHub 单文件 100 MiB 上限，
+# 作为 Release 附件分发，不再进入本仓库（取得方式见 README 第 8 节第 1 步）。
+retained-runs.zip

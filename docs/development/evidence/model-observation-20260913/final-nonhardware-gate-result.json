@@ -1,0 +1,8 @@
+{
+  "command": "npm.cmd run verify:non-hardware-robustness",
+  "startedAt": "2026-09-12T19:18:55.9829552Z",
+  "endedAt": "2026-09-12T19:29:01.2567892Z",
+  "exitCode": 0,
+  "log": "final-nonhardware-gate.log",
+  "logSha256": "c4205aa44917708dff15aaa3d2d2996d95b9f9e5fd4a6aa83a12d7ba7a0b3c46"
+}

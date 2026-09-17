@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "operator-studio.retained-review-archive/v1",
+  "archive": ".operator-studio-local/queue-prepared-binding-20260914/retained-review-originals.zip",
+  "manifest": ".operator-studio-local/queue-prepared-binding-20260914/retained-review-originals.zip.manifest.json",
+  "sha256": "58b0b7eac2d0970328e120bd37ec7ea57a649842a932d2d7d01c111a66bb916d",
+  "uncompressedBytes": 331378,
+  "files": 29,
+  "standardVerify": {
+    "tool": "launch.py evidence verify",
+    "exitCode": 0,
+    "valid": true
+  },
+  "scope": "Integrated candidate bytes, root failure log, original combination failure/pass, frozen acceptance and concrete correction request. Not a live-hardware or N20 pass."
+}
+

@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 2,
+  "taskId": "queue_57F3209A15FE4796",
+  "status": "failed",
+  "submittedAt": "2026-09-13T15:40:12.332Z",
+  "deadlineAt": "2026-09-13T15:42:12.332Z",
+  "progress": 100,
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "run_D9D7871CC169508901D68E9D",
+    "missionId": "MIS_MTZZATVY",
+    "purpose": "candidate",
+    "baselineKind": null,
+    "operator": "generic_affine",
+    "candidate": {
+      "id": "candidate-01",
+      "digest": "sha256:f40c44b7e00752623340206fbb1892f5db06edcbab433553a2755b321e9f08a7",
+      "remoteId": null,
+      "sourceRunId": "claude_MTZZBJAB_AA753436"
+    },
+    "hardware": [
+      "local-shared-gpu"
+    ],
+    "runtime": "client-managed-runtime",
+    "metric": "latency p50",
+    "matrix": {
+      "environments": [
+        "local-shared-gpu"
+      ],
+      "stages": [
+        "Correctness",
+        "Full Benchmark"
+      ],
+      "correctnessCases": 4,
+      "warmup": 3,
+      "repeats": 10,
+      "testSpec": {
+        "schemaVersion": "operator-studio.test-spec/v1",
+        "generation": {
+          "owner": "baseline-materializer-agent",
+          "source": "authoritative-semantics",
+          "deterministic": true,
+          "seed": 20260826
+        },
+        "correctness": {
+          "requestedCases": 4,
+          "requiredCategories": [
+            "minimal",
+            "representative",
+            "boundary",
+            "ragged"
+          ],
+          "atol": 1e-05,
+          "rtol": 1e-05,
+          "requireNamedCases": true
+        },
+        "benchmark": {
+          "requiredProfiles": [
+            "primary",
+            "small"
+          ],
+          "warmup": 3,
+          "repeats": 10,
+          "metrics": [
+            "p50_us",
+            "p95_us",
+            "min_us",
+            "max_us"
+          ],
+          "primaryProfile": "primary"
+        }
+      }
+    },
+    "tracer": {
+      "enabled": true,
+      "format": "operator-trace/v1"
+    },
+    "profiler": {
+      "enabled": true,
+      "format": "operator-profile/v1"
+    },
+    "limits": {
+      "timeoutSeconds": 120
+    },
+    "runPy": "import torch\n\ndef inputs_for(rows, cols):\n    x = (torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32) + 3).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)\n\ndef run(inputs):\n    # Algebraically identical, kernel-fused form:\n    #   relu(1.25*x + 0.75*y - 0.125) == 1.25 * relu(x + 0.6*y - 0.1)\n    # One output allocation, three elementwise kernels, no redundant copy.\n    out = torch.add(inputs['x'], inputs['y'], alpha=0.6)\n    torch.threshold(out, 0.1, 0.0, out=out)\n    return out.mul_(1.25)\n",
+    "runPySource": "run.py",
+    "oracleRunPy": "import torch\n\ndef inputs_for(rows, cols):\n    x = (torch.linspace(-2, 2, rows * cols, device='cuda', dtype=torch.float32) + 3).reshape(rows, cols)\n    return {'x': x, 'y': x.flip(-1)}\n\ndef get_inputs():\n    return inputs_for(32, 256)\n\ndef get_test_cases():\n    return [\n        {'name': 'minimal', 'category': 'minimal', 'inputs': inputs_for(1, 1)},\n        {'name': 'representative', 'category': 'representative', 'inputs': get_inputs()},\n        {'name': 'boundary', 'category': 'boundary', 'inputs': inputs_for(2, 32)},\n        {'name': 'ragged', 'category': 'ragged', 'inputs': inputs_for(3, 17)},\n    ]\n\ndef get_benchmark_inputs():\n    return [{'name': 'primary', 'inputs': get_inputs()}, {'name': 'small', 'inputs': inputs_for(2, 32)}]\n\ndef reference(inputs):\n    return torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)\n\ndef run(inputs):\n    # Initial implementation deliberately does one redundant device copy.\n    value = torch.relu(inputs['x'] * 1.25 + inputs['y'] * 0.75 - 0.125)\n    return value.clone()\n",
+    "workspaceId": "MIS_MTZZATVY",
+    "packageDigest": "sha256:303308c6b93ad1b213fecdde930ac0dccf1b95ab8a643557e39dbe91ed37692e",
+    "admissionId": "sha256:a0caef9347936dd59731b286915b064c8a3e8877d2b8852fe3fb3952f9f1cf0e",
+    "environmentDigest": "sha256:8bf3be2a795d38ced372d28982409163081bd5268bebdd4a76b21e25368666ef",
+    "acceptanceDigest": "sha256:d36756ce0c44518f0cc14837f0b55b56b5a69cf998faef0ad2324945c661b385",
+    "target": {
+      "device": "gpu",
+      "platform": "nvidia-cuda"
+    },
+    "build": {},
+    "adapter": {
+      "id": "python-shared-gpu",
+      "languages": [
+        "python"
+      ],
+      "version": "1"
+    },
+    "checks": [
+      "correctness",
+      "benchmark"
+    ],
+    "deadline": "2026-09-13T15:42:12.317Z"
+  },
+  "logs": [
+    {
+      "sequence": 1,
+      "at": "2026-09-13T15:40:22.469Z",
+      "progress": 10,
+      "message": "Local backend execution claimed exactly once."
+    },
+    {
+      "sequence": 2,
+      "at": "2026-09-13T15:40:28.756Z",
+      "progress": 100,
+      "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)"
+    }
+  ],
+  "result": {
+    "status": "failed",
+    "error": {
+      "code": "OPERATOR_CORRECTNESS_MISMATCH",
+      "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+      "phase": "correctness",
+      "role": "candidate",
+      "retryable": false,
+      "details": {
+        "case": "minimal",
+        "caseIndex": 1,
+        "category": "minimal"
+      }
+    },
+    "correctness": {
+      "status": "failed",
+      "passed": false,
+      "total": 4,
+      "executedCases": 1,
+      "passedCases": 0,
+      "failedCase": 1,
+      "failedCaseName": "minimal",
+      "failedCaseCategory": "minimal",
+      "error": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+      "failure": {
+        "code": "OPERATOR_CORRECTNESS_MISMATCH",
+        "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+        "phase": "correctness",
+        "role": "candidate",
+        "retryable": false,
+        "details": {
+          "case": "minimal",
+          "caseIndex": 1,
+          "category": "minimal"
+        }
+      },
+      "caseResults": [
+        {
+          "case": "minimal",
+          "dtype": "float32",
+          "maxDiff": 0.125,
+          "rmse": 0.125,
+          "cosDiff": 0,
+          "passed": false,
+          "error": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+          "failure": {
+            "code": "OPERATOR_CORRECTNESS_MISMATCH",
+            "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+            "phase": "correctness",
+            "role": "candidate",
+            "retryable": false,
+            "details": {
+              "case": "minimal",
+              "caseIndex": 1,
+              "category": "minimal"
+            }
+          }
+        }
+      ],
+      "referenceCache": {
+        "schemaVersion": "operator-studio.correctness-reference-cache/v1",
+        "enabled": true,
+        "hits": 0,
+        "misses": 1
+      },
+      "durationMs": 351.079
+    },
+    "benchmark": [],
+    "environment": {
+      "requested": [
+        "local-shared-gpu"
+      ],
+      "runtime": "local-shared-gpu-runner/v1",
+      "service": "local-shared-gpu-adapter",
+      "source": "local-shared-gpu",
+      "liveHardware": true,
+      "hardware": "nvidia-gpu",
+      "candidateDigest": "sha256:f40c44b7e00752623340206fbb1892f5db06edcbab433553a2755b321e9f08a7",
+      "runPySource": "run.py",
+      "diagnosticsMode": "unavailable",
+      "executionPackage": {
+        "packageDigest": "sha256:303308c6b93ad1b213fecdde930ac0dccf1b95ab8a643557e39dbe91ed37692e",
+        "admissionId": "sha256:a0caef9347936dd59731b286915b064c8a3e8877d2b8852fe3fb3952f9f1cf0e",
+        "preparedArtifactDigest": "sha256:0bbdc3825adb221d23c59754e685b9d051ba821bad67f2a0198e6655648857be",
+        "environmentDigest": "sha256:8bf3be2a795d38ced372d28982409163081bd5268bebdd4a76b21e25368666ef",
+        "acceptanceDigest": "sha256:d36756ce0c44518f0cc14837f0b55b56b5a69cf998faef0ad2324945c661b385",
+        "workspaceId": "MIS_MTZZATVY",
+        "target": {
+          "device": "gpu",
+          "platform": "nvidia-cuda"
+        },
+        "build": {},
+        "adapter": {
+          "id": "python-shared-gpu",
+          "languages": [
+            "python"
+          ],
+          "version": "1"
+        }
+      },
+      "executionMode": "gpu",
+      "targetProbe": {
+        "tool": "C:\\Windows\\system32\\nvidia-smi.EXE",
+        "deviceIndex": 0,
+        "deviceName": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "driverVersion": "551.78",
+        "memoryMiB": 6144,
+        "torchVersion": "2.6.0+cu124",
+        "cudaVersion": "12.4",
+        "nvidiaSmi": "NVIDIA GeForce RTX 3060 Laptop GPU, 551.78, 6144",
+        "architecture": "sm86"
+      },
+      "architecture": "sm86",
+      "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+      "driverVersion": "551.78",
+      "publishable": false
+    },
+    "publishable": false,
+    "executionPackage": {
+      "packageDigest": "sha256:303308c6b93ad1b213fecdde930ac0dccf1b95ab8a643557e39dbe91ed37692e",
+      "admissionId": "sha256:a0caef9347936dd59731b286915b064c8a3e8877d2b8852fe3fb3952f9f1cf0e",
+      "preparedArtifactDigest": "sha256:0bbdc3825adb221d23c59754e685b9d051ba821bad67f2a0198e6655648857be",
+      "environmentDigest": "sha256:8bf3be2a795d38ced372d28982409163081bd5268bebdd4a76b21e25368666ef",
+      "acceptanceDigest": "sha256:d36756ce0c44518f0cc14837f0b55b56b5a69cf998faef0ad2324945c661b385",
+      "workspaceId": "MIS_MTZZATVY",
+      "target": {
+        "device": "gpu",
+        "platform": "nvidia-cuda"
+      },
+      "build": {},
+      "adapter": {
+        "id": "python-shared-gpu",
+        "languages": [
+          "python"
+        ],
+        "version": "1"
+      }
+    },
+    "schemaVersion": "operator-studio.shared-gpu-result/v1",
+    "experienceEvidence": {
+      "missionId": "MIS_MTZZATVY",
+      "candidateId": "candidate-01",
+      "runId": "run_D9D7871CC169508901D68E9D",
+      "patchDigest": "sha256:f40c44b7e00752623340206fbb1892f5db06edcbab433553a2755b321e9f08a7",
+      "packageDigest": "sha256:303308c6b93ad1b213fecdde930ac0dccf1b95ab8a643557e39dbe91ed37692e",
+      "environmentDigest": "sha256:8bf3be2a795d38ced372d28982409163081bd5268bebdd4a76b21e25368666ef",
+      "acceptanceDigest": "sha256:d36756ce0c44518f0cc14837f0b55b56b5a69cf998faef0ad2324945c661b385",
+      "hardware": "nvidia-gpu",
+      "executionMode": "gpu",
+      "outcome": "failed",
+      "operation": "test",
+      "liveHardware": true,
+      "architecture": "sm86"
+    }
+  },
+  "error": {
+    "code": "OPERATOR_CORRECTNESS_MISMATCH",
+    "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+    "phase": "correctness",
+    "role": "candidate",
+    "retryable": false,
+    "details": {
+      "case": "minimal",
+      "caseIndex": 1,
+      "category": "minimal"
+    },
+    "correctness": {
+      "status": "failed",
+      "passed": false,
+      "total": 4,
+      "executedCases": 1,
+      "passedCases": 0,
+      "failedCase": 1,
+      "failedCaseName": "minimal",
+      "failedCaseCategory": "minimal",
+      "error": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+      "failure": {
+        "code": "OPERATOR_CORRECTNESS_MISMATCH",
+        "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+        "phase": "correctness",
+        "role": "candidate",
+        "retryable": false,
+        "details": {
+          "case": "minimal",
+          "caseIndex": 1,
+          "category": "minimal"
+        }
+      },
+      "caseResults": [
+        {
+          "case": "minimal",
+          "dtype": "float32",
+          "maxDiff": 0.125,
+          "rmse": 0.125,
+          "cosDiff": 0,
+          "passed": false,
+          "error": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+          "failure": {
+            "code": "OPERATOR_CORRECTNESS_MISMATCH",
+            "message": "Tensor-likes are not close!\n\nMismatched elements: 1 / 1 (100.0%)\nGreatest absolute difference: 0.125 at index (0, 0) (up to 1e-05 allowed)\nGreatest relative difference: 0.06666667014360428 at index (0, 0) (up to 1e-05 allowed)",
+            "phase": "correctness",
+            "role": "candidate",
+            "retryable": false,
+            "details": {
+              "case": "minimal",
+              "caseIndex": 1,
+              "category": "minimal"
+            }
+          }
+        }
+      ],
+      "referenceCache": {
+        "schemaVersion": "operator-studio.correctness-reference-cache/v1",
+        "enabled": true,
+        "hits": 0,
+        "misses": 1
+      },
+      "durationMs": 351.079
+    }
+  },
+  "lastError": null,
+  "attempts": {
+    "submit": 1,
+    "poll": 2,
+    "reconcile": 0,
+    "cancel": 0
+  },
+  "failures": {},
+  "resourceRelease": {
+    "confirmed": true,
+    "status": "confirmed",
+    "reason": "Runner process and owned process tree have exited.",
+    "deadline": "2026-09-13T15:42:17.519Z",
+    "nextAction": null
+  },
+  "dispatchClaim": null,
+  "submissionStartedAt": "2026-09-13T15:40:17.464Z",
+  "remoteTaskId": "local_c500_5683EF9FCD9858D80F2E4FC9826541D0",
+  "remoteTaskIds": null,
+  "durationMs": 6271,
+  "startedAt": "2026-09-13T15:40:17.539Z",
+  "completedAt": "2026-09-13T15:40:28.740Z",
+  "cancelClaim": null
+}

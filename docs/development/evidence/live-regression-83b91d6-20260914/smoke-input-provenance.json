@@ -1,0 +1,27 @@
+{
+  "source": "upstream-prepared-byte-identical-receipt-copies",
+  "originAlreadyIntegrated": true,
+  "files": [
+    {
+      "path": "docs/development/evidence/live-regression-83b91d6-20260914/smoke-batch.json",
+      "sha256": "d9ec55a224371fbce5cdb0feda7766b20b0ba1171faafae16973b6f52a5db370",
+      "upstreamPreparedCopyOf": {
+        "task_id": "task_7ebdf3cf0d964f7392d80ca07c0876b3",
+        "attempt_id": "run_cc6d0a8c3d8743509f016612b1abc58d",
+        "artifact_digest": "557b1b990d2ede3332d5ce327d51d998d09511b6c5449b3f54607cc9f07757dd",
+        "path": ".operator-studio-local/dispatch-live-83b91d6/smoke/batch.json"
+      }
+    },
+    {
+      "path": "docs/development/evidence/live-regression-83b91d6-20260914/smoke-ledger.json",
+      "sha256": "486178937a86f63768c8e18aaa95884524137d7e843600e023eeef9c9ef2bf69",
+      "upstreamPreparedCopyOf": {
+        "task_id": "task_7ebdf3cf0d964f7392d80ca07c0876b3",
+        "attempt_id": "run_cc6d0a8c3d8743509f016612b1abc58d",
+        "artifact_digest": "557b1b990d2ede3332d5ce327d51d998d09511b6c5449b3f54607cc9f07757dd",
+        "path": ".operator-studio-local/dispatch-live-83b91d6/smoke/ledger.json"
+      }
+    }
+  ],
+  "reason": "Private snapshots exclude .operator-studio-local; use explicit immutable upstream evidence copies without asserting platform source_task_id can alias a different output path."
+}

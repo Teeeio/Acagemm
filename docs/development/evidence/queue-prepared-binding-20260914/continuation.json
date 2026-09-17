@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "operator-studio.prepared-binding-continuation/v1",
+  "recordedAt": "2026-09-14",
+  "priorStatus": "status.json is the retained pre-confirmation/pre-correction snapshot; original failures are not erased.",
+  "authorizationEvidenceId": "auth_fbf93820d1914a91be140e875571eeed",
+  "implementation": {
+    "task_id": "task_a0ed30802821495f880bae5cc83db1d6",
+    "attempt_id": "run_1a2d13e37dc34689b8a9044a501e8fa1",
+    "artifact_digest": "dc7c30381f5d98e0bd39b1153276b0b4b0dfae6b37e83837e90b7b6966f359f1",
+    "status": "integrated",
+    "changedFiles": [
+      {
+        "path": "client-runtime/README.md",
+        "status": "modified",
+        "sha256": "5aebf2050886c381a84776b421979afd0a1b18d6992fc585849b611877844809"
+      },
+      {
+        "path": "client-runtime/application/benchmark-package-preparation-service.md",
+        "status": "modified",
+        "sha256": "7baade624fb6a52845898716e158c261316c7a79bdfb6ae28efb47b5c4865d35"
+      },
+      {
+        "path": "client-runtime/application/benchmark-package-preparation-service.mjs",
+        "status": "modified",
+        "sha256": "1103e49a29c94fe65a7fbce73b228f8d10cfc1439dadcaf506eccdee43315bb6"
+      },
+      {
+        "path": "client-runtime/execution-package-contract.md",
+        "status": "modified",
+        "sha256": "bc327cafb8e85d41441876e28c808fbde2f60574e7c28ccc054ed630fb504f4a"
+      },
+      {
+        "path": "client-runtime/execution-package-contract.mjs",
+        "status": "modified",
+        "sha256": "bfcc715405f98f820bbe212ca7666f5c9a3b7713a1849a39d2403a9c0a06600e"
+      },
+      {
+        "path": "client-runtime/execution-package-store.md",
+        "status": "modified",
+        "sha256": "fca230d09913558726769c4eb3d804934701cce9f8f31d2363a64a3966111e8a"
+      },
+      {
+        "path": "client-runtime/execution-package-store.mjs",
+        "status": "modified",
+        "sha256": "1987a4bd88aa3d009f5f40a1094176685b0df071f1cff19d817c840ed45659bb"
+      }
+    ]
+  },
+  "independentTest": {
+    "task_id": "task_17f14990774a4a05982f51f8bb5c25cd",
+    "attempt_id": "run_49827064e2fb49e4b90052145aa6593c",
+    "artifact_digest": "03c694168437166b378975665d71734e608091d36a9f8e24b5e7b47c945395ba",
+    "status": "integrated",
+    "changedFiles": [
+      {
+        "path": "tests/README.md",
+        "status": "modified",
+        "sha256": "36ac1d847e5c3dfb34f451e0ecc041a6aad8f6dc9f5931d5de837e475cdfc0f7"
+      },
+      {
+        "path": "tests/execution-package-contract-test.mjs",
+        "status": "modified",
+        "sha256": "651356b1462aa0ba3139101831ad22bf8bf5e8841497b35caa7e38e2d9078e98"
+      }
+    ]
+  },
+  "combination": {
+    "task_id": "task_8f6ce0f1d93d43f093ae5ce71f120200",
+    "attempt_id": "run_3b79029607524847a1d15cba132f5a66",
+    "artifact_digest": "114cb6c00d09a56ae8dda0dd61d3cb9293dc519f07fe18d267fae70a2d49b6f8",
+    "actualExitCode": 0,
+    "checks": 8,
+    "contractChecks": 58,
+    "storeChecks": 47,
+    "queueCases": {
+      "passed": 7,
+      "total": 7
+    },
+    "failureBoundaryCases": {
+      "passed": 16,
+      "total": 16
+    }
+  },
+  "rootRelease": {
+    "status": "passed",
+    "checks": 143,
+    "exitCode": 0,
+    "log": ".operator-studio-local/queue-prepared-binding-20260914/root-release-final.log"
+  },
+  "rootNonHardware": {
+    "status": "passed",
+    "checks": 44,
+    "includesReleaseChecks": 143,
+    "exitCode": 0,
+    "log": ".operator-studio-local/queue-prepared-binding-20260914/root-nonhardware-final.log"
+  },
+  "integratedSource": {
+    "candidateFiles": 9,
+    "shaMismatches": 0,
+    "participatingSourceFiles": 317
+  },
+  "live": {
+    "newFrozenSource": null,
+    "newSmokeAttempts": 0,
+    "freshN20Attempts": 0,
+    "freshN20Required": 20,
+    "strictN20Passed": false,
+    "coverageAttempts": 0
+  },
+  "next": "Final Root gates passed; archive proof, commit/freeze byte-identical source, then separate real smoke, fresh20 and coverage."
+}

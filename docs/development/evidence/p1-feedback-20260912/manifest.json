@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "operator-studio.evidence-archive/v1",
+  "archivedAt": "2026-09-12",
+  "evidencePackage": "p1-feedback-20260912",
+  "sourceRunRoot": "F:\\设计\\快速项目\\acagemm原型\\.tmp-real-agent\\shared-gpu-W4va7P",
+  "runId": "shared-gpu-W4va7P",
+  "note": "SHA256 values are digests of the archived JSON files as stored on disk. They are NOT the promptDigest fields inside the prompt-audit JSON, which digest the prompt text only.",
+  "files": [
+    {
+      "targetRelativePath": "summary.json",
+      "sourceRelativePath": "summary.json",
+      "sha256": "3708ad41df5e418107ae6c6ac5d141cdf07a147561aa60fa0dd0c0d3da6b5284",
+      "bytes": 1378,
+      "sourceSha256": "3708ad41df5e418107ae6c6ac5d141cdf07a147561aa60fa0dd0c0d3da6b5284",
+      "byteIdentical": true
+    },
+    {
+      "targetRelativePath": "affine-state.json",
+      "sourceRelativePath": "affine-state.json",
+      "sha256": "67366cc8ccc8afa02885f2c626e8cd076c0f3a1f7f2133fd77d627022087fa4b",
+      "bytes": 402225,
+      "sourceSha256": "67366cc8ccc8afa02885f2c626e8cd076c0f3a1f7f2133fd77d627022087fa4b",
+      "byteIdentical": true
+    },
+    {
+      "targetRelativePath": "p1-feedback-verification.json",
+      "sourceRelativePath": "p1-feedback-verification.json",
+      "sha256": "77c70f37ca52e78557dddf10098edbba90d8d6e425123b7dfe7d6cde949be80d",
+      "bytes": 2110,
+      "sourceSha256": "77c70f37ca52e78557dddf10098edbba90d8d6e425123b7dfe7d6cde949be80d",
+      "byteIdentical": true
+    },
+    {
+      "targetRelativePath": "code-manifest.json",
+      "sourceRelativePath": "code-manifest.json",
+      "sha256": "991982649544c24aead6e9628fdb21ce449c1f49a2605776b5110089f6bff99f",
+      "bytes": 2048,
+      "sourceSha256": "991982649544c24aead6e9628fdb21ce449c1f49a2605776b5110089f6bff99f",
+      "byteIdentical": true
+    },
+    {
+      "targetRelativePath": "runtime/experiences/experiences.json",
+      "sourceRelativePath": "runtime/experiences/experiences.json",
+      "sha256": "bc1e40ce81d244f1fc9365c6893434e20479fd639051a4ae2be115f06c97b6b3",
+      "bytes": 3249,
+      "sourceSha256": "bc1e40ce81d244f1fc9365c6893434e20479fd639051a4ae2be115f06c97b6b3",
+      "byteIdentical": true
+    },
+    {
+      "targetRelativePath": "bridge/prompt-audits/claude_MTY3AZLZ_D6E64670.json",
+      "sourceRelativePath": "bridge/prompt-audits/claude_MTY3AZLZ_D6E64670.json",
+      "sha256": "d8389f573ade8900c99391a2a5d789539beca8954ecd41d34f1af198cc809391",
+      "bytes": 14091,
+      "sourceSha256": "d8389f573ade8900c99391a2a5d789539beca8954ecd41d34f1af198cc809391",
+      "byteIdentical": true
+    },
+    {
+      "targetRelativePath": "bridge/prompt-audits/claude_MTY3D3AA_C95A6106.json",
+      "sourceRelativePath": "bridge/prompt-audits/claude_MTY3D3AA_C95A6106.json",
+      "sha256": "286f2b7b876ef40cbc25a02d56321ae949bbd8b33be5decb46bd03aa98786650",
+      "bytes": 31601,
+      "sourceSha256": "286f2b7b876ef40cbc25a02d56321ae949bbd8b33be5decb46bd03aa98786650",
+      "byteIdentical": true
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "recordType": "root-batch-resume-decision",
+  "at": "2026-09-13T01:31:52.4357941Z",
+  "reason": "Run2 finished full_success with confirmed release but cancelled run only emitted init, model unknown is genuine. Continue remaining original 18 invocations for complete N20 evaluation; do not replace run2 or add a 21st; strict batch acceptance already fails comparability",
+  "resumeAt": 3,
+  "finishAt": 20,
+  "preserveAllPriorRows": true,
+  "codeOrBudgetChanges": false
+}

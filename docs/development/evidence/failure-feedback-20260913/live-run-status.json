@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "operator-studio.live-regression-approval-status/v1",
+  "recordedAt": "2026-09-13T15:55:09.107866+00:00",
+  "codeCommit": "f3a54460c795cd6a64ceea01e0c2e0e3bcdf6d29",
+  "frozenSourcePath": "F:/设计/快速项目/acagemm原型/.operator-studio-local/frozen-live-f3a5446",
+  "localVerification": {
+    "release": {
+      "checks": 142,
+      "exitCode": 0
+    },
+    "nonHardware": {
+      "checks": 44,
+      "includesReleaseChecks": 142,
+      "exitCode": 0
+    },
+    "originalsArchive": "verification-originals.zip",
+    "archiveSha256": "7363061527d71b3469a80efea1b4fda9ba1b8e70010976704fdf41ea4ac0ce9c",
+    "sourceFilesMatched": 315
+  },
+  "newLiveStatus": "affine_smoke_verified_new_repair_dispatch_blocked",
+  "newDownstreamTaskIds": [
+    "task_baf9fc222be74e38afb3fbd67eb545c6"
+  ],
+  "newModelRequestsSent": null,
+  "newN20Invocations": 0,
+  "approvedLocalWork": "All implementation/test/doc tasks evaluated and integrated; final gates complete; local code committed, frozen source matches tested bytes.",
+  "route": {
+    "localProxy": "http://127.0.0.1:15721",
+    "configuredUpstream": "https://api.deepseek.com/anthropic",
+    "providerName": "DeepSeek",
+    "providerId": "998b9212-bbf7-4677-90f7-143e508ad9f6",
+    "autoFailoverEnabled": false,
+    "evidence": "Read-only CC Switch sqlite database current Claude provider + provider_endpoints + proxy_config; latest local proxy records same provider. No secrets output. Remote-service attestation is not claimed."
+  },
+  "requestedScope": {
+    "families": [
+      "affine",
+      "reduction",
+      "normalization"
+    ],
+    "smoke": "one affine two-round invocation, independently verified before N20",
+    "n20": "20 new original affine invocations, no replacement, no pooling with smoke or old batch",
+    "coverage": "separate reduction/normalization invocation",
+    "dataSent": [
+      "new operator workspace code",
+      "optimization prompts",
+      "test feedback",
+      "context attached by existing Claude CLI configuration, potentially local paths or repository information"
+    ],
+    "credentials": "No additional worker credentials or provider changes; existing user CLI authentication is used."
+  },
+  "automaticReview": [
+    {
+      "attempt": 1,
+      "reason": "该命令会通过 Claude 代理执行真实 E2E，可能向未确认的上游发送代码、提示词、测试反馈及 CLI 上下文；用户此前明确拒绝此类发送，且当前仅授权继续验收，不足以授权该敏感目的地的数据外传。",
+      "newEvidenceAfter": "Read-only verification established configured DeepSeek endpoint and disabled automatic failover."
+    },
+    {
+      "attempt": 2,
+      "reason": "虽已只读确认上游为 DeepSeek，但该真实 E2E 仍会外发代码、提示词、反馈和 CLI 上下文；用户仅说继续验收，未明确授权这些具体数据发送至该外部目的地，且此前明确拒绝发送。"
+    }
+  ],
+  "nextAction": "Obtain explicit authorization for the frozen repair implementation/test dispatch to the configured DeepSeek model. Then submit the saved request, independently combine and validate exact candidate artifacts, integrate, final gates, freeze new code and rerun smoke before fresh N20 and separate coverage. Do not pool older source batches or backfill unknown models.",
+  "priorBatch": {
+    "affineOriginals": 20,
+    "fullSuccess": 20,
+    "comparable": 19,
+    "unknown": 1,
+    "strictN20Passed": false
+  },
+  "priorStatusSnapshot": {
+    "recordedAt": "2026-09-13 11:48:48 UTC",
+    "newLiveStatus": "not_started_automatic_approval_rejected",
+    "newDownstreamTaskIds": [],
+    "newModelRequestsSent": 0,
+    "nextAction": "Obtain explicit user authorization of the listed data to the confirmed DeepSeek configured endpoint, then submit the frozen smoke request. Do not bypass the review gate or silently substitute another execution channel."
+  },
+  "currentEvidence": "../queue-prepared-binding-20260913/resume-status.json",
+  "e2eAuthorizationResolution": {
+    "userReply": "为了优化派发工作流，我又优化了mcp和规则，现在继续，允许",
+    "resolved": true,
+    "result": "Original E2E dispatch accepted and completed. Previous two E2E rejection records are historical."
+  },
+  "newRepairApproval": {
+    "resolved": false,
+    "reason": "重试仍会向外部DeepSeek模型发送生产源码、失败队列证据和修复细节以执行新的实现/测试派发；此前用户授权限定于真实E2E验收外发，未明确覆盖该开发任务。",
+    "taskIds": []
+  },
+  "newAgentRunInvocations": 3,
+  "modelRequestCountNote": "Three actual required Claude Code run invocations were retained and observed; total upstream HTTP request count was not independently counted."
+}

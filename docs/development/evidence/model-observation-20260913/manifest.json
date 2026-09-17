@@ -1,0 +1,260 @@
+{
+  "schemaVersion": "operator-studio.evidence-archive/v1",
+  "generatedAt": "2026-09-12T19:37:31.402Z",
+  "fileCount": 27,
+  "sourceDirectory": "F:/设计/快速项目/acagemm原型/.operator-studio-local/model-observation-20260913 (Root read-only original directory)",
+  "files": [
+    {
+      "path": "verification.json",
+      "bytes": 2632,
+      "sha256": "284a5b9df8ba9287dbca648555a78e021f2801f21a2530b7b28329e771b24bf7",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/verification.json",
+      "copyVerified": true,
+      "role": "Root 机器核验总表：codeCommit b85c2f7、无硬件门禁 139/41 exit 0、8 个关键源文件门禁前后 SHA256 一致、producer/consumer 三测试 exit 0、五种 driver fixture 场景通过、本轮真实 GPU/Agent 运行 0 次、N20 未合格、实机审批待决。"
+    },
+    {
+      "path": "final-nonhardware-gate-result.json",
+      "bytes": 301,
+      "sha256": "bd0b1d1ce1d98964e116bf727ff1aedc7818ef7192fd11eb725ca37ca80f06c8",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/final-nonhardware-gate-result.json",
+      "copyVerified": true,
+      "role": "最终无硬件门禁结果：release 139 / non-hardware 41，exit 0，起止时间与日志 SHA256。"
+    },
+    {
+      "path": "final-nonhardware-gate.log",
+      "bytes": 85182,
+      "sha256": "c4205aa44917708dff15aaa3d2d2996d95b9f9e5fd4a6aa83a12d7ba7a0b3c46",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/final-nonhardware-gate.log",
+      "copyVerified": true,
+      "role": "完整无硬件门禁输出；含 [release-check] PASS: 139 checks 与 [non-hardware-check] PASS: 41 checks。"
+    },
+    {
+      "path": "gate-source-before.json",
+      "bytes": 1467,
+      "sha256": "faf5ccc4784d7d24e22f2571efa96e793fe0cbc8b5dbf5fe8e6c0ecb50c1a23a",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/gate-source-before.json",
+      "copyVerified": true,
+      "role": "门禁运行前 8 个关键源文件的 SHA256 清单（仅这 8 个，不代表整棵源码树）。"
+    },
+    {
+      "path": "gate-source-after.json",
+      "bytes": 1467,
+      "sha256": "faf5ccc4784d7d24e22f2571efa96e793fe0cbc8b5dbf5fe8e6c0ecb50c1a23a",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/gate-source-after.json",
+      "copyVerified": true,
+      "role": "门禁运行后同一 8 个关键源文件的 SHA256 清单，与 before 逐项一致。"
+    },
+    {
+      "path": "producer-final-checks.json",
+      "bytes": 222,
+      "sha256": "0f0fb917dab69c25f2b41a320eae08e1ff0a128b6bbfa45a01792998abc56cb8",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/producer-final-checks.json",
+      "copyVerified": true,
+      "role": "producer 最终三个测试 exit 0（model-observation / claude-runtime / agent-runtime-timeout-recovery）。"
+    },
+    {
+      "path": "producer-final-files.json",
+      "bytes": 1300,
+      "sha256": "25477f6e66fc2b757e8b57b8e8ac766546e41fad3299ff8d4ba2a79ffad952c2",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/producer-final-files.json",
+      "copyVerified": true,
+      "role": "producer 最终 9 个交付源文件与其 SHA256。"
+    },
+    {
+      "path": "producer-final-model-observation-test.mjs.log",
+      "bytes": 3077,
+      "sha256": "44064d2dc87c581d283c65c9b41bd72d11487f28e00163e99cafe4a43c9c709b",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/producer-final-model-observation-test.mjs.log",
+      "copyVerified": true,
+      "role": "producer 模型观测 pure/adapter/projection/archive 测试：34 passed, 0 failed；明确无真实 CLI/Python/网络/GPU 进程。"
+    },
+    {
+      "path": "producer-final-claude-runtime-test.mjs.log",
+      "bytes": 69,
+      "sha256": "5ea9ddc8cb137c06acb9c597f51ea2ca5df75ab0ec9f9173aeee7b808bc07fb9",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/producer-final-claude-runtime-test.mjs.log",
+      "copyVerified": true,
+      "role": "Claude CLI 生命周期与归一化事件契约通过。"
+    },
+    {
+      "path": "producer-final-agent-runtime-timeout-recovery-test.mjs.log",
+      "bytes": 110,
+      "sha256": "f640d92588da3f78adcb1c237b9956c4d45569b69fbfa3a4da75d04aa9f75420",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/producer-final-agent-runtime-timeout-recovery-test.mjs.log",
+      "copyVerified": true,
+      "role": "Agent 运行时超时触发的取消收敛为可重试终态。"
+    },
+    {
+      "path": "consumer-third-checks.json",
+      "bytes": 236,
+      "sha256": "32dc9dccfa8ec79ec6ccb5b483a321607afaee829e7830d64f8f1c89f13c28df",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-third-checks.json",
+      "copyVerified": true,
+      "role": "consumer 第三版三个测试 exit 0（collector / model-observation-acceptance / shared-gpu-acceptance）。"
+    },
+    {
+      "path": "consumer-third-files.json",
+      "bytes": 737,
+      "sha256": "e9d8f9b6fd28b64c6922fabaead73cc16f23c390b9a44947a705db6594317f09",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-third-files.json",
+      "copyVerified": true,
+      "role": "consumer 第三版 5 个交付文件与其 SHA256。"
+    },
+    {
+      "path": "consumer-third-driver-vm.json",
+      "bytes": 4421,
+      "sha256": "a51e9527283d6c2382383400f3b34ca9822956ca634b4309dee4b1f84fa8366a",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-third-driver-vm.json",
+      "copyVerified": true,
+      "role": "consumer 第三版实际 driver 在 VM fixture 下的五种场景（confirmed、pending_then_confirmed、stop_transport_failure、final_file_missing、final_directory_failure）全部通过；fixtureOnly=true，无真实 Runtime/GPU/网络。"
+    },
+    {
+      "path": "consumer-third-shared-gpu-model-collector-test.mjs.log",
+      "bytes": 163,
+      "sha256": "f88227010a8aa9fd161f2d66f9e8beed61c2e3809ce158ba4c81f17fe5e96955",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-third-shared-gpu-model-collector-test.mjs.log",
+      "copyVerified": true,
+      "role": "独立 collector 测试 65/65 通过，0 expected-red。"
+    },
+    {
+      "path": "consumer-third-model-observation-acceptance-test.mjs.log",
+      "bytes": 165,
+      "sha256": "dc99ad029ab572177c884c286dc34e0101077d41a40a0f97aeaf3d99a0f7cfb8",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-third-model-observation-acceptance-test.mjs.log",
+      "copyVerified": true,
+      "role": "模型观测验收（required-run 覆盖、指纹、台账可比性）契约通过，无 GPU/Agent。"
+    },
+    {
+      "path": "consumer-third-shared-gpu-acceptance-test.mjs.log",
+      "bytes": 217,
+      "sha256": "c5d7ad4eaf33ecb20db677182d8a44f69850eb018a8e5cb4c6f3dcee1eb4870e",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-third-shared-gpu-acceptance-test.mjs.log",
+      "copyVerified": true,
+      "role": "shared-gpu 验收契约（P1 只读回放、预算终态、家族结果、配置指纹、run 台账）通过。"
+    },
+    {
+      "path": "consumer-first-b.log",
+      "bytes": 165,
+      "sha256": "dc99ad029ab572177c884c286dc34e0101077d41a40a0f97aeaf3d99a0f7cfb8",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-first-b.log",
+      "copyVerified": true,
+      "role": "consumer 第一版 B 测试通过；该版随后被 Root 复现实际问题并退回，作历史保留。"
+    },
+    {
+      "path": "consumer-first-shared.log",
+      "bytes": 217,
+      "sha256": "c5d7ad4eaf33ecb20db677182d8a44f69850eb018a8e5cb4c6f3dcee1eb4870e",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-first-shared.log",
+      "copyVerified": true,
+      "role": "consumer 第一版 shared 测试通过；同上随后被 Root 复现问题退回，作历史保留。"
+    },
+    {
+      "path": "consumer-second-shared-gpu-model-collector-test.mjs.log",
+      "bytes": 163,
+      "sha256": "4dbe1b4818783d5e075069c368cf7e03122f435b6d8433797b465a6b2e719f93",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-second-shared-gpu-model-collector-test.mjs.log",
+      "copyVerified": true,
+      "role": "consumer 第二版 collector 48/48 通过；随后 Root 实际 helper 复现 4 类漏判，作历史保留。"
+    },
+    {
+      "path": "consumer-second-model-observation-acceptance-test.mjs.log",
+      "bytes": 165,
+      "sha256": "dc99ad029ab572177c884c286dc34e0101077d41a40a0f97aeaf3d99a0f7cfb8",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-second-model-observation-acceptance-test.mjs.log",
+      "copyVerified": true,
+      "role": "consumer 第二版模型观测验收通过，历史保留（该版未集成）。"
+    },
+    {
+      "path": "consumer-second-shared-gpu-acceptance-test.mjs.log",
+      "bytes": 217,
+      "sha256": "c5d7ad4eaf33ecb20db677182d8a44f69850eb018a8e5cb4c6f3dcee1eb4870e",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-second-shared-gpu-acceptance-test.mjs.log",
+      "copyVerified": true,
+      "role": "consumer 第二版 shared 验收通过，历史保留（该版未集成）。"
+    },
+    {
+      "path": "consumer-second-root-probes.log",
+      "bytes": 378,
+      "sha256": "92553ca839085914aeee7ffad2a169a2b38fd7ddb289a24c7ecc2868ba2fa843",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-second-root-probes.log",
+      "copyVerified": true,
+      "role": "Root 用第二版实际 helper 复现的误判：冲突 duplicate、空 parsed 新记录、foreign provider 的已知 Mission 记录、known-start 冲突均被误判为 observed；non-Agent 取消 barrier 被忽略。"
+    },
+    {
+      "path": "consumer-second-driver-failure-vm.json",
+      "bytes": 620,
+      "sha256": "2a91b8df85c9972973322b1725221038820ffd6123663bf9bc3efa3bb5ca4cbe",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/consumer-second-driver-failure-vm.json",
+      "copyVerified": true,
+      "role": "Root 实际 driver 全 fixture 复现：try 内 const stopMissionNow 在 finally 不可见，stopCalls=0、killRuntime 且保留原 ReferenceError；原失败保留、cleanup 未确认。fixtureOnly=true。"
+    },
+    {
+      "path": "collector-baseline-red.log",
+      "bytes": 12463,
+      "sha256": "fac76a821f186714963a40d4f3d1f23c155cf4a872391b61458473e812aa5b1a",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/collector-baseline-red.log",
+      "copyVerified": true,
+      "role": "冻结 helper 实现前的独立 collector 测试真实基线：1/48 通过、47 expected-red，历史保留。"
+    },
+    {
+      "path": "collector-edge65-baseline-red.log",
+      "bytes": 2637,
+      "sha256": "97602ad4cbdbc5af9f90db263f6ec4a9999432b9c5a0baa66c19973767c5e0b5",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/collector-edge65-baseline-red.log",
+      "copyVerified": true,
+      "role": "第二版复核 53/65 通过、12 expected-red（新增冲突顺序/空记录/foreign provider/stop receipt 边界），历史保留。"
+    },
+    {
+      "path": "live-approval-status.json",
+      "bytes": 598,
+      "sha256": "4bf87b1a32cc1e689512a371f5237b5e369b520e31bb550c1cf8a6882f46870c",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/live-approval-status.json",
+      "copyVerified": true,
+      "role": "真实命令被 exec_command automatic approval review 在 CreateProcess 前拒绝的记录：approval-required、processCreated=false、未开始真实 GPU/Agent、未产生新 attempt/summary；上游目的未独立确认。"
+    },
+    {
+      "path": "live-run-request.json",
+      "bytes": 6070,
+      "sha256": "0ef828cc848fa383f97d3cae72485a504e2351b30cf8052c9a755c4b286354b5",
+      "kind": "byte-identical-copy",
+      "source": ".operator-studio-local/model-observation-20260913/live-run-request.json",
+      "copyVerified": true,
+      "role": "待审批实机运行请求输入（affine 两轮与 reduction/normalization、预算、payload 范围）；仅为输入准备，不是实机结果。"
+    }
+  ],
+  "scope": "Root model-observation hardware-free acceptance (release 139 / non-hardware 41, exit 0) plus the rejected live-approval request; no new real GPU/Agent sample, no N20",
+  "excluded": [
+    "baseline.tar",
+    "review/",
+    "gate-runtime/",
+    "gate-data/",
+    "gate-bridge/",
+    "temporary runtime/user settings and credentials"
+  ]
+}

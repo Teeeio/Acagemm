@@ -1,0 +1,14 @@
+[
+  {
+    "test": "shared-gpu-model-collector-test.mjs",
+    "exit": 0
+  },
+  {
+    "test": "model-observation-acceptance-test.mjs",
+    "exit": 0
+  },
+  {
+    "test": "shared-gpu-acceptance-test.mjs",
+    "exit": 0
+  }
+]

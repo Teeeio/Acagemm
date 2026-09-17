@@ -1,0 +1,8 @@
+{
+  "command": "npm.cmd run verify:non-hardware-robustness",
+  "exit": 0,
+  "startedAt": "2026-09-12T13:11:55.2267527Z",
+  "completedAt": "2026-09-12T13:21:32.2487670Z",
+  "log": "final-full-gate.log",
+  "physicalHardwareDisabled": true
+}

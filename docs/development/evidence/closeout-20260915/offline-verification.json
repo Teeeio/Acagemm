@@ -1,0 +1,698 @@
+{
+  "schemaVersion": "acagemm.portable-evidence-report/v1",
+  "mode": "offline-portable-verify",
+  "ok": true,
+  "bundle": "C:\\Users\\棉被暖~3\\AppData\\Local\\Temp\\acagemm-closeout-sd8j_b9p\\evidence",
+  "scratch": "C:\\Users\\棉被暖~3\\AppData\\Local\\Temp\\acagemm-closeout-sd8j_b9p\\scratch",
+  "sourceCommit": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948",
+  "manifestEntries": 15,
+  "inputs": {
+    "reader": {
+      "path": "docs/development/evidence/live-regression-20260913/verify-retained-runs.mjs",
+      "bundlePath": "repo/docs/development/evidence/live-regression-20260913/verify-retained-runs.mjs",
+      "declaredSha256": "07a0c9b24b548b4e7461435f4881892eb7cf2e67d5224c72826ed06c33a984ee",
+      "actualSha256": "07a0c9b24b548b4e7461435f4881892eb7cf2e67d5224c72826ed06c33a984ee",
+      "sha256Match": true
+    },
+    "helpers": [
+      {
+        "path": "scripts/shared-gpu-acceptance.mjs",
+        "bundlePath": "repo/scripts/shared-gpu-acceptance.mjs",
+        "declaredSha256": "242d3fe2562bd9dbd59762721402591d146d3a22259e58597b099a3712767955",
+        "actualSha256": "242d3fe2562bd9dbd59762721402591d146d3a22259e58597b099a3712767955",
+        "sha256Match": true
+      },
+      {
+        "path": "scripts/summarize-gpu-agent-runs.mjs",
+        "bundlePath": "repo/scripts/summarize-gpu-agent-runs.mjs",
+        "declaredSha256": "91bbab8a3437bb819fcc688c285a701f5b93e6103a19e07e5cba5757bc0c2aa1",
+        "actualSha256": "91bbab8a3437bb819fcc688c285a701f5b93e6103a19e07e5cba5757bc0c2aa1",
+        "sha256Match": true
+      },
+      {
+        "path": "client-runtime/model-observation.mjs",
+        "bundlePath": "repo/client-runtime/model-observation.mjs",
+        "declaredSha256": "2625f6fb7958d6064770c9c7919ce43d272574be050e8f0e20a8e46e6c95143d",
+        "actualSha256": "2625f6fb7958d6064770c9c7919ce43d272574be050e8f0e20a8e46e6c95143d",
+        "sha256Match": true
+      },
+      {
+        "path": "client-runtime/cancellation-contract.mjs",
+        "bundlePath": "repo/client-runtime/cancellation-contract.mjs",
+        "declaredSha256": "ba49589bd210208081e0a9065668f99cd6418d1053930f271605b392b6e2f2d3",
+        "actualSha256": "ba49589bd210208081e0a9065668f99cd6418d1053930f271605b392b6e2f2d3",
+        "sha256Match": true
+      }
+    ],
+    "archives": [
+      {
+        "path": "run-diagnostics-20260914/coverage-recovered-originals.zip",
+        "bundlePath": "archives/run-diagnostics-20260914/coverage-recovered-originals.zip",
+        "replay": "coverage",
+        "declaredSha256": "fe88c8f0a32674b75ab23b88d524b0e3b9eb4d33702f3f9d02a8830084a603d7",
+        "actualSha256": "fe88c8f0a32674b75ab23b88d524b0e3b9eb4d33702f3f9d02a8830084a603d7",
+        "sha256Match": true
+      },
+      {
+        "path": "run-diagnostics-20260914/failed-smoke-originals.zip",
+        "bundlePath": "archives/run-diagnostics-20260914/failed-smoke-originals.zip",
+        "replay": null,
+        "declaredSha256": "c50b7de215cbb73339b6cd4e5dcd58e221810bf127b584ab083f9eefdf606c6d",
+        "actualSha256": "c50b7de215cbb73339b6cd4e5dcd58e221810bf127b584ab083f9eefdf606c6d",
+        "sha256Match": true
+      },
+      {
+        "path": "run-diagnostics-20260914/n20-recovered-originals.zip",
+        "bundlePath": "archives/run-diagnostics-20260914/n20-recovered-originals.zip",
+        "replay": "n20",
+        "declaredSha256": "ccd79f9354f9f82bde76b4d8242b56b72505568c27be360b38d0fa8be2f92aca",
+        "actualSha256": "ccd79f9354f9f82bde76b4d8242b56b72505568c27be360b38d0fa8be2f92aca",
+        "sha256Match": true
+      },
+      {
+        "path": "run-diagnostics-20260914/proxy-repair-retry-originals.zip",
+        "bundlePath": "archives/run-diagnostics-20260914/proxy-repair-retry-originals.zip",
+        "replay": null,
+        "declaredSha256": "988dec3b7cbc4f4fb1a28867a81bb6c6b212ceef7d92a40ddd3230b5747dca95",
+        "actualSha256": "988dec3b7cbc4f4fb1a28867a81bb6c6b212ceef7d92a40ddd3230b5747dca95",
+        "sha256Match": true
+      },
+      {
+        "path": "run-diagnostics-20260914/smoke-recovered-originals.zip",
+        "bundlePath": "archives/run-diagnostics-20260914/smoke-recovered-originals.zip",
+        "replay": "smoke",
+        "declaredSha256": "f519a0ccc79bdcb274022c0a8de052fb156c5deb1a8ec3e20d4098d01ebca045",
+        "actualSha256": "f519a0ccc79bdcb274022c0a8de052fb156c5deb1a8ec3e20d4098d01ebca045",
+        "sha256Match": true
+      },
+      {
+        "path": "live-regression-83b91d6-20260914/coverage-originals.zip",
+        "bundlePath": "archives/live-regression-83b91d6-20260914/coverage-originals.zip",
+        "replay": null,
+        "declaredSha256": "8f6a9c278380f658ea2cecf067f3382ecf8c2c54f82bc318b84ef5616c27cc09",
+        "actualSha256": "8f6a9c278380f658ea2cecf067f3382ecf8c2c54f82bc318b84ef5616c27cc09",
+        "sha256Match": true
+      },
+      {
+        "path": "live-regression-83b91d6-20260914/n20-originals.zip",
+        "bundlePath": "archives/live-regression-83b91d6-20260914/n20-originals.zip",
+        "replay": null,
+        "declaredSha256": "8e8b53d9a58bf27da3a18c867dae89f7e2d4eb6737aed562cb7dc4ae929957a4",
+        "actualSha256": "8e8b53d9a58bf27da3a18c867dae89f7e2d4eb6737aed562cb7dc4ae929957a4",
+        "sha256Match": true
+      },
+      {
+        "path": "live-regression-83b91d6-20260914/smoke-originals.zip",
+        "bundlePath": "archives/live-regression-83b91d6-20260914/smoke-originals.zip",
+        "replay": null,
+        "declaredSha256": "2340cb0beb2fc77ca92d1ab6ea26d9a8134981a6484a7cd5cfec8bf905b09ee3",
+        "actualSha256": "2340cb0beb2fc77ca92d1ab6ea26d9a8134981a6484a7cd5cfec8bf905b09ee3",
+        "sha256Match": true
+      }
+    ]
+  },
+  "archiveShapes": [
+    {
+      "path": "run-diagnostics-20260914/coverage-recovered-originals.zip",
+      "replay": "coverage",
+      "sha256": "fe88c8f0a32674b75ab23b88d524b0e3b9eb4d33702f3f9d02a8830084a603d7",
+      "entries": 390,
+      "files": 390,
+      "directories": 0,
+      "uncompressedBytes": 7739309,
+      "integrity": true,
+      "reasons": []
+    },
+    {
+      "path": "run-diagnostics-20260914/failed-smoke-originals.zip",
+      "replay": null,
+      "sha256": "c50b7de215cbb73339b6cd4e5dcd58e221810bf127b584ab083f9eefdf606c6d",
+      "entries": 171,
+      "files": 171,
+      "directories": 0,
+      "uncompressedBytes": 1099780,
+      "integrity": true,
+      "reasons": []
+    },
+    {
+      "path": "run-diagnostics-20260914/n20-recovered-originals.zip",
+      "replay": "n20",
+      "sha256": "ccd79f9354f9f82bde76b4d8242b56b72505568c27be360b38d0fa8be2f92aca",
+      "entries": 4493,
+      "files": 4493,
+      "directories": 0,
+      "uncompressedBytes": 75748429,
+      "integrity": true,
+      "reasons": []
+    },
+    {
+      "path": "run-diagnostics-20260914/proxy-repair-retry-originals.zip",
+      "replay": null,
+      "sha256": "988dec3b7cbc4f4fb1a28867a81bb6c6b212ceef7d92a40ddd3230b5747dca95",
+      "entries": 175,
+      "files": 175,
+      "directories": 0,
+      "uncompressedBytes": 1455465,
+      "integrity": true,
+      "reasons": []
+    },
+    {
+      "path": "run-diagnostics-20260914/smoke-recovered-originals.zip",
+      "replay": "smoke",
+      "sha256": "f519a0ccc79bdcb274022c0a8de052fb156c5deb1a8ec3e20d4098d01ebca045",
+      "entries": 219,
+      "files": 219,
+      "directories": 0,
+      "uncompressedBytes": 3834792,
+      "integrity": true,
+      "reasons": []
+    },
+    {
+      "path": "live-regression-83b91d6-20260914/coverage-originals.zip",
+      "replay": null,
+      "sha256": "8f6a9c278380f658ea2cecf067f3382ecf8c2c54f82bc318b84ef5616c27cc09",
+      "entries": 391,
+      "files": 391,
+      "directories": 0,
+      "uncompressedBytes": 9128094,
+      "integrity": true,
+      "reasons": []
+    },
+    {
+      "path": "live-regression-83b91d6-20260914/n20-originals.zip",
+      "replay": null,
+      "sha256": "8e8b53d9a58bf27da3a18c867dae89f7e2d4eb6737aed562cb7dc4ae929957a4",
+      "entries": 4546,
+      "files": 4546,
+      "directories": 0,
+      "uncompressedBytes": 88428865,
+      "integrity": true,
+      "reasons": []
+    },
+    {
+      "path": "live-regression-83b91d6-20260914/smoke-originals.zip",
+      "replay": null,
+      "sha256": "2340cb0beb2fc77ca92d1ab6ea26d9a8134981a6484a7cd5cfec8bf905b09ee3",
+      "entries": 219,
+      "files": 219,
+      "directories": 0,
+      "uncompressedBytes": 3706430,
+      "integrity": true,
+      "reasons": []
+    }
+  ],
+  "extraction": [
+    {
+      "archive": "run-diagnostics-20260914/coverage-recovered-originals.zip",
+      "directory": "extracted/run-diagnostics-20260914__coverage-recovered-originals",
+      "files": 390,
+      "bytes": 7739309
+    },
+    {
+      "archive": "run-diagnostics-20260914/failed-smoke-originals.zip",
+      "directory": "extracted/run-diagnostics-20260914__failed-smoke-originals",
+      "files": 171,
+      "bytes": 1099780
+    },
+    {
+      "archive": "run-diagnostics-20260914/n20-recovered-originals.zip",
+      "directory": "extracted/run-diagnostics-20260914__n20-recovered-originals",
+      "files": 4493,
+      "bytes": 75748429
+    },
+    {
+      "archive": "run-diagnostics-20260914/proxy-repair-retry-originals.zip",
+      "directory": "extracted/run-diagnostics-20260914__proxy-repair-retry-originals",
+      "files": 175,
+      "bytes": 1455465
+    },
+    {
+      "archive": "run-diagnostics-20260914/smoke-recovered-originals.zip",
+      "directory": "extracted/run-diagnostics-20260914__smoke-recovered-originals",
+      "files": 219,
+      "bytes": 3834792
+    },
+    {
+      "archive": "live-regression-83b91d6-20260914/coverage-originals.zip",
+      "directory": "extracted/live-regression-83b91d6-20260914__coverage-originals",
+      "files": 391,
+      "bytes": 9128094
+    },
+    {
+      "archive": "live-regression-83b91d6-20260914/n20-originals.zip",
+      "directory": "extracted/live-regression-83b91d6-20260914__n20-originals",
+      "files": 4546,
+      "bytes": 88428865
+    },
+    {
+      "archive": "live-regression-83b91d6-20260914/smoke-originals.zip",
+      "directory": "extracted/live-regression-83b91d6-20260914__smoke-originals",
+      "files": 219,
+      "bytes": 3706430
+    }
+  ],
+  "groups": {
+    "coverage": {
+      "group": "coverage",
+      "expected": {
+        "runs": 1,
+        "candidates": 4,
+        "modelRuns": 4,
+        "strictN20": false
+      },
+      "runRoots": 1,
+      "observed": {
+        "invocations": 1,
+        "candidateTasks": 4,
+        "distinctCandidateDigests": 4,
+        "modelRuns": 4,
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "familyCount": 2,
+        "runCount": 1,
+        "fullSuccessRuns": 1,
+        "verifiedRuns": 1,
+        "readerOk": true,
+        "strictN20Eligible": false,
+        "strictN20RequiredRuns": 20,
+        "exitCode": 0
+      },
+      "checks": [
+        {
+          "name": "reader_exit_code",
+          "passed": true,
+          "evidence": "observed=0 expected=0"
+        },
+        {
+          "name": "reader_ok",
+          "passed": true,
+          "evidence": "observed=True expected=True"
+        },
+        {
+          "name": "invocations",
+          "passed": true,
+          "evidence": "observed=1 expected=1"
+        },
+        {
+          "name": "run_count",
+          "passed": true,
+          "evidence": "observed=1 expected=1"
+        },
+        {
+          "name": "verified_runs",
+          "passed": true,
+          "evidence": "observed=1 expected=1"
+        },
+        {
+          "name": "full_success_runs",
+          "passed": true,
+          "evidence": "observed=1 expected=1"
+        },
+        {
+          "name": "candidates",
+          "passed": true,
+          "evidence": "observed=4 expected=4"
+        },
+        {
+          "name": "distinct_candidate_digests",
+          "passed": true,
+          "evidence": "observed=4 expected=4"
+        },
+        {
+          "name": "model_runs",
+          "passed": true,
+          "evidence": "observed=4 expected=4"
+        },
+        {
+          "name": "strict_n20",
+          "passed": true,
+          "evidence": "observed=False expected=False"
+        },
+        {
+          "name": "strict_n20_required_runs",
+          "passed": true,
+          "evidence": "observed=20 expected=20"
+        },
+        {
+          "name": "observed_models",
+          "passed": true,
+          "evidence": "models=['deepseek-v4-flash']"
+        },
+        {
+          "name": "families",
+          "passed": true,
+          "evidence": "families=['normalization', 'reduction']"
+        }
+      ],
+      "passed": true
+    },
+    "n20": {
+      "group": "n20",
+      "expected": {
+        "runs": 20,
+        "candidates": 40,
+        "modelRuns": 44,
+        "strictN20": true
+      },
+      "runRoots": 20,
+      "observed": {
+        "invocations": 20,
+        "candidateTasks": 40,
+        "distinctCandidateDigests": 40,
+        "modelRuns": 44,
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "familyCount": 1,
+        "runCount": 20,
+        "fullSuccessRuns": 20,
+        "verifiedRuns": 20,
+        "readerOk": true,
+        "strictN20Eligible": true,
+        "strictN20RequiredRuns": 20,
+        "exitCode": 0
+      },
+      "checks": [
+        {
+          "name": "reader_exit_code",
+          "passed": true,
+          "evidence": "observed=0 expected=0"
+        },
+        {
+          "name": "reader_ok",
+          "passed": true,
+          "evidence": "observed=True expected=True"
+        },
+        {
+          "name": "invocations",
+          "passed": true,
+          "evidence": "observed=20 expected=20"
+        },
+        {
+          "name": "run_count",
+          "passed": true,
+          "evidence": "observed=20 expected=20"
+        },
+        {
+          "name": "verified_runs",
+          "passed": true,
+          "evidence": "observed=20 expected=20"
+        },
+        {
+          "name": "full_success_runs",
+          "passed": true,
+          "evidence": "observed=20 expected=20"
+        },
+        {
+          "name": "candidates",
+          "passed": true,
+          "evidence": "observed=40 expected=40"
+        },
+        {
+          "name": "distinct_candidate_digests",
+          "passed": true,
+          "evidence": "observed=40 expected=40"
+        },
+        {
+          "name": "model_runs",
+          "passed": true,
+          "evidence": "observed=44 expected=44"
+        },
+        {
+          "name": "strict_n20",
+          "passed": true,
+          "evidence": "observed=True expected=True"
+        },
+        {
+          "name": "strict_n20_required_runs",
+          "passed": true,
+          "evidence": "observed=20 expected=20"
+        },
+        {
+          "name": "observed_models",
+          "passed": true,
+          "evidence": "models=['deepseek-v4-flash']"
+        },
+        {
+          "name": "families",
+          "passed": true,
+          "evidence": "families=['affine']"
+        }
+      ],
+      "passed": true
+    },
+    "smoke": {
+      "group": "smoke",
+      "expected": {
+        "runs": 1,
+        "candidates": 2,
+        "modelRuns": 2,
+        "strictN20": false
+      },
+      "runRoots": 1,
+      "observed": {
+        "invocations": 1,
+        "candidateTasks": 2,
+        "distinctCandidateDigests": 2,
+        "modelRuns": 2,
+        "models": [
+          "deepseek-v4-flash"
+        ],
+        "familyCount": 1,
+        "runCount": 1,
+        "fullSuccessRuns": 1,
+        "verifiedRuns": 1,
+        "readerOk": true,
+        "strictN20Eligible": false,
+        "strictN20RequiredRuns": 20,
+        "exitCode": 0
+      },
+      "checks": [
+        {
+          "name": "reader_exit_code",
+          "passed": true,
+          "evidence": "observed=0 expected=0"
+        },
+        {
+          "name": "reader_ok",
+          "passed": true,
+          "evidence": "observed=True expected=True"
+        },
+        {
+          "name": "invocations",
+          "passed": true,
+          "evidence": "observed=1 expected=1"
+        },
+        {
+          "name": "run_count",
+          "passed": true,
+          "evidence": "observed=1 expected=1"
+        },
+        {
+          "name": "verified_runs",
+          "passed": true,
+          "evidence": "observed=1 expected=1"
+        },
+        {
+          "name": "full_success_runs",
+          "passed": true,
+          "evidence": "observed=1 expected=1"
+        },
+        {
+          "name": "candidates",
+          "passed": true,
+          "evidence": "observed=2 expected=2"
+        },
+        {
+          "name": "distinct_candidate_digests",
+          "passed": true,
+          "evidence": "observed=2 expected=2"
+        },
+        {
+          "name": "model_runs",
+          "passed": true,
+          "evidence": "observed=2 expected=2"
+        },
+        {
+          "name": "strict_n20",
+          "passed": true,
+          "evidence": "observed=False expected=False"
+        },
+        {
+          "name": "strict_n20_required_runs",
+          "passed": true,
+          "evidence": "observed=20 expected=20"
+        },
+        {
+          "name": "observed_models",
+          "passed": true,
+          "evidence": "models=['deepseek-v4-flash']"
+        },
+        {
+          "name": "families",
+          "passed": true,
+          "evidence": "families=['affine']"
+        }
+      ],
+      "passed": true
+    }
+  },
+  "readerInvocations": [
+    {
+      "group": "coverage",
+      "argv": [
+        "node.EXE",
+        "<bundle>/repo/docs/development/evidence/live-regression-20260913/verify-retained-runs.mjs",
+        "--repo",
+        "<bundle>/repo",
+        "<scratch>/extracted/run-diagnostics-20260914__coverage-recovered-originals/shared-gpu-QgcQww"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "stdoutFile": "reader/coverage.stdout.json",
+      "stdoutBytes": 43468,
+      "stdoutSha256": "7341c95a52a57fe58224f5156d265ed2bbfc2fbf2e870a34320d47921d4aee0d",
+      "stderrFile": "reader/coverage.stderr.txt",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "parsed": true
+    },
+    {
+      "group": "n20",
+      "argv": [
+        "node.EXE",
+        "<bundle>/repo/docs/development/evidence/live-regression-20260913/verify-retained-runs.mjs",
+        "--repo",
+        "<bundle>/repo",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-1834rH",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-3zpjpS",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-455pRN",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-4gl7nC",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-9DR0qo",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-Erc1Nq",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-M5zmup",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-Nxr7Yv",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-VtnOAW",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-a6riHU",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-bxoQ1W",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-c22EpL",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-lcUN5t",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-oQEe6L",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-qjzq49",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-r6xNsC",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-v5hRKH",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-wEY3Gd",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-xCwzG3",
+        "<scratch>/extracted/run-diagnostics-20260914__n20-recovered-originals/shared-gpu-zv3eSX"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "stdoutFile": "reader/n20.stdout.json",
+      "stdoutBytes": 455983,
+      "stdoutSha256": "633719fbead16c51443a41430fb26a4bf4fac6d6c4f6232f2a7f5e9b9c30930e",
+      "stderrFile": "reader/n20.stderr.txt",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "parsed": true
+    },
+    {
+      "group": "smoke",
+      "argv": [
+        "node.EXE",
+        "<bundle>/repo/docs/development/evidence/live-regression-20260913/verify-retained-runs.mjs",
+        "--repo",
+        "<bundle>/repo",
+        "<scratch>/extracted/run-diagnostics-20260914__smoke-recovered-originals/shared-gpu-cMvSAe"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "stdoutFile": "reader/smoke.stdout.json",
+      "stdoutBytes": 26815,
+      "stdoutSha256": "e8fcc0347434c75286eb479b194e32a7630447d6ff7dd9a4a9a8aaeb300f4d89",
+      "stderrFile": "reader/smoke.stderr.txt",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "parsed": true
+    }
+  ],
+  "node": {
+    "path": "F:\\Node\\node.EXE",
+    "version": "v22.23.2",
+    "versionExitCode": 0
+  },
+  "mismatches": [],
+  "failures": [],
+  "checks": [
+    {
+      "name": "path_safety",
+      "passed": true,
+      "evidence": "--report is a new file outside --bundle and --scratch, and --scratch does not overlap --bundle"
+    },
+    {
+      "name": "payload_manifest",
+      "passed": true,
+      "evidence": "15 payload file(s) match MANIFEST.sha256"
+    },
+    {
+      "name": "inputs_sha256",
+      "passed": true,
+      "evidence": "reader + 4 helper(s) + 8 archive(s) match the SHA256 declared in inputs.json"
+    },
+    {
+      "name": "archive_integrity",
+      "passed": true,
+      "evidence": "all 8 archive(s) pass SHA256, member-name safety and per-entry CRC/size checks"
+    },
+    {
+      "name": "archive_extraction",
+      "passed": true,
+      "evidence": "8 archive(s) extracted into a fresh scratch with original bytes preserved"
+    },
+    {
+      "name": "group_expectations:coverage",
+      "passed": true,
+      "evidence": "reader_exit_code=ok; reader_ok=ok; invocations=ok; run_count=ok; verified_runs=ok; full_success_runs=ok; candidates=ok; distinct_candidate_digests=ok; model_runs=ok; strict_n20=ok; strict_n20_required_runs=ok; observed_models=ok; families=ok"
+    },
+    {
+      "name": "group_expectations:n20",
+      "passed": true,
+      "evidence": "reader_exit_code=ok; reader_ok=ok; invocations=ok; run_count=ok; verified_runs=ok; full_success_runs=ok; candidates=ok; distinct_candidate_digests=ok; model_runs=ok; strict_n20=ok; strict_n20_required_runs=ok; observed_models=ok; families=ok"
+    },
+    {
+      "name": "group_expectations:smoke",
+      "passed": true,
+      "evidence": "reader_exit_code=ok; reader_ok=ok; invocations=ok; run_count=ok; verified_runs=ok; full_success_runs=ok; candidates=ok; distinct_candidate_digests=ok; model_runs=ok; strict_n20=ok; strict_n20_required_runs=ok; observed_models=ok; families=ok"
+    },
+    {
+      "name": "strict_n20_scope",
+      "passed": true,
+      "evidence": "strictN20Eligible groups observed: ['n20']; declared by inputs.json: ['n20']"
+    },
+    {
+      "name": "verify",
+      "passed": true,
+      "evidence": "all payload, archive, extraction and reader replay checks passed"
+    }
+  ],
+  "notes": [
+    "Payload membership/bytes/SHA256 is checked before any extraction or Node execution.",
+    "All eight archives are hash- and entry-verified; only archives whose inputs.json replay field names a group are successful-run replay inputs. Failed/unknown history is verified, never skipped.",
+    "Historical absolute path strings inside the originals are preserved byte-for-byte and are never dereferenced; verification depends only on the relocated bundle.",
+    "User configuration, credentials and unrelated repository files are not part of the bundle.",
+    "Bundle, scratch and report path relationships are validated before anything is written; an unsafe --report path is refused without being written."
+  ],
+  "strictN20EligibleGroups": [
+    "n20"
+  ],
+  "result": {
+    "ok": true,
+    "exitCode": 0,
+    "groups": {
+      "smoke": true,
+      "n20": true,
+      "coverage": true
+    },
+    "replayInvocations": 3
+  }
+}

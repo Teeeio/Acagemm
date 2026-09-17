@@ -1,0 +1,51 @@
+{
+  "capturedAt": "2026-09-12T08:01:46.569Z",
+  "baseCommit": "dd9593882109a884d6eedc725b683f586d2e7f6c",
+  "note": "Post-run fingerprint captured before acceptance-test edits were integrated. Production files were unchanged throughout this live run; audit changes were not yet committed.",
+  "files": [
+    {
+      "path": "client-runtime/operator-test-evidence.mjs",
+      "sha256": "40af990564cdfc43ee7c911d305ec5dd5514f428f23a054c0c5d9cb4831b3d5f"
+    },
+    {
+      "path": "client-runtime/mission-project-state.mjs",
+      "sha256": "a8ff887b4c4f9de1ad6bb98bfc45a017dbf4cc56bc4d8f03d8b2239572c46956"
+    },
+    {
+      "path": "client-runtime/agent-runtime.mjs",
+      "sha256": "51d1782ddfc09417d2d0e993808cce6769724e1093e990d4ee77ad8385c2b50e"
+    },
+    {
+      "path": "client-runtime/experience-contract.mjs",
+      "sha256": "fd7ef652bc7d4faac6fad4269d525376873168c54236d39d99ee813e03ac190c"
+    },
+    {
+      "path": "client-runtime/application/round-experience-service.mjs",
+      "sha256": "d3bfbfe16bfecd6c85e3568eaf8b0f84bf3c8dfbd4a247f7143486e7b120cdcb"
+    },
+    {
+      "path": "client-runtime/application/experience-service.mjs",
+      "sha256": "9818b32105673580187482732253cdf897a4b732f45ac105b4cb1b4b358f52db"
+    },
+    {
+      "path": "client-runtime/application/agent-commands.mjs",
+      "sha256": "f3dc86eb7a49fb7ce5b4f79e8eb1b27183563c9f3b8b49ca328bbe0403615ad6"
+    },
+    {
+      "path": "client-runtime/application/agent-round-service.mjs",
+      "sha256": "41c332ace8c91da294edd6342b006c739374a382326c043b52ff53467070eccd"
+    },
+    {
+      "path": "client-runtime/application/shared-gpu-experience-verifier.mjs",
+      "sha256": "00243ecdefd09a56692a9210a8e0cf1a250b9759edc4b64843d865912311c785"
+    },
+    {
+      "path": "tools/local-shared-gpu-runner.py",
+      "sha256": "063fe1b502fc0ca0b63d1843275a82f29aaa4ed2f0b62b41f6740cf37dc3b1ae"
+    },
+    {
+      "path": "scripts/e2e-shared-gpu-agent-iteration.mjs",
+      "sha256": "0b9bfe2052e10f3c1df50677cb7b5a87cb2083519ef10ecc21015630ae2d00af"
+    }
+  ]
+}

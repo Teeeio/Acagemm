@@ -47,6 +47,30 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { selectEvidenceDecision } from '../tools/local-c500-tester/workflow-summary.mjs';
+
+const EVIDENCE_EXECUTION_LABELS = { live: 'live（真实执行）', simulation: 'simulation（仿真执行）', cpu: 'cpu（CPU 执行）', unknown: 'unknown（执行来源未知）' };
+const EVIDENCE_STATUS_LABELS = { allowed: 'allowed', reference: 'reference', blocked: 'blocked', waiting_external_verification: '等待外部验证', unknown: 'unknown' };
+const evidenceExecutionLabel = (decision) => decision ? (EVIDENCE_EXECUTION_LABELS[decision.execution.kind] || decision.execution.kind) : 'unknown（无版本化决策）';
+const evidenceStatusLabel = (status) => EVIDENCE_STATUS_LABELS[status] || status || 'unknown';
+const evidenceReasons = (reasons = []) => (reasons.length ? reasons.join(', ') : '无');
+
+// Read-only projection of the versioned decision held by Mission state. Never
+// derives adoption/publication from flat booleans; only a decision bound to the
+// current benchmark candidate/run is used, and a missing decision stays null.
+const projectAppEvidenceDecision = (state = {}) => {
+  const benchmark = state.benchmark || {};
+  const review = state.decisionReview || {};
+  const benchmarkCandidate = benchmark.candidate || {};
+  const benchmarkCandidateId = benchmarkCandidate.id || state.appliedCandidateId || null;
+  const appliedCandidate = (state.candidateEvaluations || []).find((candidate) => candidate.id === benchmarkCandidateId) || {};
+  const currentIdentity = {
+    candidateId: benchmarkCandidateId,
+    candidateDigest: benchmarkCandidate.digest || appliedCandidate.patchDigest || null,
+    runId: benchmark.runId || null,
+  };
+  return selectEvidenceDecision(currentIdentity, benchmark.evidenceDecision, review.gate?.decision);
+};
 
 const stageOrder = {
   diagnosis: 0,
@@ -1339,10 +1363,20 @@ function CodeView({ patchApplied, workspaceFiles: remoteWorkspaceFiles, candidat
   );
 }
 
-function ExperimentsView({ benchmarkStatus, benchmarkProgress, benchmarkLogs, benchmarkResult, testMatrix, canRollback, onRunBenchmark, onRollbackStage, onOpenModal, paused }) {
+function ExperimentsView({ benchmarkStatus, benchmarkProgress, benchmarkLogs, benchmarkResult, evidenceDecision = null, testMatrix, canRollback, onRunBenchmark, onRollbackStage, onOpenModal, paused }) {
   const complete = benchmarkStatus === 'complete';
   const running = benchmarkStatus === 'running';
-  const liveEvidence = benchmarkResult?.environment?.liveHardware === true;
+  const publicationAllowed = evidenceDecision?.publication?.status === 'allowed';
+  const evidenceHeadline = !complete
+    ? '正在收集 Benchmark / Tracer / Profiler'
+    : evidenceDecision
+      ? `执行 ${evidenceExecutionLabel(evidenceDecision)} · 采用 ${evidenceStatusLabel(evidenceDecision.adoption?.status)} · 发布 ${evidenceStatusLabel(evidenceDecision.publication?.status)}`
+      : '无版本化决策：发布状态 unknown，不可发布';
+  const evidenceDetail = !complete
+    ? '测试完成后读取版本化证据决策，分别显示执行、正确性、基准、采用与发布结果。'
+    : evidenceDecision
+      ? `correctness ${evidenceDecision.correctness?.passed ? 'passed' : 'failed'} · benchmark ${evidenceDecision.benchmark?.valid ? 'valid' : 'invalid'}${publicationAllowed ? '；该决策允许正式发布。' : `；不可发布原因：${evidenceReasons(evidenceDecision.publication?.reasons)}。`}`
+      : '历史结果缺少版本化决策，不能标记为真实硬件证据，也不会发布正式知识。';
   const selectedEnvironments = testMatrix?.environments || ['C500', 'CUDA'];
   const visibleTasks = selectedEnvironments.map((platform, index) => ({
     id: `matrix-${String(platform).toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}-${index + 1}`,
@@ -1389,7 +1423,7 @@ function ExperimentsView({ benchmarkStatus, benchmarkProgress, benchmarkLogs, be
 
       <section className="evidence-band">
         <ShieldCheck size={23} />
-        <div><span>EVIDENCE POLICY</span><strong>{complete ? (liveEvidence ? '真实硬件证据已形成，可进入正式 Gate' : 'Mock 证据已形成，仅用于验证流程') : '正在收集 Benchmark / Tracer / Profiler'}</strong><p>{liveEvidence ? 'Run 已绑定真实 Environment Snapshot 与 Runner Adapter 版本，结果可审计、可复现。' : '当前测试服务未连接真实硬件；结果可以推动演示闭环，但不会标记为 Level 3 或发布正式知识。'}</p></div>
+        <div><span>EVIDENCE POLICY</span><strong>{evidenceHeadline}</strong><p>{evidenceDetail}</p></div>
         <button className="text-link" onClick={() => onOpenModal('knowledgeEvidence')}>查看证据引用 <ArrowRight size={15} /></button>
       </section>
     </main>
@@ -1417,8 +1451,18 @@ function DecisionView({ stage, decisionReview, currentBest, workflowRecovery, ca
     { label: '性能目标', detail: selected.c500 == null ? '等待测试结果' : `${selected.c500}μs`, passed: selected.c500 != null && selected.c500 <= 45 },
     { label: '证据完整性', detail: selected.evidence, passed: Boolean(selected.evidence) },
   ];
-  const allGatesPassed = selected.acceptGate ? selected.acceptGate.passed === true : gates.every((gate) => gate.passed || gate.informational);
-  const decisionStatus = !ready ? '等待验证' : reviewPending ? '流程已阻塞' : adoptionReverted ? `已回退到 ${currentBest?.version || 'cnd.01'}` : reviewResolved ? '策略已自动执行' : allGatesPassed ? 'Accept Gate 通过' : '进入参考池';
+  // Adoption/publication wording comes from the versioned decision when present;
+  // the review Gate is only used when it is bound to this selected candidate.
+  const selectedIdentity = { candidateId: selected.id || null, candidateDigest: selected.patchDigest || selected.digest || null, runId: selected.evidenceRunId || null };
+  const selectedDecision = selectEvidenceDecision(selectedIdentity, selected.acceptGate?.decision)
+    || selectEvidenceDecision(selectedIdentity, decisionReview?.gate?.decision);
+  const allGatesPassed = selectedDecision
+    ? selectedDecision.adoption.status === 'allowed'
+    : selected.acceptGate ? selected.acceptGate.passed === true : gates.every((gate) => gate.passed || gate.informational);
+  const decisionOutcome = selectedDecision
+    ? `采用 ${evidenceStatusLabel(selectedDecision.adoption.status)} / 发布 ${evidenceStatusLabel(selectedDecision.publication.status)}`
+    : allGatesPassed ? 'Accept Gate 通过（无版本化决策）' : '进入参考池（无版本化决策）';
+  const decisionStatus = !ready ? '等待验证' : reviewPending ? '流程已阻塞' : adoptionReverted ? `已回退到 ${currentBest?.version || 'cnd.01'}` : reviewResolved ? `策略已执行 · ${decisionOutcome}` : decisionOutcome;
   const decisionTone = !ready ? 'waiting' : reviewPending ? 'blocked' : adoptionReverted ? 'reverted' : reviewResolved ? 'completed' : allGatesPassed ? 'policy-ready' : 'attention';
   return (
     <main className="page detail-page decision-page">
@@ -1430,7 +1474,7 @@ function DecisionView({ stage, decisionReview, currentBest, workflowRecovery, ca
         <div><span>{adoptionReverted ? 'CURRENT BEST' : 'SELECTED CANDIDATE'}</span><strong>{adoptionReverted ? currentBest?.version : selected.label}</strong><small>{adoptionReverted ? '上一稳定版本已恢复' : selected.title}</small></div>
         <div><span>BASELINE</span><strong>53.8 <em>μs</em></strong><small>C500 p50</small></div>
         <div><span>PROPOSED</span><strong className="metric-good">{selected.c500} <em>μs</em></strong><small>{selected.delta} vs baseline</small></div>
-        <div className={`decision-hero-result ${decisionTone}`}><span>FLOW DECISION</span><strong>{decisionStatus}</strong><small>{reviewPending ? 'blocked by intervention' : 'adoption policy evaluated'}</small></div>
+        <div className={`decision-hero-result ${decisionTone}`}><span>FLOW DECISION</span><strong>{decisionStatus}</strong><small>{reviewPending ? 'blocked by intervention' : selectedDecision ? `publication ${selectedDecision.publication.status} · ${evidenceReasons(selectedDecision.publication.reasons)}` : '无版本化决策，不推导发布结论'}</small></div>
       </section>
       <section className="decision-workspace">
         <aside className="decision-candidates">
@@ -1482,12 +1526,53 @@ function CurationView({ drafts = defaultKnowledgeDrafts, publishedAssets, knowle
   const [activeDraftId, setActiveDraftId] = useState('exp.async-plan-cache');
   const [editorTab, setEditorTab] = useState('definition');
   if (!drafts.length) return <main className="page detail-page"><section className="detail-heading"><div><span className="detail-overline">KNOWLEDGE CURATION</span><h1>暂无待沉淀经验</h1><p>Agent 会在真实候选完成验证和决策后生成结构化知识草稿。</p></div></section><section className="knowledge-empty"><BookOpen size={25} /><strong>等待 Agent 产出知识草稿</strong><span>客户端不会把内置示例伪装成本次 Mission 的经验。</span></section></main>;
-  const publishedIds = new Set((publishedAssets || []).filter((asset) => asset.status === 'published').map((asset) => asset.id));
-  const simulationOnly = knowledgeMaintenance.changes?.some((change) => change.outcome === 'simulation_only');
+  // Asset/draft outcome reads its own versioned evidence decision; nothing is
+  // inferred from flat booleans. The draft's own evidenceBinding is the only
+  // identity used: the draft's decision, its maintenance change's decision and
+  // its published asset's decision must each be bound to this exact
+  // candidateId/candidateDigest/runId. A draft without a complete binding stays
+  // unknown, and neither current benchmark/currentBest nor a foreign DTO's own
+  // binding may fill it in. A legacy `auto_published` outcome is shown only as a
+  // historical record, never as a current publication badge.
+  const draftDecisionIdentity = (draft) => ({
+    candidateId: draft?.evidenceBinding?.candidateId || null,
+    candidateDigest: draft?.evidenceBinding?.candidateDigest || null,
+    runId: draft?.evidenceBinding?.runId || null,
+  });
+  const decisionForDraft = (draft) => selectEvidenceDecision(
+    draftDecisionIdentity(draft),
+    draft?.evidenceDecision,
+    knowledgeMaintenance.changes?.find((change) => change.draftId === draft?.id)?.evidenceDecision,
+    (publishedAssets || []).find((asset) => asset.id === draft?.id)?.evidenceDecision,
+  );
+  const draftOutcomeLabel = (draft) => {
+    const decision = decisionForDraft(draft);
+    if (decision) {
+      if (decision.publication.status === 'allowed') return '自动发布';
+      if (decision.publication.status === 'waiting_external_verification') return '待外部验证';
+      return `不可发布(${evidenceReasons(decision.publication.reasons)})`;
+    }
+    const change = knowledgeMaintenance.changes?.find((item) => item.draftId === draft?.id);
+    if (change?.outcome === 'simulation_only') return '仿真预览';
+    if (change?.outcome === 'auto_published') return '历史自动发布记录（无版本化决策，不作为当前发布）';
+    return '等待策略';
+  };
+  const simulationOnly = knowledgeMaintenance.changes?.some((change) => {
+    const draft = drafts.find((item) => item.id === change.draftId);
+    // Same draft identity as every other read: an arbitrary change DTO must not
+    // be projected directly, and a change without its own draft stays legacy.
+    const decision = decisionForDraft(draft);
+    return decision ? decision.execution.kind === 'simulation' : change.outcome === 'simulation_only';
+  });
+  const draftIsPublished = (draft) => {
+    const decision = decisionForDraft(draft);
+    return Boolean(decision && decision.publication.status === 'allowed');
+  };
   const activeDraft = drafts.find((draft) => draft.id === activeDraftId) || drafts[0];
   const activeChange = knowledgeMaintenance.changes?.find((change) => change.draftId === activeDraft.id);
-  const published = publishedIds.has(activeDraft.id) || activeChange?.outcome === 'auto_published';
-  const publishedCount = publishedIds.size;
+  const activeDecision = decisionForDraft(activeDraft);
+  const published = draftIsPublished(activeDraft);
+  const publishedCount = drafts.filter(draftIsPublished).length;
   const updateDraft = (field, value) => onUpdateDraft(activeDraft.id, { [field]: value });
   const deriveScope = (draft) => [draft.hardware?.join(' / '), draft.operator, draft.dtype, draft.shape].filter(Boolean).join(' · ');
   const updateControlled = (field, value) => {
@@ -1513,11 +1598,11 @@ function CurationView({ drafts = defaultKnowledgeDrafts, publishedAssets, knowle
           <nav className="curation-draft-list" aria-label="本次知识维护结果">
             {drafts.map((draft) => {
               const change = knowledgeMaintenance.changes?.find((item) => item.draftId === draft.id);
-              const isPublished = publishedIds.has(draft.id) || change?.outcome === 'auto_published';
-              return <button key={draft.id} className={activeDraft.id === draft.id ? 'selected' : ''} onClick={() => selectDraft(draft.id)}><span className={`curation-draft-icon ${isPublished ? 'published' : ''}`}>{isPublished ? <Check size={14} /> : <Lightbulb size={14} />}</span><span><small>{draft.code} · {change?.action === 'update' ? '合并更新' : '新建资产'}</small><strong>{draft.title}</strong><em>{change?.nextVersion || '待版本化'} · {isPublished ? '自动发布' : change?.outcome === 'simulation_only' ? '仿真预览' : '等待策略'}</em></span><ChevronRight size={14} /></button>;
+              const isPublished = draftIsPublished(draft);
+              return <button key={draft.id} className={activeDraft.id === draft.id ? 'selected' : ''} onClick={() => selectDraft(draft.id)}><span className={`curation-draft-icon ${isPublished ? 'published' : ''}`}>{isPublished ? <Check size={14} /> : <Lightbulb size={14} />}</span><span><small>{draft.code} · {change?.action === 'update' ? '合并更新' : '新建资产'}</small><strong>{draft.title}</strong><em>{change?.nextVersion || '待版本化'} · {draftOutcomeLabel(draft)}</em></span><ChevronRight size={14} /></button>;
             })}
           </nav>
-          <div className="curation-lineage-summary"><ShieldCheck size={15} /><div><strong>{simulationOnly ? 'Mock 只验证知识维护链路' : '决策触发，不依赖人工发布'}</strong><small>{simulationOnly ? 'simulation evidence · preview only' : 'decision.adopted · Level 3 evidence · fixed versions'}</small></div></div>
+          <div className="curation-lineage-summary"><ShieldCheck size={15} /><div><strong>{simulationOnly ? '仿真执行只验证知识维护链路' : '决策触发，不依赖人工发布'}</strong><small>{activeDecision ? `${activeDecision.schemaVersion} · execution ${activeDecision.execution.kind} · publication ${activeDecision.publication.status}` : simulationOnly ? 'legacy simulation evidence · preview only' : '无版本化决策 · 不可发布'}</small></div></div>
           <button className="text-link" onClick={() => onOpenModal('events')}>查看自动维护审计记录 <ArrowRight size={14} /></button>
         </aside>
         <section className="curation-editor-panel">
@@ -2125,6 +2210,7 @@ export default function App() {
   const [benchmarkProgress, setBenchmarkProgress] = useState(0);
   const [benchmarkLogs, setBenchmarkLogs] = useState([]);
   const [benchmarkResult, setBenchmarkResult] = useState(null);
+  const [benchmarkEvidenceDecision, setBenchmarkEvidenceDecision] = useState(null);
   const [testMatrix, setTestMatrix] = useState({ environments: ['C500', 'CUDA'], stages: ['Correctness', 'Probe', 'Full Benchmark'] });
   const [knowledgeDraftsState, setKnowledgeDraftsState] = useState([]);
   const [candidateEvaluations, setCandidateEvaluations] = useState([]);
@@ -2185,6 +2271,7 @@ export default function App() {
       setBenchmarkLogs(state.benchmark.logs || []);
       setBenchmarkResult(state.benchmark.result || null);
     }
+    if (state.benchmark || state.decisionReview) setBenchmarkEvidenceDecision(projectAppEvidenceDecision(state));
     if (state.testMatrix) setTestMatrix(state.testMatrix);
     if (Array.isArray(state.knowledgeDrafts)) {
       setKnowledgeDraftsState(state.knowledgeDrafts);
@@ -2525,9 +2612,11 @@ export default function App() {
   useEffect(() => {
     if (benchmarkStatus === 'complete' && stage === 'evidence' && view === 'experiments') {
       navigateMission('decision');
-      notify(benchmarkResult?.environment?.liveHardware === true ? 'Full Benchmark 完成，已生成真实硬件证据。' : 'Mock Benchmark 完成，已生成流程验证证据。');
+      notify(benchmarkEvidenceDecision
+        ? `Full Benchmark 完成：执行 ${evidenceExecutionLabel(benchmarkEvidenceDecision)}，发布 ${evidenceStatusLabel(benchmarkEvidenceDecision.publication?.status)}。`
+        : 'Full Benchmark 完成，但没有版本化决策；发布状态 unknown，不可发布。');
     }
-  }, [benchmarkStatus, stage, view, benchmarkResult]);
+  }, [benchmarkStatus, stage, view, benchmarkEvidenceDecision]);
   useEffect(() => () => Object.values(draftSaveTimers.current).forEach((timer) => window.clearTimeout(timer)), []);
   useEffect(() => {
     const handleKeyboard = (event) => {
@@ -2550,7 +2639,7 @@ export default function App() {
   let content;
   if (view === 'iterations') content = <IterationsView candidateEvaluations={candidateEvaluations} failureRecords={failureRecords} onOpenModal={openModal} />;
   else if (view === 'code') content = <CodeView patchApplied={patchApplied} workspaceFiles={workspaceFilesState} candidateEvaluations={candidateEvaluations} currentAction={agentState.currentAction} onApplyPatch={applyPatch} onOpenModal={openModal} paused={missionPaused} />;
-  else if (view === 'experiments') content = <ExperimentsView benchmarkStatus={benchmarkStatus} benchmarkProgress={benchmarkProgress} benchmarkLogs={benchmarkLogs} benchmarkResult={benchmarkResult} testMatrix={testMatrix} canRollback={Boolean(workflowRecovery?.checkpoints?.length)} onRunBenchmark={runBenchmark} onRollbackStage={rollbackStage} onOpenModal={openModal} paused={missionPaused} />;
+  else if (view === 'experiments') content = <ExperimentsView benchmarkStatus={benchmarkStatus} benchmarkProgress={benchmarkProgress} benchmarkLogs={benchmarkLogs} benchmarkResult={benchmarkResult} evidenceDecision={benchmarkEvidenceDecision} testMatrix={testMatrix} canRollback={Boolean(workflowRecovery?.checkpoints?.length)} onRunBenchmark={runBenchmark} onRollbackStage={rollbackStage} onOpenModal={openModal} paused={missionPaused} />;
   else if (view === 'decision') content = <DecisionView stage={stage} decisionReview={decisionReview} currentBest={currentBest} workflowRecovery={workflowRecovery} candidateEvaluations={candidateEvaluations} activeMission={activeMission} onRollbackStage={rollbackStage} onRevertAdoption={revertAdoption} onOpenModal={openModal} onViewCuration={() => navigateMission('curation')} paused={missionPaused} />;
   else if (view === 'curation') content = <CurationView drafts={knowledgeDraftsState} publishedAssets={publishedAssets} knowledgeMaintenance={knowledgeMaintenance} activeMission={activeMission} onUpdateDraft={updateKnowledgeDraft} onViewLibrary={() => navigateGlobal('knowledge')} onOpenModal={openModal} optionLibrary={knowledgeOptionLibrary} />;
   else if (view === 'knowledge') content = <KnowledgeView catalog={effectiveCatalog} setView={navigateMission} onOpenModal={openModal} missionContext={missionContext} activeMission={activeMission} references={knowledgeReferences} onReference={referenceKnowledge} />;

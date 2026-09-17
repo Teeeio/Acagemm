@@ -1,0 +1,24 @@
+[
+  {
+    "pageId": "technique-kernel-fusion",
+    "reviewId": "sm86-principles-v1",
+    "mode": "reviewed-transfer",
+    "content": "Project-reviewed transferable suggestion, not an executed or verified result: where the Mission explicitly has producer/consumer operations, consider whether keeping intermediates within a launch can reduce materialization. Preserve the exact numerical contract and independently compare the candidate with its baseline. Fusion can increase live state, registers and synchronization; do not assume a speedup. This summary excludes the source's Blackwell/TMEM-specific examples and makes no claim that sm86 supports those instructions. Applicability review covers this general principle only, not the original implementation or its reported performance.",
+    "topics": ["kernel-fusion", "producer-consumer", "intermediate-materialization"],
+    "hardware": ["nvidia-gpu"],
+    "architectures": ["sm86"],
+    "requiredCapabilities": [],
+    "software": []
+  },
+  {
+    "pageId": "technique-vectorized-loads",
+    "reviewId": "sm86-principles-v1",
+    "mode": "reviewed-transfer",
+    "content": "Project-reviewed transferable suggestion, not an executed or verified result: for explicitly contiguous per-thread data, prove alignment, access legality and tail handling for every fixed shape before trying wider loads. Compare scalar and wider candidates while keeping work mapping and cache policy constant. Check compiler output and measure actual correctness and runtime. Wider source expressions do not guarantee wider transactions, and extra registers may offset benefits. No profiler evidence here establishes a bandwidth bottleneck. This summary excludes the source's NVFP4 implementation and latency claims; its sm86 applicability review covers only this bounded validation method.",
+    "topics": ["vectorization", "vectorized-loads", "contiguous", "alignment", "tail-handling"],
+    "hardware": ["nvidia-gpu"],
+    "architectures": ["sm86"],
+    "requiredCapabilities": [],
+    "software": []
+  }
+]

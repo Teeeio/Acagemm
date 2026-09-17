@@ -3,6 +3,7 @@ import { addAuditEvent, appendRuntimeEvent } from './runtime-events.mjs';
 import { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
 import { createBaselineRequirementState, createBaselineResolutionState, createBaselineSourcePolicy, createDecisionReviewState, normalizeBaselineKind } from './evidence-state.mjs';
 import { buildBaselineEvidence, evaluateAcceptGate } from './accept-gate.mjs';
+import { classifyEvidenceDecision } from './knowledge-state.mjs';
 import { safeMissionId } from './state-identifiers.mjs';
 
 export const isInfrastructureTestFailure = (failure = {}) => {
@@ -17,6 +18,98 @@ export const isInfrastructureTestFailure = (failure = {}) => {
   ].filter(Boolean).join(' ').toLowerCase();
   if (['REMOTE_UNREACHABLE', 'REMOTE_TIMEOUT', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)) return true;
   return /remote api unreachable|tls|ssl|socket disconnected|connection refused|connection reset|network timed? ?out|connect timed? ?out|econnreset|econnrefused|etimedout|eai_again|enotfound/.test(message);
+};
+
+// 后端/来源名不是硬件目标。真实执行目标只能来自驱动探测结果，绝不从 backend
+// 字符串、设备型号或当前宿主环境反推；纯字符串无法证明执行真的探测过目标。
+const BACKEND_TARGET_NAMES = new Set(['local-shared-gpu', 'local-c500', 'local-c550']);
+export const isBackendTargetName = (value) => typeof value === 'string' && BACKEND_TARGET_NAMES.has(value.trim().toLowerCase());
+
+const normalizeTargetValues = (value) => {
+  const items = Array.isArray(value) ? value : value == null ? [] : [value];
+  const result = [];
+  for (const item of items) {
+    if (typeof item !== 'string') continue;
+    const normalized = item.trim().toLowerCase();
+    if (!normalized || result.includes(normalized)) continue;
+    result.push(normalized);
+    if (result.length >= 16) break;
+  }
+  return result;
+};
+
+// 返回 null 表示「本轮没有可信的实际执行目标」：此时必须保留旧目标，不得清空。
+// 探测凭据是 environment.targetProbe 中真实的 deviceName/driverVersion，或归一化后的
+// environment.device + environment.driverVersion。仅硬件/架构字符串不构成执行已探测的证明，
+// 因此 shared-GPU 预检失败结果里硬编码的 hardware="nvidia-gpu" 不会覆盖历史目标。
+// CPU 的 terminal completed 结果（hardware=cpu 且 executionMode=cpu）可独立保留，不要求 GPU 探测。
+export const extractEnvironmentTarget = (environment, { status } = {}) => {
+  if (!environment || typeof environment !== 'object' || Array.isArray(environment)) return null;
+  const probe = environment.targetProbe && typeof environment.targetProbe === 'object' && !Array.isArray(environment.targetProbe) ? environment.targetProbe : {};
+  const hardware = normalizeTargetValues(environment.hardware).filter((item) => !isBackendTargetName(item));
+  if (!hardware.length) return null;
+  const architecture = normalizeTargetValues(environment.architecture).filter((item) => !isBackendTargetName(item));
+  const executionMode = typeof environment.executionMode === 'string' ? environment.executionMode.trim().toLowerCase() : null;
+  const targetText = (value) => typeof value === 'string' && value.trim() ? value.trim() : null;
+  const device = targetText(environment.device) || targetText(probe.deviceName);
+  const driverVersion = targetText(environment.driverVersion) || targetText(probe.driverVersion);
+  const probed = Boolean(device && driverVersion);
+  const cpuDeclared = status === 'completed' && executionMode === 'cpu' && hardware.length === 1 && hardware[0] === 'cpu';
+  if (!probed && !cpuDeclared) return null;
+  return {
+    hardware,
+    architecture,
+    device,
+    driverVersion,
+    backend: typeof environment.source === 'string' && environment.source.trim() ? environment.source.trim().toLowerCase() : null,
+    executionMode,
+  };
+};
+
+const projectResolvedTarget = (state, snapshot) => {
+  const activeMissionId = typeof state?.activeMissionId === 'string' && state.activeMissionId ? state.activeMissionId : null;
+  if (!activeMissionId) return;
+  // 任务与 Mission 的归属以提交载荷为准；显式属于别的 Mission 的结果绝不能污染本 Mission。
+  if (snapshot?.payload?.missionId != null && snapshot.payload.missionId !== activeMissionId) return;
+  const result = snapshot?.result;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return;
+  if (result.experienceEvidence?.missionId != null && result.experienceEvidence.missionId !== activeMissionId) return;
+  const target = extractEnvironmentTarget(result.environment, { status: snapshot.status });
+  if (!target) return;
+  const sourceRunId = [snapshot.payload?.requestId, result.experienceEvidence?.runId, snapshot.runId, state.benchmark?.runId]
+    .find((value) => typeof value === 'string' && value) || null;
+  const previous = state.iterationStats?.resolvedTarget?.missionId === activeMissionId ? state.iterationStats.resolvedTarget : null;
+  const mission = state.missions?.find((item) => item.id === activeMissionId);
+  const constraints = [
+    ['previous', previous && { hardware: normalizeTargetValues(previous.hardware), architecture: normalizeTargetValues(previous.architecture) }],
+    ['mission', { hardware: normalizeTargetValues(mission?.hardware).filter((item) => !isBackendTargetName(item)), architecture: normalizeTargetValues(mission?.architecture) }],
+  ];
+  const issues = [];
+  for (const [source, expected] of constraints) {
+    if (!expected) continue;
+    for (const field of ['hardware', 'architecture']) {
+      if (expected[field].length && (!target[field].length || target[field].some((value) => !expected[field].includes(value)))) issues.push({ source, field, expected: expected[field], actual: target[field] });
+    }
+  }
+  const mismatch = issues.length ? { missionId: activeMissionId, sourceTaskId: snapshot.taskId, runId: sourceRunId, issues, detectedAt: snapshot.completedAt || new Date().toISOString() } : null;
+  const existingMismatches = state.iterationStats?.resolvedTargetMismatches || [];
+  const seen = mismatch && existingMismatches.some((item) => item.sourceTaskId === mismatch.sourceTaskId && JSON.stringify(item.issues) === JSON.stringify(mismatch.issues));
+  state.iterationStats = {
+    ...(state.iterationStats || {}),
+    resolvedTarget: {
+      missionId: activeMissionId,
+      hardware: target.hardware,
+      ...(target.architecture.length ? { architecture: target.architecture } : {}),
+      device: target.device,
+      driverVersion: target.driverVersion,
+      backend: target.backend,
+      executionMode: target.executionMode,
+      sourceTaskId: snapshot.taskId || null,
+      sourceRunId,
+      resolvedAt: snapshot.completedAt || new Date().toISOString(),
+    },
+    ...(mismatch ? { resolvedTargetMismatch: mismatch, resolvedTargetMismatches: seen ? existingMismatches : [...existingMismatches, mismatch].slice(-10) } : {}),
+  };
 };
 
 export function applyOperatorTestSnapshot(state, snapshot) {
@@ -42,12 +135,36 @@ export function applyOperatorTestSnapshot(state, snapshot) {
     };
   }
   const previousStatus = state.benchmark.status;
+  // 同一终态快照的重复投影必须完全无副作用：重复 tick / JSON 恢复不得新增
+  // events、时间戳、候选处置或资产版本。
+  const canonicalSnapshot = (value) => Array.isArray(value) ? value.map(canonicalSnapshot)
+    : value && typeof value === 'object'
+      ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalSnapshot(value[key])])) : value;
+  const snapshotFingerprint = JSON.stringify(canonicalSnapshot(snapshot));
+  const terminalReplay = ['complete', 'failed', 'cancelled'].includes(previousStatus)
+    && ['completed', 'failed', 'cancelled'].includes(snapshot.status)
+    && state.benchmark.snapshotFingerprint === snapshotFingerprint;
+  if (terminalReplay) return finish();
   const nextStatus = snapshot.resourceRelease?.confirmed === false ? 'running' : snapshot.status === 'completed' ? 'complete' : snapshot.status === 'failed' ? 'failed' : snapshot.status === 'cancelled' ? 'cancelled' : 'running';
+  // 后端任务身份只来自快照显式携带的 remoteTaskId；队列 testTaskId 不是它的替代，
+  // 绝不能回填。快照省略 remoteTaskId 时，只有同一 request（同一 payload.requestId）
+  // 已记录过的身份才可保留；新 request 绝不继承上一个 run 的 backend taskId。
+  const requestId = snapshot.payload?.requestId != null ? snapshot.payload.requestId : (state.benchmark?.requestId ?? null);
+  const snapshotRunId = snapshot.payload?.runId != null ? snapshot.payload.runId : null;
+  const sameRequest = (snapshot.payload?.requestId != null && state.benchmark?.requestId != null
+      && snapshot.payload.requestId === state.benchmark.requestId)
+    || (snapshotRunId != null && state.benchmark?.runId != null && snapshotRunId === state.benchmark.runId
+      && (snapshot.payload?.requestId == null || state.benchmark?.requestId == null));
   state.benchmark = {
     ...state.benchmark,
+    snapshotFingerprint,
     status: nextStatus,
     ...(snapshot.resourceRelease ? { resourceRelease: structuredClone(snapshot.resourceRelease) } : {}),
     progress: Number(snapshot.progress || 0),
+    requestId,
+    remoteTaskId: snapshot.remoteTaskId != null
+      ? snapshot.remoteTaskId
+      : (sameRequest ? (state.benchmark?.remoteTaskId ?? null) : null),
     logs: Array.isArray(snapshot.logs) ? structuredClone(snapshot.logs) : [],
     completedAt: snapshot.completedAt || null,
     durationMs: Number(snapshot.durationMs || state.benchmark.durationMs || 0),
@@ -56,6 +173,9 @@ export function applyOperatorTestSnapshot(state, snapshot) {
     lastServiceError: snapshot.error ? structuredClone(snapshot.error) : null,
   };
   reconcileResourceRelease(state);
+  // 终态结果才投影实际执行目标；baseline 分支随后清空 benchmark 也不影响它
+  // （目标存放在 iterationStats，随 Mission 持久化/切换）。
+  if (['completed', 'failed', 'cancelled'].includes(snapshot.status)) projectResolvedTarget(state, snapshot);
   if (snapshot.payload?.semanticBinding || state.benchmark.semanticBinding) {
     state.benchmark.semanticBinding = structuredClone(snapshot.payload?.semanticBinding || state.benchmark.semanticBinding);
     if (state.benchmark.result && typeof state.benchmark.result === 'object') {
@@ -237,11 +357,76 @@ export function applyOperatorTestSnapshot(state, snapshot) {
     }, { kind: 'operator-test-service', mode: snapshot.result?.environment?.liveHardware ? 'live' : 'mock' });
   }
   const gate = evaluateAcceptGate(state, snapshot.result || {});
+  const decision = gate.decision || null;
+  // 生产的唯一决策真相：完整深拷贝到 benchmark，候选 Gate 与 review Gate 保留同一值。
+  if (decision) state.benchmark.evidenceDecision = structuredClone(decision);
   const candidateId = state.appliedCandidateId || state.benchmark?.candidate?.id || null;
   const recommendation = gate.result === 'eligible' ? 'adopt' : gate.result === 'reference' ? 'reference' : 'reject';
-  applyGateDisposition(state, candidateId, gate);
+  applyGateDisposition(state, candidateId, gate, decision);
   if (gate.passed && isManagedWorkspaceRuntimeMode(state.agent?.runtimeKind)) ensureEvidenceKnowledgeDraft(state, candidateId, gate);
   appendRuntimeEvent(state, 'accept_gate.evaluated', { candidate: candidateId, result: gate.result, passed: gate.passed, rules: gate.rules }, { kind: 'policy', mode: 'client' });
+  // 必需真实诊断缺失是可恢复的：保留候选与隔离工作区，进入可恢复等待，绝不启动新 Agent
+  // 去“补工具”或改写代码。人工审批仍优先阻塞，不被该分支覆盖。
+  if (decision?.adoption?.status === 'waiting_external_verification' && state.decisionReview?.status !== 'awaiting_review') {
+    // 重复投影同一等待决策是幂等的：已处于同一候选/运行的等待状态时不产生新事件、
+    // 时间戳或状态改写。
+    const alreadyWaiting = state.decisionReview?.status === 'waiting_external_verification'
+      && state.decisionReview?.candidateId === candidateId
+      && state.decisionReview?.gate?.decision?.binding?.runId === decision.binding?.runId
+      && state.missionPaused === true
+      && state.iterationStats?.loopStatus === 'blocked'
+      && state.iterationStats?.loopStatusReason === 'external_verification';
+    if (alreadyWaiting) return finish();
+    const decisionClone = structuredClone(decision);
+    state.decisionReview = {
+      ...(state.decisionReview || createDecisionReviewState('auto_ready')),
+      status: 'waiting_external_verification',
+      candidateId,
+      recommendation: 'reference',
+      gate,
+      decision: decisionClone,
+      evidenceDecision: decisionClone,
+      requiresApproval: false,
+      gateEvaluatedAt: state.benchmark.completedAt,
+      resolution: null,
+    };
+    state.agent = {
+      ...state.agent,
+      status: 'awaiting_action',
+      phase: '等待外部诊断验证',
+      currentAction: {
+        id: 'action.external-verification',
+        type: 'test.plan',
+        title: '恢复后重试同一候选',
+        reason: '正确性与 Benchmark 证据完整，但缺少绑定当前候选/运行的真实诊断采集。系统保留候选、工作区与预算记录，不生成新候选或修改代码；外部诊断可用后恢复并重试同一候选。',
+        expectedOutput: '真实 mcTracer / mcProfiler 证据 · Accept Gate 重评',
+        risk: 'low',
+        approvalRequired: false,
+      },
+    };
+    // 复用已有 missionPaused / loopStatus blocked 机制，并给出 external_verification 原因。
+    state.missionPaused = true;
+    state.iterationStats = {
+      ...(state.iterationStats || {}),
+      loopStatus: 'blocked',
+      loopStatusReason: 'external_verification',
+    };
+    addAuditEvent(state, '等待外部诊断验证', `${candidateId || 'candidate'} · 缺少必需真实诊断，候选与工作区已保留`, 'warning', 'Clock');
+    appendRuntimeEvent(state, 'accept_gate.waiting_external_verification', {
+      candidate: candidateId,
+      runId: state.benchmark?.runId || null,
+      reasons: decision.adoption.reasons,
+      publication: decision.publication?.status || null,
+    }, { kind: 'policy', mode: 'client' });
+    return finish();
+  }
+  // 不再等待（例如恢复后同一候选重试已产生合格诊断）：只清除 external_verification
+  // 编排阻塞标记，恢复可继续的循环状态；既有证据决策、候选与预算事实不变。
+  if (state.iterationStats?.loopStatusReason === 'external_verification') {
+    const { externalVerificationAcknowledged: _ack, ...restStats } = state.iterationStats;
+    state.iterationStats = { ...restStats, loopStatus: 'running', loopStatusReason: null };
+    state.missionPaused = false;
+  }
   if (state.decisionReview?.status === 'awaiting_review') {
     state.decisionReview = { ...state.decisionReview, candidateId, recommendation, gate, gateEvaluatedAt: state.benchmark.completedAt };
     state.agent = {
@@ -280,11 +465,13 @@ export function applyOperatorTestSnapshot(state, snapshot) {
   return finish();
 }
 
-const applyGateDisposition = (state, candidateId, gate) => {
+const applyGateDisposition = (state, candidateId, gate, decision = gate?.decision || null) => {
   if (!candidateId) return;
   const candidate = (state.candidateEvaluations || []).find((item) => item.id === candidateId);
   if (!candidate) return;
+  // 候选 Gate 与 review Gate 保存同一决策对象；decision 与 benchmark.evidenceDecision 同值。
   candidate.acceptGate = gate;
+  candidate.evidenceRunId = state.benchmark?.runId || null;
   if (gate.result === 'eligible') {
     candidate.classification = 'eligible';
     candidate.status = 'Accept Gate 已通过';
@@ -293,10 +480,11 @@ const applyGateDisposition = (state, candidateId, gate) => {
     return;
   }
   if (gate.result === 'reference') {
+    const waiting = decision?.adoption?.status === 'waiting_external_verification';
     candidate.classification = 'reference';
-    candidate.status = '弱候选参考';
+    candidate.status = waiting ? '等待外部诊断验证' : '弱候选参考';
     candidate.tone = 'reference';
-    candidate.decision = '未采用，保留为弱候选参考';
+    candidate.decision = waiting ? '暂缓采用，候选与工作区保留等待外部诊断' : '未采用，保留为弱候选参考';
     candidate.decisionReason = gate.summary;
     return;
   }
@@ -329,6 +517,11 @@ const ensureEvidenceKnowledgeDraft = (state, candidateId, gate) => {
   const candidate = (state.candidateEvaluations || []).find((item) => item.id === candidateId);
   const mission = state.missions?.find((item) => item.id === state.activeMissionId) || {};
   if (!candidate) return;
+  // 只按同一 evidenceDecision 分类：真实但不可发布 => development（明确不可发布）；
+  // 显式模拟/CPU => simulation；publication allowed 才 validated。旧无 decision 保守 unknown，
+  // 绝不从 Level 3 或 live 布尔自动授权。
+  const decision = gate?.decision || state.benchmark?.evidenceDecision || null;
+  const classification = classifyEvidenceDecision(decision);
   const measurements = state.benchmark?.result?.benchmark || [];
   state.knowledgeDrafts = [...(state.knowledgeDrafts || []), {
     id: `exp.${safeMissionId(state.activeMissionId).toLowerCase()}.${candidateId}`,
@@ -348,16 +541,27 @@ const ensureEvidenceKnowledgeDraft = (state, candidateId, gate) => {
     expectedGain: measurements.map((item) => `${item.environment} ${item.value}${item.unit}`).join(' · '),
     validation: gate.summary,
     constraints: `仅适用于本次已验证的 Mission 范围；${gate.skippedRules.length ? '未评估规则不得外推。' : '所有配置门禁均已评估。'}`,
-    contraindications: '工作区 Diff、环境、测试矩阵或硬件范围变化时必须重新验证。',
+    contraindications: classification.publishable
+      ? '工作区 Diff、环境、测试矩阵或硬件范围变化时必须重新验证。'
+      : `明确不可发布：${classification.reason}`,
     failedAttempts: '无',
-    evidence: `${state.benchmark?.runId} · ${gate.passedRules.length}/${gate.evaluatedRules} required gates`,
-    evidenceLevel: gate.publishable ? 'Level 3' : '模拟证据',
-    confidence: gate.publishable ? '中' : '仅供流程验证',
+    evidence: `${state.benchmark?.runId} · ${gate.passedRules.length}/${gate.evaluatedRules} required gates · ${classification.publication}`,
+    evidenceLevel: classification.evidenceLevel,
+    confidence: classification.confidence,
+    evidenceDecision: decision ? structuredClone(decision) : null,
+    publication: classification.publication,
+    publishable: classification.publishable,
     evidenceRefs: [state.activeMissionId, candidateId, candidate.patchDigest, state.benchmark?.runId, state.benchmark?.result?.tracer?.format, state.benchmark?.result?.profiler?.format].filter(Boolean),
+    // 显式绑定身份：治理回填只认 candidateId+digest+runId 全匹配，绝不缺省匹配。
+    evidenceBinding: {
+      candidateId,
+      candidateDigest: candidate.patchDigest || state.benchmark?.candidate?.digest || null,
+      runId: state.benchmark?.runId || null,
+    },
     sourceMission: state.activeMissionId,
     sourceCandidate: candidateId,
     sourceCommit: state.workflowRecovery?.worktree?.head || 'isolated-worktree',
     owner: 'Operator Studio',
-    status: gate.publishable ? 'validated' : 'simulation',
+    status: classification.draftStatus,
   }];
 };

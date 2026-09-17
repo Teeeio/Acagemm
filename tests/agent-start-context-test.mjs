@@ -14,6 +14,7 @@ const state = {
 };
 const events = [];
 const roundExperience = {
+  preflightCollection: async () => { events.push('preflight'); },
   prepare: async ({ state, mission, roundId }) => {
     reads++;
     const existing = state.iterationStats.roundExperience;
@@ -43,7 +44,7 @@ const prepared = await command.prepare({
   recordIntent: async (value) => { recorded.push(structuredClone(value)); events.push('intent'); },
   runEffect: (effect) => effect(),
 });
-assert.deepEqual(events, ['intent', 'checkpoint', 'start']);
+assert.deepEqual(events, ['preflight', 'intent', 'checkpoint', 'start']);
 assert.equal(captured.experienceContext.versions.guidance, 1);
 assert.equal(captured.experienceContext.roundId, 'mission-1:round:1');
 assert.equal(prepared.payload.roundBudget.startedAt, new Date(epoch).toISOString());
@@ -109,4 +110,17 @@ const lateLaunches = launches;
 await assert.rejects(command.prepare({ state: published, body: { workspace: 'isolated-workspace' }, intent: newRecords[0],
   recordIntent: async () => {}, runEffect: effect => effect() }), { code: 'ROUND_BUDGET_EXCEEDED' });
 assert.equal(launches, lateLaunches, 'expired active replay cannot borrow the old published state to renew its deadline');
-console.log('[agent-start-context] first/manual-settled runs freeze distinct contexts; replay/retry cannot refresh deadlines or counters');
+clock = epoch;
+roundExperience.preflightCollection = async () => { throw new Error('environment preflight failed'); };
+const beforeFailure = { launches, reads, events: events.length };
+await assert.rejects(command.prepare({ state, body: { workspace: 'isolated-workspace' }, intent,
+  recordIntent: async () => { throw Error('must not persist new intent'); }, runEffect: (effect) => effect() }),
+  /environment preflight failed/);
+assert.deepEqual({ launches, reads, events: events.length }, beforeFailure);
+roundExperience.preflightCollection = async () => { clock += 10; };
+const limitedState = { ...state, missionBudgetMs: 10, missionBudgetStartedAt: new Date(epoch).toISOString() };
+await assert.rejects(command.prepare({ state: limitedState, body: { workspace: 'isolated-workspace' }, intent,
+  recordIntent: async () => { throw Error('must not persist new intent'); }, runEffect: (effect) => effect() }),
+  (error) => error.code === 'ROUND_EXPERIENCE_BUDGET_EXCEEDED');
+assert.deepEqual({ launches, reads, events: events.length }, beforeFailure);
+console.log('[agent-start-context] first/manual-settled runs freeze distinct contexts; replay/retry cannot refresh deadlines or counters; failed preflight blocks dispatch');

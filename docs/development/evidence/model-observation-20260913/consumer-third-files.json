@@ -1,0 +1,22 @@
+[
+  {
+    "path": "scripts/e2e-shared-gpu-agent-iteration.mjs",
+    "sha256": "0a45b40f5cdb1fee694a2ebfb9530f2c14237a43322d22a6bdff8520aafbf39a"
+  },
+  {
+    "path": "scripts/shared-gpu-acceptance.mjs",
+    "sha256": "242d3fe2562bd9dbd59762721402591d146d3a22259e58597b099a3712767955"
+  },
+  {
+    "path": "scripts/shared-gpu-acceptance.md",
+    "sha256": "101ad640619339005e855f25f1fbe537b17b36cd897380ac7847527232fae273"
+  },
+  {
+    "path": "scripts/summarize-gpu-agent-runs.mjs",
+    "sha256": "91bbab8a3437bb819fcc688c285a701f5b93e6103a19e07e5cba5757bc0c2aa1"
+  },
+  {
+    "path": "docs/development/REAL_GPU_REGRESSION.md",
+    "sha256": "04f819a72a99e4083a203dddedfd01d2a477e439c5507a30107ae3049937d0e4"
+  }
+]

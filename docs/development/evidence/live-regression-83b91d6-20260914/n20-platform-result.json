@@ -1,0 +1,34 @@
+{
+  "summary": "命令任务失败：node（退出码 1，耗时 5711.235s），进度 100.0%",
+  "checks": [
+    {
+      "name": "命令退出码",
+      "passed": false,
+      "evidence": "exit_code=1 · 5711.235s",
+      "source": "platform_command"
+    }
+  ],
+  "unresolved": [],
+  "context_suggestions": [],
+  "execution_kind": "command",
+  "checks_are_worker_reported": false,
+  "checks_are_platform_verified": true,
+  "usage": {
+    "usage_source": "not_applicable",
+    "billing_verified": false,
+    "input_tokens": null,
+    "output_tokens": null,
+    "total_tokens": null,
+    "provider_completed_requests": 0,
+    "provider_usage_reported_requests": 0,
+    "harness_reported_usage": null,
+    "note": "command 任务由用户指定程序执行；平台不自动启动 worker 模型，token 未知且不计入 worker 模型用量。"
+  },
+  "validation": {
+    "structure": "not_applicable",
+    "scope": "passed",
+    "artifact_digest": "e790e6e9294bca1a5f76042d0bd882fc9ef8882e001e6c1c7c33c55bc076cdb1",
+    "exit_code": 1,
+    "execution_kind": "command"
+  }
+}

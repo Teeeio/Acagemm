@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "operator-studio.root-archive-index/v1",
+  "archive": ".operator-studio-local/live-regression-83b91d6-20260914/coverage-originals.zip",
+  "sha256": "8f6a9c278380f658ea2cecf067f3382ecf8c2c54f82bc318b84ef5616c27cc09",
+  "files": 391,
+  "uncompressedBytes": 9128094,
+  "standardVerifyValid": true,
+  "taskId": "task_8e90edc775e14bedb2eb1b3e0dfb352e",
+  "attemptId": "run_fd9462bbac17432ebe42ca5a636b6dfe",
+  "artifactDigest": "41e15bed699f90dee736aaa5127a5e9c29fd1f8c12e25c0f4114d781d5beefbb",
+  "platformState": "integrated",
+  "programExitCode": 0,
+  "elapsedSeconds": 433.969,
+  "platformChangedFiles": [],
+  "reportProvenance": {
+    "source": "Root copies of existing original command workspace reports, independently SHA verified; not platform-delivered payloads.",
+    "reviseHistory": [
+      "First request omitted required artifact_digest; rejected before mutation.",
+      "Second request explicitly bound original digest; platform rejected control-directory registration. No revision created, original attempt/digest unchanged."
+    ],
+    "resolution": "Accepted actual passed command evidence; empty-diff integration recorded honestly. No import bypass and no GPU replay."
+  },
+  "rootReports": [
+    {
+      "path": "coverage-batch.json",
+      "sha256": "8988a0b66a850bcd9d33596c3b7115dacea67a8a3d7bd58afb0cf8a345cee491",
+      "bytes": 1069
+    },
+    {
+      "path": "coverage-failed-feedback.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+      "bytes": 1
+    },
+    {
+      "path": "coverage-failed-feedback.json",
+      "sha256": "d30e16b286c7294625a347ed782f913e87cd50249c054cc83e50cf0a6bbd8ff3",
+      "bytes": 479
+    },
+    {
+      "path": "coverage-failed-feedback.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "coverage-independent.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+      "bytes": 1
+    },
+    {
+      "path": "coverage-independent.json",
+      "sha256": "f92c9e7c3230a369dd02fc5f74088a502706f549d7145ea09e6f79e0beec549c",
+      "bytes": 43412
+    },
+    {
+      "path": "coverage-independent.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "coverage-ledger.json",
+      "sha256": "41ab6f84acb5122d83ff8d418b2150fc3df3adc4c2bec0a659546de8880a35bf",
+      "bytes": 75174
+    },
+    {
+      "path": "coverage-platform-command.json",
+      "sha256": "ca3169ce9394c8c683b74f72aabf8d76304edf24053c13dcdb28be95a33d1b86",
+      "bytes": 1164
+    },
+    {
+      "path": "coverage-platform-execution.jsonl",
+      "sha256": "2c27e9dee649058302e6ef4312fc30e195cfc997cd4f6e0793bb23a47d653a54",
+      "bytes": 265
+    },
+    {
+      "path": "coverage-platform-result.json",
+      "sha256": "4f0f68598abbde8516a490860bd0b39930b4609cd5714c2e26ecf62ef017524b",
+      "bytes": 1104
+    }
+  ]
+}

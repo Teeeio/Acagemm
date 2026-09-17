@@ -1,0 +1,89 @@
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-import-test.mjs\",\"state\":\"start\"}"}
+{"type": "stderr", "text": "file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/client-runtime/kernel-wiki-import.mjs:53"}
+{"type": "stderr", "text": "const invalid = (message) => { throw Object.assign(new Error(message), { code: 'KERNEL_WIKI_INVALID', status: 400 }); };"}
+{"type": "stderr", "text": "^"}
+{"type": "stderr", "text": "Error: page text must be a string"}
+{"type": "stderr", "text": "at invalid (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/client-runtime/kernel-wiki-import.mjs:53:52)"}
+{"type": "stderr", "text": "at parseKernelWikiPage (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/client-runtime/kernel-wiki-import.mjs:256:33)"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/kernel-wiki-import-test.mjs:118:20"}
+{"type": "stderr", "text": "at test (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/kernel-wiki-import-test.mjs:37:43)"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/kernel-wiki-import-test.mjs:106:9 {"}
+{"type": "stderr", "text": "code: 'KERNEL_WIKI_INVALID',"}
+{"type": "stderr", "text": "status: 400"}
+{"type": "stderr", "text": "}"}
+{"type": "stderr", "text": "Node.js v22.23.2"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-import-test.mjs\",\"exitCode\":1}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-selection-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "PASS the D selection policy version is the frozen value"}
+{"type": "stderr", "text": "node:internal/modules/run_main:123"}
+{"type": "stderr", "text": "triggerUncaughtException("}
+{"type": "stderr", "text": "^"}
+{"type": "stderr", "text": "AssertionError [ERR_ASSERTION]: Missing expected exception: architecture-specific without architecture must fail explicitly"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/experience-selection-test.mjs:184:66"}
+{"type": "stderr", "text": "at test (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/experience-selection-test.mjs:40:43)"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/experience-selection-test.mjs:134:9 {"}
+{"type": "stderr", "text": "generatedMessage: false,"}
+{"type": "stderr", "text": "code: 'ERR_ASSERTION',"}
+{"type": "stderr", "text": "actual: undefined,"}
+{"type": "stderr", "text": "expected: undefined,"}
+{"type": "stderr", "text": "operator: 'throws',"}
+{"type": "stderr", "text": "diff: 'simple'"}
+{"type": "stderr", "text": "}"}
+{"type": "stderr", "text": "Node.js v22.23.2"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-selection-test.mjs\",\"exitCode\":1}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-runtime-test.mjs\",\"state\":\"start\"}"}
+{"type": "stderr", "text": "node:internal/modules/run_main:123"}
+{"type": "stderr", "text": "triggerUncaughtException("}
+{"type": "stderr", "text": "^"}
+{"type": "stderr", "text": "AssertionError [ERR_ASSERTION]: the seed state owns at least one Project"}
+{"type": "stderr", "text": "at file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/kernel-wiki-runtime-test.mjs:190:14"}
+{"type": "stderr", "text": "at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"}
+{"type": "stderr", "text": "at async test (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/kernel-wiki-runtime-test.mjs:47:37)"}
+{"type": "stderr", "text": "at async file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/kernel-wiki-runtime-test.mjs:169:3 {"}
+{"type": "stderr", "text": "generatedMessage: false,"}
+{"type": "stderr", "text": "code: 'ERR_ASSERTION',"}
+{"type": "stderr", "text": "actual: undefined,"}
+{"type": "stderr", "text": "expected: true,"}
+{"type": "stderr", "text": "operator: '==',"}
+{"type": "stderr", "text": "diff: 'simple'"}
+{"type": "stderr", "text": "}"}
+{"type": "stderr", "text": "Node.js v22.23.2"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/kernel-wiki-runtime-test.mjs\",\"exitCode\":1}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-api-service-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[experience-api-service] local project scope, human-only writes, history, conflicts and route mapping passed"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/experience-api-service-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/round-experience-service-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "PASS all effect and authority ports are explicit"}
+{"type": "output", "text": "PASS one round freezes source/version/scope; updates are visible only in the next round"}
+{"type": "output", "text": "PASS restored contexts are validated and frozen without re-querying or crossing projects"}
+{"type": "output", "text": "PASS domain prompt formatter checks identities, digest and source limitations once"}
+{"type": "output", "text": "PASS concurrent same-round retrieval is deduplicated and ordinary advice reads start no Agent"}
+{"type": "output", "text": "PASS retrieval errors/timeouts are explicit and late results cannot mutate the round"}
+{"type": "output", "text": "PASS legacy evidence is explicitly skipped and cannot self-claim verification"}
+{"type": "output", "text": "PASS only matching verified complete evidence is written, idempotently and never publishable"}
+{"type": "output", "text": "PASS observation collection is bounded and storage uncertainty is not silently ignored"}
+{"type": "output", "text": "PASS batch cancellation reaches a slow second verifier and prevents a late repository write"}
+{"type": "output", "text": "Round experience service: 10 checks passed."}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/round-experience-service-test.mjs\",\"exitCode\":0}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node --experimental-vm-modules tests/state-domain-boundary-test.mjs\",\"state\":\"start\"}"}
+{"type": "stderr", "text": "(node:109600) ExperimentalWarning: VM Modules is an experimental feature and might change at any time"}
+{"type": "stderr", "text": "(Use `node --trace-warnings ...` to show where the warning was created)"}
+{"type": "stderr", "text": "node:internal/modules/run_main:123"}
+{"type": "stderr", "text": "triggerUncaughtException("}
+{"type": "stderr", "text": "^"}
+{"type": "stderr", "text": "AssertionError [ERR_ASSERTION]: domain effects/loaders must be injected: client-runtime/application/experience-service.mjs"}
+{"type": "stderr", "text": "at visit (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/state-domain-boundary-test.mjs:35:12)"}
+{"type": "stderr", "text": "at async inspectGraph (file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/state-domain-boundary-test.mjs:47:33)"}
+{"type": "stderr", "text": "at async file:///F:/%E8%AE%BE%E8%AE%A1/%E5%BF%AB%E9%80%9F%E9%A1%B9%E7%9B%AE/deepseek%E5%8A%B3%E5%8A%A1%E6%B4%BE%E9%81%A3/.dispatch-data/attempts/run_21a8359b97be4d3f82391a0aebe415a8/workspace/tests/state-domain-boundary-test.mjs:83:26 {"}
+{"type": "stderr", "text": "generatedMessage: false,"}
+{"type": "stderr", "text": "code: 'ERR_ASSERTION',"}
+{"type": "stderr", "text": "actual: false,"}
+{"type": "stderr", "text": "expected: true,"}
+{"type": "stderr", "text": "operator: '==',"}
+{"type": "stderr", "text": "diff: 'simple'"}
+{"type": "stderr", "text": "}"}
+{"type": "stderr", "text": "Node.js v22.23.2"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node --experimental-vm-modules tests/state-domain-boundary-test.mjs\",\"exitCode\":1}"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/module-boundary-test.mjs\",\"state\":\"start\"}"}
+{"type": "output", "text": "[module-boundary] production path, dependency direction, and local contracts passed"}
+{"type": "output", "text": "DISPATCH_PROGRESS {\"check\":\"node tests/module-boundary-test.mjs\",\"exitCode\":0}"}

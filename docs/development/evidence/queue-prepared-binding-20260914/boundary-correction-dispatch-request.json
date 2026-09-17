@@ -1,0 +1,229 @@
+{
+  "project_id": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+  "request_id": "prepared-binding-domain-boundary-correction-20260914",
+  "tasks": [
+    {
+      "milestone_id": "operator-real-regression",
+      "work_item": "准备摘要生产接线修复",
+      "execution_kind": "model",
+      "profile_id": "model_24e9ad57f50c4e21b6dcb581a454ae93",
+      "timeout_seconds": 1200,
+      "resource_keys": [],
+      "acceptance_inputs": [
+        {
+          "path": "docs/development/QUEUE_PREPARED_BINDING_BOUNDARY_ADDENDUM.md",
+          "sha256": "f202d3d2a76ec89bbffd15b28c9a419f3f0ba15dd55a7c2a86a0305f736fb10c"
+        },
+        {
+          "path": "tests/state-domain-boundary-test.mjs",
+          "sha256": "c97cad51cc77d2161e69cc879c3125b65a3f3e81588ad33f438776432b9a0b1a"
+        },
+        {
+          "path": "tests/queue-prepared-binding-test.mjs",
+          "sha256": "d31792ed218f46563d9363b91230cf11e78361344af839bdb198fc92590befe2",
+          "source_task_id": "task_01681af2b5024a52941fd9125cb410fa"
+        }
+      ],
+      "depends_on": [
+        "task_3b83f182c3434326803709c0a0e53ff2",
+        "task_01681af2b5024a52941fd9125cb410fa"
+      ],
+      "dispatch_reason": "【经核对的明确会话授权，非泛化允许】本轮最新用户『允许，继续』直接回答紧邻的完整问题：『是否允许按已保存的修复请求，将相关生产源码、失败队列证据、修复说明及必要仓库上下文发送至 https://api.deepseek.com/anthropic，执行这两项实现与独立测试任务？』此后同一会话已通过正常 dispatch_submit 创建、执行并集成 task_3b83f182c3434326803709c0a0e53ff2 和 task_01681af2b5024a52941fd9125cb410fa。现有 context revision30 记录的是这条用户直接答复，不是平台替用户授权。当前请求是这同一项准备摘要修复在 Root 必需最终门禁中发现的必要返修，仍仅相关生产源码、同一失败证据/修复说明和必要仓库上下文，到同一明确目的地，无新增目的地、凭据输出、安装或业务模型调用。此前『暂不发送』在此具体答复之前，已被该后续明确答复覆盖。保留这次自动审批拒绝；本次相同submit只补充上述可核验授权和已授权任务关联，不使用旁路执行。上游估计8分钟。",
+      "upstream_plan": {
+        "approach": "沿补充契约将同一个纯 contentDigest 实现移入既有 execution-package-contract，store 保持同绑定兼容重导出，preparer 只依赖纯 contract。独立测试同时准备既有测试扩展，互不重叠写入；精确候选组合后接受，Root 最终 required gates。",
+        "estimated_minutes": 8,
+        "verification_level": "targeted",
+        "interfaces": [
+          "contentDigest(bytes) 保持 sha256: + createHash('sha256').update(bytes).digest('hex') 原算法与原异常；旧 store export === canonical contract export。",
+          "preparer 工厂签名与所有业务行为保持不变；state-domain-boundary 和 queue binding acceptance 不修改。"
+        ],
+        "stop_conditions": [
+          "现有边界/接口与路线矛盾时 decision_request 并保留产物，不自行换方案。",
+          "不得运行真实GPU、业务模型、联网安装、启动新agent；仅现有派发worker上下文外发在用户授权范围。"
+        ],
+        "preflight": [
+          {
+            "check": "Root 最终发布门禁",
+            "status": "failed",
+            "evidence": "root-release.exit=1; root-release.log:585 application/benchmark-package-preparation-service.mjs -> execution-package-store.mjs forbidden."
+          },
+          {
+            "check": "唯一修复路线",
+            "status": "passed",
+            "evidence": "Root只读确认contentDigest为单行纯createHash算法，state-domain允许node:crypto，contract无副作用；保持旧API同绑定。"
+          },
+          {
+            "check": "最新用户具体授权核对",
+            "status": "passed",
+            "evidence": "直接用户答复『允许，继续』所回应完整问题逐字包含 https://api.deepseek.com/anthropic 及相关生产源码/失败队列/修复说明/必要仓库上下文；同轮已授权原修复两项任务集成，上述返修保持该目的、数据范围、上游服务和必要完成工作不变。"
+          }
+        ]
+      },
+      "key": "pure-digest-implementation",
+      "title": "准备摘要接线返修：纯摘要函数归入领域契约",
+      "task_type": "implementation",
+      "goal": "修复真实 release 暴露的 application→store 禁止依赖，保持已验证准备摘要绑定与所有旧摘要API语义。",
+      "allowed_paths": [
+        "client-runtime/execution-package-contract.mjs",
+        "client-runtime/execution-package-contract.md",
+        "client-runtime/execution-package-store.mjs",
+        "client-runtime/execution-package-store.md",
+        "client-runtime/application/benchmark-package-preparation-service.mjs",
+        "client-runtime/application/benchmark-package-preparation-service.md",
+        "client-runtime/README.md"
+      ],
+      "review_depends_on": [
+        "pure-digest-tests"
+      ],
+      "steps": [
+        "先读补充契约与模块文档；不要更改原 acceptance 文件。",
+        "把现有一行 contentDigest 原封移到 execution-package-contract；仅import createHash；store import canonical function供内部使用并同绑定re-export，createHash从store删去但保留randomUUID。preparer两个纯helper合并从contract导入。",
+        "更新所改模块同名文档和Client Runtime README的API归属说明，不修改其他行为/业务输出/测试文件。",
+        "仅运行给定 syntax 与 state-domain targeted 检查；保留输出，跨候选组合由Root执行。"
+      ],
+      "acceptance": [
+        "application闭包不触达store；既有state-domain-boundary通过，标准不变。",
+        "旧store export与contract canonical同绑定，原算法/错误不变；preparer仅导入变化且7项绑定矩阵不削弱。",
+        "限定7文件，文档清楚指向pure canonical函数。"
+      ],
+      "verification_commands": [
+        "node --check client-runtime/execution-package-contract.mjs",
+        "node --check client-runtime/execution-package-store.mjs",
+        "node --check client-runtime/application/benchmark-package-preparation-service.mjs",
+        "node --experimental-vm-modules tests/state-domain-boundary-test.mjs"
+      ],
+      "verification_recipe": {
+        "name": "pure-digest-author-targeted",
+        "checks": [
+          {
+            "name": "contract-syntax",
+            "argv": [
+              "node",
+              "--check",
+              "client-runtime/execution-package-contract.mjs"
+            ]
+          },
+          {
+            "name": "store-syntax",
+            "argv": [
+              "node",
+              "--check",
+              "client-runtime/execution-package-store.mjs"
+            ]
+          },
+          {
+            "name": "preparer-syntax",
+            "argv": [
+              "node",
+              "--check",
+              "client-runtime/application/benchmark-package-preparation-service.mjs"
+            ]
+          },
+          {
+            "name": "state-domain-boundary",
+            "argv": [
+              "node",
+              "--experimental-vm-modules",
+              "tests/state-domain-boundary-test.mjs"
+            ],
+            "timeout_seconds": 120
+          }
+        ]
+      }
+    },
+    {
+      "milestone_id": "operator-real-regression",
+      "work_item": "准备摘要生产接线修复",
+      "execution_kind": "model",
+      "profile_id": "model_24e9ad57f50c4e21b6dcb581a454ae93",
+      "timeout_seconds": 1200,
+      "resource_keys": [],
+      "acceptance_inputs": [
+        {
+          "path": "docs/development/QUEUE_PREPARED_BINDING_BOUNDARY_ADDENDUM.md",
+          "sha256": "f202d3d2a76ec89bbffd15b28c9a419f3f0ba15dd55a7c2a86a0305f736fb10c"
+        },
+        {
+          "path": "tests/state-domain-boundary-test.mjs",
+          "sha256": "c97cad51cc77d2161e69cc879c3125b65a3f3e81588ad33f438776432b9a0b1a"
+        },
+        {
+          "path": "tests/queue-prepared-binding-test.mjs",
+          "sha256": "d31792ed218f46563d9363b91230cf11e78361344af839bdb198fc92590befe2",
+          "source_task_id": "task_01681af2b5024a52941fd9125cb410fa"
+        }
+      ],
+      "depends_on": [
+        "task_3b83f182c3434326803709c0a0e53ff2",
+        "task_01681af2b5024a52941fd9125cb410fa"
+      ],
+      "dispatch_reason": "【经核对的明确会话授权，非泛化允许】本轮最新用户『允许，继续』直接回答紧邻的完整问题：『是否允许按已保存的修复请求，将相关生产源码、失败队列证据、修复说明及必要仓库上下文发送至 https://api.deepseek.com/anthropic，执行这两项实现与独立测试任务？』此后同一会话已通过正常 dispatch_submit 创建、执行并集成 task_3b83f182c3434326803709c0a0e53ff2 和 task_01681af2b5024a52941fd9125cb410fa。现有 context revision30 记录的是这条用户直接答复，不是平台替用户授权。当前请求是这同一项准备摘要修复在 Root 必需最终门禁中发现的必要返修，仍仅相关生产源码、同一失败证据/修复说明和必要仓库上下文，到同一明确目的地，无新增目的地、凭据输出、安装或业务模型调用。此前『暂不发送』在此具体答复之前，已被该后续明确答复覆盖。保留这次自动审批拒绝；本次相同submit只补充上述可核验授权和已授权任务关联，不使用旁路执行。上游估计8分钟。",
+      "upstream_plan": {
+        "approach": "沿补充契约将同一个纯 contentDigest 实现移入既有 execution-package-contract，store 保持同绑定兼容重导出，preparer 只依赖纯 contract。独立测试同时准备既有测试扩展，互不重叠写入；精确候选组合后接受，Root 最终 required gates。",
+        "estimated_minutes": 8,
+        "verification_level": "targeted",
+        "interfaces": [
+          "contentDigest(bytes) 保持 sha256: + createHash('sha256').update(bytes).digest('hex') 原算法与原异常；旧 store export === canonical contract export。",
+          "preparer 工厂签名与所有业务行为保持不变；state-domain-boundary 和 queue binding acceptance 不修改。"
+        ],
+        "stop_conditions": [
+          "现有边界/接口与路线矛盾时 decision_request 并保留产物，不自行换方案。",
+          "不得运行真实GPU、业务模型、联网安装、启动新agent；仅现有派发worker上下文外发在用户授权范围。"
+        ],
+        "preflight": [
+          {
+            "check": "Root 最终发布门禁",
+            "status": "failed",
+            "evidence": "root-release.exit=1; root-release.log:585 application/benchmark-package-preparation-service.mjs -> execution-package-store.mjs forbidden."
+          },
+          {
+            "check": "唯一修复路线",
+            "status": "passed",
+            "evidence": "Root只读确认contentDigest为单行纯createHash算法，state-domain允许node:crypto，contract无副作用；保持旧API同绑定。"
+          },
+          {
+            "check": "最新用户具体授权核对",
+            "status": "passed",
+            "evidence": "直接用户答复『允许，继续』所回应完整问题逐字包含 https://api.deepseek.com/anthropic 及相关生产源码/失败队列/修复说明/必要仓库上下文；同轮已授权原修复两项任务集成，上述返修保持该目的、数据范围、上游服务和必要完成工作不变。"
+          }
+        ]
+      },
+      "key": "pure-digest-tests",
+      "title": "独立验证摘要函数迁移的已知向量与旧API兼容",
+      "task_type": "independent-test",
+      "goal": "独立扩展现有契约测试，验证纯函数迁移不改数据身份并保留旧store API；不改验收边界。",
+      "allowed_paths": [
+        "tests/execution-package-contract-test.mjs",
+        "tests/README.md"
+      ],
+      "review_depends_on": [],
+      "steps": [
+        "读补充契约，扩展现有contract测试，保留已有断言；禁止写生产实现/边界测试/注册清单。",
+        "检查 canonical 与 legacy store contentDigest 严格同函数；使用固定 empty 和 abc SHA256字面量，UTF8字符串/Buffer等价，二进制Uint8Array/Buffer等价，无输入变异，非法输入保留拒绝。",
+        "可参考当前接口定义；生产新export尚未组合，不伪称behavior通过。只syntax检查。",
+        "更新testsREADME相关条目，提交由Root的精确候选组合行为验证。"
+      ],
+      "acceptance": [
+        "字面量 known vectors 检测身份变化，兼容引用使用strictEqual；二进制不被字符串化且输入不变。",
+        "原manifest/admission断言保留；仅2文件修改，作者只宣称syntax，等待组合验证。"
+      ],
+      "verification_commands": [
+        "node --check tests/execution-package-contract-test.mjs"
+      ],
+      "verification_recipe": {
+        "name": "pure-digest-test-author-syntax",
+        "checks": [
+          {
+            "name": "contract-test-syntax",
+            "argv": [
+              "node",
+              "--check",
+              "tests/execution-package-contract-test.mjs"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
+

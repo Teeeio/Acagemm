@@ -1,0 +1,1111 @@
+{
+  "schemaVersion": "operator-studio.run-diagnostics-acceptance/v1",
+  "updatedAt": "2026-09-15T02:52:01.711158+00:00",
+  "implementation": {
+    "state": "integrated",
+    "sources": [
+      {
+        "task_id": "task_4c947d98ea4a4037800012a270d08060",
+        "attempt_id": "run_5556da8e04c3411a81ff2c0c6dd98fcd",
+        "artifact_digest": "ae1a11ca51b50781b16241d667378bc55261a7d24215931aa33aa255d89f7ab5"
+      },
+      {
+        "task_id": "task_508330ccd8084fe687ade96396fa1b6f",
+        "attempt_id": "run_b30077005b534b74be612a2a3514fd32",
+        "artifact_digest": "527aeb09ddac646ac343934337f27720a5bd6a4347d1bbafbe989cb5043131e7"
+      },
+      {
+        "task_id": "task_3d6075d0a32643eaa82ab91c36440d6b",
+        "attempt_id": "run_0d1afecd5c4d4ad0b155d7de894ca14f",
+        "artifact_digest": "fd6526f41ad7e6e27cfb0b5bb6fbd3c48606c5605f2d37900fd746529b73daed"
+      }
+    ],
+    "combination": {
+      "taskId": "task_cff8fc85778f46f1a0198154c5f44aad",
+      "attemptId": "run_9de260e14be240ccb4de92f44e03f57e",
+      "artifactDigest": "bb8b1e92962ce9f4eac6ab6ae04fe05003d7b99431f51463edbfb5c7cbfb21c6",
+      "exitCode": 0,
+      "elapsedSeconds": 724.718
+    },
+    "checks": {
+      "release": 144,
+      "nonhardwareIncludingRelease": 44,
+      "diagnosticsScenarios": 12,
+      "cancellationLiveness": "passed",
+      "timeoutRecovery": "passed"
+    },
+    "manifest": [
+      {
+        "path": "client-runtime/README.md",
+        "sha256": "2a1501f39c7e131b4509a94314e11fba915e6957008a04ea942e9319ce5a3231",
+        "mode": 438
+      },
+      {
+        "path": "client-runtime/agent-runtime.md",
+        "sha256": "e9bd39500a9c618a3edd19d3080322096d2595e8b5f2d48d43f3923846b9a94d",
+        "mode": 438
+      },
+      {
+        "path": "client-runtime/agent-runtime.mjs",
+        "sha256": "aaeebacafa2e5428d311a93005f4e1a53dda09ad739c497b04997e4aec38830c",
+        "mode": 438
+      },
+      {
+        "path": "client-runtime/claude-client.mjs",
+        "sha256": "6b60c9fff283ed54ffa43040d4af3f3d04480ce8884edf3f8e0ac753385d385d",
+        "mode": 438
+      },
+      {
+        "path": "package.json",
+        "sha256": "c78b30c7abb2cc63e33335b0f7b10596bf8786ac1a1248219fff2297a084abde",
+        "mode": 438
+      },
+      {
+        "path": "scripts/verify-local-c500-release.mjs",
+        "sha256": "7f95413e50d1a24576d681b3578d22d627ab3020b8517fcbfdd7b90cf5d916d1",
+        "mode": 438
+      },
+      {
+        "path": "tests/README.md",
+        "sha256": "9f1b045aecc36478d421df8427de9819d0ff795172c7005b9d76cf62a93a5271",
+        "mode": 438
+      },
+      {
+        "path": "tests/agent-run-diagnostics-test.mjs",
+        "sha256": "ed6c7df72ae21a0eb46294450a463333af0b6dfaea5b210836ed4c13406d89ca",
+        "mode": 438
+      }
+    ]
+  },
+  "issues": [
+    {
+      "id": "diagnostics",
+      "fact": "恢复后affine smoke 2/2及新N20 44/44实际模型观测成功；N20全部diagnostics身份/计数/观测时间/close原件核验通过。旧无响应与取消记录保留。 同源reduction/normalization覆盖4/4实际模型与diagnostics也通过。",
+      "inference": null,
+      "unknown": "旧CLI/代理/上游无回答的精确根因仍未证明；当前已恢复。",
+      "evidence": [
+        "task_4c947d98ea4a4037800012a270d08060",
+        "task_508330ccd8084fe687ade96396fa1b6f",
+        "task_3d6075d0a32643eaa82ab91c36440d6b",
+        "smoke-recovered-20260915/reader.json",
+        "n20-recovered-20260915/diagnostics.json",
+        "coverage-recovered-20260915/diagnostics.json"
+      ],
+      "next_action": "无需新增诊断功能。"
+    },
+    {
+      "id": "integration-blocking",
+      "fact": "本轮组合与来源验收/集成全部成功。无效配方分别暴露Windows npm.cmd启动、缺node_modules、离线cpSync异常退出和600秒上限；已使用确定性长command、精确离线依赖、失败即停止入口通过完整门禁。旧组合取消并保留4次历史。",
+      "inference": null,
+      "unknown": "cpSync异常退出内部原因未证明。",
+      "evidence": [
+        "task_97b9d8970a004130b8a7ed0503410f64",
+        "task_cff8fc85778f46f1a0198154c5f44aad"
+      ],
+      "next_action": "今后同类长跑直接用长command，组合前完成依赖准备。"
+    },
+    {
+      "id": "downstream-scope",
+      "fact": "独立测试作者曾超出syntax-only指令运行旧测试并写出范围，平台产物收集拒绝；返工后范围通过。",
+      "inference": null,
+      "unknown": "任务指令不是操作系统级工具隔离。",
+      "evidence": [
+        "task_3d6075d0a32643eaa82ab91c36440d6b"
+      ],
+      "next_action": "保留明确allowed_paths和作者阶段验证边界，继续独立核对实际工具行为。"
+    },
+    {
+      "id": "invalid-round-trips",
+      "fact": "本轮有实现返工与验证环境返工；不能宣称已证明工作流节省成本。长wait单次持续759.297秒后返回真实动作，无需短轮询。",
+      "inference": null,
+      "unknown": "未完成账单计量。",
+      "evidence": [
+        "task_cff8fc85778f46f1a0198154c5f44aad"
+      ],
+      "next_action": "复用真实失败日志，避免相同无变化全套重跑。"
+    },
+    {
+      "id": "state-display",
+      "fact": "submitted或主命令exit0仍可能同时配方失败；本次最终command、recipe、candidate verification均通过后才验收。",
+      "inference": null,
+      "unknown": null,
+      "evidence": [
+        "platform-candidate-verification.json",
+        "platform-verification.json"
+      ],
+      "next_action": "继续以真实门禁和精确attempt/digest判断放行。"
+    },
+    {
+      "id": "existing-recovery-lock",
+      "fact": "run_cc91c02b5091464eae0c29b00a0e3ba2在已有恢复测试6并发提交读取metadata.lock时EPERM。源码未改变；独立复核10 pass/1 skip，随后固定全链通过。",
+      "inference": "间歇性Windows锁读失败，未被本轮修复。",
+      "unknown": "底层触发原因。",
+      "evidence": [
+        "task_cff8fc85778f46f1a0198154c5f44aad",
+        "root-recovery-recheck.txt"
+      ],
+      "next_action": "保留缺陷；再次复现时单独有界定位，禁止无限重试。"
+    },
+    {
+      "id": "strict-n20",
+      "fact": "新21c6d78严格N20已通过并验收集成：20/20功能成功且可比、44/44实际模型观测；旧83b91d6的19可比+1unknown失败历史保留。",
+      "inference": null,
+      "unknown": null,
+      "evidence": [
+        "../live-regression-83b91d6-20260914/README.md",
+        "n20-recovered-20260915/batch.json",
+        "n20-recovered-20260915/reader.json"
+      ],
+      "next_action": "本批真实验收完成：affine严格N20及同冻结源reduction/normalization各两轮已独立验收归档；保留全部历史失败，不继续无变化重跑。"
+    }
+  ],
+  "liveTwoRound": {
+    "state": "failed",
+    "taskId": "task_f39cb784cf5943cc85d32f3a7232eb43",
+    "attemptId": "run_189b972e6c6a45d6baef54781ee7b0f1",
+    "artifactDigest": "aac3624def495b489cde6e89a2df4a0f0f542ff4f799f1ddedc9355b8936c4db",
+    "exitCode": 1,
+    "elapsedSeconds": 742.437,
+    "outcome": "failure",
+    "reason": "3 main runs without candidate, followed by total_budget stop; 4 required actual models unknown",
+    "baseline": "completed",
+    "completedCandidates": 0,
+    "diagnosticsVerifiedRuns": [
+      {
+        "path": "bridge\\claude-runs\\claude_MU1MQ1D6_E01918CB.json",
+        "sha256": "296a1a6be97eec6d41af7d274f830c60b368641d69add2760f66278cc049924d",
+        "status": "cancelled",
+        "sessionId": "cbc13671-f5ee-4b18-998d-ce4a287c6cd4",
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "provider": "claude-code",
+          "runId": "claude_MU1MQ1D6_E01918CB",
+          "missionId": "MIS_MU1MP7HP",
+          "sessionId": "cbc13671-f5ee-4b18-998d-ce4a287c6cd4",
+          "status": "unknown",
+          "model": null,
+          "source": null,
+          "models": [],
+          "configuredModels": [
+            "claude-opus-5[1m]"
+          ],
+          "usageModels": [],
+          "observations": [],
+          "reasons": [
+            "no assistant response metadata in the run stream"
+          ]
+        },
+        "diagnostics": {
+          "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+          "provider": "claude-code",
+          "runId": "claude_MU1MQ1D6_E01918CB",
+          "missionId": "MIS_MU1MP7HP",
+          "stdout": {
+            "chunks": 1,
+            "bytes": 1166,
+            "firstAt": "2026-09-14T19:21:56.271Z",
+            "lastAt": "2026-09-14T19:21:56.271Z"
+          },
+          "stderr": {
+            "chunks": 0,
+            "bytes": 0,
+            "firstAt": null,
+            "lastAt": null
+          },
+          "events": {
+            "systemInit": 1,
+            "thinkingTokens": 0,
+            "assistant": 0,
+            "result": 0,
+            "other": 0,
+            "invalidJson": 0
+          },
+          "firstModelObservedAt": null,
+          "cancellation": {
+            "requestedAt": "2026-09-14T19:24:54.162Z",
+            "context": {
+              "schemaVersion": "operator-studio.cancellation-context/v1",
+              "runId": "claude_MU1MQ1D6_E01918CB",
+              "missionId": "MIS_MU1MP7HP",
+              "role": "main",
+              "trigger": "budget_exceeded",
+              "triggeredAt": "2026-09-14T19:24:54.162Z",
+              "budgetMs": 180000,
+              "elapsedMs": 181262,
+              "stallTimeoutMs": 300000,
+              "idleMs": 175009
+            }
+          },
+          "close": {
+            "at": "2026-09-14T19:24:55.098Z",
+            "exitCode": 1,
+            "signal": null
+          }
+        }
+      },
+      {
+        "path": "bridge\\claude-runs\\claude_MU1MU8S6_08FA5FDF.json",
+        "sha256": "0b729124343f55332755ba0a8eeed09b2982411715dcdaef0250549c4ff03799",
+        "status": "cancelled",
+        "sessionId": "cee8b23f-12da-4421-a457-649ba3189f0d",
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "provider": "claude-code",
+          "runId": "claude_MU1MU8S6_08FA5FDF",
+          "missionId": "MIS_MU1MP7HP",
+          "sessionId": "cee8b23f-12da-4421-a457-649ba3189f0d",
+          "status": "unknown",
+          "model": null,
+          "source": null,
+          "models": [],
+          "configuredModels": [
+            "claude-opus-5[1m]"
+          ],
+          "usageModels": [],
+          "observations": [],
+          "reasons": [
+            "no assistant response metadata in the run stream"
+          ]
+        },
+        "diagnostics": {
+          "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+          "provider": "claude-code",
+          "runId": "claude_MU1MU8S6_08FA5FDF",
+          "missionId": "MIS_MU1MP7HP",
+          "stdout": {
+            "chunks": 1,
+            "bytes": 1166,
+            "firstAt": "2026-09-14T19:25:11.431Z",
+            "lastAt": "2026-09-14T19:25:11.431Z"
+          },
+          "stderr": {
+            "chunks": 0,
+            "bytes": 0,
+            "firstAt": null,
+            "lastAt": null
+          },
+          "events": {
+            "systemInit": 1,
+            "thinkingTokens": 0,
+            "assistant": 0,
+            "result": 0,
+            "other": 0,
+            "invalidJson": 0
+          },
+          "firstModelObservedAt": null,
+          "cancellation": {
+            "requestedAt": "2026-09-14T19:28:14.177Z",
+            "context": {
+              "schemaVersion": "operator-studio.cancellation-context/v1",
+              "runId": "claude_MU1MU8S6_08FA5FDF",
+              "missionId": "MIS_MU1MP7HP",
+              "role": "main",
+              "trigger": "budget_exceeded",
+              "triggeredAt": "2026-09-14T19:28:14.177Z",
+              "budgetMs": 180000,
+              "elapsedMs": 184918,
+              "stallTimeoutMs": 300000,
+              "idleMs": 180012
+            }
+          },
+          "close": {
+            "at": "2026-09-14T19:28:15.113Z",
+            "exitCode": 1,
+            "signal": null
+          }
+        }
+      },
+      {
+        "path": "bridge\\claude-runs\\claude_MU1MYK67_427EB533.json",
+        "sha256": "40ce51c12c13535e9230aff6432bfcc42dc4dde3d2602e4ecbdd3d393f677a90",
+        "status": "cancelled",
+        "sessionId": "f3a556af-b348-4d55-8a27-28c7dd9c3648",
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "provider": "claude-code",
+          "runId": "claude_MU1MYK67_427EB533",
+          "missionId": "MIS_MU1MP7HP",
+          "sessionId": "f3a556af-b348-4d55-8a27-28c7dd9c3648",
+          "status": "unknown",
+          "model": null,
+          "source": null,
+          "models": [],
+          "configuredModels": [
+            "claude-opus-5[1m]"
+          ],
+          "usageModels": [],
+          "observations": [],
+          "reasons": [
+            "no assistant response metadata in the run stream"
+          ]
+        },
+        "diagnostics": {
+          "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+          "provider": "claude-code",
+          "runId": "claude_MU1MYK67_427EB533",
+          "missionId": "MIS_MU1MP7HP",
+          "stdout": {
+            "chunks": 1,
+            "bytes": 1166,
+            "firstAt": "2026-09-14T19:28:32.800Z",
+            "lastAt": "2026-09-14T19:28:32.800Z"
+          },
+          "stderr": {
+            "chunks": 0,
+            "bytes": 0,
+            "firstAt": null,
+            "lastAt": null
+          },
+          "events": {
+            "systemInit": 1,
+            "thinkingTokens": 0,
+            "assistant": 0,
+            "result": 0,
+            "other": 0,
+            "invalidJson": 0
+          },
+          "firstModelObservedAt": null,
+          "cancellation": {
+            "requestedAt": "2026-09-14T19:31:35.653Z",
+            "context": {
+              "schemaVersion": "operator-studio.cancellation-context/v1",
+              "runId": "claude_MU1MYK67_427EB533",
+              "missionId": "MIS_MU1MP7HP",
+              "role": "main",
+              "trigger": "budget_exceeded",
+              "triggeredAt": "2026-09-14T19:31:35.653Z",
+              "budgetMs": 180000,
+              "elapsedMs": 185095,
+              "stallTimeoutMs": 300000,
+              "idleMs": 181472
+            }
+          },
+          "close": {
+            "at": "2026-09-14T19:31:36.464Z",
+            "exitCode": 1,
+            "signal": null
+          }
+        }
+      },
+      {
+        "path": "bridge\\claude-runs\\claude_research_MU1N2QYI_20452C1F.json",
+        "sha256": "dd13d349623692e6ae1b5633f668253dcc4bec9d33679d03aa95d7995a811ed8",
+        "status": "cancelled",
+        "sessionId": "eec7e276-ff24-48fc-be87-5a16d0fcbc2d",
+        "modelObservation": {
+          "schemaVersion": "operator-studio.model-observation/v1",
+          "provider": "claude-code",
+          "runId": "claude_research_MU1N2QYI_20452C1F",
+          "missionId": "MIS_MU1MP7HP",
+          "sessionId": "eec7e276-ff24-48fc-be87-5a16d0fcbc2d",
+          "status": "unknown",
+          "model": null,
+          "source": null,
+          "models": [],
+          "configuredModels": [
+            "claude-opus-5[1m]"
+          ],
+          "usageModels": [],
+          "observations": [],
+          "reasons": [
+            "no assistant response metadata in the run stream"
+          ]
+        },
+        "diagnostics": {
+          "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+          "provider": "claude-code",
+          "runId": "claude_research_MU1N2QYI_20452C1F",
+          "missionId": "MIS_MU1MP7HP",
+          "stdout": {
+            "chunks": 1,
+            "bytes": 1199,
+            "firstAt": "2026-09-14T19:31:48.904Z",
+            "lastAt": "2026-09-14T19:31:48.904Z"
+          },
+          "stderr": {
+            "chunks": 0,
+            "bytes": 0,
+            "firstAt": null,
+            "lastAt": null
+          },
+          "events": {
+            "systemInit": 1,
+            "thinkingTokens": 0,
+            "assistant": 0,
+            "result": 0,
+            "other": 0,
+            "invalidJson": 0
+          },
+          "firstModelObservedAt": null,
+          "cancellation": {
+            "requestedAt": "2026-09-14T19:33:19.210Z",
+            "context": {
+              "schemaVersion": "operator-studio.cancellation-context/v1",
+              "runId": "claude_research_MU1N2QYI_20452C1F",
+              "missionId": "MIS_MU1MP7HP",
+              "role": "research",
+              "trigger": "explicit_cancel",
+              "triggeredAt": "2026-09-14T19:33:19.210Z",
+              "budgetMs": null,
+              "elapsedMs": null,
+              "stallTimeoutMs": null,
+              "idleMs": null
+            }
+          },
+          "close": {
+            "at": "2026-09-14T19:33:19.987Z",
+            "exitCode": 1,
+            "signal": null
+          }
+        }
+      }
+    ],
+    "resourceRelease": {
+      "runtimeExit": {
+        "code": null,
+        "signal": "SIGTERM"
+      },
+      "teardownConfirmed": true,
+      "queueTasks": 1,
+      "allQueueTasksTerminalAndReleased": true
+    },
+    "proxyRecords": [
+      {
+        "session_id": "cbc13671-f5ee-4b18-998d-ce4a287c6cd4",
+        "status_code": 200,
+        "first_token_ms": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 178778,
+        "is_streaming": 1
+      },
+      {
+        "session_id": "cbc13671-f5ee-4b18-998d-ce4a287c6cd4",
+        "status_code": 200,
+        "first_token_ms": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 179204,
+        "is_streaming": 1
+      },
+      {
+        "session_id": "cee8b23f-12da-4421-a457-649ba3189f0d",
+        "status_code": 200,
+        "first_token_ms": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 183633,
+        "is_streaming": 1
+      },
+      {
+        "session_id": "cee8b23f-12da-4421-a457-649ba3189f0d",
+        "status_code": 200,
+        "first_token_ms": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 184059,
+        "is_streaming": 1
+      },
+      {
+        "session_id": "eec7e276-ff24-48fc-be87-5a16d0fcbc2d",
+        "status_code": 200,
+        "first_token_ms": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 91479,
+        "is_streaming": 1
+      },
+      {
+        "session_id": "eec7e276-ff24-48fc-be87-5a16d0fcbc2d",
+        "status_code": 200,
+        "first_token_ms": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 91018,
+        "is_streaming": 1
+      },
+      {
+        "session_id": "f3a556af-b348-4d55-8a27-28c7dd9c3648",
+        "status_code": 200,
+        "first_token_ms": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 184020,
+        "is_streaming": 1
+      },
+      {
+        "session_id": "f3a556af-b348-4d55-8a27-28c7dd9c3648",
+        "status_code": 200,
+        "first_token_ms": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 183616,
+        "is_streaming": 1
+      }
+    ],
+    "proxyRecordCaveat": "HTTP200 and proxy model labels are not assistant response metadata, never used to fill actual model; counters are not billing proof",
+    "gitProvenance": {
+      "original": "git exit128 dubious ownership",
+      "processEnvCountProbe": "still exit128; model was not called",
+      "existingScopedGitEnvironmentProbe": "commit21c6d78 and clean status exit0 using scratch private gitconfig; no source/global configuration edit"
+    },
+    "channelProbe": {
+      "taskId": "task_913ee21508464351b3eb77b872c2121f",
+      "attemptId": "run_a7020d103f0d4248a247ced0456a63b3",
+      "prompt": "Reply exactly OK.",
+      "timeoutMs": 60000,
+      "received": "system.init only",
+      "commandExitCode": 1,
+      "error": "ETIMEDOUT",
+      "platformStatus": "failed",
+      "platformNote": "Execution exceeded100 seconds during collecting; actual command receipt elapsed60.734 seconds and failed",
+      "cause": "CLI/proxy/upstream cause not resolved"
+    },
+    "originalArchive": {
+      "path": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\failed-smoke-originals.zip",
+      "sha256": "c50b7de215cbb73339b6cd4e5dcd58e221810bf127b584ab083f9eefdf606c6d",
+      "files": 171
+    },
+    "reportProvenance": "Failed dispatch task remains failed; these files are Root copies of original evidence, not accepted/integrated success artifacts"
+  },
+  "newN20": {
+    "state": "passed",
+    "taskId": "task_65736e77aae34934b6698aa9adea074d",
+    "attemptId": "run_271aad43764f461faa63c361ad468204",
+    "artifactDigest": "81d91f91280226bfcca127d6e61d1bce076940ab3db2f0e6f8ea39b8e4eab692",
+    "platformState": "integrated",
+    "exitCode": 0,
+    "elapsedSeconds": 5728.109,
+    "originalDenominator": 20,
+    "fullSuccess": 20,
+    "independentlyVerified": 20,
+    "comparable": 20,
+    "strictN20Passed": true,
+    "configFingerprint": "sha256:fe436e13e464411c9f80c82b290f4ebe1c7c65abd6b5df2793e1d649d4eb5460",
+    "actualModel": "deepseek-v4-flash",
+    "requiredModelRuns": 44,
+    "observedModelRuns": 44,
+    "distinctCompletedCandidates": 40,
+    "queueOutcomes": {
+      "completed": 60,
+      "failed": 3
+    },
+    "allQueueTasksTerminalAndReleased": true,
+    "workflowWritesAfterStart": 0,
+    "archive": {
+      "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\n20-recovered-originals.zip",
+      "sha256": "ccd79f9354f9f82bde76b4d8242b56b72505568c27be360b38d0fa8be2f92aca",
+      "verified": true,
+      "files": 4493,
+      "originalBytes": 75748429
+    },
+    "independentReader": "n20-recovered-20260915/reader.json",
+    "diagnostics": "n20-recovered-20260915/diagnostics.json",
+    "failedFeedback": {
+      "contractConformant": 3,
+      "newRoundInjectionObserved": 2,
+      "noLaterRound": 1,
+      "immediateInjectionSupplementalExitCode": 1,
+      "frozenContractReconciliationExitCode": 0,
+      "explanation": "Same logical round retains frozen experience selection; two failures are observed injected on the subsequent new logical round, one has no later round. The supplemental immediate-injection audit is preserved, not rewritten as passed."
+    },
+    "scope": "Frozen21c6d78/local-shared-gpu/affine/two-candidate E2E; smoke and historical batches excluded; not a universal stability or publishable-hardware claim."
+  },
+  "sourceCommit": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948",
+  "authorization": {
+    "id": "auth_e22b8ef6ebf44270bbebc352632d1580",
+    "userAnswer": "现在给你授权，允许你发送数据跑affine测试，并提前允许你继续N20测试，后续该网站https://api.deepseek.com/anthropic可以信任，无需再询问",
+    "destination": "https://api.deepseek.com/anthropic",
+    "source": "upstream_reported",
+    "authority": "none",
+    "hostSubmissionAllowed": true
+  },
+  "liveRetries": [
+    {
+      "id": "after-user-reported-proxy-repair",
+      "userStatement": "claude问题已修复是代理问题，现在重试并继续N20",
+      "taskId": "task_91991f437dfb474986a70bf24afb18d4",
+      "attemptId": "run_223e1478557e49aca5e862751065eb53",
+      "artifactDigest": "4fb09c22567877d1427f946f88aa4f4bd8239b99324efbd62f1a727560b9b006",
+      "state": "failed",
+      "exitCode": 1,
+      "elapsedSeconds": 735.266,
+      "completedCandidates": 0,
+      "requiredModels": 5,
+      "observedModels": 0,
+      "code": {
+        "commit": "21c6d7868bd3c5aa74dfcc098f87e3ad4236f948",
+        "dirty": false,
+        "contentDigest": "sha256:95d972f6133b8ebdc0a5148ce6507a5169274f6a9c4eac25b953fe4bd44c732f"
+      },
+      "diagnostics": [
+        {
+          "runId": "claude_MU1O5IEN_13BFEF42",
+          "sessionId": "15605efd-954e-449a-ba4a-487cc7a67d55",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1O5IEN_13BFEF42",
+            "missionId": "MIS_MU1O4WG5",
+            "sessionId": "15605efd-954e-449a-ba4a-487cc7a67d55",
+            "status": "unknown",
+            "model": null,
+            "source": null,
+            "models": [],
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [],
+            "observations": [],
+            "reasons": [
+              "no assistant response metadata in the run stream"
+            ]
+          },
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1O5IEN_13BFEF42",
+            "missionId": "MIS_MU1O4WG5",
+            "stdout": {
+              "chunks": 1,
+              "bytes": 1166,
+              "firstAt": "2026-09-14T20:01:56.214Z",
+              "lastAt": "2026-09-14T20:01:56.214Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 0,
+              "assistant": 0,
+              "result": 0,
+              "other": 0,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": null,
+            "cancellation": {
+              "requestedAt": "2026-09-14T20:04:57.819Z",
+              "context": {
+                "schemaVersion": "operator-studio.cancellation-context/v1",
+                "runId": "claude_MU1O5IEN_13BFEF42",
+                "missionId": "MIS_MU1O4WG5",
+                "role": "main",
+                "trigger": "budget_exceeded",
+                "triggeredAt": "2026-09-14T20:04:57.819Z",
+                "budgetMs": 180000,
+                "elapsedMs": 183412,
+                "stallTimeoutMs": 300000,
+                "idleMs": 180008
+              }
+            },
+            "close": {
+              "at": "2026-09-14T20:04:58.524Z",
+              "exitCode": 1,
+              "signal": null
+            }
+          },
+          "sha256": "7d802329dcacae09bc1554c56e9eb9b90dacc8fd95f25a97f052e2a603f7bdf9"
+        },
+        {
+          "runId": "claude_MU1O9PAF_5552EA1D",
+          "sessionId": "313984e8-3aab-4643-b983-f408334fa906",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1O9PAF_5552EA1D",
+            "missionId": "MIS_MU1O4WG5",
+            "sessionId": "313984e8-3aab-4643-b983-f408334fa906",
+            "status": "unknown",
+            "model": null,
+            "source": null,
+            "models": [],
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [],
+            "observations": [],
+            "reasons": [
+              "no assistant response metadata in the run stream"
+            ]
+          },
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1O9PAF_5552EA1D",
+            "missionId": "MIS_MU1O4WG5",
+            "stdout": {
+              "chunks": 1,
+              "bytes": 1166,
+              "firstAt": "2026-09-14T20:05:11.656Z",
+              "lastAt": "2026-09-14T20:05:11.656Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 0,
+              "assistant": 0,
+              "result": 0,
+              "other": 0,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": null,
+            "cancellation": {
+              "requestedAt": "2026-09-14T20:08:12.829Z",
+              "context": {
+                "schemaVersion": "operator-studio.cancellation-context/v1",
+                "runId": "claude_MU1O9PAF_5552EA1D",
+                "missionId": "MIS_MU1O4WG5",
+                "role": "main",
+                "trigger": "budget_exceeded",
+                "triggeredAt": "2026-09-14T20:08:12.829Z",
+                "budgetMs": 180000,
+                "elapsedMs": 182896,
+                "stallTimeoutMs": 300000,
+                "idleMs": 180009
+              }
+            },
+            "close": {
+              "at": "2026-09-14T20:08:13.703Z",
+              "exitCode": 1,
+              "signal": null
+            }
+          },
+          "sha256": "0f6a6ec164b24c55ed6c38e8d7b2df5126550dba3ae831655c5556f69ea46ee4"
+        },
+        {
+          "runId": "claude_MU1ODVT2_6FF4E2DF",
+          "sessionId": "3f50028f-2789-4aaf-b719-ccee4a3bf000",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ODVT2_6FF4E2DF",
+            "missionId": "MIS_MU1O4WG5",
+            "sessionId": "3f50028f-2789-4aaf-b719-ccee4a3bf000",
+            "status": "unknown",
+            "model": null,
+            "source": null,
+            "models": [],
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [],
+            "observations": [],
+            "reasons": [
+              "no assistant response metadata in the run stream"
+            ]
+          },
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1ODVT2_6FF4E2DF",
+            "missionId": "MIS_MU1O4WG5",
+            "stdout": {
+              "chunks": 1,
+              "bytes": 1166,
+              "firstAt": "2026-09-14T20:08:26.668Z",
+              "lastAt": "2026-09-14T20:08:26.668Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 0,
+              "assistant": 0,
+              "result": 0,
+              "other": 0,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": null,
+            "cancellation": {
+              "requestedAt": "2026-09-14T20:11:27.845Z",
+              "context": {
+                "schemaVersion": "operator-studio.cancellation-context/v1",
+                "runId": "claude_MU1ODVT2_6FF4E2DF",
+                "missionId": "MIS_MU1O4WG5",
+                "role": "main",
+                "trigger": "budget_exceeded",
+                "triggeredAt": "2026-09-14T20:11:27.845Z",
+                "budgetMs": 180000,
+                "elapsedMs": 182840,
+                "stallTimeoutMs": 300000,
+                "idleMs": 180014
+              }
+            },
+            "close": {
+              "at": "2026-09-14T20:11:28.553Z",
+              "exitCode": 1,
+              "signal": null
+            }
+          },
+          "sha256": "15d66f2d28ad108abc84a18d7154f705098ef2437fbd93c0fd2053857f7a97fb"
+        },
+        {
+          "runId": "claude_MU1OKB9W_51B6CDCC",
+          "sessionId": "45712362-2fcc-4173-96f7-362bb24b6c7c",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1OKB9W_51B6CDCC",
+            "missionId": "MIS_MU1O4WG5",
+            "sessionId": "45712362-2fcc-4173-96f7-362bb24b6c7c",
+            "status": "unknown",
+            "model": null,
+            "source": null,
+            "models": [],
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [],
+            "observations": [],
+            "reasons": [
+              "no assistant response metadata in the run stream"
+            ]
+          },
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_MU1OKB9W_51B6CDCC",
+            "missionId": "MIS_MU1O4WG5",
+            "stdout": {
+              "chunks": 1,
+              "bytes": 1166,
+              "firstAt": "2026-09-14T20:13:26.627Z",
+              "lastAt": "2026-09-14T20:13:26.627Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 0,
+              "assistant": 0,
+              "result": 0,
+              "other": 0,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": null,
+            "cancellation": {
+              "requestedAt": "2026-09-14T20:13:27.855Z",
+              "context": {
+                "schemaVersion": "operator-studio.cancellation-context/v1",
+                "runId": "claude_MU1OKB9W_51B6CDCC",
+                "missionId": "MIS_MU1O4WG5",
+                "role": "main",
+                "trigger": "explicit_cancel",
+                "triggeredAt": "2026-09-14T20:13:27.855Z",
+                "budgetMs": null,
+                "elapsedMs": null,
+                "stallTimeoutMs": null,
+                "idleMs": null
+              }
+            },
+            "close": {
+              "at": "2026-09-14T20:13:28.520Z",
+              "exitCode": 1,
+              "signal": null
+            }
+          },
+          "sha256": "13e7982c2b8a495bf229dfda81fd36626ee8aea3f16d2ff838d4d1c41c36163b"
+        },
+        {
+          "runId": "claude_research_MU1OI1JM_78CE4B7E",
+          "sessionId": "9d4bdaa7-cca1-4fe2-a1cd-537f80d74ff6",
+          "modelObservation": {
+            "schemaVersion": "operator-studio.model-observation/v1",
+            "provider": "claude-code",
+            "runId": "claude_research_MU1OI1JM_78CE4B7E",
+            "missionId": "MIS_MU1O4WG5",
+            "sessionId": "9d4bdaa7-cca1-4fe2-a1cd-537f80d74ff6",
+            "status": "unknown",
+            "model": null,
+            "source": null,
+            "models": [],
+            "configuredModels": [
+              "claude-opus-5[1m]"
+            ],
+            "usageModels": [],
+            "observations": [],
+            "reasons": [
+              "no assistant response metadata in the run stream"
+            ]
+          },
+          "diagnostics": {
+            "schemaVersion": "operator-studio.agent-run-diagnostics/v1",
+            "provider": "claude-code",
+            "runId": "claude_research_MU1OI1JM_78CE4B7E",
+            "missionId": "MIS_MU1O4WG5",
+            "stdout": {
+              "chunks": 1,
+              "bytes": 1199,
+              "firstAt": "2026-09-14T20:11:41.419Z",
+              "lastAt": "2026-09-14T20:11:41.419Z"
+            },
+            "stderr": {
+              "chunks": 0,
+              "bytes": 0,
+              "firstAt": null,
+              "lastAt": null
+            },
+            "events": {
+              "systemInit": 1,
+              "thinkingTokens": 0,
+              "assistant": 0,
+              "result": 0,
+              "other": 0,
+              "invalidJson": 0
+            },
+            "firstModelObservedAt": null,
+            "cancellation": {
+              "requestedAt": "2026-09-14T20:13:12.851Z",
+              "context": {
+                "schemaVersion": "operator-studio.cancellation-context/v1",
+                "runId": "claude_research_MU1OI1JM_78CE4B7E",
+                "missionId": "MIS_MU1O4WG5",
+                "role": "research",
+                "trigger": "explicit_cancel",
+                "triggeredAt": "2026-09-14T20:13:12.851Z",
+                "budgetMs": null,
+                "elapsedMs": null,
+                "stallTimeoutMs": null,
+                "idleMs": null
+              }
+            },
+            "close": {
+              "at": "2026-09-14T20:13:13.492Z",
+              "exitCode": 1,
+              "signal": null
+            }
+          },
+          "sha256": "f5ac0665de734a063729f6746ad308da568ae848ee2153ef1ea55739309fe41a"
+        }
+      ],
+      "release": {
+        "teardownConfirmed": true,
+        "runtimeExit": {
+          "code": null,
+          "signal": "SIGTERM"
+        },
+        "allQueueTasksTerminalAndReleased": true
+      },
+      "environmentComparison": "specified HTTP_PROXY/HTTPS_PROXY, base URL environment, CLI directory and user profile matched current terminal; NO_PROXY absent in current terminal",
+      "loopbackProbe": {
+        "taskId": "task_f3f77f37ca284314a58460e8e6478a4b",
+        "attemptId": "run_06e6e8b5f2f2458e990d1b84f1aff2fc",
+        "result": "only init; ETIMEDOUT after60000ms",
+        "inference": "adding process-only loopback NO_PROXY did not restore response"
+      },
+      "unknown": "which CLI/proxy/upstream step remains unusable after user-reported repair",
+      "archive": {
+        "path": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\proxy-repair-retry-originals.zip",
+        "sha256": "988dec3b7cbc4f4fb1a28867a81bb6c6b212ceef7d92a40ddd3230b5747dca95",
+        "files": 175
+      },
+      "provenance": "Root copies of failed originals; failed platform task is not accepted/integrated as success"
+    }
+  ],
+  "latestLiveAttempt": "additionalCoverage",
+  "liveRecovery": {
+    "state": "passed",
+    "taskId": "task_aae9d7f36e174c1bb6d88d4770bdf060",
+    "attemptId": "run_560416040a7249a9ab618f19dcc73621",
+    "artifactDigest": "73b437fdd7eb03cb6794d0eb96b61954835d62e2b6ab2e06dc0584de16d85162",
+    "exitCode": 0,
+    "elapsedSeconds": 314.547,
+    "actualModelsObserved": 2,
+    "completedCandidates": 2,
+    "independentReader": "smoke-recovered-20260915/reader.json",
+    "archive": {
+      "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\smoke-recovered-originals.zip",
+      "sha256": "f519a0ccc79bdcb274022c0a8de052fb156c5deb1a8ec3e20d4098d01ebca045",
+      "verified": true,
+      "files": 219,
+      "originalBytes": 3834792
+    },
+    "headlessProbe": {
+      "taskId": "task_8fc8b18e1e484a64a55f011cd085807d",
+      "exitCode": 0,
+      "elapsedSeconds": 3.109,
+      "model": "deepseek-v4-flash",
+      "response": "OK"
+    },
+    "interpretation": "Current headless CLI and real GPU chain recovered without source/global configuration edits; earlier proxy/CLI failure root cause remains unproven."
+  },
+  "newN20History": [
+    {
+      "state": "not_run",
+      "authorization": "already_allowed",
+      "reason": "new smoke still failed with5/5 unknown,0candidates; bounded loopback probe also timed out",
+      "nextAction": "compare with the user-verified working Claude CLI invocation before more model/GPU runs"
+    }
+  ],
+  "additionalCoverage": {
+    "state": "passed",
+    "platformState": "integrated",
+    "taskId": "task_a389dd25c6ce4cc59e55a8db8bde1588",
+    "attemptId": "run_1452e3c488ae4a59b6c1c77aa826f719",
+    "artifactDigest": "12f4dd51e852c139d614399368b984f2e7385873c858131f4c912fedb103a331",
+    "exitCode": 0,
+    "elapsedSeconds": 430.547,
+    "families": [
+      "reduction",
+      "normalization"
+    ],
+    "roundsPerFamily": 2,
+    "distinctCompletedCandidates": 4,
+    "requiredModelRuns": 4,
+    "observedModelRuns": 4,
+    "actualModel": "deepseek-v4-flash",
+    "queueTasks": 6,
+    "allQueueTasksCompletedAndReleased": true,
+    "workflowWritesAfterStart": 0,
+    "failedCandidates": 0,
+    "independentReader": "coverage-recovered-20260915/reader.json",
+    "diagnostics": "coverage-recovered-20260915/diagnostics.json",
+    "archive": {
+      "archive": "F:\\设计\\快速项目\\acagemm原型\\.operator-studio-local\\run-diagnostics-20260914\\coverage-recovered-originals.zip",
+      "sha256": "fe88c8f0a32674b75ab23b88d524b0e3b9eb4d33702f3f9d02a8830084a603d7",
+      "verified": true,
+      "files": 390,
+      "originalBytes": 7739309
+    },
+    "authorization": {
+      "question": "是否允许额外运行 reduction/normalization 各两轮，并将其代码、提示词和测试反馈经现有 Claude 渠道发送至 https://api.deepseek.com/anthropic？",
+      "userAnswer": "允许，继续",
+      "sourceLocation": "本轮用户消息，紧接该具体问题",
+      "source": "upstream_reported",
+      "authority": "none",
+      "hostSubmissionAllowed": true
+    },
+    "scope": "Separate two-family coverage on frozen21c6d78; not pooled into affine N20 and not a per-family N20 stability claim."
+  },
+  "additionalCoverageHistory": [
+    {
+      "state": "not_started",
+      "families": [
+        "reduction",
+        "normalization"
+      ],
+      "requestId": "21c6d78-coverage-recovered-20260915",
+      "hostResult": "auto_review_rejected",
+      "reason": "This launches additional reduction/normalization GPU runs that send project data to DeepSeek, but the trusted authorization explicitly covered affine and N20 only, not this separate coverage scope.",
+      "nextAction": "Ask explicit approval for this separate data-sending coverage scope; do not retry or bypass.",
+      "previousCoverage": "83b91d6 historical coverage remains valid for that earlier source only."
+    }
+  ]
+}

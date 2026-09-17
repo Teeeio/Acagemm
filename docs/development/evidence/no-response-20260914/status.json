@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "operator-studio.no-response-review-result/v1",
+  "completedAt": "2026-09-14T14:00:00.225883+00:00",
+  "projectId": "268e8876-8e03-4ce2-94db-5c7ff9678edf",
+  "report": {
+    "taskId": "task_2a4cfe3fd9814151bce3f72190b4142f",
+    "attemptId": "run_831c24667e19429988b1dc1fedc69bfb",
+    "artifactDigest": "d8b4185643fad3b6cff883b7f4df893db73ea4c086416dc7ba9c2d14a382672e",
+    "status": "integrated",
+    "modelAttempts": 3,
+    "localRevisions": 1
+  },
+  "verification": {
+    "taskId": "task_09b97e24ef43461e935798b037ca8b2b",
+    "attemptId": "run_53f179b8c03940d1947484dc91ab3028",
+    "artifactDigest": "88753e75b5683a61a34387772b3a123f2840d7048c96d307cb12c83121f19ef3",
+    "status": "integrated",
+    "exitCode": 0,
+    "recipePassed": true,
+    "supersededAttempt": "run_80078c200d9c4fcb91d3c7ed2c6c0aba"
+  },
+  "authorizationEvidence": "auth_03d0f217c9f2493889f0fbb5789cfc01",
+  "businessE2ERunsAdded": 0,
+  "productionCodeChanged": false,
+  "sourceN20": {
+    "taskId": "task_44338a002ba04dc4b366153587a55704",
+    "fullSuccess": 20,
+    "comparable": 19,
+    "unknown": 1,
+    "strictPassed": false
+  },
+  "nextStep": "Freeze bounded safe runtime diagnostics and independent scenario tests before a new real batch.",
+  "evidenceFiles": [
+    {
+      "path": "client-review.json",
+      "sha256": "35a194345e0c2611c624ce729eb4733ac7f7a243a49dc13ce4884d6f656d6c38",
+      "bytes": 37809
+    },
+    {
+      "path": "client-review.md",
+      "sha256": "e0096697fc01e8ad4b92f5b363a5bf313a3da02089dde46a48cbfa9f70ba573a",
+      "bytes": 20137
+    },
+    {
+      "path": "case.json",
+      "sha256": "df6ccf5df226fee440eee3876e3af9c0174ae0ee6c553d3172d4f7ba559e767c",
+      "bytes": 19605
+    },
+    {
+      "path": "root-timeline.json",
+      "sha256": "72dcc62e7dfdee2b7f008bb0ec4bec5d35d493b68527f07063832e5f820be1c8",
+      "bytes": 6834
+    },
+    {
+      "path": "root-verification.json",
+      "sha256": "ef05f8c145f1ef4f9b037a149cba87c0c6449d7f1b9371b668be1287953bba30",
+      "bytes": 2081
+    },
+    {
+      "path": "root-verification-worker.json",
+      "sha256": "cdc3f9807a9c212bcde7d2db833f27f4e16899d261af8b67bb621c7819e9ee8f",
+      "bytes": 1653
+    },
+    {
+      "path": "platform-candidate-verification.json",
+      "sha256": "fddca2b18f50e2e1c1326a228121d8edb83cf8a8ee9134f153d6432dfea415f6",
+      "bytes": 2185
+    },
+    {
+      "path": "platform-verification.json",
+      "sha256": "59ea04a390a94dacc3cf23ac18f3f627ca8c12392e7f0832e4df2de7dd9928fd",
+      "bytes": 1052
+    },
+    {
+      "path": "platform-candidate-verification-stale.json",
+      "sha256": "3066cee228827a489a50708f510d54c9916f839437c69588a92e6627a8e59700",
+      "bytes": 2055
+    },
+    {
+      "path": "platform-verification-stale.json",
+      "sha256": "ae15f6dfe463fbc591ec7d691cd428324557183a1db2d1f9272eeb2807234674",
+      "bytes": 1052
+    },
+    {
+      "path": "platform-integration-interrupted.json",
+      "sha256": "3ab33f21e09983b6cfa0f04d4af0389cff948c399f53fd35a471219896a8803e",
+      "bytes": 716
+    },
+    {
+      "path": "platform-recovery-observation.json",
+      "sha256": "45471d5912a8fab714adcb060c5da88dcf703cf7cdade5104e790328959d7d11",
+      "bytes": 980
+    }
+  ]
+}
