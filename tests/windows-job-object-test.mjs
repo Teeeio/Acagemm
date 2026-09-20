@@ -64,14 +64,23 @@ test('job object termination releases descendants and helper failures fail close
       arguments: `--input-type=module -e ${JSON.stringify(script)}`,
       cwd: root, stdoutPath, stderrPath, tempRoot: root, jobName,
     });
+    // Wait for a *valid* PID, not merely for the file to exist. `writeFile`
+    // creates (and truncates) the file before the bytes land, so on a loaded
+    // machine the reader can observe it empty — `Number('')` is 0, which the
+    // loop below used to return as the answer and report as "the descendant
+    // was not recorded". A positive integer is the only value that ends the
+    // wait; everything else keeps polling, so a spawn that genuinely failed
+    // still fails (as a timeout whose message carries what was last observed).
     descendantPid = await (async () => {
       const deadline = Date.now() + TREE_SETTLE_DEADLINE_MS;
+      let observed = null;
       while (Date.now() < deadline) {
-        try { return Number((await readFile(pidPath, 'utf8')).trim()); } catch { await delay(40); }
+        try { observed = (await readFile(pidPath, 'utf8')).trim(); } catch { observed = null; }
+        if (/^\d+$/.test(observed ?? '') && Number(observed) > 0) return Number(observed);
+        await delay(40);
       }
-      throw new Error('descendant PID was not recorded');
+      throw new Error(`descendant PID was not recorded; last observed content: ${JSON.stringify(observed)}`);
     })();
-    assert.ok(descendantPid > 0);
     assert.doesNotThrow(() => process.kill(descendantPid, 0));
     const duplicate = await spawnJobObjectProcess({ filePath: process.execPath,
       arguments: '-e "setTimeout(() => {}, 30000)"', cwd: root,
