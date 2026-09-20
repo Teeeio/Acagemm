@@ -15,7 +15,9 @@ export const createSourceService = ({ readdir, stat, path, workspaceManager }) =
         if (!isRepo) continue;
         const head = await workspaceManager.git(['rev-parse', 'HEAD'], repoPath).then((result) => result.stdout.trim()).catch(() => null);
         const origin = await workspaceManager.git(['remote', 'get-url', 'origin'], repoPath).then((result) => result.stdout.trim()).catch(() => '');
-        if (head) references.push({ repository: origin || repoPath, commit: head, path: '' });
+        // 注册的是**仓库级引用**：断言「这个仓库在这个 commit 上」，不指向仓库内任何文件。
+        // 显式写 scope，不靠空 path 表达（空 path 只是历史写法，校验端仍兼容但不再是契约）。
+        if (head) references.push({ repository: origin || repoPath, commit: head, scope: 'repository' });
       }
       if (references.length) await workspaceManager.updateSourceRegistry({ sourceRoot: mission.sourceRoot, runtimeRoot, missionId: state.activeMissionId, references });
       return { count: references.length, references };

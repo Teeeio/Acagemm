@@ -23,13 +23,20 @@ assert.equal(dirty.verdict, 'modified');
 assert.equal(dirty.reasonCode, 'source_root_modified');
 assert.deepEqual(dirty.modified[0].changedFiles, ['reference.cu']);
 
-// 引用级错误码是噪声，不能污染判定。source-service 注册来源时写 `path: ''`，
-// 于是 SOURCE_REFERENCE_PATH_INVALID 会稳定出现；以整份 errors 为依据会让每次巡检都报「被改」。
+// 引用级错误码不进判定：它们讲的是「某个 mission 声称用了什么」，不是来源根自身状态。
+// 以整份 errors 为依据，巡检就会因 mission 级声明问题（未登记的仓库、已被上游推进的旧 commit）
+// 报「来源被改」。2026-09-20 起仓库级引用是一等 scope，注册端不再产生 PATH_INVALID，
+// 但这条约束与注册端写法无关——引用级错误码整体不参与判定。
 const referenceNoise = classifySourceRegistryIntegrity({
-  inspection: { errors: [{ code: 'SOURCE_REFERENCE_PATH_INVALID', source: 'https://example.invalid/up.git', detail: '来源引用必须使用仓库内相对路径。' }] },
+  inspection: {
+    errors: [
+      { code: 'SOURCE_REFERENCE_PATH_INVALID', source: 'https://example.invalid/up.git', detail: '来源引用必须使用仓库内相对路径。' },
+      { code: 'SOURCE_REFERENCE_SCOPE_INVALID', source: 'https://example.invalid/up.git', detail: '来源引用的 scope 只能是 file 或 repository。' },
+    ],
+  },
 });
 assert.equal(referenceNoise.verdict, 'clean', 'reference-level errors must never be read as "the source was modified"');
-assert.deepEqual(referenceNoise.ignoredCodes, ['SOURCE_REFERENCE_PATH_INVALID']);
+assert.deepEqual(referenceNoise.ignoredCodes, ['SOURCE_REFERENCE_PATH_INVALID', 'SOURCE_REFERENCE_SCOPE_INVALID']);
 assert.deepEqual(referenceNoise.modified, []);
 
 // 未知码同样不参与判定，但如实回传，便于诊断。

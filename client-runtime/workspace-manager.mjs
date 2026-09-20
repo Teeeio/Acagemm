@@ -400,7 +400,33 @@ export function createWorkspaceManager(options = {}) {
         : Boolean(referenceCommit) && (source.commit.toLowerCase() === referenceCommit || source.commit.toLowerCase().startsWith(referenceCommit));
       if (!commitMatches) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_COMMIT_MISMATCH', detail: `引用 Commit 与 Source Registry 当前 HEAD 不一致（${source.commit.slice(0, 12)}）。` };
       const relativePath = String(reference.path || '').replaceAll('\\', '/').replace(/^\.\//, '');
-      if (!relativePath || path.isAbsolute(relativePath) || relativePath.split('/').includes('..')) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_PATH_INVALID', detail: '来源引用必须使用仓库内相对路径。' };
+      // 引用有两个正式的 scope，必须显式判定，不能靠 path 恰好为空来碰巧表达：
+      //  - file：指向仓库内一个相对文件路径（默认）。
+      //  - repository：仓库级引用，断言「这个仓库在这个 commit 上」，不指向任何文件。它的身份
+      //    与 sources 条目本身一致，因此不需要、也不允许再做路径解析。
+      // 未声明 scope 时按 path 推断：只有空路径能推断成仓库级（候选自报来源允许只给仓库+commit）。
+      const declaredScope = reference.scope === undefined || reference.scope === null ? null : String(reference.scope).trim().toLowerCase();
+      if (declaredScope !== null && declaredScope !== 'file' && declaredScope !== 'repository') {
+        return { ...reference, verified: false, code: 'SOURCE_REFERENCE_SCOPE_INVALID', detail: '来源引用的 scope 只能是 file 或 repository。' };
+      }
+      const referenceScope = declaredScope ?? (relativePath ? 'file' : 'repository');
+      if (referenceScope === 'repository') {
+        return {
+          ...reference,
+          scope: 'repository',
+          path: '',
+          verified: true,
+          sourceId: source.id,
+          resolvedCommit: source.commit,
+          resolvedTree: source.tree,
+          canonicalRepository: source.canonicalRepository,
+          transportRepository: source.transportRepository,
+          transportMode: source.transportMode,
+          mirrorVerified: source.mirrorVerified,
+        };
+      }
+      if (!relativePath) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_PATH_INVALID', detail: 'file 级来源引用必须使用仓库内相对路径。' };
+      if (path.isAbsolute(relativePath) || relativePath.split('/').includes('..')) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_PATH_INVALID', detail: '来源引用必须使用仓库内相对路径。' };
       const referencedPath = path.resolve(source.path, relativePath);
       const contained = referencedPath === path.resolve(source.path) || referencedPath.startsWith(`${path.resolve(source.path)}${path.sep}`);
       const [referenceInfo, resolvedReference, resolvedSource] = await Promise.all([
@@ -412,6 +438,7 @@ export function createWorkspaceManager(options = {}) {
       if (!contained || !referenceInfo?.isFile() || referenceInfo.isSymbolicLink() || !realContained) return { ...reference, verified: false, code: 'SOURCE_REFERENCE_PATH_MISSING', detail: '来源引用路径不存在、是符号链接或超出仓库边界。' };
       return {
         ...reference,
+        scope: 'file',
         verified: true,
         sourceId: source.id,
         resolvedCommit: source.commit,
@@ -439,7 +466,10 @@ export function createWorkspaceManager(options = {}) {
     }
     for (const reference of inspection.references.filter((item) => item.verified)) {
       const key = `${reference.repository}@${reference.resolvedCommit || reference.commit}`;
-      byKey.set(key, { ...byKey.get(key), repository: reference.repository, commit: reference.resolvedCommit || reference.commit, lastUsedByMission: missionId || null, referencedPaths: [...new Set([...(byKey.get(key)?.referencedPaths || []), reference.path].filter(Boolean))], updatedAt: new Date().toISOString() });
+      // 仓库级引用没有文件路径可记：它由 referencedRepositoryLevel 标记，referencedPaths 只收
+      // file 级引用。只在为真时写入，避免后续的 file 级引用把已有标记覆盖掉。
+      const repositoryLevel = reference.scope === 'repository' ? { referencedRepositoryLevel: true } : {};
+      byKey.set(key, { ...byKey.get(key), repository: reference.repository, commit: reference.resolvedCommit || reference.commit, lastUsedByMission: missionId || null, ...repositoryLevel, referencedPaths: [...new Set([...(byKey.get(key)?.referencedPaths || []), reference.path].filter(Boolean))], updatedAt: new Date().toISOString() });
     }
     const next = { schemaVersion: 2, sources: [...byKey.values()] };
     await mkdir(runtimeRoot, { recursive: true });

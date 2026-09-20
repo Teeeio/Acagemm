@@ -15,9 +15,12 @@
 
 ## Invariants
 
-- **巡检调用一律传空引用清单** `inspectSources(sourceRoot, [])`。带上 Source Registry 里的历史引用
-  会让 `SOURCE_REFERENCE_PATH_INVALID` 稳定出现（注册时写 `path: ''`），
-  使每次巡检都升级成 `needs_human`——那不是检测，是把所有 mission 卡死。
+- **巡检调用一律传空引用清单** `inspectSources(sourceRoot, [])`。本服务问的是「来源根现在还能不能
+  当固定引用」，不是「历史上某个 mission 声称的来源还成不成立」；只传空清单，判定就只由来源根自身的
+  错误码决定。历史引用属于 mission 级声明，它们的失败（未登记仓库、已被上游推进的旧 commit）会被
+  归类成引用级错误码，真出现时也会让链路因与来源根无关的原因停摆。历史上这里还多一层噪声：
+  注册端写 `path: ''` 导致 `SOURCE_REFERENCE_PATH_INVALID` 恒定出现；2026-09-20 起仓库级引用是
+  一等 scope，该噪声已消失，空清单这条约束不依赖它。
 - 判定完全交给 `../source-registry-integrity.mjs`，本服务不自己认错误码。
 - 只改 `state.iterationStats`，不改 `mission.status`、不改 `missionPaused`：升级理由由循环守护统一读取。
 - 事件是持久的（`appendRuntimeEvent`），不是日志。
