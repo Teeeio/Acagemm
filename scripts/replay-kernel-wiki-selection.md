@@ -16,13 +16,17 @@ evidence-publication constraint.
    the selection that actually happened in that round and does not change when the
    store gains records later.
 2. **Secondary, confounded — `--recheck` re-runs `retrieveExperienceSelection`
-   against today's store.** Two confounds are confirmed, not hypothetical:
+   against today's store.** Three confounds are confirmed, not hypothetical:
    - the on-disk store is **final**: records written after that round are visible
      today (verified: in `r8/a/slot-03` the store revision went `2 -> 3` after the
      round, and the only added record carries `createdAt` three minutes *after* the
      round's `loopStartedAt`);
    - the audit does **not** persist `preferredIds` / `repeatedAttempts`, which do
      participate in ranking, so the ranking cannot be replayed exactly.
+   - the **injection quotas are not part of `policyVersion`**, so a re-run applies
+     *today's* caps while the audit recorded the caps in force at the time
+     (`selection.quotas`). Rounds audited under a different cap are therefore not
+     directly comparable — the cap must be read from the audit, not from the code.
 
    `recheckSelection` therefore always returns a `confounds` list, and the CLI
    prints a reminder that a recheck difference must not be read as "what happened".
@@ -74,6 +78,24 @@ counted as a hit.
 
 `relevanceWarnings` (informational) are `declared-architecture-excludes-target` and
 `no-feature-topic-overlap`. Weak relevance is never reported as a defect.
+
+## Did the injection cap ever bind? (read from the audits, never asserted)
+
+`summarize` reports `quotaProfiles` — one row per cap value actually recorded in the
+audits (`selection.quotas.wiki`, or `(not recorded)` for older audits, never
+back-filled with today's value) with the audit count, the highest number of Wiki
+items that cap ever admitted, and how many entries that cap's audits excluded for
+`quota-wiki`. `wikiCapBinds` counts audits in which a candidate was excluded for
+`quota-wiki`.
+
+The only observable of "the cap was binding" is a recorded `quota-wiki` exclusion.
+A short list of injected Wiki items is *not* evidence that the cap was reached — it
+is equally consistent with a cap that never mattered. Current corpus: 32 audits
+recorded `wiki: 6` with a maximum of one Wiki item injected and zero `quota-wiki`
+exclusions, 22 recorded no quota at all — so **the 6 -> 3 change is inert on the
+observed data**. That is the honest reading: the corpus neither supports nor
+contradicts the tightening. (The binding-`quota-wiki` arithmetic is unit-tested
+against synthetic rows; the corpus numbers above are what the real artifacts say.)
 
 ## Corpus discovery
 

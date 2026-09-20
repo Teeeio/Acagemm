@@ -798,9 +798,11 @@ contradictory applicability modes), generic HTTP create/update rejection of
 ports (the rejection belongs to the domain write path, not to an HTTP field
 filter, and the explicit import API stays the only entry) with byte-compatible
 schema-1 records, legacy ordering/policy version with zero migration, local-first
-ranking with the D quotas (local ≤4, Wiki ≤6 =
+ranking with the D quotas (local ≤4, Wiki ≤3 =
 symptom ≤2 / technique ≤3 / guidance ≤1, never padded, so a default selection
-never exceeds the 10-unit D cap), metadata recall beyond the legacy top-20
+never exceeds the 7-unit D cap; each Wiki candidate must also clear the relevance
+threshold, so a page that only passes applicability is never injected), metadata
+recall beyond the legacy top-20
 window, `sm100`+`nvidia-gpu` rejected for an `sm86`+`nvidia-gpu` target (and a
 missing target dimension failing applicability instead of being assumed: an empty
 architecture dimension left empty on both the canonical query scope and the

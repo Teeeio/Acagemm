@@ -8,10 +8,15 @@
 // 证据优先级（read-only replay 的关键，报告里必须保持这个顺序）：
 //   1) 落盘的 `roundExperienceSelection` 审计 = **主证据**。它记录当轮真实选择，不会因为
 //      之后 store 被追加记录而改变。
-//   2) `--recheck` 重跑 `retrieveExperienceSelection` = **次要**的可复现性检查。它有两个
+//   2) `--recheck` 重跑 `retrieveExperienceSelection` = **次要**的可复现性检查。它有三个
 //      已确认的混淆源，重跑差异只能当线索、不能当"当轮事实"：
 //        a) 磁盘上的 store 是**最终**状态；当轮之后写入的记录当时还看不见，今天可见。
 //        b) 审计没有持久化 `preferredIds` / `repeatedAttempts`，而它们参与排序，重跑无法复刻。
+//        c) 注入配额不参与 `policyVersion`，重跑用的是**今天**的上限；审计记录的是当时的
+//           `quotas`。所以跨配额调整的审计重跑结果不可直接比较（`quotaProfiles` 给出当时值）。
+//
+// 上限是否真的在起作用，由**落盘审计**回答而不是靠断言：审计既记了当时的 `quotas`，也记了每条
+// 排除理由，`quota-wiki` 出现才说明上限真的切掉了候选（见 `summarize` 的 `wikiCapBinds`）。
 //
 // 退出码：0 = 报告完成且未发现缺陷；1 = 用法错误或发现缺陷；2 = 指定的运行目录不可读。
 //
@@ -207,6 +212,8 @@ export const buildAuditRow = ({ runDir, selection, loopStartedAt, records }) => 
     selectedCount: selected.length,
     wiki,
     exclusions: exclusionSummary(selection),
+    // 当轮实际生效的注入上限。取自审计，不取自当前代码：报告要说的是"当时是多少"。
+    wikiQuota: Number.isInteger(selection?.quotas?.wiki) ? selection.quotas.wiki : null,
     loopStartedAt: loopStartedAt ?? null,
   };
   row.defects = selectionDefects({ selection, wikiItems: wiki });
@@ -227,6 +234,23 @@ export const summarize = (rows) => {
   }
   const hits = rows.filter((row) => row.wiki.length);
   const flat = (key) => rows.flatMap((row) => row[key].map((entry) => ({ run: row.run, roundId: row.roundId, contextId: row.contextId, ...entry })));
+  // 「上限有没有在起作用」必须由落盘审计回答，不能靠断言。审计里既记了当时的 `quotas.wiki`，
+  // 也记了每条被排除的理由：只有 `quota-wiki` 真的出现过，才说明上限切掉了候选。一次都没出现，
+  // 说明这次上限取值在观察到的语料上是**空转**的——不能拿它当"收紧有效"的证据。
+  const quotaProfiles = new Map();
+  let wikiCapBinds = 0;
+  for (const row of rows) {
+    // 早期审计没有 quotas 字段：如实记为"未记录"，绝不拿今天的上限替它填。
+    const quota = Number.isInteger(row.wikiQuota) ? row.wikiQuota : null;
+    const key = quota === null ? '(not recorded)' : String(quota);
+    const entry = quotaProfiles.get(key) ?? { wiki: quota, audits: 0, maxSelected: 0, cutByCap: 0 };
+    entry.audits += 1;
+    entry.maxSelected = Math.max(entry.maxSelected, row.wiki.length);
+    const cut = row.exclusions?.byReason?.['quota-wiki'] ?? 0;
+    entry.cutByCap += cut;
+    if (cut) wikiCapBinds += 1;
+    quotaProfiles.set(key, entry);
+  }
   return {
     runs: uniqueSorted(rows.map((row) => row.run)).length,
     audits: rows.length,
@@ -234,6 +258,9 @@ export const summarize = (rows) => {
     wikiItemsSelected: rows.reduce((total, row) => total + row.wiki.length, 0),
     distinctWikiUnits: uniqueSorted(hits.flatMap((row) => row.wiki.map((item) => identity(item.recordId, item.version)))),
     byCondition: [...byCondition.values()].sort((left, right) => left.condition.localeCompare(right.condition)),
+    // 记录了的上限按数值升序，未记录的排最后（不拿今天的值替它排序）。
+    quotaProfiles: [...quotaProfiles.values()].sort((left, right) => (left.wiki ?? Infinity) - (right.wiki ?? Infinity)),
+    wikiCapBinds,
     defects: flat('defects'),
     relevanceWarnings: flat('relevanceWarnings'),
   };
@@ -247,6 +274,7 @@ export const recheckSelection = ({ store, selection, now }) => {
   const confounds = [
     'store-read-is-final-not-as-of-the-round: records written after this round are visible today',
     'preferredIds-and-repeatedAttempts-are-not-persisted-in-the-audit-so-ranking-cannot-be-replayed',
+    'quota-profile-is-not-part-of-the-policy-version: the re-run applies today\'s injection caps, not the ones the audit recorded in selection.quotas',
   ];
   if (!isNonBlank(now)) return { status: 'skipped', reason: 'no replay clock: the surrounding iteration stats carry no loopStartedAt', confounds };
   if (selection?.policyVersion !== WIKI_SELECTION_POLICY_VERSION) {
@@ -446,6 +474,16 @@ const renderReport = ({ runs, rows, summary, skippedCheckoutSnapshots }) => {
     lines.push(`被选中的不同 KernelWiki 单元（${summary.distinctWikiUnits.length}）：`);
     for (const unit of summary.distinctWikiUnits) lines.push(`  ${unit}`);
   }
+  lines.push('');
+  lines.push('当轮生效的 Wiki 注入上限（取自落盘审计，不是当前代码）：');
+  lines.push('  上限  审计数  该上限下最多注入  被 quota-wiki 切掉的条目');
+  for (const entry of summary.quotaProfiles) {
+    lines.push(`  ${String(entry.wiki ?? '(未记录)').padStart(4)} ${String(entry.audits).padStart(6)} ${String(entry.maxSelected).padStart(16)} ${String(entry.cutByCap).padStart(24)}`);
+  }
+  lines.push(summary.wikiCapBinds
+    ? `  上限真的切掉过候选：${summary.wikiCapBinds} 条审计出现 quota-wiki。`
+    : '  没有任何一条审计出现 quota-wiki：在观察到的语料上，上限一次都没有成为约束。'
+      + ' 这**不能**证明收紧上限有收益，也不能证明它有害——它只是没被触发。');
   const hits = rows.filter((row) => row.wiki.length);
   lines.push('');
   lines.push(`--- 命中明细（${hits.length} 条审计）---`);
@@ -476,7 +514,8 @@ const renderReport = ({ runs, rows, summary, skippedCheckoutSnapshots }) => {
       + `${warning.topics ? ` topics=[${warning.topics.join(',')}]` : ''}`);
   }
   if (rows.some((row) => row.recheck)) {
-    lines.push('[replay] 重跑差异**不能**当成当轮事实：store 是最终状态，且审计未持久化 preferredIds/repeatedAttempts');
+    lines.push('[replay] 重跑差异**不能**当成当轮事实：store 是最终状态，审计未持久化 preferredIds/repeatedAttempts，'
+      + '且重跑用今天的注入配额（审计里的 quotas 才是当时值）');
   }
   return lines.join('\n');
 };

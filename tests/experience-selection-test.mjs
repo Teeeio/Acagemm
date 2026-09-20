@@ -360,8 +360,9 @@ try {
     const localSelected = selectedRecords.filter((record) => !record.selectionMetadata);
     const wikiSelected = selectedRecords.filter((record) => record.selectionMetadata);
     assert.ok(localSelected.length >= 1 && localSelected.length <= 4, `local quota is 4, saw ${localSelected.length}`);
-    assert.ok(wikiSelected.length >= 2 && wikiSelected.length <= 6, `wiki quota is 6, saw ${wikiSelected.length}`);
-    assert.ok(selectedIds.length <= 10, `the default D quota is 10 (local 4 + Wiki 6), saw ${selectedIds.length}`);
+    assert.equal(wikiSelected.length, 3, `the Wiki quota is 3 and this fixture supplies six topical candidates, saw ${wikiSelected.length}`);
+    assert.equal(retrieved.selection.quotas.wiki, 3, 'the audit records the Wiki quota that was actually applied');
+    assert.ok(selectedIds.length <= 7, `the default D quota is 7 (local 4 + Wiki 3), saw ${selectedIds.length}`);
     assert.ok(selectedIds.length <= EXPERIENCE_LIMITS.contextItems, 'the 20-item hard bound still holds');
     const types = wikiSelected.map((record) => record.selectionMetadata.type);
     const buckets = wikiSelected.map(bucketOf);
@@ -372,8 +373,18 @@ try {
     const techFour = titleOf(records, 'Technique four page');
     assert.equal(bucketOf(patternRecord), 'symptom', 'a pattern page is symptom-indexed provenance, never a guidance unit');
     assert.ok(selectedIds.includes(patternRecord.id), 'the symptom-indexed pattern page is selected as a hypothesis');
-    assert.ok(selectedIds.includes(techFour.id), 'a selected pattern page expands its candidate technique one hop');
-    assert.equal(buckets.filter((bucket) => bucket === 'symptom').length, 2, 'both symptom-bucket units fit inside the symptom quota');
+    // The cap, not the matcher, bounds injection: the two symptom units take the
+    // symptom quota, so every candidate the Wiki cap of 3 leaves out is a
+    // technique unit, and each one stays visible in the audit as quota-wiki
+    // instead of disappearing. One hop still produces a real candidate - that is
+    // asserted on the pure ranker below, which no quota touches.
+    const cutByCap = retrieved.selection.excluded.filter((entry) => entry.reason === 'quota-wiki');
+    assert.equal(cutByCap.length, 3, `six topical candidates minus the Wiki cap of 3, saw ${cutByCap.length}`);
+    for (const entry of cutByCap) assert.equal(bucketOf(byId.get(entry.id)), 'technique', 'only the technique candidates exceed the Wiki cap in this fixture');
+    for (const title of ['Technique alpha page', 'Technique beta page', 'Technique gamma page', 'Technique four page']) {
+      const id = titleOf(records, title).id;
+      assert.equal(selectedIds.includes(id) || cutByCap.some((entry) => entry.id === id), true, `${title} is either injected or audited as quota-wiki, never silently dropped`);
+    }    assert.equal(buckets.filter((bucket) => bucket === 'symptom').length, 2, 'both symptom-bucket units fit inside the symptom quota');
     const unreviewed = titleOf(records, 'Unreviewed page');
     assert.equal(selectedIds.includes(unreviewed.id), false, 'an unreviewed page is retained but never injected');
     assert.equal(retrieved.context.items.some((item) => item.id === unreviewed.id), false);
@@ -386,8 +397,9 @@ try {
       assert.ok(Array.isArray(item.scope.hardware), 'context items keep their scope');
     }
     // The pure ranker is the same order: local guidance precedes every Wiki unit,
-    // the symptom-indexed pattern page sits in the symptom bucket, and a page of
-    // any other type is only ever a guidance fallback.
+    // the symptom-indexed pattern page sits in the symptom bucket, and only a
+    // positive topical hit (feature/symptom/technique) ever reaches the candidate
+    // list - passing applicability alone is not relevance.
     const ranked = ranks(records, { features: match });
     const firstLocal = ranked.ordered.findIndex((entry) => entry.bucket === 'local');
     const firstWiki = ranked.ordered.findIndex((entry) => entry.bucket !== 'local');
@@ -400,10 +412,16 @@ try {
       assert.ok(entry.reason.length > 0);
     }
     assert.equal(ranked.ordered.find((entry) => entry.id === patternRecord.id)?.bucket, 'symptom', 'a symptom-indexed pattern page is ranked in the symptom bucket');
-    for (const id of [titleOf(records, 'Guidance one page').id, titleOf(records, 'Guidance two page').id]) {
-      const bucket = ranked.ordered.find((entry) => entry.id === id)?.bucket;
-      assert.ok(bucket === undefined || bucket === 'guidance', `a guidance page may only be guidance, saw ${bucket}`);
+    assert.ok(ranked.ordered.some((entry) => entry.id === techFour.id), 'the pattern page\'s candidate technique is still a ranked candidate; the quota, never the matcher, is what bounds injection');
+    // Relevance threshold: a reviewed guidance page that only passed applicability
+    // matches no topic, so it is excluded like any ordinary page - no fallback slot
+    // and no guidance-fallback reason are produced any more.
+    for (const title of ['Guidance one page', 'Guidance two page']) {
+      const id = titleOf(records, title).id;
+      assert.equal(ranked.ordered.some((entry) => entry.id === id), false, `${title} passes applicability but matches no topic and must not be a candidate`);
+      assert.equal(ranked.excluded.find((entry) => entry.id === id)?.reason, 'no-topic-match', `${title} is excluded for having no topical match`);
     }
+    assert.equal(ranked.ordered.some((entry) => entry.reason === 'guidance-fallback') || ranked.excluded.some((entry) => entry.reason === 'guidance-fallback'), false, 'the removed scope-only fallback reason is never produced again');
     for (const entry of ranked.excluded) {
       assert.deepEqual(Object.keys(entry).sort(), ['id', 'reason', 'version']);
       assert.ok(entry.reason.length > 0, 'an exclusion always carries a bounded reason');
@@ -512,11 +530,15 @@ try {
   });
 
   await test('symptom candidateTechniques expand exactly one hop, only to techniques, and never duplicate', async () => {
+    // The hop topics deliberately avoid a shared token (a `tech-hop` / `tech-deep`
+    // pair would match each other through the bare token `tech` in the topical
+    // matcher). That keeps this fixture to exactly the three candidates the hop
+    // semantics need, so it tests one hop rather than the separate Wiki cap.
     const pages = [
-      page({ id: 'symptom-hop', title: 'Hop symptom page', type: 'symptom', symptoms: ['hop-symptom'], techniques: ['tech-hop'], architectures: ['sm86'] }),
-      page({ id: 'hop-technique', title: 'One hop technique page', tags: ['tech-hop'], techniques: ['tech-deep'], architectures: ['sm86'] }),
-      page({ id: 'deep-technique', title: 'Two hop technique page', tags: ['tech-deep'], architectures: ['sm86'] }),
-      page({ id: 'hop-pattern', title: 'Hop pattern page', type: 'pattern', tags: ['tech-hop'], architectures: ['sm86'] }),
+      page({ id: 'symptom-hop', title: 'Hop symptom page', type: 'symptom', symptoms: ['hop-symptom'], techniques: ['hopvec'], architectures: ['sm86'] }),
+      page({ id: 'hop-technique', title: 'One hop technique page', tags: ['hopvec'], techniques: ['deepvec'], architectures: ['sm86'] }),
+      page({ id: 'deep-technique', title: 'Two hop technique page', tags: ['deepvec'], architectures: ['sm86'] }),
+      page({ id: 'hop-pattern', title: 'Hop pattern page', type: 'pattern', tags: ['hopvec'], architectures: ['sm86'] }),
     ];
     const reviews = pages.map((item) => archReview(item.path.split('/').pop().replace('.md', '')));
     const { service, store } = await setup('single-hop', { pages, reviews });
@@ -537,7 +559,7 @@ try {
       selection: selection({
         features: features(
           { kind: 'symptom', value: 'hop-symptom', basis: 'Hypothesis only.' },
-          { kind: 'technique', value: 'tech-hop', basis: 'Unverified direction.' },
+          { kind: 'technique', value: 'hopvec', basis: 'Unverified direction.' },
         ),
       }),
     }));

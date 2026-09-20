@@ -192,18 +192,15 @@ const topical = (needle, values) => {
 const matchesAny = (features, ...groups) => features.some((feature) => topical(feature.value, groups.flat()));
 
 // KernelWiki 的 type=pattern 就是症状页（TEAM_HANDOFF §8.3）：症状 → 可能原因 → 候选手法。
-// 它必须进 symptom 桶（≤2 配额、参与一跳展开），不能落到 guidance 兜底。
+// 它必须进 symptom 桶（≤2 配额、参与一跳展开），不能落到 guidance 桶。
 const SYMPTOM_TYPES = Object.freeze(['symptom', 'pattern']);
 const TECHNIQUE_TYPES = Object.freeze(['technique']);
-const GUIDANCE_TYPES = Object.freeze(['guidance']);
 const typeKey = (type) => type.trim().toLowerCase();
 const bucketFor = (type) => SYMPTOM_TYPES.includes(typeKey(type)) ? 'symptom' : TECHNIQUE_TYPES.includes(typeKey(type)) ? 'technique' : 'guidance';
-// 兜底指导必须是被明确声明为指导的单元：项目审查产出的可迁移单元（reviewed-transfer），
-// 或页面自身类型就是 guidance。普通 kernel/hardware/language/migration 页面即使被审查过，
-// 只要没有主题命中就排除，不靠类型名去填 ≤1 的兜底名额。
-const reviewedGuidance = (metadata) => metadata.applicability.mode === 'reviewed-transfer' || GUIDANCE_TYPES.includes(typeKey(metadata.type));
 const BUCKET_ORDER = { symptom: 0, technique: 1, guidance: 2 };
-const RANK_REASONS = ['failure-match', 'structure-match', 'symptom-match', 'technique-match', 'guidance-fallback'];
+// 四档都是正向的主题命中（feature 的 failure/structure 两类 + 症状 + 手法）。
+// 没有「无主题命中的兜底档」：仅通过适用范围校验的单元不满足相关性阈值，直接排除。
+const RANK_REASONS = ['failure-match', 'structure-match', 'symptom-match', 'technique-match'];
 const identity = (entry) => `${entry.id}@${entry.version}`;
 
 // 本地条件的取值面：保留算子、dtype、shape、环境与测试绑定（scope 全量 + 执行证据的实际条件）。
@@ -286,11 +283,11 @@ export function rankExperienceCandidates(records, options) {
           : matchesAny(features.filter((feature) => feature.kind === 'technique'), entry.metadata.candidateTechniques, entry.metadata.topics) ? 3
             : null;
     const bucket = bucketFor(entry.metadata.type);
-    // 只有被明确声明为指导的已审查单元才允许兜底；普通页无主题命中即排除，不补名额
-    //（一跳展开仍可能认领它们，且同一条目不会同时出现在 ordered 与 excluded）。
-    if (direct === null && !(bucket === 'guidance' && reviewedGuidance(entry.metadata))) { noMatch.push(entry); continue; }
-    const rank = direct === null ? 4 : direct;
-    wiki.set(identity(entry), { entry, rank, reason: RANK_REASONS[rank], bucket });
+    // 相关性阈值：只有正向命中的 wiki 单元才进入候选。通过适用范围校验（appliesTo）不等于相关
+    // ——已审查的指导页也不再兜底，无主题命中一律排除，不补名额（一跳展开仍可能认领它们，
+    // 且同一条目不会同时出现在 ordered 与 excluded）。
+    if (direct === null) { noMatch.push(entry); continue; }
+    wiki.set(identity(entry), { entry, rank: direct, reason: RANK_REASONS[direct], bucket });
   }
 
   // One hop only: matching symptom/pattern pages expand their candidateTechniques by an EXACT

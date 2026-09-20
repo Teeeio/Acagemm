@@ -12,11 +12,13 @@ export const EXPERIENCE_SELECTION_POLICY_VERSION = 'operator-studio.experience-s
 // 由调用方（研究 driver / 生产组合根）显式选择；省略即保持既有方案 D 行为不变。
 export const EXPERIENCE_CONDITIONS = Object.freeze(['facts-only', 'local-only', 'local-and-wiki']);
 const SELECTION_EXCLUSION_LIMIT = 50;
-// 方案 D 默认配额：本地经验 ≤4、KernelWiki ≤6（症状 ≤2、手法 ≤3、兜底指导 ≤1），
+// 方案 D 默认配额：本地经验 ≤4、KernelWiki ≤3（症状 ≤2、手法 ≤3、指导 ≤1），
 // 软预算 24 KiB 按 formatter 实际 UTF-8 输出计算。都是上限，不为凑满而补齐。
-const D_SELECTION_QUOTAS = Object.freeze({ local: 4, wiki: 6, symptom: 2, technique: 3, guidance: 1 });
+// Wiki 总数 3 是当前的实际约束（下限由相关性阈值决定，见 experience-selection.md）；
+// 三个分项仍是各自的上限，不随总数重新分配。
+const D_SELECTION_QUOTAS = Object.freeze({ local: 4, wiki: 3, symptom: 2, technique: 3, guidance: 1 });
 const D_RENDERED_BYTES = 24 * 1024;
-// 未显式给 query.limit 时，方案 D 的默认上限必须容得下 4 本地 + 6 Wiki 的建议配额；
+// 未显式给 query.limit 时，方案 D 的默认上限必须容得下 4 本地 + 3 Wiki 的配额；
 // 旧检索路径（无 query.selection）保持默认 8 不变。
 const D_SELECTION_DEFAULT_LIMIT = D_SELECTION_QUOTAS.local + D_SELECTION_QUOTAS.wiki;
 const LEGACY_DEFAULT_LIMIT = 8;

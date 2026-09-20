@@ -45,13 +45,13 @@ Phase 3 方案 D 的**确定性优化假设选择器**：把「能不能用」�
 
 本地执行记录与当前项目 guidance 优先：**当前失败观察** → 显式 preferred（最佳/未解决）→ 命中特征 → 较近的本地 guidance（`updatedAt` 降序，随后 id 升序/version 降序）。「当前失败观察」= 与本轮 features 相关、或显式 preferred 的失败记录；**不相关的旧失败只算本地历史**，退回最后一组，不能恒定压过当前 preferred/相关失败。相关性取值保留 scope 全量与执行证据的实际条件（算子、dtype、shape、硬件/架构、operation、outcome）。**保留记录内容与 scope 全量**，排序结果只引用 ID/版本。
 
-Wiki 顺序：failure 命中 → structure 命中 → 症状假设命中 → 手法命中；兜底指导仅限**被明确声明为指导的已审查单元**（项目审查产出的 `reviewed-transfer` 单元，或页面自身 `type=guidance`）。普通 `kernel/hardware/language/migration` 页面即使已审查，只要无主题命中就排除，不靠类型名填 ≤1 的兜底名额。主题命中只看内容线索（`topics`/`symptoms`/`candidateTechniques`/`architectures`），`type` 只决定 bucket、不作为内容参与匹配。
+Wiki 顺序：failure 命中 → structure 命中 → 症状假设命中 → 手法命中。**这四档都是正向主题命中，也是唯一可能进入候选的 wiki 单元**：只有通过适用范围校验（`appliesTo`）而没有任何主题命中的单元一律排除（`no-topic-match`），**没有兜底档、不补名额**，因此不存在「仅作用域命中即达标」的 wiki 条目——已审查的 `reviewed-transfer` 单元与 `type=guidance` 页也不例外。主题命中只看内容线索（`topics`/`symptoms`/`candidateTechniques`/`architectures`），`type` 只决定 bucket、不作为内容参与匹配。
 
-`bucket` 由类型决定：`symptom`/`pattern`→symptom（KernelWiki 的 `pattern` 页就是症状→手法页，占症状 ≤2 配额并参与一跳展开）、`technique`→technique、其它类型只能进入 `guidance`。命中/选中的症状页 `candidateTechniques` **只展开一跳**，且该引用是**精确边**：条目在 trim+小写后必须**恰好等于**目标的 `pageId` 或其 `topics` 之一；**禁止**分词/子串/主题相似度匹配（否则 `tech-hop` 与 `tech-deep` 会靠共享词 `tech` 连成一条边）。目标自身的 `candidateTechniques` 是出边、不是身份，**不参与**该匹配。展开后重新应用适用性；**展开目标必须自身是 technique 单元**，展开到另一个症状页再往下走就是间接递归，**绝不递归 `related`**。普通 features 的主题相关性排序仍沿用原有分词匹配，不受此精确边约束影响。
+`bucket` 由类型决定：`symptom`/`pattern`→symptom（KernelWiki 的 `pattern` 页就是症状→手法页，占症状 ≤2 配额并参与一跳展开）、`technique`→technique、其它类型只能进入 `guidance`（该桶只收**正向命中**的其它类型页，已无兜底入口）。命中/选中的症状页 `candidateTechniques` **只展开一跳**，且该引用是**精确边**：条目在 trim+小写后必须**恰好等于**目标的 `pageId` 或其 `topics` 之一；**禁止**分词/子串/主题相似度匹配（否则 `tech-hop` 与 `tech-deep` 会靠共享词 `tech` 连成一条边）。目标自身的 `candidateTechniques` 是出边、不是身份，**不参与**该匹配。展开后重新应用适用性；**展开目标必须自身是 technique 单元**，展开到另一个症状页再往下走就是间接递归，**绝不递归 `related`**。普通 features 的主题相关性排序仍沿用原有分词匹配，不受此精确边约束影响。
 
 确定性：不使用当前时钟；同分排序为 **ID 升序、version 降序**（本地 guidance 先按记录内 `updatedAt` 降序）。按内容与 `unitDigest` 去重。只对**精确给出的 ID+version** 降权（`repeated-attempt`），不封禁整个手法类别；降权在**本地与 Wiki 都生效**（同一优先级组内，被重复的条目排到未重复的之后），不只是改写 `reason`。
 
-`reason` 取值：本地 `local-failure-observation|preferred|feature-match|local-guidance`；Wiki `failure-match|structure-match|symptom-match|technique-match|technique-one-hop|guidance-fallback`，降权统一为 `repeated-attempt`。排除原因：`unreviewed`、`applicability-architecture-undeclared`、`applicability-target-architecture-missing`、`applicability-architecture`、`applicability-hardware`、`applicability-capabilities`、`applicability-software`、`no-topic-match`、`duplicate-unit`。同一条目不会同时出现在 `ordered` 与 `excluded`。
+`reason` 取值：本地 `local-failure-observation|preferred|feature-match|local-guidance`；Wiki `failure-match|structure-match|symptom-match|technique-match|technique-one-hop`（四档正向命中 + 一跳展开），降权统一为 `repeated-attempt`。排除原因：`unreviewed`、`applicability-architecture-undeclared`、`applicability-target-architecture-missing`、`applicability-architecture`、`applicability-hardware`、`applicability-capabilities`、`applicability-software`、`no-topic-match`、`duplicate-unit`。同一条目不会同时出现在 `ordered` 与 `excluded`。
 
 ## Dependencies / Side Effects
 

@@ -249,8 +249,8 @@ await test('a row keeps only KernelWiki items in `wiki`, carries the policy reas
 });
 
 await test('summary groups by condition and reports hit rates over audits, not runs', () => {
-  const row = (experienceCondition, wikiCount) => ({
-    run: '/run-a', experienceCondition, wiki: Array.from({ length: wikiCount }, (_value, index) => ({ recordId: `kw-${index}`, version: 1 })), defects: [], relevanceWarnings: [],
+  const row = (experienceCondition, wikiCount, extra = {}) => ({
+    run: '/run-a', experienceCondition, wiki: Array.from({ length: wikiCount }, (_value, index) => ({ recordId: `kw-${index}`, version: 1 })), defects: [], relevanceWarnings: [], ...extra,
   });
   const summary = summarize([row('local-and-wiki', 1), row('local-and-wiki', 0), row(null, 0), { ...row('local-only', 0), run: '/run-b' }]);
   assert.equal(summary.audits, 4);
@@ -261,6 +261,29 @@ await test('summary groups by condition and reports hit rates over audits, not r
   assert.deepEqual(summary.byCondition.map((entry) => [entry.condition, entry.audits, entry.wikiHits]), [
     ['(unset)', 1, 0], ['local-and-wiki', 2, 1], ['local-only', 1, 0],
   ]);
+  assert.equal(summary.wikiCapBinds, 0, 'a row that never recorded a quota-wiki exclusion cannot claim the cap bound');
+});
+
+await test('whether the injection cap ever bound is read from the persisted audits, not asserted', () => {
+  // The cap "binding" has exactly one observable: a candidate the audit recorded as excluded for
+  // `quota-wiki`. Anything else (a full page of wiki items, a high cap) is not evidence.
+  const audit = (wikiQuota, wikiCount, quotaWikiExclusions) => ({
+    run: '/run-a', experienceCondition: 'local-and-wiki', wikiQuota, defects: [], relevanceWarnings: [],
+    wiki: Array.from({ length: wikiCount }, (_value, index) => ({ recordId: `kw-${index}`, version: 1 })),
+    exclusions: { total: quotaWikiExclusions, byReason: quotaWikiExclusions ? { 'quota-wiki': quotaWikiExclusions } : {} },
+  });
+  const inert = summarize([audit(6, 1, 0), audit(6, 0, 0)]);
+  assert.deepEqual(inert.quotaProfiles, [{ wiki: 6, audits: 2, maxSelected: 1, cutByCap: 0 }]);
+  assert.equal(inert.wikiCapBinds, 0);
+  const binding = summarize([audit(6, 1, 0), audit(3, 3, 2), audit(3, 2, 0)]);
+  assert.deepEqual(binding.quotaProfiles, [
+    { wiki: 3, audits: 2, maxSelected: 3, cutByCap: 2 },
+    { wiki: 6, audits: 1, maxSelected: 1, cutByCap: 0 },
+  ], 'each round is attributed to the cap the audit recorded at the time');
+  assert.equal(binding.wikiCapBinds, 1, 'only the round with a quota-wiki exclusion proves the cap cut a candidate');
+  // An audit that predates the field must be reported as unrecorded, never defaulted to today's cap.
+  assert.deepEqual(summarize([{ run: '/run', experienceCondition: null, wiki: [], defects: [], relevanceWarnings: [] }]).quotaProfiles,
+    [{ wiki: null, audits: 1, maxSelected: 0, cutByCap: 0 }]);
 });
 
 // --- I/O: audit collection and corpus discovery ------------------------------------
@@ -306,7 +329,9 @@ await test('the re-run never claims to be the round selection: no clock or a dri
   const noClock = recheckSelection({ store, selection, now: null });
   assert.equal(noClock.status, 'skipped');
   assert.match(noClock.reason, /loopStartedAt/u);
-  assert.equal(noClock.confounds.length, 2, 'the confounds must travel with every verdict, skips included');
+  assert.equal(noClock.confounds.length, 3, 'the confounds must travel with every verdict, skips included');
+  assert.ok(noClock.confounds.some((entry) => /quota-profile-is-not-part-of-the-policy-version/u.test(entry)),
+    'a quota change is invisible to the policy version, so the re-run must name it as a confound');
   const drifted = recheckSelection({ store, selection: { ...selection, policyVersion: 'operator-studio.optimization-hypothesis-selection/v0' }, now: CLOCK });
   assert.equal(drifted.status, 'skipped');
   assert.match(drifted.reason, /policy version changed/u);
@@ -320,7 +345,7 @@ await test('a difference explained by a record written after the round is labell
 
   const unchanged = recheckSelection({ store, selection: persisted, now: CLOCK });
   assert.equal(unchanged.status, 'same');
-  assert.deepEqual(unchanged.confounds.length, 2);
+  assert.deepEqual(unchanged.confounds.length, 3);
 
   // A local record appended AFTER the round: today's store sees it, the round could not.
   const later = buildStore();

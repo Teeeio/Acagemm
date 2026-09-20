@@ -7,6 +7,26 @@ scheduler, vector store, model selection call, dependency or GPU run. The prior
 N20 is not validation of this new source. A later controlled three-condition live
 study measures selection benefit; this batch cannot claim performance benefit.
 
+## Amendment: Wiki injection cap and relevance threshold (2026-09-20)
+
+Operator decision, not a test-driven loosening. Two entries changed:
+
+1. The default D Wiki quota is **3**, not 6. The three sub-maxima are unchanged
+   (symptom<=2, technique<=3, guidance<=1) and are deliberately NOT rebalanced
+   against the smaller total; the total is now the binding constraint. The
+   default D limit follows (4 local + 3 Wiki = 7).
+2. The scope-only fallback tier is **removed**. The four positive topical tiers
+   (failure/structure/symptom/technique match) are the only Wiki units that can
+   become candidates; passing applicability without a topical match is excluded
+   for every page, including reviewed guidance. The `guidance-fallback` reason no
+   longer exists. Reason codes, the ordered entry shape and the bucket vocabulary
+   are otherwise unchanged, and local experience quotas/ordering are untouched.
+
+The recorded audit carries the applied `quotas`, so an audit written under the
+older numbers stays distinguishable from one written under these. The policy
+version string is unchanged because the ranker's tier ordering is unchanged and
+the audit already records the quota values it applied.
+
 ## Single route and ownership
 
 A owns experience-contract.mjs/.md and new experience-selection.mjs/.md: optional
@@ -64,8 +84,10 @@ Local execution/current-project guidance is ranked first: current failure
 observations, explicit preferred IDs (best/unresolved), then matching features,
 then recent local guidance. Preserve record content and scope in full.
 Wiki order: failure match, structure match, symptom hypothesis match, technique
-match; an explicitly reviewed guidance unit can be fallback. No topical match
-means exclusion for ordinary pages. Expand selected/matching symptom page
+match. These four positive topical tiers are the ONLY Wiki units that can become
+candidates: a page that passes applicability with no topical match is excluded
+(no-topic-match) whatever its type or review mode, so there is no fallback tier
+and no quota is padded. Expand selected/matching symptom page
 candidateTechniques ONE hop by pageId or technique topic; reapply applicability,
 never recurse related. Only the exact supplied repeated ID/version is demoted;
 never ban a technique category. Deduplicate content/unit identity.
@@ -78,10 +100,12 @@ over ALL metadata candidates, no top20 pre-truncation; rank; fetch exact ID and
 version and revalidate scope/status/version before rendering. Rank cannot grant
 access. Query target hardware/architecture must agree with canonical scope.
 Never disclose inaccessible record IDs/content in exclusion details.
-Default D quotas: local<=4, Wiki<=6 comprising symptom<=2, technique<=3,
-guidance<=1. These are maxima, do not fill empty quotas. When previous attempts
-are supplied, at most one previously untried technique is added. Keep existing
-20 items/64KiB context/8000 content hard bounds and query.limit as further cap.
+Default D quotas: local<=4, Wiki<=3 comprising symptom<=2, technique<=3,
+guidance<=1; the sub-maxima are unchanged maxima and are not rebalanced against
+the smaller total. These are maxima, do not fill empty quotas. When previous
+attempts are supplied, at most one previously untried technique is added. Keep
+existing 20 items/64KiB context/8000 content hard bounds and query.limit as
+further cap.
 Soft 24KiB applies to actual UTF-8 FORMATTER output, not estimated chars;
 mandatory round facts live outside this budget. Skip an oversized optional
 record and consider later smaller ones. Audit selected and bounded excluded
