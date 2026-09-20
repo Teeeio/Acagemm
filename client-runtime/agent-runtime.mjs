@@ -1565,14 +1565,22 @@ export function createAgentRuntime(options = {}) {
       ? { ...previous, primaryFailure, resourceRelease: { ...(previous.resourceRelease || {}), primaryFailure } }
       : previous;
     if (isExecutionReleased(run)) { cancellationRetries.delete(previous.runId); return { run, projection: null }; }
+    // `resourceRelease.status === 'active'` is the adapter's sentinel for a run
+    // that is still executing: it is `confirmed: false` because nothing has been
+    // released yet, not because a release is under way. `resourceReleaseBarrier`
+    // in cancellation-contract.mjs already excludes that state; this predicate
+    // must exclude it too, otherwise the first projection of every fresh run
+    // reads "still running" as "releasing" and cancels it at launch.
+    const releaseInProgress = run.resourceRelease?.status === 'active'
+      ? false
+      : run.resourceRelease?.confirmed === false
+        || ['pending', 'unconfirmed', 'quarantined', 'blocked'].includes(run.resourceRelease?.status);
     const cancelling = expired || logicalDone || previousWithFailure.status === 'cancel_requested' || ['completed', 'failed', 'cancelled'].includes(run.status)
-      || run.resourceRelease?.confirmed === false
-      || ['pending', 'unconfirmed', 'quarantined', 'blocked'].includes(run.resourceRelease?.status);
+      || releaseInProgress;
     if (!cancelling) return { run, projection: null };
     let outcome = run;
     const releasePending = expired || logicalDone || previousWithFailure.status === 'cancel_requested'
-      || run.resourceRelease?.confirmed === false
-      || ['pending', 'unconfirmed', 'quarantined', 'blocked'].includes(run.resourceRelease?.status);
+      || releaseInProgress;
     const retryCount = cancellationRetries.get(previousWithFailure.runId) || 0;
     const shouldRequest = (previousWithFailure.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') || releasePending;
     if (shouldRequest && retryCount < MAX_CANCELLATION_RETRIES) {

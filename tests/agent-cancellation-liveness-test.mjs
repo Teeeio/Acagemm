@@ -31,6 +31,40 @@ for (const role of ['agent', 'researchAgent', 'materializer']) {
   assert.ok(!result.state.baseline.materializer?.result);
 }
 
+// Counterpart to the block above: a fresh run that is inside its budget must
+// not be cancelled just because its record is not released yet. The real
+// codex adapter publishes `resourceRelease: { confirmed: false, status: 'active' }`
+// for a live run ("nothing released yet"); the stubs above omit the field, so
+// only this shape exercises the distinction. Without it, every run is cancelled
+// on its first projection and exits with no output.
+const freshRecord = (runId) => ({ runId, status: 'running', workspace: 'DO_NOT_READ_ACTIVE_WORKSPACE',
+  startedAt: new Date().toISOString(), process: { pid: 1 },
+  resourceRelease: { confirmed: false, status: 'active', reason: 'Agent execution is active.' } });
+for (const role of ['agent', 'researchAgent', 'materializer']) {
+  const cancelled = [];
+  const freshRuntime = createAgentRuntime({ mode: 'codex-cli', codexClient: {
+    describe: async () => ({ installed: true, version: 'test' }),
+    readRun: async (runId) => freshRecord(runId),
+    readEvents: async () => [],
+    cancel: async (runId) => { cancelled.push(runId); return { status: 'cancel_requested', resourceRelease: { confirmed: false, status: 'pending' } }; },
+    eventText: () => '',
+  } });
+  const freshState = {
+    activeMissionId: 'MIS_ACTIVE', missions: [{ id: 'MIS_ACTIVE', title: 'Active run' }],
+    stage: 'diagnosis', runtimeEvents: [], candidateEvaluations: [], researchNotes: [],
+    agent: { status: 'idle' }, baseline: { status: 'missing' },
+  };
+  const run = { runId: 'fresh_' + role, runtimeKind: 'codex-cli', status: 'running', runPhase: 'acquire',
+    startedAt: new Date().toISOString(), budgetMs: 600_000, notes: [], messages: [], artifacts: [],
+    sessionDeadlineAt: new Date(Date.now() + 600_000).toISOString(), lastEventAt: Date.now(), eventCount: 0 };
+  if (role === 'materializer') freshState.baseline.materializer = run;
+  else freshState[role] = run;
+  await freshRuntime.projectState(freshState);
+  const projected = role === 'materializer' ? freshState.baseline.materializer : freshState[role];
+  assert.deepEqual(cancelled, [], role + ' must not be cancelled while it is still executing');
+  assert.equal(projected.status, 'running', role + ' stays running inside its budget');
+}
+
 const seen = [];
 const saved = [];
 const stopState = {
