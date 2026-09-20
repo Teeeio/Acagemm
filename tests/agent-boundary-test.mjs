@@ -15,6 +15,10 @@ try {
   // 文案不得断言「本阶段没有 shell」：codex 的 shell 默认开着，那种断言在它那一侧是假话。
   assert.match(boundary.toolInstruction, /to reach outside the granted roots/);
   assert.doesNotMatch(boundary.toolInstruction, /Do not use a local shell/);
+  // 也不得声称「工具只能访问已授予根内的路径」：codex 沙箱全盘可读，claude 的 Read 实测能读到
+  // cwd 与全部 --add-dir 之外。声明必须写成约束，而不是一句做不到的能力断言。
+  assert.doesNotMatch(boundary.toolInstruction, /may access only/);
+  assert.match(boundary.toolInstruction, /even if a tool can reach further/);
   assert.match(boundary.toolInstruction, /Never assume that a requested file already exists/);
   assert.match(boundary.toolInstruction, /Create missing files/);
   assert.ok((await readdir(workspace)).includes('.git'));
