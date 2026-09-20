@@ -37,10 +37,12 @@ try {
   }
   assert.ok(run && run.status !== 'running', 'Codex boundary smoke timed out');
   const events = await client.readEvents(runId);
-  assert.equal(events.some((event) => event.item?.type === 'command_execution'), false, 'local shell remained exposed');
+  // 本脚本没有设 OPERATOR_CODEX_DISABLE_SHELL_TOOL，shell_tool 因此是开着的：这条断言证明的是
+  // 「模型没有去用 shell」，不是「边界拿掉了 shell」。两者不能混为一谈。
+  assert.equal(events.some((event) => event.item?.type === 'command_execution'), false, 'the smoke agent used local command execution despite the stage instruction');
   assert.match(await readFile(path.join(workspace, 'run.py'), 'utf8'), /BOUNDARY_SMOKE = True/);
   passed = true;
-  console.log('[agent-boundary-codex] local shell hidden and cwd apply_patch retained');
+  console.log('[agent-boundary-codex] cwd apply_patch retained and the model did not reach for the shell (shell_tool was available, not disabled)');
 } finally {
   if (client && runId) await client.cancel(runId).catch(() => {});
   await new Promise((resolve) => setTimeout(resolve, 500));

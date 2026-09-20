@@ -94,7 +94,11 @@ const auditAgentIsolation = async ({ runRoot: activeRunRoot, workspaceRoot }) =>
     assert.equal(isWithin(workspaceRoot, record.workspace), true, `${record.runId} workspace escaped Mission root`);
     assert.ok((record.additionalDirectories || []).every((directory) => isWithin(workspaceRoot, directory)), `${record.runId} add-dir escaped Mission root`);
     assert.ok(record.boundary, `${record.runId} has no enforced stage boundary`);
-    assert.equal(record.boundary.enforcement, 'local-shell-disabled', `${record.runId} did not disable local shell tools`);
+    // 标签必须与 codex-client.mjs 实际写出的值一致。8e6d711 把 'local-shell-disabled' 改名成
+    // 'workspace-sandbox-and-workflow-diff'（诚实版：shell 并未被关掉，只是被沙箱限制写），这条断言
+    // 当时没跟着改，从那以后每次运行都在这里失败。shell 真正关掉是可选行为
+    // （OPERATOR_CODEX_DISABLE_SHELL_TOOL，默认不开），所以这里断言的本来也不是「没有 shell」。
+    assert.equal(record.boundary.enforcement, 'workspace-sandbox-and-workflow-diff', `${record.runId} boundary enforcement label drifted from codex-client`);
     assert.equal(record.boundary.roots.workspace, record.workspace, `${record.runId} boundary cwd mismatch`);
     const events = await readFile(record.eventPath, 'utf8');
     const eventRecords = events.split(/\r?\n/).filter(Boolean).map(JSON.parse);

@@ -12,7 +12,9 @@ try {
   await writeFile(path.join(workspace, 'MISSION.md'), '# mission\n', 'utf8');
   const boundary = await prepareAgentBoundary({ workspace, role: 'iteration', roots: { workspace } });
   assert.deepEqual(JSON.parse(boundary.environment.OPERATOR_AGENT_ROOTS), { workspace: path.resolve(workspace) });
-  assert.match(boundary.toolInstruction, /Do not use a local shell/);
+  // 文案不得断言「本阶段没有 shell」：codex 的 shell 默认开着，那种断言在它那一侧是假话。
+  assert.match(boundary.toolInstruction, /to reach outside the granted roots/);
+  assert.doesNotMatch(boundary.toolInstruction, /Do not use a local shell/);
   assert.match(boundary.toolInstruction, /Never assume that a requested file already exists/);
   assert.match(boundary.toolInstruction, /Create missing files/);
   assert.ok((await readdir(workspace)).includes('.git'));

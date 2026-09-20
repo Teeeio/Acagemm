@@ -38,7 +38,9 @@ export async function prepareAgentBoundary({ workspace, role, roots }) {
       OPERATOR_AGENT_ROOTS: JSON.stringify(resolvedRoots),
     },
     toolInstruction: [
-      'Do not use a local shell, command execution, or add-directory tool in this stage.',
+      // 不得声称「本阶段没有 shell」：codex 的 shell 默认开着（只有沙箱限制它写），那句话在它那一侧
+      // 是假话，换来的只是失效的合规。这里只陈述两侧都成立的约束——不许用执行能力越过下面列出的根。
+      'Do not use a shell, command execution or add-directory tool to reach outside the granted roots listed below.',
       ...rootLines,
       'Use evidence embedded in the prompt. Create missing files with the available file creation or patch tool; use patch/edit operations only for files that already exist or that you created during this turn.',
     ].join('\n'),
