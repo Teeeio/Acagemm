@@ -504,9 +504,19 @@ export const createCodexClient = (options = {}) => {
     return execution.cancelling;
   };
 
-  const start = async ({ runId = `codex_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, missionId, goal, workspace, additionalDirectories = [], resumeThreadId = null, sandboxMode: runSandboxMode = null, skipGitRepoCheck = false, environment = {} }) => {
+  const start = async ({ runId = `codex_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, missionId, goal, workspace, additionalDirectories = [], readOnlyDirectories = [], resumeThreadId = null, sandboxMode: runSandboxMode = null, skipGitRepoCheck = false, environment = {} }) => {
     await mkdir(runsDir, { recursive: true });
     const writableDirectories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
+    // codex 没有「只读附加目录」这个概念：沙箱本身允许全盘读、只把写限制在可写根内，
+    // 而 --add-dir 加的正是可写根。只读引用根因此不进 argv——读本来就通，写由沙箱挡住。
+    // 这里只做登记与冲突校验，避免将来有人把同一个目录又传成可写，而把「只读」静默升级。
+    const readOnlyResolved = [...new Set((readOnlyDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
+    const overlap = writableDirectories.filter((directory) => readOnlyResolved.includes(directory));
+    if (overlap.length) {
+      const error = new Error(`同一次运行不能把目录同时授予可写与只读：${overlap.join(', ')}`);
+      error.code = 'CODEX_DIRECTORY_GRANT_CONFLICT';
+      throw error;
+    }
     const effectiveSandbox = runSandboxMode || sandboxMode;
     const boundaryEnabled = Boolean(environment.OPERATOR_AGENT_ROOTS);
     // The MVP relies on Codex's workspace sandbox plus the post-run Mission
@@ -516,7 +526,7 @@ export const createCodexClient = (options = {}) => {
     // Operators may still opt into the stricter tool surface explicitly.
     const disableShellTool = String(environment.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? process.env.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? '').toLowerCase() === '1'
       || String(environment.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? process.env.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? '').toLowerCase() === 'true';
-    const record = { schemaVersion: 2, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null,
+    const record = { schemaVersion: 2, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, readOnlyDirectories: readOnlyResolved, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null,
       process: { pid: null, ownerPid: process.pid, instanceId },
       // This is a diagnostic projection only.  It records each boundary that
       // the adapter can observe and is intentionally not used to infer a

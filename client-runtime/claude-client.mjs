@@ -430,7 +430,7 @@ export const createClaudeClient = (options = {}) => {
     return { ready: true, code: 'CLAUDE_READY', workspace, command, version: descriptor.version, configurationAuthority: 'local-claude-code', permissionMode };
   };
 
-  const start = async ({ runId = `claude_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, missionId, goal, workspace, additionalDirectories = [], resumeThreadId = null, environment = {} }) => {
+  const start = async ({ runId = `claude_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, missionId, goal, workspace, additionalDirectories = [], readOnlyDirectories = [], resumeThreadId = null, environment = {} }) => {
     if (permissionMode !== 'acceptEdits') {
       const error = new Error(`Claude Code 仅允许 acceptEdits，当前配置为 ${permissionMode}。`);
       error.code = 'CLAUDE_PERMISSION_MODE_UNSAFE';
@@ -438,7 +438,19 @@ export const createClaudeClient = (options = {}) => {
     }
     await mkdir(runsDir, { recursive: true });
     await writeFile(emptyMcpConfigPath, '{"mcpServers":{}}\n', 'utf8');
-    const directories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
+    // 对 claude 而言 --add-dir 是「可读」授权通道（写是否放行由 permission mode 决定），
+    // 所以只读引用根也必须进 --add-dir 才读得到；它的只读性由下面的工具面摘除保证，
+    // 而不是靠权限规则——路径级 deny 在 Windows 绝对路径上不匹配（实测四种写法均未拦住），
+    // 工具级 deny 才拦得住。
+    const writableDirectories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
+    const readOnlyResolved = [...new Set((readOnlyDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
+    const overlap = writableDirectories.filter((directory) => readOnlyResolved.includes(directory));
+    if (overlap.length) {
+      const error = new Error(`同一次运行不能把目录同时授予可写与只读：${overlap.join(', ')}`);
+      error.code = 'CLAUDE_DIRECTORY_GRANT_CONFLICT';
+      throw error;
+    }
+    const directories = [...new Set([...writableDirectories, ...readOnlyResolved])];
     const role = environment.OPERATOR_AGENT_ROLE || 'stage';
     const roots = environment.OPERATOR_AGENT_ROOTS ? JSON.parse(environment.OPERATOR_AGENT_ROOTS) : { workspace: path.resolve(workspace) };
     // Every run starts unknown: a resume hint is a request parameter, never an
@@ -452,7 +464,10 @@ export const createClaudeClient = (options = {}) => {
       runId,
       missionId,
       workspace: workspace || process.cwd(),
-      additionalDirectories: directories,
+      additionalDirectories: writableDirectories,
+      readOnlyDirectories: readOnlyResolved,
+      // 两种根都进 --add-dir，读授权是合并后的结果；记录合并值以便审计实际授权面。
+      grantedDirectories: directories,
       threadId: null,
       sessionId: null,
       status: 'running',
@@ -468,9 +483,16 @@ export const createClaudeClient = (options = {}) => {
       error: null,
     };
     await persistRun(runId, record);
-    const allowedTools = ['research-acquire', 'research-experience'].includes(role)
-      ? 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch'
-      : 'Read,Write,Edit';
+    // acquire 轮对 Source Registry 只读：本阶段把写工具从工具面整个摘掉，写入因此不是
+    // 「被规则拒绝」而是「不存在该工具」。研究员的交付物是 JSON 回答，没有任何下游会读取
+    // 它在采集阶段写的文件，所以摘掉写工具不影响采集结果。
+    const readOnlyAcquisition = role === 'research-acquire';
+    const allowedTools = readOnlyAcquisition
+      ? 'Read,Glob,Grep,WebSearch,WebFetch'
+      : ['research-experience'].includes(role)
+        ? 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch'
+        : 'Read,Write,Edit';
+    const disallowedTools = readOnlyAcquisition ? 'Bash,NotebookEdit,Write,Edit' : 'Bash,NotebookEdit';
     const configuredMaxTurns = Number(environment.OPERATOR_CLAUDE_MAX_TURNS || process.env.OPERATOR_CLAUDE_MATERIALIZER_MAX_TURNS || 6);
     const maxTurns = role === 'materializer'
       ? Math.max(1, Math.min(20, Math.trunc(Number.isFinite(configuredMaxTurns) ? configuredMaxTurns : 6)))
@@ -482,7 +504,7 @@ export const createClaudeClient = (options = {}) => {
       '--permission-mode', permissionMode,
       '--tools', allowedTools,
       '--allowedTools', allowedTools,
-      '--disallowedTools', 'Bash,NotebookEdit',
+      '--disallowedTools', disallowedTools,
       '--disable-slash-commands',
       '--strict-mcp-config',
       '--mcp-config', emptyMcpConfigPath,

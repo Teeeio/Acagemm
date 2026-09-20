@@ -104,7 +104,10 @@ const auditAgentIsolation = async ({ runRoot: activeRunRoot, workspaceRoot }) =>
   }
   for (const record of researchRuns.filter((entry) => entry.boundary.role === 'research-acquire')) {
     assert.equal(path.resolve(record.workspace), path.join(workspaceRoot, 'research'));
-    assert.deepEqual(record.additionalDirectories.map((directory) => path.resolve(directory)), [path.join(workspaceRoot, 'sources')]);
+    // Source Registry 只作为只读引用根下发：它不得出现在可写 add-dir 里，否则研究员能改注册表，
+    // 而 baseline 的来源权威正是从注册表建立的。
+    assert.deepEqual(record.additionalDirectories, [], 'research-acquire must not receive a writable add-dir');
+    assert.deepEqual((record.readOnlyDirectories || []).map((directory) => path.resolve(directory)), [path.join(workspaceRoot, 'sources')]);
     assert.deepEqual(Object.keys(record.boundary.roots).sort(), ['sourceRoot', 'workspace']);
     assert.equal(path.resolve(record.boundary.roots.sourceRoot), path.join(workspaceRoot, 'sources'));
   }

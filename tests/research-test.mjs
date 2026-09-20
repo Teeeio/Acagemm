@@ -93,7 +93,11 @@ try {
   assert.match(spawnCalls[0].args.join(' '), /--sandbox workspace-write/);
   assert.doesNotMatch(spawnCalls[0].args.join(' '), /--skip-git-repo-check/);
   assert.match(spawnCalls[0].args.join(' '), /--cd .*research/);
-  assert.ok(spawnCalls[0].args.join(' ').includes(`--add-dir ${sourceRoot}`));
+  // Source Registry 不再作为可写 add-dir 下发：codex 沙箱本就全盘可读，而 --add-dir 加的正是
+  // 可写根。注册表一旦可写，研究员就能改掉 baseline 赖以建立的来源权威。
+  assert.doesNotMatch(spawnCalls[0].args.join(' '), /--add-dir/, 'the acquire stage must not grant a writable add-dir for the Source Registry');
+  // 文案必须与上面的强制一致：只读是被强制的事实，不是一句声明。
+  assert.match(spawnCalls[0].stdin, /Source Registry is strictly READ-ONLY/);
   assert.match(spawnCalls[0].stdin, /Research Agent/);
   // mission 配置了 sourceRoot → 先检查本地，再选择可访问远程来源或语义 fallback。
   assert.match(spawnCalls[0].stdin, /ACQUISITION phase/);

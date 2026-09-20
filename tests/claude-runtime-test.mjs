@@ -148,7 +148,10 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 80));
   assert.ok(spawnCalls[2].args.includes('--resume'));
   assert.ok(spawnCalls[2].args.includes('session-test'));
-  assert.equal(spawnCalls[2].args[spawnCalls[2].args.indexOf('--allowedTools') + 1], 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch');
+  assert.equal(spawnCalls[2].args[spawnCalls[2].args.indexOf('--allowedTools') + 1], 'Read,Glob,Grep,WebSearch,WebFetch');
+  // acquire 轮对 Source Registry 只读：写工具必须从工具面移除，而不是靠权限规则拒绝。
+  assert.equal(spawnCalls[2].args[spawnCalls[2].args.indexOf('--disallowedTools') + 1], 'Bash,NotebookEdit,Write,Edit',
+    'the acquisition stage must not expose any write tool, or the read-only Source Registry grant can be written through');
 
   await client.start({
     runId: 'claude_ACTIVITY',

@@ -1157,6 +1157,11 @@ export function createAgentRuntime(options = {}) {
     }
   };
 
+  // acquire 阶段对 Source Registry 只读：claude 侧把写工具从工具面摘掉，codex 侧沙箱只允许
+  // 写研究目录。这句话因此只陈述两种适配器都成立的不变量——既不说「你可以写」，也不说
+  // 「你没有写工具」，因为任何一种能力断言都会在另一侧变成假话。
+  const acquireWriteBoundary = (researchDir) => `The Source Registry is strictly READ-ONLY in this stage: never create, modify, rename or delete anything inside it. Do not write anywhere outside the research directory (${researchDir}), do not modify the Mission workspace, Iteration Repository or existing Source files, and do not create any candidate patch.`;
+
   const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot, runPhase, sourceEvidence = null, runId = null, sourceRegistry = null, allowDiscoveredSources = false }) => {
     const base = [
       'You are the Research Agent for Operator Studio — a read-only research scout that assists operator iteration.',
@@ -1199,7 +1204,7 @@ export function createAgentRuntime(options = {}) {
         sourceRegistry && sourceRegistry.names
           ? `Local Source Registry inventory (READ-ONLY, platform-provided; ${sourceRegistry.total} entries${sourceRegistry.truncated ? `, showing the first ${sourceRegistry.names.length}` : ''}): ${sourceRegistry.names.join(', ') || '(empty)'}. A local selection must use one of these exact directory names.`
           : 'The local Source Registry inventory could not be read; prefer a remote HTTPS Git source or the semantic fallback.',
-        `You may write ONLY inside the research directory: ${researchDir}. Treat the Source Registry as read-only. You MUST NOT modify the Mission workspace, Iteration Repository, existing Source files, or create any candidate patch. The fixed workflow reuses local selections or clones remote selections and records the resulting commit/tree snapshot.`,
+        `${acquireWriteBoundary(researchDir)} The fixed workflow reuses local selections or clones remote selections and records the resulting commit/tree snapshot.`,
         'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.source-acquisition/v2","summary":"...","sourceAcquisition":{"repositories":[{"name":"flashinfer","location":"local|remote","url":"https://accessible-host/owner/repo.git","reason":"why it matches this Mission","evidencePaths":["repo/relative/operator_file.py","repo/relative/kernel_file.cuh"]}],"semanticFallback":false,"fallbackReason":""}}. For a local selection, name must match a Source Registry child directory and url may be omitted. For a remote selection, provide a safe HTTPS Git URL. Select at most 3 repositories. If neither local nor remote source is usable, return repositories:[], semanticFallback:true, and a concise semantic specification in fallbackReason so the Materializer can implement a baseline from the Mission.',
       ].join('\n');
     }
@@ -1214,8 +1219,10 @@ export function createAgentRuntime(options = {}) {
     }
     // 单阶段（无 sourceRoot）：检索 + 产笔记（旧行为），一个 run 完成
     return [...base,
-      'You have network access. Research the latest operator implementations, papers and open-source libraries relevant to the direction above. You may git clone repositories, read upstream sources, and browse documentation.',
-      `You may write ONLY inside the research directory: ${researchDir} (e.g. clones/ and notes/). You MUST NOT modify the Mission workspace, the Iteration Repository, or create any candidate patch. This is a read-only research turn.`,
+      // 不得声称「你可以 git clone」：claude 侧本阶段没有 shell/写工具，codex 侧克隆也由
+      // 固定工作流负责。声称一个研究员做不到的能力，会换来确定失效的合规。
+      'You have network access. Research the latest operator implementations, papers and open-source libraries relevant to the direction above. Use hosted web search and fetch to read upstream sources and documentation; repository cloning is performed by the fixed workflow, not by you.',
+      `${acquireWriteBoundary(researchDir)} This is a read-only research turn.`,
       'Do NOT propose candidates, do not produce a "candidates" field, and do not call any benchmark or test service.',
       'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v1","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}],"baselineSources":[{"authority":"upstream","repository":"https://...","commit":"...","path":"...","operator":"...","expandedSingleFile":false,"confidence":"high|medium|low","reason":"why this is an authoritative reference candidate"}]}. baselineSources are read-only source candidates only; do not decide adoption or submit tests. If no authoritative baseline source exists, return "baselineSources":[] and explain why in findings.',
     ].join('\n');
@@ -1453,12 +1460,18 @@ export function createAgentRuntime(options = {}) {
       roots: { workspace, ...(runPhase === 'acquire' && mission.sourceRoot ? { sourceRoot: mission.sourceRoot } : {}) },
     });
     const prompt = `${buildResearchPrompt({ mission, direction, researchDir: workspace, sourceRoot: mission.sourceRoot, runPhase, sourceEvidence, runId, sourceRegistry, allowDiscoveredSources: mission.sourcePolicy?.allowDiscoveredSources === true })}\n${boundary.toolInstruction}`;
+    // 研究阶段对 Source Registry 只有读需求，因此以「只读引用根」下发，而不是可写附加目录。
+    // codex 的沙箱允许全盘读、只限制写，且 --add-dir 加的就是可写根，所以该字段进不了它的 argv；
+    // claude 的 --add-dir 是唯一的读授权通道，由适配器映射为读授权并同时摘掉写工具。
+    // 这样 agent-boundary 里 READ-ONLY 的说法才是被强制的事实，而不是一句声明。
+    const readOnlyDirectories = runPhase === 'acquire' && mission.sourceRoot ? [mission.sourceRoot] : [];
     const run = await runtimeEngine.invoke(mode, 'start', {
       runId,
       missionId: mission.id,
       goal: prompt,
       workspace,
-      additionalDirectories: runPhase === 'acquire' && mission.sourceRoot ? [mission.sourceRoot] : [],
+      additionalDirectories: [],
+      readOnlyDirectories,
       sandboxMode: 'workspace-write',
       environment: boundary.environment,
     });
