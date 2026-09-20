@@ -1,5 +1,6 @@
 import { execFile as nodeExecFile, spawn as nodeSpawn } from 'node:child_process';
 import { appendFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
@@ -8,6 +9,37 @@ import { resolveCliInvocation } from './cli-command.mjs';
 import { observeClaudeModel } from './model-observation.mjs';
 
 const defaultTimeoutMs = 12_000;
+
+// Claude Code 从**配置根**（默认 ~/.claude）读 settings.json，那里面的 permissions.deny/allow/ask、
+// hooks、mcpServers 都是对本次运行生效的强制通道——实测证据：配置根里放
+// permissions.deny=["Read(<外部路径>/**)"] 后，即便同时传了 --permission-mode acceptEdits，
+// 那次 Read 仍被以 "denied by your permission settings" 拒绝。不 pin 配置根，宿主的这套规则就会
+// 跟着进到运行时的 agent 里，适配器声明的参数就不再是唯一的约束来源。故把配置根指向运行时自己的目录。
+//
+// 这里**不**声称「宿主的 defaultMode 会盖掉 --permission-mode」：那条我没测过。mode 之间谁优先与本处
+// 无关——实测 --permission-mode 本身并不构成写边界（四种 mode 下越界写都成功），真正有牙齿的是
+// deny 类规则与工具面；pin 配置根是为了让这些有牙齿的通道归适配器所有。
+//
+// 凭证与模型映射走的是进程环境变量（ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL / ANTHROPIC_MODEL），
+// 不属于配置文件，隔离后照常可用——本机实测隔离目录下仍能正常鉴权并完成一次运行。
+//
+// 与 git-environment 同样的回退：打包目录可能只读，退到系统临时目录，而不是让每次运行都失败。
+const ensureClaudeConfigDir = async (configuredDir) => {
+  const configDirs = [...new Set([configuredDir, path.join(os.tmpdir(), 'operator-studio-claude-config')])];
+  let configDir;
+  let lastError;
+  for (const candidate of configDirs) {
+    try {
+      await mkdir(candidate, { recursive: true });
+      configDir = candidate;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!configDir) throw lastError;
+  return configDir;
+};
 
 const execFileAsync = (execFileImpl, command, args, options = {}) => new Promise((resolve, reject) => {
   execFileImpl(command, args, { ...options, encoding: 'utf8', timeout: options.timeout ?? defaultTimeoutMs }, (error, stdout = '', stderr = '') => {
@@ -438,8 +470,12 @@ export const createClaudeClient = (options = {}) => {
     }
     await mkdir(runsDir, { recursive: true });
     await writeFile(emptyMcpConfigPath, '{"mcpServers":{}}\n', 'utf8');
-    // 对 claude 而言 --add-dir 是「可读」授权通道（写是否放行由 permission mode 决定），
-    // 所以只读引用根也必须进 --add-dir 才读得到；它的只读性由下面的工具面摘除保证。
+    // 在建立运行记录之前定下配置根，好让记录能如实登记「这次运行用的是哪个配置」。
+    const claudeConfigDir = environment.CLAUDE_CONFIG_DIR || await ensureClaudeConfigDir(path.join(bridgeDir, 'claude-config'));
+    // 对 claude 而言 --add-dir 是「可读」授权通道——注意它只是把该目录显式列为工作目录，**不是**写权限的
+    // 开关：实测不传任何 --add-dir 时，越界写照样成功，permission mode 也拦不住（acceptEdits / dontAsk
+    // 四种 mode 全试过）。所以只读引用根必须进 --add-dir 才读得到；它的只读性由下面的工具面摘除保证，
+    // 不能指望 mode 或 --add-dir 本身。
     //
     // 更正（2026-09-19）：此前这里写着「路径级 deny 在 Windows 绝对路径上不匹配」，那是我测错了。
     // 当时的四种写法都构造无效——写规则写成 Write(...)（文件权限检查从不匹配这个名字，写规则要用
@@ -477,6 +513,8 @@ export const createClaudeClient = (options = {}) => {
       readOnlyDirectories: readOnlyResolved,
       // 两种根都进 --add-dir，读授权是合并后的结果；记录合并值以便审计实际授权面。
       grantedDirectories: directories,
+      // 登记实际使用的配置根，好让「有没有沿用宿主全局配置」可被审计而不是靠约定。
+      claudeConfigDir,
       threadId: null,
       sessionId: null,
       status: 'running',
@@ -523,11 +561,13 @@ export const createClaudeClient = (options = {}) => {
       ...(resumeThreadId ? ['--resume', resumeThreadId] : []),
     ];
     const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, { configDir: path.join(bridgeDir, 'git-trust') });
+    // 配置根由适配器拥有，放在 environment 展开之后：宿主全局配置不得渗进来。
+    const runEnvironment = { ...scopedEnvironment, ...environment, CLAUDE_CONFIG_DIR: claudeConfigDir };
     const child = spawnImpl(command, commandArgs(args), {
       cwd: record.workspace,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
-      env: { ...scopedEnvironment, ...environment },
+      env: runEnvironment,
     });
     let stderr = '';
     let eventBuffer = '';

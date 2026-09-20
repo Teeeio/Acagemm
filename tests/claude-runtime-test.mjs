@@ -126,6 +126,14 @@ try {
   ]);
   assert.equal(spawnCalls[0].cwd, root);
   assert.equal(spawnCalls[0].stdin, 'create run.py\n');
+  // 适配器不得沿用宿主的全局配置：用户级 ~/.claude/settings.json 里的 permissions.defaultMode 等
+  // 一旦渗进来，适配器声明的 --permission-mode 就不代表实际生效的模式。配置根必须是运行时自己的。
+  const configDir = spawnCalls[0].env.CLAUDE_CONFIG_DIR;
+  assert.ok(configDir, 'the claude run must pin CLAUDE_CONFIG_DIR so host global settings cannot leak in');
+  assert.equal(path.resolve(configDir), path.join(root, 'bridge', 'claude-config'));
+  assert.notEqual(path.resolve(configDir), path.resolve(os.homedir(), '.claude'));
+  // 隔离的是配置目录，不是进程环境：PATH 等必须照常传递，否则 claude 根本起不来。
+  assert.equal(spawnCalls[0].env.PATH, process.env.PATH);
 
   await client.start({
     runId: 'claude_MATERIALIZER',
