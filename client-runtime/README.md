@@ -172,6 +172,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/baseline-benchmark-service.mjs` | baseline benchmark command submission | baseline context | updated state |
 | `application/baseline-materializer-command-service.mjs` | baseline materializer command submission | baseline context | updated state |
 | `application/baseline-source-inspection-service.mjs` | strict baseline source verification | baseline context | validation/state |
+| `application/source-registry-integrity-service.mjs` | source root integrity gate: a modified or unverifiable registry stops auto-advance | source root, Mission/state | `needs_human` escalation + durable event |
 | `application/baseline-materializer-recovery-service.mjs` | materializer failure recovery and research redirect | materializer state | state/action |
 | `application/iteration-service.mjs` | formal iteration dependency boundary | iteration ports | immutable iteration API |
 | `application/runtime-projection-service.mjs` | workflow and Agent state projection | state/runtime | projected state |

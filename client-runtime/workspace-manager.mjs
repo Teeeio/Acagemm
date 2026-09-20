@@ -353,7 +353,16 @@ export function createWorkspaceManager(options = {}) {
         if (configuredTransport && normalizeRepositoryIdentity(configuredTransport) !== normalizeRepositoryIdentity(transportRepository)) {
           throw new Error('Source transport metadata 与 Git origin 不一致。');
         }
-        if (recordedTree && recordedTree !== tree) throw new Error('Source tree metadata 与当前 HEAD tree 不一致。');
+        // 登记的 tree pin 与当前 HEAD tree 不一致 = 来源内容被改过（可能是别处提交的，工作区反而是干净的）。
+        // 这必须与「不是独立 Git 根 / 元数据与 origin 不一致」这类结构性故障分开：前者证明「仓库结构没坏、
+        // 内容换了」，是修改证据；后者只说明无法核验。混成一个码会让上游无法区分「被改」与「看不懂」。
+        if (recordedTree && recordedTree !== tree) {
+          const mismatch = new Error('Source tree metadata 与当前 HEAD tree 不一致。');
+          mismatch.code = 'SOURCE_REPOSITORY_TREE_MISMATCH';
+          mismatch.recordedTree = recordedTree;
+          mismatch.tree = tree;
+          throw mismatch;
+        }
         const transportMode = normalizeRepositoryIdentity(canonicalRepository) === normalizeRepositoryIdentity(transportRepository) ? 'canonical' : 'mirror';
         sources.push({
           id: entry.name,
@@ -370,7 +379,14 @@ export function createWorkspaceManager(options = {}) {
         });
         if (status.length) errors.push({ code: 'SOURCE_REPOSITORY_DIRTY', source: entry.name, detail: `第三方来源包含 ${status.length} 个未提交变更，不能作为固定引用。`, changedFiles: status.map((line) => line.slice(3).trim()) });
       } catch (cause) {
-        errors.push({ code: 'SOURCE_REPOSITORY_INVALID', source: entry.name, detail: cause.stderr?.trim() || cause.message });
+        const mismatch = cause.code === 'SOURCE_REPOSITORY_TREE_MISMATCH';
+        errors.push({
+          code: mismatch ? 'SOURCE_REPOSITORY_TREE_MISMATCH' : 'SOURCE_REPOSITORY_INVALID',
+          source: entry.name,
+          detail: cause.stderr?.trim() || cause.message,
+          // 只有 tree pin 不一致才带上两棵树：它们是「内容被改过」的直接证据，而不是「读不出来」。
+          ...(mismatch ? { recordedTree: cause.recordedTree, tree: cause.tree } : {}),
+        });
       }
     }
     const verifiedReferences = await Promise.all((references || []).map(async (reference) => {

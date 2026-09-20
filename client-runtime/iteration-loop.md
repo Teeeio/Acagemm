@@ -115,3 +115,20 @@ emits `research.acquisition_port_missing` with the fallback it chose, and — wh
 `reasonCode = RESEARCH_ACQUISITION_PORT_MISSING` before continuing with the legacy registry count.
 With neither port the loop still reports `fallback: 'none'` before ending as `research_no_material`.
 Regression: `tests/loop-test.mjs` asserts all three shapes.
+
+### Modified source root stops auto-advance
+
+Third-party sources are fixed references. Once the source root has been modified — uncommitted changes, or a
+HEAD tree that no longer matches the registered `operatorStudio.sourceTree` pin — the material basis for the
+round is no longer the pinned one, so the automatic flow must stop rather than continue on swapped material.
+
+The acquire region calls the optional `deps.inspectSourceIntegrity` port immediately after settlement, before
+promoting to the synthesize stage, and asks it about `researchAgent.sourceRoot` (the root acquisition actually
+used), not about whatever root the Mission also carries. A non-`valid` result returns `action: 'needs_human'`
+with `loopStatusReason` = `source_root_modified` or `source_root_unverifiable`, plus a durable
+`source_registry.integrity_failed` event; `detectLoopGuard` then returns that reason on the next tick, which is
+what actually halts auto-advance. Manual operations are not blocked.
+
+The port is optional on purpose: with no port there is no evidence about the source root, and the loop does not
+invent a conclusion from its absence. Regression: `tests/loop-test.mjs` (blocked, unverifiable, clean, and the
+port-absent path), `tests/source-registry-integrity-test.mjs`.

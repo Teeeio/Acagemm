@@ -18,6 +18,8 @@ import {
   MAX_RESEARCH_ESCALATIONS,
   TOTAL_BUDGET_MS,
 } from '../client-runtime/iteration-loop.mjs';
+import { createSourceRegistryIntegrityService } from '../client-runtime/application/source-registry-integrity-service.mjs';
+import { appendRuntimeEvent } from '../client-runtime/runtime-events.mjs';
 import { createMission, createSeedState, resumeMissionState } from '../client-runtime/state-store.mjs';
 import { ensureRoundBudgetStarted } from '../client-runtime/round-budget-contract.mjs';
 import { RESEARCH_ADVISORY_BUDGET_MS, RESEARCH_TRIGGERS } from '../client-runtime/research-policy.mjs';
@@ -745,6 +747,59 @@ const acquireEmptyState = makeState({
 let empty = await advanceIteration(acquireEmptyState, { ...deps, acquireSources: async () => ({ sources: [], failures: [] }) });
 assert.equal(empty.action, 'research_no_material');
 assert.equal(startResearchCalls, 0);
+
+// ---- 来源根完整性闸门：被改动就停自动流转 ----
+// 来源是固定引用。改动过（未提交变更，或 HEAD tree 偏离登记的 tree pin）之后，以它为材料基线的
+// 自动流转必须停下等人裁决，而不是拿着换过的材料继续跑。上面 `acquireDoneState` 那一组没有注入
+// inspectSourceIntegrity 端口，仍照常进入综合阶段——没有端口就没有证据，不臆造结论。
+resetCounters();
+const integrityService = createSourceRegistryIntegrityService({
+  inspectSources: async () => ({
+    ready: false,
+    sources: [],
+    references: [],
+    errors: [{ code: 'SOURCE_REPOSITORY_TREE_MISMATCH', source: 'upstream', detail: 'Source tree metadata 与当前 HEAD tree 不一致。', recordedTree: 'tree-before', tree: 'tree-after' }],
+  }),
+  appendRuntimeEvent,
+});
+const modifiedSourceState = makeState({
+  researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_modified', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_modified', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research' },
+});
+const modifiedSource = await advanceIteration(modifiedSourceState, { ...deps, inspectSourceIntegrity: integrityService.inspect });
+assert.equal(modifiedSource.action, 'needs_human');
+assert.equal(startResearchCalls, 0, 'a modified source root must not proceed to the synthesis stage');
+assert.equal(modifiedSource.state.iterationStats.loopStatus, 'needs_human');
+assert.equal(modifiedSource.state.iterationStats.loopStatusReason, 'source_root_modified');
+assert.ok(modifiedSource.state.runtimeEvents.some((event) => event.type === 'source_registry.integrity_failed'
+  && event.payload?.reasonCode === 'source_root_modified' && event.payload?.modified?.[0]?.source === 'upstream'));
+// 「停了」必须由守卫兑现，而不是只写在状态里：自动流转的停止点就是 detectLoopGuard 的返回值。
+assert.equal(detectLoopGuard(modifiedSource.state), 'source_root_modified',
+  'the guard must actually halt auto-advance, or "stopped" is only a claim');
+
+// 核验不了（不是独立 Git 根等）同样停，但理由码不同——不可知不得冒充「被改过」。
+resetCounters();
+const unverifiableService = createSourceRegistryIntegrityService({
+  inspectSources: async () => ({ ready: false, sources: [], references: [], errors: [{ code: 'SOURCE_REPOSITORY_INVALID', source: 'broken', detail: '来源目录不是独立 Git 根目录。' }] }),
+  appendRuntimeEvent,
+});
+const unverifiableSource = await advanceIteration(makeState({
+  researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_broken', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_broken', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research' },
+}), { ...deps, inspectSourceIntegrity: unverifiableService.inspect });
+assert.equal(unverifiableSource.action, 'needs_human');
+assert.equal(unverifiableSource.state.iterationStats.loopStatusReason, 'source_root_unverifiable');
+assert.equal(detectLoopGuard(unverifiableSource.state), 'source_root_unverifiable');
+
+// 来源干净：闸门放行，照常进入综合阶段。
+resetCounters();
+const cleanIntegrityService = createSourceRegistryIntegrityService({
+  inspectSources: async () => ({ ready: true, sources: [{ id: 'upstream' }], references: [], errors: [] }),
+  appendRuntimeEvent,
+});
+const cleanSource = await advanceIteration(makeState({
+  researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_clean', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_clean', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research' },
+}), { ...deps, acquireSources: async () => ({ sources: [{ name: 'upstream' }], failures: [] }), inspectSourceIntegrity: cleanIntegrityService.inspect });
+assert.equal(cleanSource.action, 'research_synthesizing');
+assert.equal(cleanSource.state.iterationStats.loopStatus, 'running');
 
 // 端口缺失不得被静默当成「没有材料」：显式标注理由，并退回兼容口径而不是假装 0 收获
 resetCounters();

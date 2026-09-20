@@ -111,6 +111,7 @@ import { createBaselineBenchmarkService } from './application/baseline-benchmark
 import { createBaselineMaterializerCommandService } from './application/baseline-materializer-command-service.mjs';
 import { createBaselineSourceInspectionService } from './application/baseline-source-inspection-service.mjs';
 import { createBaselineMaterializerRecoveryService } from './application/baseline-materializer-recovery-service.mjs';
+import { createSourceRegistryIntegrityService } from './application/source-registry-integrity-service.mjs';
 import { createIterationService } from './application/iteration-service.mjs';
 import { createRuntimeProjectionService } from './application/runtime-projection-service.mjs';
 import { createRuntimeAdvanceService } from './application/runtime-advance-service.mjs';
@@ -482,6 +483,8 @@ const autopilotCandidateActionService = createAutopilotCandidateActionService({ 
 const autopilotValidationService = createAutopilotValidationService({ executeCommand, journal: commandJournal, saveState: persistState, registry: commandRegistry, inferMissionMatrix });
 const materializerPolicyService = createMaterializerPolicyService();
 
+const sourceRegistryIntegrityService = createSourceRegistryIntegrityService({ inspectSources: (...args) => workspaceManager.inspectSources(...args), appendRuntimeEvent });
+
 const iterationPorts = {
   startResearch: iterationResearchService.startResearch,
   cancelResearch: iterationResearchService.cancelResearch,
@@ -489,6 +492,7 @@ const iterationPorts = {
   countSources: sourceService.countSources,
   countRunSources: sourceService.countRunSources,
   acquireSources: sourceAcquisitionService.acquireSources,
+  inspectSourceIntegrity: sourceRegistryIntegrityService.inspect,
   startMainRound: mainRoundOrchestrationService.start,
   startBaseline: (...args) => baselineOrchestrationService.start(...args),
   researchDirForMission,

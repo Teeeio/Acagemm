@@ -998,6 +998,19 @@ export async function advanceIteration(state, deps = {}) {
         elapsedMs: null,
       }, { kind: 'research', mode: 'policy' });
     }
+    // 材料基线闸门：来源根被改动（未提交变更，或 HEAD tree 偏离登记的 tree pin）后，它就不再是
+    // 固定引用，以它为基线的自动流转必须停下等人裁决。这里问的是来源本身，不是引用——
+    // 判定层只认来源级错误码（见 source-registry-integrity.mjs）。
+    if (deps.inspectSourceIntegrity) {
+      // 问的是采集这一步用的那个根，不是 mission 上另配的根。
+      const integrity = await deps.inspectSourceIntegrity({ state, mission, sourceRoot: researchAgent.sourceRoot || mission.sourceRoot });
+      if (!integrity.valid) {
+        addAuditEvent(integrity.state, '来源根完整性校验未通过',
+          integrity.verdict === 'modified' ? '来源内容已被改动，固定引用失效，已停自动流转' : '来源无法核验，已停自动流转',
+          'warning', 'Search');
+        return { state: integrity.state, action: 'needs_human' };
+      }
+    }
     // 来源数量与有效材料数量分开显示：这里只报告本次 run 获取到几个来源。
     const materialCount = Array.isArray(acquired) ? acquired.length : 0;
     if ((materialCount > 0 || allowSemanticFallback) && deps.startResearch) {
