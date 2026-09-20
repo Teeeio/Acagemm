@@ -17,11 +17,17 @@ contract and [Agent lifecycle contract](agent-runtime.md).
 Windows MVP Codex runs use the unelevated sandbox fallback when the optional
 Windows sandbox helper is unavailable. Boundary mode keeps Codex's structured
 file-edit tools enabled by default; the workspace sandbox and post-run Mission
-Workspace Diff audit remain the write boundary. Set
+Workspace Diff audit remain the write boundary. The `shell_tool` is **on** by
+default as well: confinement comes from `--sandbox workspace-write` plus
+`--add-dir` for each writable root, not from a narrower tool surface. Read-only
+additional roots are deliberately not passed to the CLI, because the sandbox
+already allows reading anywhere and only writes are confined. Set
 `OPERATOR_CODEX_DISABLE_SHELL_TOOL=1` only when a stricter tool surface is
-required for a controlled diagnostic run. Runs also ignore the local Codex
-`config.toml` by default to prevent an unexpectedly large user-rule context from
-starving the Agent turn; set `OPERATOR_CODEX_IGNORE_USER_CONFIG=0` to opt back in.
+required for a controlled diagnostic run; it takes effect only in boundary mode
+(`OPERATOR_AGENT_ROOTS` set), so it is never the thing that protects a run.
+Runs also ignore the local Codex `config.toml` by default to prevent an
+unexpectedly large user-rule context from starving the Agent turn; set
+`OPERATOR_CODEX_IGNORE_USER_CONFIG=0` to opt back in.
 
 On Windows, native Codex executables are launched through the Job Object
 supervisor by default. Each run receives an independent Job, a file-backed

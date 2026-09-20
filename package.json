@@ -210,7 +210,9 @@
     "verify:non-hardware-robustness": "node scripts/verify-non-hardware-robustness.mjs",
     "opencode:serve": "opencode serve --hostname 127.0.0.1 --port 4096",
     "research:smoke": "node scripts/research-network-smoke.mjs",
-    "verify:researcher-source": "node scripts/verify-researcher-source.mjs"
+    "verify:researcher-source": "node scripts/verify-researcher-source.mjs",
+    "replay:kernel-wiki-selection": "node scripts/replay-kernel-wiki-selection.mjs",
+    "test:replay-kernel-wiki-selection": "node tests/replay-kernel-wiki-selection-test.mjs"
   },
   "dependencies": {
     "ink": "5.2.1",
