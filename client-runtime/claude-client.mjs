@@ -7,6 +7,7 @@ import { runtimeDir } from './storage-paths.mjs';
 import { createScopedGitEnvironment } from './git-environment.mjs';
 import { resolveCliInvocation } from './cli-command.mjs';
 import { observeClaudeModel } from './model-observation.mjs';
+import { buildClaudeSettings, resolveClaudeToolSurface, writeDenyRulesFor } from './claude-permission-surface.mjs';
 
 const defaultTimeoutMs = 12_000;
 
@@ -25,7 +26,9 @@ const defaultTimeoutMs = 12_000;
 //
 // 与 git-environment 同样的回退：打包目录可能只读，退到系统临时目录，而不是让每次运行都失败。
 const ensureClaudeConfigDir = async (configuredDir) => {
-  const configDirs = [...new Set([configuredDir, path.join(os.tmpdir(), 'operator-studio-claude-config')])];
+  // 回退目录按运行隔离（沿用运行 id 这一层）：共用一个回退目录会让并发的两次运行互相覆盖
+  // settings.json，把其中一次的 deny 规则悄悄抹掉。
+  const configDirs = [...new Set([configuredDir, path.join(os.tmpdir(), 'operator-studio-claude-config', path.basename(configuredDir))])];
   let configDir;
   let lastError;
   for (const candidate of configDirs) {
@@ -381,6 +384,9 @@ export const createClaudeClient = (options = {}) => {
   const spawnImpl = options.spawnImpl || nodeSpawn;
   const execFileImpl = options.execFileImpl || nodeExecFile;
   const bridgeDir = options.bridgeDir || path.resolve(process.env.OPERATOR_BRIDGE_DIR || path.join(runtimeDir, 'agent-bridge'));
+  // 传给 CLI 的 permission mode。它决定 CLI 的交互行为，**不是**安全边界——实测四种 mode 下
+  // workspace 之外的写入都成功（见文件头注释）。真正的能力边界是工具面与配置根里的 deny 规则，
+  // 由 claude-permission-surface 推导。这个旋钮保留只是为了让 CLI 有一个确定的行为档位。
   const permissionMode = options.permissionMode || process.env.OPERATOR_CLAUDE_PERMISSION_MODE || 'acceptEdits';
   const runsDir = path.join(bridgeDir, 'claude-runs');
   const emptyMcpConfigPath = path.join(bridgeDir, 'claude-empty-mcp.json');
@@ -445,33 +451,23 @@ export const createClaudeClient = (options = {}) => {
   const preflight = async ({ workspace }) => {
     const descriptor = await describe();
     if (!descriptor.installed) return { ready: false, code: 'CLAUDE_NOT_INSTALLED', detail: '未检测到 Claude Code CLI。', workspace };
-    if (permissionMode !== 'acceptEdits') {
-      return {
-        ready: false,
-        code: 'CLAUDE_PERMISSION_MODE_UNSAFE',
-        detail: `仅允许 acceptEdits，当前配置为 ${permissionMode}。`,
-        workspace,
-      };
-    }
     try {
       const workspaceStat = await stat(workspace);
       if (!workspaceStat.isDirectory()) throw new Error('workspace is not a directory');
     } catch (cause) {
       return { ready: false, code: 'CLAUDE_WORKSPACE_UNAVAILABLE', detail: cause.message, workspace };
     }
-    return { ready: true, code: 'CLAUDE_READY', workspace, command, version: descriptor.version, configurationAuthority: 'local-claude-code', permissionMode };
+    return {
+      ready: true, code: 'CLAUDE_READY', workspace, command, version: descriptor.version,
+      configurationAuthority: 'local-claude-code', permissionMode,
+      // 明确登记 permissionMode 不是能力边界，免得下游把它当成安全属性读。
+      permissionModeIsBoundary: false,
+    };
   };
 
   const start = async ({ runId = `claude_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`, missionId, goal, workspace, additionalDirectories = [], readOnlyDirectories = [], resumeThreadId = null, environment = {} }) => {
-    if (permissionMode !== 'acceptEdits') {
-      const error = new Error(`Claude Code 仅允许 acceptEdits，当前配置为 ${permissionMode}。`);
-      error.code = 'CLAUDE_PERMISSION_MODE_UNSAFE';
-      throw error;
-    }
     await mkdir(runsDir, { recursive: true });
     await writeFile(emptyMcpConfigPath, '{"mcpServers":{}}\n', 'utf8');
-    // 在建立运行记录之前定下配置根，好让记录能如实登记「这次运行用的是哪个配置」。
-    const claudeConfigDir = environment.CLAUDE_CONFIG_DIR || await ensureClaudeConfigDir(path.join(bridgeDir, 'claude-config'));
     // 对 claude 而言 --add-dir 是「可读」授权通道——注意它只是把该目录显式列为工作目录，**不是**写权限的
     // 开关：实测不传任何 --add-dir 时，越界写照样成功，permission mode 也拦不住（acceptEdits / dontAsk
     // 四种 mode 全试过）。所以只读引用根必须进 --add-dir 才读得到；它的只读性由下面的工具面摘除保证，
@@ -485,8 +481,9 @@ export const createClaudeClient = (options = {}) => {
     // settings"，permissions.blockReadsOutsideWorkingDirectories 返回 "is outside ..."。见
     // .operator-studio-local/probe/boundary-read-probe/。
     //
-    // 本阶段仍用工具面摘除而不是路径规则：摘除让写能力根本不存在，比逐次调用被拒更强，也与 codex
-    // 侧「沙箱里没有可写根」对齐。这是取舍，不是路径规则不可用。
+    // 主边界用工具面摘除而不是路径规则：摘除让写能力根本不存在，比逐次调用被拒更强，也与 codex
+    // 侧「沙箱里没有可写根」对齐。路径 deny 规则作为纵深防御同时写入配置根（见下方 denyRules）。
+    // 两者都由 grant 派生，判定见 claude-permission-surface.mjs。
     const writableDirectories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const readOnlyResolved = [...new Set((readOnlyDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const overlap = writableDirectories.filter((directory) => readOnlyResolved.includes(directory));
@@ -498,6 +495,22 @@ export const createClaudeClient = (options = {}) => {
     const directories = [...new Set([...writableDirectories, ...readOnlyResolved])];
     const role = environment.OPERATOR_AGENT_ROLE || 'stage';
     const roots = environment.OPERATOR_AGENT_ROOTS ? JSON.parse(environment.OPERATOR_AGENT_ROOTS) : { workspace: path.resolve(workspace) };
+    // 能力边界由 grant 派生，不由 role 名字派生：持有只读根且没有任何可写根 → 摘除写工具。
+    const toolSurface = resolveClaudeToolSurface({ role, writableDirectories, readOnlyDirectories: readOnlyResolved });
+    // 采集阶段宣称对 Source Registry 只读，就必须真的没有可写根可用。缺根时**显式失败**，
+    // 绝不让它静默落到「联网 + 有写工具」那一档——那会比改动前更宽，而不是更严。
+    if (role === 'research-acquire' && readOnlyResolved.length === 0) {
+      const error = new Error('research-acquire 必须携带只读引用根，否则无法保证 Source Registry 只读。');
+      error.code = 'CLAUDE_ACQUIRE_GRANT_MISSING';
+      throw error;
+    }
+    // 配置根每次运行独立：deny 规则写在这里，共用目录会让并发的两次运行互相覆盖，
+    // 「最后写者赢」会把一次运行的 deny 悄悄抹掉，而运行记录里登记的却是它写过。
+    const claudeConfigDir = environment.CLAUDE_CONFIG_DIR
+      || await ensureClaudeConfigDir(path.join(bridgeDir, 'claude-config', runId));
+    // 纵深防御：主边界是上面的工具面摘除，deny 规则覆盖「某个工具仍能走到写路径」的残余面。
+    const denyRules = writeDenyRulesFor(readOnlyResolved);
+    await writeFile(path.join(claudeConfigDir, 'settings.json'), `${JSON.stringify(buildClaudeSettings({ denyRules }), null, 2)}\n`, 'utf8');
     // Every run starts unknown: a resume hint is a request parameter, never an
     // observed response identity. The real session is learned from this stream and
     // then fixed; until it is learned, no session identity is claimed at all.
@@ -523,23 +536,24 @@ export const createClaudeClient = (options = {}) => {
       completedAt: null,
       eventPath: eventsPath(runId),
       permissionMode,
-      boundary: { role, roots, enforcement: 'claude-permissions-and-workflow-diff' },
+      // 如实登记：这次运行实际生效的能力强制面是什么。permissionMode 只记录、不作为边界。
+      enforcedSurface: {
+        authority: 'tool-surface',
+        toolSurface: { allowedTools: toolSurface.allowedTools, disallowedTools: toolSurface.disallowedTools, writeToolsWithheld: toolSurface.writeToolsWithheld },
+        denyRules,
+        permissionModeIsBoundary: false,
+      },
+      boundary: { role, roots, enforcement: 'claude-tool-surface-and-config-deny' },
       activity: { kind: 'startup', status: 'running', name: 'Claude Code', summary: '正在启动候选生成智能体', updatedAt: new Date().toISOString() },
       modelObservation: observeClaudeModel({ runId, missionId, sessionId: '', events: [] }),
       diagnostics: createRunDiagnostics(runId, missionId),
       error: null,
     };
     await persistRun(runId, record);
-    // acquire 轮对 Source Registry 只读：本阶段把写工具从工具面整个摘掉，写入因此不是
-    // 「被规则拒绝」而是「不存在该工具」。研究员的交付物是 JSON 回答，没有任何下游会读取
-    // 它在采集阶段写的文件，所以摘掉写工具不影响采集结果。
-    const readOnlyAcquisition = role === 'research-acquire';
-    const allowedTools = readOnlyAcquisition
-      ? 'Read,Glob,Grep,WebSearch,WebFetch'
-      : ['research-experience'].includes(role)
-        ? 'Read,Glob,Grep,Write,Edit,WebSearch,WebFetch'
-        : 'Read,Write,Edit';
-    const disallowedTools = readOnlyAcquisition ? 'Bash,NotebookEdit,Write,Edit' : 'Bash,NotebookEdit';
+    // 只读轮次对 Source Registry 只读：写工具从工具面整个摘掉，写入因此不是「被规则拒绝」而是
+    // 「不存在该工具」。研究员的交付物是 JSON 回答，没有任何下游会读取它在采集阶段写的文件，
+    // 所以摘掉写工具不影响采集结果。判定键是 grant（上面的 toolSurface），不是 role 字符串。
+    const { allowedTools, disallowedTools } = toolSurface;
     const configuredMaxTurns = Number(environment.OPERATOR_CLAUDE_MAX_TURNS || process.env.OPERATOR_CLAUDE_MATERIALIZER_MAX_TURNS || 6);
     const maxTurns = role === 'materializer'
       ? Math.max(1, Math.min(20, Math.trunc(Number.isFinite(configuredMaxTurns) ? configuredMaxTurns : 6)))

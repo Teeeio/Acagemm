@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { claudeActivityFromEvent, classifyClaudeFailure, createClaudeClient, normalizeClaudeEvents } from '../client-runtime/claude-client.mjs';
+import { claudeRulePath } from '../client-runtime/claude-permission-surface.mjs';
 
 const normalized = normalizeClaudeEvents([
   { type: 'system', subtype: 'init', session_id: 'session-test' },
@@ -92,14 +93,14 @@ try {
   assert.equal(descriptor.version, '2.1.0 (Claude Code)');
   assert.equal((await client.preflight({ workspace: root })).ready, true);
 
-  const unsafeClient = createClaudeClient({ command: 'claude-test', permissionMode: 'bypassPermissions', bridgeDir: path.join(root, 'unsafe-bridge'), execFileImpl, spawnImpl });
-  const unsafePreflight = await unsafeClient.preflight({ workspace: root });
-  assert.equal(unsafePreflight.ready, false);
-  assert.equal(unsafePreflight.code, 'CLAUDE_PERMISSION_MODE_UNSAFE');
-  await assert.rejects(
-    unsafeClient.start({ missionId: 'MIS_UNSAFE', goal: 'must not start', workspace: root }),
-    (error) => error.code === 'CLAUDE_PERMISSION_MODE_UNSAFE',
-  );
+  // permission mode 的守卫已删除：它拦的是一个名字，不是一个能力差（实测四种 mode 下越界写都成功）。
+  // 现在 preflight 直接对任意 mode 返回 ready，并显式标注它不是边界。真正的强制面见文件末尾的
+  // enforcedSurface 断言。
+  const alternateModeClient = createClaudeClient({ command: 'claude-test', permissionMode: 'bypassPermissions', bridgeDir: path.join(root, 'alt-bridge'), execFileImpl, spawnImpl });
+  const alternatePreflight = await alternateModeClient.preflight({ workspace: root });
+  assert.equal(alternatePreflight.ready, true, 'permission mode must not gate readiness: it is not a capability boundary');
+  assert.equal(alternatePreflight.permissionMode, 'bypassPermissions');
+  assert.equal(alternatePreflight.permissionModeIsBoundary, false);
 
   await client.start({
     runId: 'claude_TEST',
@@ -126,11 +127,14 @@ try {
   ]);
   assert.equal(spawnCalls[0].cwd, root);
   assert.equal(spawnCalls[0].stdin, 'create run.py\n');
-  // 适配器不得沿用宿主的全局配置：用户级 ~/.claude/settings.json 里的 permissions.defaultMode 等
-  // 一旦渗进来，适配器声明的 --permission-mode 就不代表实际生效的模式。配置根必须是运行时自己的。
+  // 适配器不得沿用宿主的全局配置：用户级 ~/.claude/settings.json 里的 permissions.deny 等规则是对
+  // 本次运行生效的强制通道（实测 deny 规则在显式 --permission-mode 下仍然拒绝），不 pin 配置根，
+  // 宿主的这套规则就会跟着进到运行时的 agent 里。配置根必须是运行时自己的，且**每次运行独立**——
+  // 共用目录会让并发的两次运行互相覆盖 settings.json。
   const configDir = spawnCalls[0].env.CLAUDE_CONFIG_DIR;
   assert.ok(configDir, 'the claude run must pin CLAUDE_CONFIG_DIR so host global settings cannot leak in');
-  assert.equal(path.resolve(configDir), path.join(root, 'bridge', 'claude-config'));
+  assert.equal(path.resolve(configDir), path.join(root, 'bridge', 'claude-config', 'claude_TEST'),
+    'each run must get its own config root, or concurrent runs overwrite each other\'s deny rules');
   assert.notEqual(path.resolve(configDir), path.resolve(os.homedir(), '.claude'));
   // 隔离的是配置目录，不是进程环境：PATH 等必须照常传递，否则 claude 根本起不来。
   assert.equal(spawnCalls[0].env.PATH, process.env.PATH);
@@ -145,21 +149,24 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 80));
   assert.equal(spawnCalls[1].args[spawnCalls[1].args.indexOf('--max-turns') + 1], '6');
 
+  const sourceRegistryDir = path.join(root, 'sources');
   await client.start({
     runId: 'claude_RESUME',
     missionId: 'MIS_CLAUDE',
     goal: 'continue',
     workspace: root,
     resumeThreadId: 'session-test',
+    readOnlyDirectories: [sourceRegistryDir],
     environment: { OPERATOR_AGENT_ROLE: 'research-acquire', OPERATOR_AGENT_ROOTS: JSON.stringify({ workspace: root }) },
   });
   await new Promise((resolve) => setTimeout(resolve, 80));
   assert.ok(spawnCalls[2].args.includes('--resume'));
   assert.ok(spawnCalls[2].args.includes('session-test'));
   assert.equal(spawnCalls[2].args[spawnCalls[2].args.indexOf('--allowedTools') + 1], 'Read,Glob,Grep,WebSearch,WebFetch');
-  // acquire 轮对 Source Registry 只读：写工具必须从工具面移除，而不是靠权限规则拒绝。
+  // 只读轮次：写工具必须从工具面移除（能力不存在），而不是靠权限规则逐次拒绝。
   assert.equal(spawnCalls[2].args[spawnCalls[2].args.indexOf('--disallowedTools') + 1], 'Bash,NotebookEdit,Write,Edit',
-    'the acquisition stage must not expose any write tool, or the read-only Source Registry grant can be written through');
+    'a read-only grant must not expose any write tool, or the read-only Source Registry grant can be written through');
+  assert.equal(spawnCalls[2].args.includes('--add-dir') && spawnCalls[2].args[spawnCalls[2].args.indexOf('--add-dir') + 1], sourceRegistryDir);
 
   await client.start({
     runId: 'claude_ACTIVITY',
@@ -195,7 +202,74 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal((await client.readRun('claude_CANCEL')).status, 'cancelled');
 
+  // ---- 能力边界由 grant 派生，不由 role 名字派生 ----
+  // 上面那次 acquire 的运行记录必须如实登记实际强制面：写工具被摘除、deny 规则与只读根一一对应、
+  // 且不再声称 permission mode 是边界。
+  const acquireRecord = await client.readRun('claude_RESUME');
+  assert.equal(acquireRecord.boundary.enforcement, 'claude-tool-surface-and-config-deny',
+    'the enforcement label must not claim permission mode bounds anything');
+  assert.equal(acquireRecord.enforcedSurface.authority, 'tool-surface');
+  assert.equal(acquireRecord.enforcedSurface.toolSurface.writeToolsWithheld, true);
+  assert.equal(acquireRecord.enforcedSurface.permissionModeIsBoundary, false);
+  assert.deepEqual(acquireRecord.enforcedSurface.denyRules, [`Edit(${claudeRulePath(sourceRegistryDir)}/**)`],
+    'the read-only root must produce a deny rule in the documented Edit(...) form');
+  // Windows 路径必须归一化成 `Edit(//c/.../**)`：小写盘符、无冒号。写成 Edit(//C:/.../**) 不匹配。
+  assert.match(acquireRecord.enforcedSurface.denyRules[0], /^Edit\(\/\/[a-z]\/.*\/\*\*\)$/,
+    'write rules must not carry an uppercase drive letter with a colon, which never matches');
+  const settingsWritten = JSON.parse(await readFile(path.join(acquireRecord.claudeConfigDir, 'settings.json'), 'utf8'));
+  assert.deepEqual(settingsWritten.permissions.deny, acquireRecord.enforcedSurface.denyRules,
+    'the settings actually written must match what the run record claims');
+  // 可写运行不产生 deny 规则，但仍登记强制面。
+  const iterationRecord = await client.readRun('claude_ACTIVITY');
+  assert.equal(iterationRecord.enforcedSurface.toolSurface.writeToolsWithheld, false);
+  assert.deepEqual(iterationRecord.enforcedSurface.denyRules, []);
+
+  // 负例 A：role 不再说了算——非 acquire 的 role 只要拿到只读根，同样摘除写工具。
+  await client.start({
+    runId: 'claude_READONLY_ITERATION',
+    missionId: 'MIS_CLAUDE',
+    goal: 'iteration with a read-only reference root',
+    workspace: root,
+    readOnlyDirectories: [sourceRegistryDir],
+    environment: { OPERATOR_AGENT_ROLE: 'iteration', OPERATOR_AGENT_ROOTS: JSON.stringify({ workspace: root }) },
+  });
+  const readOnlyIteration = spawnCalls.at(-1);
+  assert.equal(readOnlyIteration.args[readOnlyIteration.args.indexOf('--disallowedTools') + 1], 'Bash,NotebookEdit,Write,Edit',
+    'write tools must be withheld from any run holding a read-only root, not only from research-acquire');
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const readOnlyIterationRecord = await client.readRun('claude_READONLY_ITERATION');
+  assert.equal(readOnlyIterationRecord.enforcedSurface.toolSurface.writeToolsWithheld, true);
+  assert.deepEqual(readOnlyIterationRecord.enforcedSurface.denyRules, [`Edit(${claudeRulePath(sourceRegistryDir)}/**)`]);
+
+  // 负例 B：缺 grant 时显式失败，而不是静默落到「联网 + 有写工具」那一档——那会比改动前更宽。
+  await assert.rejects(
+    client.start({
+      runId: 'claude_ACQUIRE_NO_GRANT',
+      missionId: 'MIS_CLAUDE',
+      goal: 'acquire without a read-only root',
+      workspace: root,
+      environment: { OPERATOR_AGENT_ROLE: 'research-acquire', OPERATOR_AGENT_ROOTS: JSON.stringify({ workspace: root }) },
+    }),
+    (error) => error.code === 'CLAUDE_ACQUIRE_GRANT_MISSING',
+  );
+
+  // 负例 C：permission mode 不再是闸门——顶层非 acceptEdits 的 client 能正常跑完一次并如实登记。
+  await alternateModeClient.start({
+    runId: 'claude_ALTMODE',
+    missionId: 'MIS_CLAUDE',
+    goal: 'run under a mode that used to be rejected',
+    workspace: root,
+    environment: { OPERATOR_AGENT_ROLE: 'iteration', OPERATOR_AGENT_ROOTS: JSON.stringify({ workspace: root }) },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const altModeRecord = await alternateModeClient.readRun('claude_ALTMODE');
+  assert.equal(altModeRecord.status, 'completed', 'a non-acceptEdits permission mode must not block a run');
+  assert.equal(altModeRecord.permissionMode, 'bypassPermissions');
+  assert.equal(altModeRecord.enforcedSurface.permissionModeIsBoundary, false);
+
   console.log('[claude-runtime] CLI lifecycle and normalized event contract passed');
 } finally {
-  await rm(root, { recursive: true, force: true });
+  // Windows 上未结束的运行仍可能在写 run 记录/事件文件，与清理抢跑会抛 ENOTEMPTY，
+  // 把真正的断言失败盖成一条目录报错。重试让失败信息始终是断言本身。
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 }
