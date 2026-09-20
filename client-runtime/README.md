@@ -27,7 +27,12 @@ required for a controlled diagnostic run; it takes effect only in boundary mode
 (`OPERATOR_AGENT_ROOTS` set), so it is never the thing that protects a run.
 Runs also ignore the local Codex `config.toml` by default to prevent an
 unexpectedly large user-rule context from starving the Agent turn; set
-`OPERATOR_CODEX_IGNORE_USER_CONFIG=0` to opt back in.
+`OPERATOR_CODEX_IGNORE_USER_CONFIG=0` to opt back in. That flag does not cover
+the host Codex home's own `AGENTS.md`, which Codex assembles into every run, so
+each run is additionally pointed at a Mission-scoped Codex home that carries the
+provider credential and nothing else. `client-runtime/codex-client.md` states
+what is and is not copied; set `OPERATOR_CODEX_ISOLATE_HOME=0` to run against
+the host home unchanged.
 
 On Windows, native Codex executables are launched through the Job Object
 supervisor by default. Each run receives an independent Job, a file-backed

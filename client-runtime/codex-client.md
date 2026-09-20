@@ -14,6 +14,19 @@ and preserve runId, missionId, workspace, threadId and event path, adding
 
 - start creates a process in the requested isolated workspace. On Unix it creates
   a dedicated process group; Windows processes remain hidden.
+- Each run is pointed at a Codex home the adapter owns
+  (`<bridgeDir>/codex-home/<missionId>`), scoped to the Mission so `exec resume`
+  still finds the home that created its thread. Codex assembles a run's
+  instructions from that home as well as from the workspace, and
+  `--ignore-user-config` covers `config.toml` only: measured on codex-cli 0.155.0
+  a run carrying that flag still received the host home's `AGENTS.md` verbatim.
+  A Mission Agent must read its own workspace's conventions, so the isolated home
+  carries the provider credential and nothing else — no host `AGENTS.md`, config,
+  skills or plugins. Records expose `codexHome`, `codexHomeIsolated` and
+  `codexHomeSeededCredentials` so the inheritance question is auditable.
+  `OPERATOR_CODEX_ISOLATE_HOME=0` (or `createCodexClient({ isolateCodexHome: false })`)
+  runs against the host home unchanged; a per-run `environment.CODEX_HOME` names an
+  operator-owned home that this adapter neither seeds nor cleans.
 - Model selection is explicit and never persisted: `createCodexClient({ model })`
   wins over `OPERATOR_CODEX_MODEL`, which wins over legacy `CODEX_MODEL`. The
   shared-GPU acceptance harness defaults to `gpt-5.6-sol`; set
@@ -47,9 +60,18 @@ before cancellation is classified as unconfirmed. Options cancelGraceMs, cancelF
 terminateProcessTree support bounded contract testing. Injected termination
 returning success still requires an actual close event; a timeout is never proof.
 
-No Provider credentials are persisted or logged; errors use the existing redaction.
+Credential handling: errors and records use the existing redaction, and no
+credential value is ever written to a record or a log. Isolation does place a
+copy of the host home's `auth.json` (`HOST_CREDENTIAL_FILES`) inside the
+adapter-owned home for as long as a run needs it, because Codex reads that
+credential from `$CODEX_HOME` and has no environment equivalent. The file is
+removed when the last live run of that Mission settles; the home itself stays,
+because its session rollouts record what instructions a run actually received.
+`hostCodexHome` (default `$CODEX_HOME`, else `~/.codex`) names the source and is
+how a test keeps the developer's real credential out of the run.
 The test-owned Node process tree is only a cancellation test, not a Codex/model run.
 
 Tests:
 `node tests/codex-runtime-test.mjs`
-`node tests/codex-cancellation-test.mjs`.
+`node tests/codex-cancellation-test.mjs`
+`node tests/codex-home-isolation-test.mjs`.

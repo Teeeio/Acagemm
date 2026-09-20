@@ -8,6 +8,9 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { createCodexClient } from '../client-runtime/codex-client.mjs';
 const root = await mkdtemp(path.join(os.tmpdir(), 'codex-cancel-proof-'));
+// A run's isolated home is seeded with the provider credential taken from the host Codex home.
+// Point that at a fixture so the developer's real credential is never read or copied.
+process.env.CODEX_HOME = path.join(root, 'host-codex-home');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const children = [];
 const mockSpawn = () => {

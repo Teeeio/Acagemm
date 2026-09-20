@@ -1,6 +1,7 @@
 import { execFile as nodeExecFile, spawn as nodeSpawn } from 'node:child_process';
-import { mkdir, appendFile, readFile, stat, writeFile, rename, rm } from 'node:fs/promises';
+import { copyFile, mkdir, appendFile, readFile, stat, writeFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { runtimeDir } from './storage-paths.mjs';
 import { createScopedGitEnvironment } from './git-environment.mjs';
@@ -214,6 +215,40 @@ export const classifyCodexFailure = (run = {}, events = []) => {
   };
 };
 
+// Codex assembles a run's instructions from two independent scopes: the project documents it
+// finds around the workspace, and the *global* documents inside $CODEX_HOME
+// (`AGENTS.override.md`, else `AGENTS.md`). `--ignore-user-config` covers `config.toml` only.
+// Measured against codex-cli 0.155.0: a run started with that flag still received the host
+// home's `AGENTS.md` verbatim, and the host home's copy is the user's own machine-wide policy,
+// not the Mission Workspace's conventions — it told a materializer Agent to stop implementing
+// and write a blocker report instead.
+//
+// So the adapter points $CODEX_HOME at a directory it owns. Nothing is carried over except the
+// provider credential, because copying the rest of the host home would put the host's global
+// instructions, skills and plugins back into the run through the side door.
+const HOST_CREDENTIAL_FILES = ['auth.json'];
+
+// Windows paths cannot contain the separators or reserved characters a mission id may carry.
+const codexHomeKey = (value) => String(value || 'default').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) || 'default';
+
+const fileExists = async (target) => Boolean(await stat(target).catch(() => null));
+
+// Best effort by design: a host that authenticates through the environment or an OS keyring has
+// no such file, and that is a valid setup rather than a failure. What was seeded is reported in
+// the run record so "did this run inherit host credentials" is auditable.
+const seedHostCredentials = async (home, hostHome, files = HOST_CREDENTIAL_FILES) => {
+  const seeded = [];
+  for (const name of files) {
+    const destination = path.join(home, name);
+    try {
+      if (await fileExists(destination)) { seeded.push(name); continue; }
+      await copyFile(path.join(hostHome, name), destination);
+      seeded.push(name);
+    } catch { /* no such credential in the host home */ }
+  }
+  return seeded;
+};
+
 export const createCodexClient = (options = {}) => {
   const platform = options.platform || process.platform;
   const configuredCommand = options.command || process.env.CODEX_COMMAND || 'codex';
@@ -234,6 +269,13 @@ export const createCodexClient = (options = {}) => {
   // when a local provider explicitly depends on Codex config.toml.
   const ignoreUserConfigValue = options.ignoreUserConfig ?? process.env.OPERATOR_CODEX_IGNORE_USER_CONFIG ?? '1';
   const ignoreUserConfig = ignoreUserConfigValue === true || /^(1|true|yes)$/i.test(String(ignoreUserConfigValue));
+  // `--ignore-user-config` alone leaves the host's global instruction documents in play
+  // (see HOST_CREDENTIAL_FILES above). Isolation is on by default for the same reason: a
+  // Mission Agent must read its own workspace's conventions, not this machine's. Set
+  // OPERATOR_CODEX_ISOLATE_HOME=0 to run against the host Codex home unchanged, or pass
+  // CODEX_HOME in the per-run environment to point one run at a home the operator owns.
+  const isolateCodexHome = enabledSetting(options.isolateCodexHome ?? process.env.OPERATOR_CODEX_ISOLATE_HOME, true);
+  const hostCodexHome = options.hostCodexHome ?? process.env.CODEX_HOME ?? path.join(homedir(), '.codex');
   // The MVP deliberately uses Codex's Windows unelevated fallback unless an
   // operator explicitly selects another sandbox mode. The repository still
   // confines writes to the Mission Workspace and owns process cleanup through
@@ -451,7 +493,17 @@ export const createCodexClient = (options = {}) => {
     }
     await saveRun(record);
     children.delete(record.runId);
+    await releaseSeededCredentials(record);
     return true;
+  };
+  // The seeded credential lives only as long as the run that needed it. Runs of one Mission
+  // share a home, so the last one out removes it rather than the first to finish.
+  const releaseSeededCredentials = async (record) => {
+    const home = record?.codexHome;
+    const seeded = record?.codexHomeSeededCredentials || [];
+    if (!record?.codexHomeIsolated || !home || !seeded.length) return;
+    if ([...children.values()].some((execution) => execution.record?.codexHome === home)) return;
+    for (const name of seeded) await rm(path.join(home, name), { force: true }).catch(() => {});
   };
   const readRun = async (runId) => {
     await writes.get(runId);
@@ -526,7 +578,17 @@ export const createCodexClient = (options = {}) => {
     // Operators may still opt into the stricter tool surface explicitly.
     const disableShellTool = String(environment.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? process.env.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? '').toLowerCase() === '1'
       || String(environment.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? process.env.OPERATOR_CODEX_DISABLE_SHELL_TOOL ?? '').toLowerCase() === 'true';
-    const record = { schemaVersion: 2, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, readOnlyDirectories: readOnlyResolved, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null,
+    // Scoped to the Mission rather than the run: `exec resume` looks a thread up in the home
+    // that created it, so a per-run home would strand every resumed round. Concurrent runs of
+    // one Mission share this directory exactly as concurrent host Codex sessions share theirs.
+    const isolatedCodexHome = isolateCodexHome && !environment.CODEX_HOME
+      ? { dir: path.join(bridgeDir, 'codex-home', codexHomeKey(missionId || runId)), seeded: [] }
+      : null;
+    if (isolatedCodexHome) {
+      await mkdir(isolatedCodexHome.dir, { recursive: true });
+      isolatedCodexHome.seeded = await seedHostCredentials(isolatedCodexHome.dir, hostCodexHome);
+    }
+    const record = { schemaVersion: 2, runId, missionId, workspace: workspace || process.cwd(), additionalDirectories: writableDirectories, readOnlyDirectories: readOnlyResolved, threadId: resumeThreadId, status: 'running', startedAt: new Date().toISOString(), completedAt: null, eventPath: eventsPath(runId), sandbox: effectiveSandbox, codexHome: isolatedCodexHome?.dir || environment.CODEX_HOME || null, codexHomeIsolated: Boolean(isolatedCodexHome), codexHomeSeededCredentials: isolatedCodexHome?.seeded || [], boundary: boundaryEnabled ? { role: environment.OPERATOR_AGENT_ROLE || 'stage', roots: JSON.parse(environment.OPERATOR_AGENT_ROOTS), enforcement: 'workspace-sandbox-and-workflow-diff' } : null, skipGitRepoCheck: Boolean(skipGitRepoCheck), error: null,
       process: { pid: null, ownerPid: process.pid, instanceId },
       // This is a diagnostic projection only.  It records each boundary that
       // the adapter can observe and is intentionally not used to infer a
@@ -544,7 +606,10 @@ export const createCodexClient = (options = {}) => {
       ? ['exec', ...configArgs, ...modelArgs, 'resume', ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, resumeThreadId, '-']
       : ['exec', ...configArgs, ...modelArgs, ...gitRepoArgs, ...toolRestrictionArgs, '--json', '--sandbox', effectiveSandbox, ...sandboxArgs, '--cd', record.workspace, ...writableDirectories.flatMap((directory) => ['--add-dir', directory]), '-'];
     const scopedEnvironment = await createScopedGitEnvironment(record.workspace, process.env, { configDir: path.join(bridgeDir, 'git-trust') });
-    const runEnvironment = { ...scopedEnvironment, ...environment };
+    // The isolated home is applied after the per-run environment so it wins over an inherited
+    // $CODEX_HOME; an explicit per-run CODEX_HOME opted out above and is left untouched.
+    const runEnvironment = { ...scopedEnvironment, ...environment,
+      ...(isolatedCodexHome ? { CODEX_HOME: isolatedCodexHome.dir } : {}) };
     const runJobObject = useWindowsJobObject
       && enabledSetting(environment.OPERATOR_CODEX_JOB_OBJECT, true);
     let child = null;

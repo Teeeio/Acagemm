@@ -40,6 +40,7 @@
     "test:agent-start-context": "node tests/agent-start-context-test.mjs",
     "test:round-budget": "node tests/round-budget-test.mjs",
     "test:codex-cancellation": "node tests/codex-cancellation-test.mjs",
+    "test:codex-home-isolation": "node tests/codex-home-isolation-test.mjs",
     "test:agent-cancellation-liveness": "node tests/agent-cancellation-liveness-test.mjs",
     "test:generic-runtime-safety": "node tests/generic-runtime-safety-test.mjs",
     "test:test-service-client": "node tests/test-service-client-test.mjs",

@@ -39,6 +39,7 @@ const checks = [
   'test:agent-start-context',
   'test:round-budget',
   'test:codex-cancellation',
+  'test:codex-home-isolation',
   'test:agent-cancellation-liveness',
   'test:generic-runtime-safety',
   'test:test-service-client',
