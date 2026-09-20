@@ -21,8 +21,8 @@ entry point. Neither suite is live network/model/GPU acceptance.
 ## Unified research policy
 
 The experience research start goes through `resolveAutomaticResearch({ trigger: 'experience' })`,
-so the phase (`experience`) and budget are explicit and `researchEnabled: false` is honoured at this
+so the phase (`experience`) and budget are explicit and the default-off switch is honoured at this
 entry too. The research direction is derived from the current frozen Mission contract (title/operator,
-hardware, language) and no longer hardcodes historical hardware such as C550. Disabling automatic
-research emits one idempotent `research.skipped_disabled` event per Mission and never starts a run;
+hardware, language) and no longer hardcodes historical hardware such as C550. Not having automatic
+research enabled emits one idempotent `research.skipped_disabled` event per Mission and never starts a run;
 local experience and reviewed KernelWiki retrieval are unaffected because they are not this path.

@@ -127,7 +127,9 @@ assert.equal(isResolvedEvidenceRound({ ...resolvedReferenceEvidence, agent: { st
 const makeState = (overrides = {}) => {
   const base = {
     activeMissionId: 'MIS',
-    missions: [{ id: 'MIS', goal: '优化 C500 延迟', hardware: ['C500'], metric: 'latency_p50' }],
+    // 本文件测的是升级/停滞的编排机制，不是开关本身：默认 Mission 显式开启自动联网研究。
+    // 开关自身的语义（默认关闭、硬改名）由 research-policy-test 覆盖，那里显式构造各档取值。
+    missions: [{ id: 'MIS', goal: '优化 C500 延迟', hardware: ['C500'], metric: 'latency_p50', sourcePolicy: { webResearchEnabled: true } }],
     stage: 'diagnosis',
     agent: { status: 'idle' },
     researchAgent: { status: 'idle', runId: null },
@@ -704,11 +706,11 @@ assert.equal(lastResearchTrigger, RESEARCH_TRIGGERS.TUNNEL_VISION);
 // 关闭自动研究：同一停滞状态不得从升级分支偷偷启动采集，也不放宽任何门禁
 resetCounters();
 const researchOffState = makeState({
-  missions: [{ id: 'MIS', goal: '优化 C500 延迟', hardware: ['C500'], metric: 'latency_p50', sourcePolicy: { researchEnabled: false } }],
+  missions: [{ id: 'MIS', goal: '优化 C500 延迟', hardware: ['C500'], metric: 'latency_p50', sourcePolicy: { webResearchEnabled: false } }],
   iterationStats: { consecutiveNoAdopt: 3, lastCountedRunId: 'run_1', lastResearchRunId: null, researchRounds: 0, pendingInjection: null },
 });
 const researchOff = await advanceIteration(researchOffState, deps);
-assert.equal(startResearchCalls, 0, 'researchEnabled:false must cover the stagnation escalation entry too');
+assert.equal(startResearchCalls, 0, 'webResearchEnabled:false must cover the stagnation escalation entry too');
 assert.notEqual(researchOff.action, 'research_escalated');
 assert.ok(researchOff.state.runtimeEvents.some((event) => event.type === 'research.skipped_disabled' && event.payload?.reasonCode === 'RESEARCH_DISABLED_BY_POLICY'));
 

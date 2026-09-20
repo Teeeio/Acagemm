@@ -30,7 +30,7 @@ const strict = createRunService(make({ state: { baseline: { status: 'idle' } }, 
 assert.equal((await strict.start('MIS_1', {})).kind, 'research');
 const epoch = Date.parse('2026-09-07T00:00:00.000Z');
 const profile = fixedOperatorProfiles.find(item => item.iterationPolicy);
-const fixedMission = { id: 'MIS_1', projectId: 'PROJECT_1', goal: 'optimize the frozen operator', operatorProfile: structuredClone(profile), sourcePolicy: { researchEnabled: false }, hardware: ['C550'] };
+const fixedMission = { id: 'MIS_1', projectId: 'PROJECT_1', goal: 'optimize the frozen operator', operatorProfile: structuredClone(profile), sourcePolicy: { webResearchEnabled: false }, hardware: ['C550'] };
 const fixedState = () => {
   const state = { activeMissionId: fixedMission.id, missions: [structuredClone(fixedMission)],
     stage: 'published', knowledgeMaintenance: { status: 'completed' },

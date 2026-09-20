@@ -117,7 +117,8 @@ try {
     sourceRoot,
     hardware: ['C500'],
     metric: 'latency p50',
-    sourcePolicy: { mode: 'agent-research-only', strictZeroSource: true },
+    // 自动联网研究默认关闭；本用例跑的是研究工作流本身，故显式开启（来源门禁不受影响）。
+    sourcePolicy: { mode: 'agent-research-only', strictZeroSource: true, webResearchEnabled: true },
   };
   const state = {
     activeMissionId: mission.id,

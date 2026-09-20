@@ -31,7 +31,7 @@ const App = () => {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [draft, setDraft] = useState({
     profileId: tuiOperatorProfiles[0].id,
-    researchEnabled: true,
+    webResearchEnabled: false,
     requireAuthority: false,
     timeBudget: '',
   });
@@ -41,7 +41,7 @@ const App = () => {
   const [doctorResult, setDoctorResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const refreshGate = useRef(createLatestRefreshGate());
-  const fields = ['profileId', 'researchEnabled', 'requireAuthority', 'timeBudget'];
+  const fields = ['profileId', 'webResearchEnabled', 'requireAuthority', 'timeBudget'];
 
   const cycleProfile = (direction = 1) => setDraft((current) => {
     const index = tuiOperatorProfiles.findIndex((item) => item.id === current.profileId);
@@ -158,11 +158,11 @@ const App = () => {
       if (key.upArrow) return setFieldIndex((current) => (current + fields.length - 1) % fields.length);
       if (keyName === 'profileId' && (key.leftArrow || input === '[')) return cycleProfile(-1);
       if (keyName === 'profileId' && (key.rightArrow || input === ' ' || input === ']')) return cycleProfile(1);
-      if (['researchEnabled', 'requireAuthority'].includes(keyName) && (key.leftArrow || key.rightArrow || input === ' ' || input === '[' || input === ']')) {
+      if (['webResearchEnabled', 'requireAuthority'].includes(keyName) && (key.leftArrow || key.rightArrow || input === ' ' || input === '[' || input === ']')) {
         return setDraft((current) => ({ ...current, [keyName]: !current[keyName] }));
       }
       if (key.return) return void submitPublish();
-      if (['profileId', 'researchEnabled', 'requireAuthority'].includes(keyName)) return;
+      if (['profileId', 'webResearchEnabled', 'requireAuthority'].includes(keyName)) return;
       if (key.backspace || key.delete) return setDraft((current) => ({ ...current, [keyName]: String(current[keyName] || '').slice(0, -1) }));
       if (input && !key.ctrl && !key.meta) setDraft((current) => ({ ...current, [keyName]: `${current[keyName] || ''}${input}` }));
       return;

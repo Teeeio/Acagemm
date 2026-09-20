@@ -197,21 +197,23 @@ baseline、oracle、工具权限）。研究与候选验证路径完全隔离—
 `acquire` 去重新寻找/克隆 baseline 仓库。每个入口都必须显式声明阶段；缺失阶段会被拒绝
 （`RESEARCH_PHASE_REQUIRED`），不再回落到任何默认值。
 
-### 关闭在线研究
+### 自动联网研究（默认关闭）
 
 ```json
-{ "sourcePolicy": { "researchEnabled": false } }
-}
+{ "sourcePolicy": { "webResearchEnabled": true } }
 ```
 
-- `researchEnabled: false` 关闭**全部自动在线研究入口**：建议型研究、经验调研、来源采集与综合。
-  固定 Profile、通用停滞升级、严格来源路径、候选 baseline、materializer 恢复分支都受同一开关约束，
-  不会从别的分支悄悄启动采集或综合。
+- `webResearchEnabled` 只控制**自动联网研究入口**：建议型研究、经验调研、来源采集与综合。
+  **默认关闭**——只有显式 `true` 才开启。固定 Profile、通用停滞升级、严格来源路径、候选 baseline、
+  materializer 恢复分支都受同一开关约束，不会从别的分支悄悄启动采集或综合。
 - 它**不影响**本地经验与已审查 KernelWiki 的检索（那条路径属于 `round-experience-service`，与本开关无关）。
+  这正是它不叫 `researchEnabled` 的原因：旧名会让人以为它覆盖全部研究，把非联网的本地经验/Wiki
+  检索也算进去。硬改名，不读旧字段、不做别名回退——已持久化的 `sourcePolicy.researchEnabled`
+  一律按未开启处理。
 - 它**不放宽来源门禁**。关闭研究后如果仍需可验证来源，系统返回显式状态
   （`needs_human` + `loopStatusReason = research_disabled_source_unresolved`），
   既不隐式开启研究，也不会启用 semantic fallback。
-- **显式手动调研不受 `researchEnabled` 约束**（那是操作员的主动指令），由 `researchPolicy.manualEnabled`
+- **显式手动调研不受 `webResearchEnabled` 约束**（那是操作员的主动指令），由 `researchPolicy.manualEnabled`
   （默认 `true`）单独控制，并遵守同一总预算。
 
 ### 预算、重试、取消与 fallback

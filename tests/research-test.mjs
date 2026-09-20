@@ -68,7 +68,8 @@ try {
 
   // ---- startResearch：沙箱参数、方向注入、runId、目录、串行 guard ----
   const idleState = { activeMissionId: 'MIS_RES', runtimeEvents: [], stage: 'diagnosis', patchApplied: false, candidateEvaluations: [{ id: 'stale' }], agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
-  const mission = { id: 'MIS_RES', title: 'Research mission', repository: root, sourceRoot, hardware: ['C500'], metric: 'latency_p50', currentBest: { value: '47.0 μs' } };
+  // 自动联网研究默认关闭，本用例测的是 research run 本身，故显式开启。
+  const mission = { id: 'MIS_RES', title: 'Research mission', repository: root, sourceRoot, hardware: ['C500'], metric: 'latency_p50', currentBest: { value: '47.0 μs' }, sourcePolicy: { webResearchEnabled: true } };
   // 阶段必须显式：缺失或未知都必须拒绝启动，不再回落到 acquire 默认值。
   await assert.rejects(
     runtime.startResearch({ state: structuredClone(idleState), mission, direction: 'x', workspace: researchDir }),
@@ -111,7 +112,7 @@ try {
   const discoveredState = { activeMissionId: 'MIS_DISC', runtimeEvents: [], stage: 'diagnosis', agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
   await runtime.startResearch({
     state: discoveredState,
-    mission: { ...mission, id: 'MIS_DISC', sourcePolicy: { allowDiscoveredSources: true } },
+    mission: { ...mission, id: 'MIS_DISC', sourcePolicy: { allowDiscoveredSources: true, webResearchEnabled: true } },
     direction: 'x', workspace: researchDir, runPhase: 'acquire',
   });
   assert.match(spawnCalls.at(-1).stdin, /以及其它免凭据的 HTTPS Git 主机（discovered）/);
@@ -133,7 +134,7 @@ try {
   assert.match(spawnCalls[0].stdin, /READ-ONLY reference root/);
   assert.doesNotMatch(spawnCalls[0].stdin, /The only filesystem root assigned to this Agent/);
   // 无 sourceRoot 的 mission → 单阶段（检索 + 产笔记），不含 ACQUISITION 指令
-  const noSourceMission = { id: 'MIS_NOSRC', title: 'No source', repository: root, sourceRoot: null, hardware: ['C500'], metric: 'latency_p50' };
+  const noSourceMission = { id: 'MIS_NOSRC', title: 'No source', repository: root, sourceRoot: null, hardware: ['C500'], metric: 'latency_p50', sourcePolicy: { webResearchEnabled: true } };
   const noSourceState = { activeMissionId: 'MIS_NOSRC', runtimeEvents: [], stage: 'diagnosis', agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
   await runtime.startResearch({ state: noSourceState, mission: noSourceMission, direction: '纯检索', workspace: researchDir, runPhase: 'acquire' });
   assert.match(spawnCalls.at(-1).stdin, /read-only research turn/, 'no-sourceRoot mission stays single-phase research');

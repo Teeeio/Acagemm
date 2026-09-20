@@ -180,7 +180,9 @@ try {
       projectId: project.id,
       hardware: ['C550'],
       metric: 'latency p50',
-      sourcePolicy: { mode: 'agent-flexible', strictZeroSource: true, localFirst: true, allowDiscoveredSources: true, allowSemanticFallback: true },
+      // 自动联网研究默认关闭；本用例要验证 acquire/synthesize 两个研究 run 真的跑起来（见下方
+      // researchRuns 断言），故显式开启。开启只影响是否启动研究，不放宽任何来源门禁。
+      sourcePolicy: { mode: 'agent-flexible', strictZeroSource: true, localFirst: true, allowDiscoveredSources: true, allowSemanticFallback: true, webResearchEnabled: true },
       testScenario: { id: 'mla-three-round', hardwareMockOnly: true },
       objective: { mode: 'threshold', metric: 'latency p50', direction: 'minimize', targetRelativeImprovement: 0.2 },
       testMatrix: { environments: ['C550'], stages: ['Correctness', 'Full Benchmark'], warmup: 50, repeats: 200, correctnessCases: 24 },

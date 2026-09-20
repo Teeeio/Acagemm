@@ -5,12 +5,13 @@
 // application/* 服务共用。
 //
 // 语义边界（必须与文档保持一致）：
-//  - researchEnabled:false 关闭的是【自动在线研究】的全部入口（建议型研究、经验研究、来源采集、
-//    综合阶段）。它不关闭本地经验与已审查 Wiki 的检索（那条路径属于 round-experience-service，
-//    与本开关无关）。
-//  - 关闭研究不等于放宽来源门禁。缺必要来源时返回显式状态（blocked + 原因），
+//  - webResearchEnabled 控制的是【自动联网研究】的全部入口（建议型研究、经验研究、来源采集、
+//    综合阶段）。**默认关闭**：只有显式 true 才开启。它不控制本地经验与已审查 Wiki 的检索
+//    （那条路径属于 round-experience-service，与本开关无关）。旧名 researchEnabled 会让人以为
+//    它覆盖全部研究（含非联网的本地经验/Wiki 检索），故改名；硬改名，不读旧名、不做别名回退。
+//  - 关闭联网研究不等于放宽来源门禁。缺必要来源时返回显式状态（blocked + 原因），
 //    绝不隐式开启研究，也绝不放宽来源约束或启用 semantic fallback。
-//  - 显式手动研究（POST /api/missions/:id/research）不受 researchEnabled 约束，它是操作员的
+//  - 显式手动研究（POST /api/missions/:id/research）不受 webResearchEnabled 约束，它是操作员的
 //    主动指令；由 researchPolicy.manualEnabled（默认 true）单独控制，并且仍然遵守同一总预算。
 
 // 已知研究阶段。任何自动入口都必须显式选择其中之一，不再依赖容易混淆的默认值。
@@ -58,15 +59,15 @@ const boundedBudget = (value, fallback) => {
   return Math.min(RESEARCH_BUDGET_BOUNDS.max, Math.max(RESEARCH_BUDGET_BOUNDS.min, Math.floor(numeric)));
 };
 
-// 研究配置：优先读 mission.sourcePolicy，其次 mission.researchPolicy（迁移期兼容）。
-// 只表达必要语义，不新增模式；缺省即保持既有可用行为。
+// 研究配置：联网开关只认 mission.sourcePolicy.webResearchEnabled 一个字段。
+// 硬改名：不读旧名 researchEnabled，也不从 researchPolicy 回退——留任一条兼容通道都会让
+// 「默认关闭」在新旧配置混用时失效。
 export const resolveResearchConfig = (mission = {}) => {
   const sourcePolicy = isObject(mission?.sourcePolicy) ? mission.sourcePolicy : {};
   const researchPolicy = isObject(mission?.researchPolicy) ? mission.researchPolicy : {};
-  const enabledValue = sourcePolicy.researchEnabled ?? researchPolicy.enabled;
   return {
-    // 只有显式 false 才关闭；undefined 保持既有「默认开启」行为。
-    automaticEnabled: enabledValue !== false,
+    // 只有显式 true 才开启；缺省（undefined / null / 无 sourcePolicy）即关闭自动联网研究。
+    automaticEnabled: sourcePolicy.webResearchEnabled === true,
     // 手动研究默认可用，只有显式 false 才关闭。
     manualEnabled: researchPolicy.manualEnabled !== false && sourcePolicy.manualResearchEnabled !== false,
     advisoryBudgetMs: boundedBudget(sourcePolicy.researchBudgetMs ?? researchPolicy.budgetMs, RESEARCH_ADVISORY_BUDGET_MS),
@@ -99,7 +100,7 @@ export const resolveAutomaticResearch = ({ mission = {}, trigger }) => {
       allowed: false,
       phase,
       reasonCode: 'RESEARCH_DISABLED_BY_POLICY',
-      reason: 'Mission 已关闭自动在线研究（sourcePolicy.researchEnabled=false）。',
+      reason: 'Mission 未开启自动联网研究（需显式 sourcePolicy.webResearchEnabled=true；默认关闭）。',
       config,
     };
   }
@@ -107,7 +108,7 @@ export const resolveAutomaticResearch = ({ mission = {}, trigger }) => {
   return { allowed: true, phase, budgetMs, sessionBudgetMs: config.sessionBudgetMs, reasonCode: null, reason: null, config };
 };
 
-// 显式手动研究的裁决：不受 researchEnabled 约束，只受 manualEnabled 约束。
+// 显式手动研究的裁决：不受 webResearchEnabled 约束，只受 manualEnabled 约束。
 export const resolveManualResearch = ({ mission = {}, phase = 'acquire' }) => {
   const config = resolveResearchConfig(mission);
   if (!config.manualEnabled) {

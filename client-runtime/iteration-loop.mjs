@@ -1436,7 +1436,7 @@ export async function advanceIteration(state, deps = {}) {
   }
 
   // 升级决策：停滞（连续 N 轮无采纳）或隧道视野（同一方向重复无进展失败）。
-  // 统一走 research-policy 裁决：显式阶段、显式预算、researchEnabled:false 覆盖所有自动入口。
+  // 统一走 research-policy 裁决：显式阶段、显式预算、webResearchEnabled 未显式开启即覆盖所有自动入口。
   // 停滞 → 同步研究（下一轮依赖调研结果，串行等待）；隧道视野 → 异步研究（主线程继续，研究员并行审查）。
   const { stagnated, consecutiveNoAdopt } = detectStagnation(state);
   const vision = detectTunnelVision(state);

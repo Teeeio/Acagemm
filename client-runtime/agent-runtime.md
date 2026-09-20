@@ -25,8 +25,8 @@ provider does not query the experience repository or create observations itself.
 `startResearch` requires an explicit `runPhase` from `RESEARCH_PHASES`
 (`advisory` / `experience` / `acquire` / `synthesize`). A missing or unknown phase is rejected
 (`RESEARCH_PHASE_REQUIRED` / `RESEARCH_PHASE_UNKNOWN`) — there is no default phase. It also refuses to
-start (`RESEARCH_DISABLED_BY_POLICY`) unless the caller states `origin: 'manual'` or the Mission has
-automatic research enabled, so no future call site can bypass `sourcePolicy.researchEnabled`.
+start (`RESEARCH_DISABLED_BY_POLICY`) unless the caller states `origin: 'manual'` or the Mission sets
+`sourcePolicy.webResearchEnabled: true` (default off), so no future call site can bypass it.
 
 One research session has one deadline. `sessionDeadlineAt` is opened on the first phase and carried
 into later phases; a later phase gets `min(phaseBudget, remaining session)` and is rejected outright

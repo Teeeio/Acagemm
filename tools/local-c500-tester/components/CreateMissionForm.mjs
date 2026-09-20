@@ -4,14 +4,14 @@ import { getFixedOperatorProfile, tuiOperatorProfiles } from '../../../client-ru
 
 const rows = [
   ['profileId', '算子配置 (Operator)'],
-  ['researchEnabled', '在线调研 (Online research)'],
+  ['webResearchEnabled', '联网调研 (Web research)'],
   ['requireAuthority', '权威性检查 (Authority check)'],
   ['timeBudget', '时间预算 (Time budget, ms)'],
 ];
 
 const display = (draft, key) => {
   if (key === 'profileId') return getFixedOperatorProfile(draft.profileId || tuiOperatorProfiles[0].id).title;
-  if (key === 'researchEnabled') return draft[key] === false ? '关闭 (off)' : '开启 (on, non-blocking)';
+  if (key === 'webResearchEnabled') return draft[key] === true ? '开启 (on, non-blocking)' : '关闭 (off, 默认)';
   if (key === 'requireAuthority') return draft[key] === true ? '必须 (required)' : '关闭 (off, embedded profile)';
   return draft[key] || '不限 (unlimited)';
 };

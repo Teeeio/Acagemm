@@ -69,7 +69,7 @@ required, blocking decision does.
 `resolveAutomaticResearch` (`research-policy.mjs`) and passes the resulting phase and budget
 explicitly. Stagnation and tunnel-vision escalation therefore start an `advisory` phase run — a
 suggestion-only phase that must not acquire or clone a baseline source — instead of falling back to
-`acquire`. When `sourcePolicy.researchEnabled === false` no entry starts a run; the loop emits
+`acquire`. Unless `sourcePolicy.webResearchEnabled === true` (default off) no entry starts a run; the loop emits
 `research.skipped_disabled` and returns without weakening any source gate. Pure runtime faults
 (`classifyResearchFaults`) emit `research.skipped_runtime_fault` instead of triggering full domain
 research.

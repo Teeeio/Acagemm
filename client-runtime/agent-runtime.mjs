@@ -1367,11 +1367,11 @@ export function createAgentRuntime(options = {}) {
       error.code = runPhase == null ? 'RESEARCH_PHASE_REQUIRED' : 'RESEARCH_PHASE_UNKNOWN';
       throw error;
     }
-    // 自动研究统一策略的兜底闸门：origin 默认 'automatic'，所以任何新增调用点都不可能
-    // 绕过 researchEnabled:false 从一个分支悄悄启动采集或综合。显式手动研究必须自带
+    // 自动研究统一策略的兜底闸门：origin 默认 'automatic'，而 webResearchEnabled 默认关闭，
+    // 所以任何新增调用点都不可能绕过它、从一个分支悄悄启动采集或综合。显式手动研究必须自带
     // origin:'manual'，由调用方在 HTTP 入口处按 manualEnabled 裁决。
     if (origin !== 'manual' && !resolveResearchConfig(mission).automaticEnabled) {
-      const error = new Error('Mission 已关闭自动在线研究（sourcePolicy.researchEnabled=false）。');
+      const error = new Error('Mission 未开启自动联网研究（需显式 sourcePolicy.webResearchEnabled=true；默认关闭）。');
       error.status = 409;
       error.code = 'RESEARCH_DISABLED_BY_POLICY';
       throw error;

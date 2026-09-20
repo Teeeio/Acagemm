@@ -71,7 +71,7 @@ try {
   assert.equal(doctor.checks.device.status, 'mocked');
 
   for (const profileId of profileIds) {
-    const published = await api.publishMission({ profileId, researchEnabled: false, requireAuthority: false, timeBudget: '' });
+    const published = await api.publishMission({ profileId, webResearchEnabled: false, requireAuthority: false, timeBudget: '' });
     const deadline = Date.now() + timeoutMs;
     let snapshot = await api.loadProductionState();
     while (!isHardwareMockWorkflowCompleted(snapshot) && !isHardwareMockTerminalFailure(snapshot) && Date.now() < deadline) {

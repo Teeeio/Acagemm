@@ -159,7 +159,8 @@ try {
     stage: 'diagnosis', patchApplied: false, candidateEvaluations: [], agent: { status: 'idle' },
     iterationStats: { roundBudget: { roundId: 'RB-7' } }, baseline: { status: 'complete' },
   };
-  const mission = { id: 'MIS_DELIVERY', projectId: 'P1', title: 'delivery mission', goal: 'g', hardware: ['C588'] };
+  // 自动联网研究默认关闭；本用例跑的是交付/预算机制，故显式开启。
+  const mission = { id: 'MIS_DELIVERY', projectId: 'P1', title: 'delivery mission', goal: 'g', hardware: ['C588'], sourcePolicy: { webResearchEnabled: true } };
   const started = await runtime.startRun({ state: successState, mission, goal: 'goal text', workspace, roundId: 'RB-7', advisory });
   assert.equal(started.handled, true);
   const prompt = spawnCalls.at(-1).stdin;

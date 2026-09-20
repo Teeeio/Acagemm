@@ -86,7 +86,7 @@ export const normalizeGenericMissionSpecification = (input = {}) => {
     testMatrix: { ...testMatrix, testSpec },
     sourcePolicy: structuredClone(input.sourcePolicy || { mode: 'existing-source-project', strictZeroSource: false }),
     baseline: input.baseline ? structuredClone(input.baseline) : null,
-    testScenario: input.testScenario ? structuredClone(input.testScenario) : { id: 'generic-operator-v1', researchEnabled: input.researchEnabled !== false },
+    testScenario: input.testScenario ? structuredClone(input.testScenario) : { id: 'generic-operator-v1' },
     objective: structuredClone(input.objective || { mode: 'maximize', metric: text(input.metric || 'latency p50', 'metric'), direction: 'minimize' }),
     missionBudgetMs: input.missionBudgetMs == null ? null : Number(input.missionBudgetMs),
     start: input.start === true,

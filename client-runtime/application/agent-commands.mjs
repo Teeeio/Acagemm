@@ -127,7 +127,7 @@ export const createAgentCommands = ({
       const direction = body?.direction?.trim() || selectResearchDirection(state);
       const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
       const clone = structuredClone(state);
-      // 显式手动研究：不受 sourcePolicy.researchEnabled 约束（那是自动研究的开关），
+      // 显式手动研究：不受 sourcePolicy.webResearchEnabled 约束（那是自动联网研究的开关），
       // 只受 researchPolicy.manualEnabled 约束；阶段默认 'acquire' 并在此显式声明。
       const manual = resolveManualResearch({ mission, phase: body?.runPhase || 'acquire' });
       if (!manual.allowed) throw Object.assign(new Error(manual.reason), { code: manual.reasonCode, status: 409 });

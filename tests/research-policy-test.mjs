@@ -44,47 +44,73 @@ const acquisitionResult = (repositories) => JSON.stringify({
   sourceAcquisition: { repositories, semanticFallback: false, fallbackReason: '' },
 });
 
-// ---- A. 统一策略：researchEnabled:false 覆盖所有自动入口 ----
-const disabledMission = { id: 'MIS_OFF', sourcePolicy: { researchEnabled: false } };
-for (const trigger of Object.values(RESEARCH_TRIGGERS).filter((value) => value !== RESEARCH_TRIGGERS.MANUAL)) {
-  const resolution = resolveAutomaticResearch({ mission: disabledMission, trigger });
-  assert.equal(resolution.allowed, false, `automatic research must be denied for ${trigger}`);
-  assert.equal(resolution.reasonCode, 'RESEARCH_DISABLED_BY_POLICY');
+// ---- A. 统一策略：自动联网研究默认关闭，且只认 webResearchEnabled ----
+// 缺省（无 sourcePolicy / 无该键 / 显式 null / 显式 false）一律关闭——这是本次改动翻转的核心行为。
+const automaticTriggers = Object.values(RESEARCH_TRIGGERS).filter((value) => value !== RESEARCH_TRIGGERS.MANUAL);
+const disabledMissions = [
+  { id: 'MIS_NO_POLICY' },
+  { id: 'MIS_EMPTY_POLICY', sourcePolicy: {} },
+  { id: 'MIS_EXPLICIT_NULL', sourcePolicy: { webResearchEnabled: null } },
+  { id: 'MIS_OFF', sourcePolicy: { webResearchEnabled: false } },
+];
+for (const mission of disabledMissions) {
+  assert.equal(resolveResearchConfig(mission).automaticEnabled, false, `${mission.id} must default to off`);
+  for (const trigger of automaticTriggers) {
+    const resolution = resolveAutomaticResearch({ mission, trigger });
+    assert.equal(resolution.allowed, false, `automatic research must be denied for ${trigger} on ${mission.id}`);
+    assert.equal(resolution.reasonCode, 'RESEARCH_DISABLED_BY_POLICY');
+  }
 }
-// 关闭自动研究不影响本地经验与已审查 Wiki 的配置读取：那一路径不受 researchEnabled 约束。
+const disabledMission = disabledMissions.at(-1);
+
+// 硬改名：旧字段名不再被读取。留任一条兼容通道，都会让「默认关闭」在新旧配置混用时失效。
+assert.equal(resolveResearchConfig({ id: 'MIS_LEGACY', sourcePolicy: { researchEnabled: true } }).automaticEnabled, false,
+  'the pre-rename field name must not enable research');
+assert.equal(resolveResearchConfig({ id: 'MIS_LEGACY_POLICY', researchPolicy: { enabled: true } }).automaticEnabled, false,
+  'the legacy researchPolicy.enabled fallback must not enable research either');
+
+// 只有显式 true 才开启；开启后各自动入口照常裁决（否则「默认关闭」会被误做成「永远关闭」）。
+const enabledMission = { id: 'MIS_ON', sourcePolicy: { webResearchEnabled: true } };
+assert.equal(resolveResearchConfig(enabledMission).automaticEnabled, true);
+for (const trigger of automaticTriggers) {
+  assert.equal(resolveAutomaticResearch({ mission: enabledMission, trigger }).allowed, true, `enabling must allow ${trigger}`);
+}
+
+// 关闭自动研究不影响本地经验与已审查 Wiki 的配置读取：那一路径不受 webResearchEnabled 约束。
 assert.equal(resolveResearchConfig(disabledMission).requiresVerifiableSource, false,
   'disabling research must not weaken the source policy itself');
-assert.equal(resolveResearchConfig({ id: 'M', sourcePolicy: { mode: 'agent-research-only', researchEnabled: false } }).requiresVerifiableSource, true,
+assert.equal(resolveResearchConfig({ id: 'M', sourcePolicy: { mode: 'agent-research-only', webResearchEnabled: false } }).requiresVerifiableSource, true,
   'the source gate stays intact when research is disabled');
 
-// 手动研究不受 researchEnabled 约束，只受显式 manualEnabled 约束。
+// 手动研究不受 webResearchEnabled 约束，只受显式 manualEnabled 约束。
 assert.equal(resolveManualResearch({ mission: disabledMission, phase: 'acquire' }).allowed, true);
 assert.equal(resolveManualResearch({ mission: { id: 'M', researchPolicy: { manualEnabled: false } }, phase: 'acquire' }).allowed, false);
 assert.equal(resolveManualResearch({ mission: { id: 'M' }, phase: 'nope' }).reasonCode, 'RESEARCH_PHASE_UNKNOWN');
 
 // 阶段与预算：建议型研究用短预算（60–120s 量级默认值），必要来源采集用独立策略。
-const advisory = resolveAutomaticResearch({ mission: { id: 'M' }, trigger: RESEARCH_TRIGGERS.STAGNATION });
+const advisory = resolveAutomaticResearch({ mission: enabledMission, trigger: RESEARCH_TRIGGERS.STAGNATION });
 assert.equal(advisory.phase, 'advisory');
 assert.equal(advisory.budgetMs, RESEARCH_ADVISORY_BUDGET_MS);
 assert.equal(advisory.budgetMs, 90_000);
-assert.equal(resolveAutomaticResearch({ mission: { id: 'M' }, trigger: RESEARCH_TRIGGERS.TUNNEL_VISION }).phase, 'advisory');
-assert.equal(resolveAutomaticResearch({ mission: { id: 'M' }, trigger: RESEARCH_TRIGGERS.EXPERIENCE }).phase, 'experience');
-const acquisition = resolveAutomaticResearch({ mission: { id: 'M' }, trigger: RESEARCH_TRIGGERS.BASELINE_SOURCE });
+assert.equal(resolveAutomaticResearch({ mission: enabledMission, trigger: RESEARCH_TRIGGERS.TUNNEL_VISION }).phase, 'advisory');
+assert.equal(resolveAutomaticResearch({ mission: enabledMission, trigger: RESEARCH_TRIGGERS.EXPERIENCE }).phase, 'experience');
+const acquisition = resolveAutomaticResearch({ mission: enabledMission, trigger: RESEARCH_TRIGGERS.BASELINE_SOURCE });
 assert.equal(acquisition.phase, 'acquire');
 assert.equal(acquisition.budgetMs, RESEARCH_ACQUISITION_BUDGET_MS);
 // 预算可配置，不是写死的通用上限。
-assert.equal(resolveAutomaticResearch({ mission: { id: 'M', sourcePolicy: { researchBudgetMs: 60_000 } }, trigger: RESEARCH_TRIGGERS.STAGNATION }).budgetMs, 60_000);
-assert.equal(resolveAutomaticResearch({ mission: { id: 'M', sourcePolicy: { researchBudgetMs: 10 } }, trigger: RESEARCH_TRIGGERS.STAGNATION }).budgetMs, 30_000,
+assert.equal(resolveAutomaticResearch({ mission: { id: 'M', sourcePolicy: { webResearchEnabled: true, researchBudgetMs: 60_000 } }, trigger: RESEARCH_TRIGGERS.STAGNATION }).budgetMs, 60_000);
+assert.equal(resolveAutomaticResearch({ mission: { id: 'M', sourcePolicy: { webResearchEnabled: true, researchBudgetMs: 10 } }, trigger: RESEARCH_TRIGGERS.STAGNATION }).budgetMs, 30_000,
   'out-of-range budgets are clamped to the documented bounds');
 
 // ---- A. 固定 profile 与严格来源入口：关闭研究时不偷偷启动 ----
 let fixedStarts = 0;
+const fixedEvents = [];
 const fixedService = createAutopilotFixedProfileService({
   isResearchAgentActive: () => false,
   startResearch: async () => { fixedStarts += 1; return {}; },
   startMainRound: async ({ state }) => state,
   researchDirForMission: () => '/tmp/research',
-  appendRuntimeEvent: () => {},
+  appendRuntimeEvent: (state, type, payload) => fixedEvents.push({ type, payload }),
 });
 const fixedDisabledState = {
   activeMissionId: 'MIS_OFF', baseline: { status: 'complete' }, runtimeEvents: [],
@@ -92,8 +118,20 @@ const fixedDisabledState = {
   iterationStats: {},
 };
 const fixedOutcome = await fixedService.advance({ state: fixedDisabledState, mission: disabledMission });
-assert.equal(fixedStarts, 0, 'fixed profile must not start research when researchEnabled is false');
+assert.equal(fixedStarts, 0, 'fixed profile must not start research when webResearchEnabled is false');
 assert.equal(fixedOutcome.action, 'none');
+
+// 缺省（未设该键）同样必须走「跳过」分支。这条分支若只匹配显式 false，缺省的 undefined 就会两头
+// 落空：既不启动研究，也不留任何事件——而缺省恰恰是绝大多数 Mission 的取值。
+fixedEvents.length = 0;
+const fixedDefaultOutcome = await fixedService.advance({
+  state: { ...fixedDisabledState, activeMissionId: 'MIS_DEFAULT' },
+  mission: { id: 'MIS_DEFAULT' },
+});
+assert.equal(fixedStarts, 0, 'an unset switch must not start experience research');
+assert.equal(fixedDefaultOutcome.action, 'none');
+assert.equal(fixedEvents.filter((event) => event.type === 'research.skipped_disabled').length, 1,
+  'the default-off case must emit research.skipped_disabled instead of falling through silently');
 
 // 固定 profile 的研究方向不再写死 C550：硬件从当前任务契约派生。
 let fixedDirection = null;
@@ -106,7 +144,7 @@ const enabledFixedService = createAutopilotFixedProfileService({
 });
 await enabledFixedService.advance({
   state: { ...fixedDisabledState, missions: [{ id: 'MIS_ON', hardware: ['MetaX C588'], operatorProfile: { language: 'triton' } }] },
-  mission: { id: 'MIS_ON', title: 'paged attention', hardware: ['MetaX C588'], operatorProfile: { language: 'triton' }, sourcePolicy: {} },
+  mission: { id: 'MIS_ON', title: 'paged attention', hardware: ['MetaX C588'], operatorProfile: { language: 'triton' }, sourcePolicy: { webResearchEnabled: true } },
 });
 assert.equal(fixedStarts, 1);
 assert.match(fixedDirection, /MetaX C588/);

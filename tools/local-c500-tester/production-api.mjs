@@ -500,7 +500,8 @@ export const publishMission = async (draft) => {
       mode: 'embedded-operator-profile',
       strictZeroSource: false,
       requireAuthority: draft.requireAuthority === true,
-      researchEnabled: draft.researchEnabled !== false,
+      // 自动联网研究默认关闭：只有表单显式勾选才下发 true。
+      webResearchEnabled: draft.webResearchEnabled === true,
     },
     baseline: {
       kind: 'pytorch_reference',
@@ -509,8 +510,8 @@ export const publishMission = async (draft) => {
       materializer: { status: 'completed', phase: '内置 Profile baseline 已就绪', progress: 100, result: { schemaVersion: 'operator-studio.fixed-baseline/v1', summary: profile.summary, runPy: baselineRunPy, runPySource: 'embedded-operator-profile', source: baselineSource, report: { mode: 'fixed-operator-profile', profileId: profile.id } } },
     },
     testScenario: profile.iterationPolicy
-      ? { id: profile.id, iterationPolicy: structuredClone(profile.iterationPolicy), researchEnabled: draft.researchEnabled !== false }
-      : { id: 'fixed-four-operator-v1', fixedRounds: 3, researchEnabled: draft.researchEnabled !== false },
+      ? { id: profile.id, iterationPolicy: structuredClone(profile.iterationPolicy) }
+      : { id: 'fixed-four-operator-v1', fixedRounds: 3 },
     objective: { mode: 'maximize', metric: 'latency p50', direction: 'minimize' },
     testMatrix,
     missionBudgetMs: timeBudget > 0 ? timeBudget : null,
