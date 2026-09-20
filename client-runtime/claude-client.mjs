@@ -439,9 +439,18 @@ export const createClaudeClient = (options = {}) => {
     await mkdir(runsDir, { recursive: true });
     await writeFile(emptyMcpConfigPath, '{"mcpServers":{}}\n', 'utf8');
     // 对 claude 而言 --add-dir 是「可读」授权通道（写是否放行由 permission mode 决定），
-    // 所以只读引用根也必须进 --add-dir 才读得到；它的只读性由下面的工具面摘除保证，
-    // 而不是靠权限规则——路径级 deny 在 Windows 绝对路径上不匹配（实测四种写法均未拦住），
-    // 工具级 deny 才拦得住。
+    // 所以只读引用根也必须进 --add-dir 才读得到；它的只读性由下面的工具面摘除保证。
+    //
+    // 更正（2026-09-19）：此前这里写着「路径级 deny 在 Windows 绝对路径上不匹配」，那是我测错了。
+    // 当时的四种写法都构造无效——写规则写成 Write(...)（文件权限检查从不匹配这个名字，写规则要用
+    // Edit(...)，这正是 2.1.275 修掉的坑），路径又用了 `//C:/abs/**` 这种带盘符冒号的大写形式，
+    // 而 Windows 路径先归一化成 POSIX 小写（C:\x → /c/x），绝对锚点是 `//c/...`。用正确写法实测是
+    // 拦得住的：Read(//f/…/**) 返回 "File is in a directory that is denied by your permission
+    // settings"，permissions.blockReadsOutsideWorkingDirectories 返回 "is outside ..."。见
+    // .operator-studio-local/probe/boundary-read-probe/。
+    //
+    // 本阶段仍用工具面摘除而不是路径规则：摘除让写能力根本不存在，比逐次调用被拒更强，也与 codex
+    // 侧「沙箱里没有可写根」对齐。这是取舍，不是路径规则不可用。
     const writableDirectories = [...new Set((additionalDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const readOnlyResolved = [...new Set((readOnlyDirectories || []).filter(Boolean).map((directory) => path.resolve(directory)))];
     const overlap = writableDirectories.filter((directory) => readOnlyResolved.includes(directory));
