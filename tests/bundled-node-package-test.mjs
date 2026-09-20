@@ -22,7 +22,9 @@ assert.equal(archive.subarray(0, 6).toString('hex'), 'fd377a585a00', 'archive mu
 assert.equal(createHash('sha256').update(archive).digest('hex'), expectedSha256);
 assert.ok(dependencyArchive.length > 10_000_000, 'bundled Linux dependencies are unexpectedly small');
 assert.equal(createHash('sha256').update(dependencyArchive).digest('hex'), '04ebed39d8752ffb614e0659360037f0455a1704bfe208d4617d99709a380e3d');
-const archiveListing = spawnSync('tar', ['-tzf', dependencyArchivePath], { encoding: 'utf8', windowsHide: true });
+// An absolute Windows path carries a drive-letter colon, which GNU tar reads as `host:path`
+// ("Cannot connect to F: resolve failed"). Use the file name with an explicit cwd instead.
+const archiveListing = spawnSync('tar', ['-tzf', path.basename(dependencyArchivePath)], { cwd: path.dirname(dependencyArchivePath), encoding: 'utf8', windowsHide: true });
 assert.equal(archiveListing.status, 0, archiveListing.stderr || 'unable to inspect bundled dependencies');
 for (const required of ['node_modules/ink/package.json', 'node_modules/react/package.json', 'node_modules/yoga-layout/package.json', 'node_modules/@esbuild/linux-x64/bin/esbuild']) {
   assert.match(archiveListing.stdout, new RegExp(`^${required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\r?$`, 'm'));

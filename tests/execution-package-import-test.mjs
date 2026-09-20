@@ -41,7 +41,9 @@ try {
   assert.deepEqual(Object.keys(calls[0].dependencyFiles), ['deps/helper.py']);
   assert.deepEqual(Object.keys(calls[0].acceptance.files), ['oracle.py']);
   const archive = path.join(root, 'source.tar');
-  await exec('tar', ['-cf', archive, '-C', source, '.']);
+  // Relative names with an explicit cwd: an absolute Windows path carries a drive-letter
+  // colon, which GNU tar reads as `host:path` ("Cannot connect to C: resolve failed").
+  await exec('tar', ['-cf', 'source.tar', '-C', 'source', '.'], { cwd: root });
   const fromArchive = await importExecutionPackage({ store, sourcePath: archive, language: 'python', adapter: { id: 'a', version: '1' }, environmentId: 'env', binding: { missionId: 'm', workspaceId: 'w', candidateId: 'c', candidateDigest: 'sha256:' + 'b'.repeat(64) }, candidateEntrypoint: 'run.py', acceptanceEntrypoint: 'oracle.py', testSpec: { cases: ['minimal'] }, semanticDigest: 'sha256:' + 'c'.repeat(64) });
   assert.equal(fromArchive.source.type, 'archive');
   assert.equal(fromArchive.source.fileCount, 3);

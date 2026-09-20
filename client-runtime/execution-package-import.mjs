@@ -63,11 +63,17 @@ const normalizeArchiveName = (name) => {
 const archiveExtension = (archivePath) => /[.]zip$/i.test(String(archivePath)) ? 'zip' : 'tar';
 
 const collectTarArchive = async (archive, tarCommand) => {
+  // tar 的两个实现把 `path` 里的冒号当成 `host:path`（远程归档）：GNU tar 会直接报
+  // "Cannot connect to C: resolve failed"，bsdtar 不会。Windows 盘符路径因此必然踩中，
+  // 而 `--force-local` 只有 GNU tar 认、bsdtar 会拒绝，所以不能靠加参数解决。
+  // 统一改成「在归档所在目录里用文件名调用」：参数里不再出现冒号，两个实现、两种平台都对。
   let listing;
   let verbose;
+  const location = { cwd: path.dirname(archive) };
+  const archiveName = path.basename(archive);
   try {
-    ({ stdout: listing } = await execFileAsync(tarCommand, ['-tf', archive], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
-    ({ stdout: verbose } = await execFileAsync(tarCommand, ['-tvf', archive], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
+    ({ stdout: listing } = await execFileAsync(tarCommand, ['-tf', archiveName], { ...location, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
+    ({ stdout: verbose } = await execFileAsync(tarCommand, ['-tvf', archiveName], { ...location, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
   } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'Archive listing failed; the archive is not readable by tar.', { cause: error.code || 'TAR_FAILED' }); }
   for (const line of String(verbose).split(/\r?\n/)) {
     if (line && !['-', 'd'].includes(line[0])) throw fail('PACKAGE_SOURCE_UNSAFE', 'Archives may contain regular files and directories only.');
@@ -88,7 +94,7 @@ const collectTarArchive = async (archive, tarCommand) => {
   const files = {};
   try {
     for (const name of names) {
-      const { stdout } = await execFileAsync(tarCommand, ['-xOf', archive, archiveMembers.get(name)], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
+      const { stdout } = await execFileAsync(tarCommand, ['-xOf', archiveName, archiveMembers.get(name)], { ...location, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
       files[name] = { encoding: 'base64', content: Buffer.from(stdout).toString('base64') };
     }
   } catch (error) { throw fail('PACKAGE_ARCHIVE_INVALID', 'Archive file extraction failed.', { cause: error.code || 'TAR_FAILED' }); }

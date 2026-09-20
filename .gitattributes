@@ -2,3 +2,8 @@
 vendor/node/*.tar.xz binary
 vendor/node/*.tar.gz binary
 vendor/node/SHASUMS256.txt text eol=lf
+# 冻结的验收文档按**字节**被锁定（`tests/shared-gpu-failure-result-test.py` 对文件算 sha256 并
+# 与常量比对）。这类文件在任何 checkout 上都必须还原成提交时的那串字节，否则同一份内容在
+# Windows（core.autocrlf=true 会写成 CRLF）算出另一个摘要，冻结校验会因换行符而失败——
+# 那不是"文档被改过"，是校验读到了别的字节。钉死 LF 才能让这条校验在两种平台上都成立。
+docs/development/*_ACCEPTANCE.md text eol=lf
