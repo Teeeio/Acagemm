@@ -20,6 +20,7 @@ import {
 } from '../client-runtime/iteration-loop.mjs';
 import { createMission, createSeedState, resumeMissionState } from '../client-runtime/state-store.mjs';
 import { ensureRoundBudgetStarted } from '../client-runtime/round-budget-contract.mjs';
+import { RESEARCH_ADVISORY_BUDGET_MS, RESEARCH_TRIGGERS } from '../client-runtime/research-policy.mjs';
 
 const resumableState = createSeedState();
 const resumableMission = resumableState.missions.find((item) => item.id === resumableState.activeMissionId);
@@ -330,15 +331,22 @@ let cancelResearchCalls = 0;
 let startBaselineCalls = 0;
 let lastResearchSynchronous = null;
 let lastResearchRunPhase = null;
+let lastResearchBudgetMs = null;
+let lastResearchTrigger = null;
 let sourceCount = 0;
-const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; startBaselineCalls = 0; lastResearchSynchronous = null; lastResearchRunPhase = null; sourceCount = 0; };
+// 来源获取端口按「本次 researchRun 实际获取并验证的来源」返回，不再用注册表历史目录数。
+let acquireSourcesResult = [];
+let acquireFailures = [];
+let acquireReasonCode = null;
+const resetCounters = () => { startResearchCalls = 0; startMainRoundCalls = 0; cancelResearchCalls = 0; startBaselineCalls = 0; lastResearchSynchronous = null; lastResearchRunPhase = null; lastResearchBudgetMs = null; lastResearchTrigger = null; sourceCount = 0; };
 const deps = {
-  startResearch: async ({ state, mission, direction, workspace, synchronous, runPhase }) => { startResearchCalls += 1; lastResearchSynchronous = synchronous; lastResearchRunPhase = runPhase; state.researchAgent = { ...state.researchAgent, status: 'running', runId: runPhase === 'synthesize' ? 'codex_research_syn' : 'codex_research_1', runtimeKind: 'codex-cli', direction, researchDir: workspace, startedAt: new Date().toISOString(), budgetMs: runPhase === 'synthesize' ? 4 * 60 * 1000 : 30 * 60 * 1000, notes: [], synchronous: Boolean(synchronous), runPhase, acquireRunId: runPhase === 'synthesize' ? (state.researchAgent?.acquireRunId || 'codex_research_1') : 'codex_research_1', synthesizeRunId: runPhase === 'synthesize' ? 'codex_research_syn' : null, sourceRoot: state.researchAgent?.sourceRoot || null }; return state; },
+  startResearch: async ({ state, mission, direction, workspace, synchronous, runPhase, budgetMs = null, trigger = null }) => { startResearchCalls += 1; lastResearchSynchronous = synchronous; lastResearchRunPhase = runPhase; lastResearchBudgetMs = budgetMs; lastResearchTrigger = trigger; state.researchAgent = { ...state.researchAgent, status: 'running', runId: runPhase === 'synthesize' ? 'codex_research_syn' : 'codex_research_1', runtimeKind: 'codex-cli', direction, researchDir: workspace, startedAt: new Date().toISOString(), budgetMs: runPhase === 'synthesize' ? 4 * 60 * 1000 : 30 * 60 * 1000, notes: [], synchronous: Boolean(synchronous), runPhase, acquireRunId: runPhase === 'synthesize' ? (state.researchAgent?.acquireRunId || 'codex_research_1') : 'codex_research_1', synthesizeRunId: runPhase === 'synthesize' ? 'codex_research_syn' : null, sourceRoot: state.researchAgent?.sourceRoot || null }; return state; },
   cancelResearch: async ({ state, runId }) => { cancelResearchCalls += 1; state.researchAgent = { ...state.researchAgent, status: 'cancel_requested' }; return { state }; },
   startMainRound: async ({ state, goal }) => { startMainRoundCalls += 1; state.agent = { status: 'running', runId: 'codex_MAIN' }; state.iterationStats = { ...state.iterationStats, round: (state.iterationStats.round || 0) + 1 }; return state; },
   startBaseline: async ({ state }) => { startBaselineCalls += 1; state.baseline = { ...(state.baseline || {}), required: true, status: 'running' }; state.benchmark = { ...(state.benchmark || {}), status: 'running', purpose: 'baseline' }; return state; },
   researchDirForMission: () => '/tmp/research',
-  countSources: async () => ({ count: sourceCount }),
+  countRunSources: async () => ({ count: sourceCount }),
+  acquireSources: async () => ({ sources: acquireSourcesResult, failures: acquireFailures, reasonCode: acquireReasonCode }),
 };
 
 // paused / completed 短路
@@ -389,23 +397,41 @@ const gatedState = makeState({
   failureRecords: [{ id: 'fail.1', title: 'async dispatch', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: '数值偏差' }],
 });
 let gated = await advanceIteration(gatedState, deps);
-assert.equal(gated.action, 'research_injected');
+// 通过价值筛选 != 已注入：这里只到「材料可用」，researchAgent 绝不提前声称 injected。
+assert.equal(gated.action, 'research_available');
 assert.equal(gated.state.iterationStats.lastResearchRunId, 'codex_research_1');
 assert.ok(gated.state.iterationStats.pendingInjection);
-assert.equal(gated.state.researchAgent.injected, true);
+assert.equal(gated.state.iterationStats.pendingInjection.stage, 'available');
+assert.notEqual(gated.state.researchAgent.injected, true, 'researchAgent 不得在真正提交前声称 injected');
+assert.equal(gated.state.researchAgent.injection.status, 'available');
 // 幂等：同态再次调用不再重复价值闸（lastResearchRunId 已记）
 gated = await advanceIteration(gated.state, deps);
 assert.equal(gated.state.iterationStats.pendingInjection === null || gated.action !== 'research_injected', true);
 
-// pendingInjection → 自动续跑（startMainRound 一次，注入简报）
+// pendingInjection → 自动续跑（startMainRound 一次，交付材料）
 resetCounters();
 const resumeState = makeState({
-  iterationStats: { lastResearchRunId: 'codex_research_1', researchRounds: 1, pendingInjection: { noteId: 'n1', briefing: '研究员简报', value: 'high' }, consecutiveNoAdopt: 0 },
+  iterationStats: { lastResearchRunId: 'codex_research_1', researchRounds: 1, pendingInjection: { noteId: 'n1', briefing: '研究员简报', value: 'high', stage: 'available' }, consecutiveNoAdopt: 0 },
 });
 let resumed = await advanceIteration(resumeState, deps);
+// 历史材料（无 advisory 封装）以「本轮真实启动了执行端 run」为提交证据：提交后才清除材料。
 assert.equal(resumed.action, 'resumed_agent');
 assert.equal(startMainRoundCalls, 1);
 assert.equal(resumed.state.iterationStats.pendingInjection, null);
+assert.equal(resumed.state.iterationStats.researchInjection.status, 'submitted');
+assert.equal(resumed.state.iterationStats.researchInjection.evidence, 'legacy-round-started');
+
+// 启动未成功（stub 不产生 run）时不得声称已提交，材料必须保留并可恢复。
+resetCounters();
+const blockedState = makeState({
+  iterationStats: { lastResearchRunId: 'codex_research_2', researchRounds: 1, pendingInjection: { noteId: 'n2', briefing: '研究员简报', value: 'high', stage: 'available' }, consecutiveNoAdopt: 0 },
+});
+const blockedDeps = { ...deps, startMainRound: async ({ state: inner }) => inner };
+const blocked = await advanceIteration(blockedState, blockedDeps);
+assert.equal(blocked.action, 'research_delivery_deferred');
+assert.ok(blocked.state.iterationStats.pendingInjection, '未提交的材料不能被提前丢弃');
+assert.equal(blocked.state.iterationStats.pendingInjection.stage, 'uncertain');
+assert.equal(blocked.state.iterationStats.pendingInjection.delivery.reason, 'preflight_blocked');
 
 // 轮次结算：runHistory[0] 新 → round_counted，计数 increment
 resetCounters();
@@ -461,6 +487,11 @@ assert.equal(escalated.action, 'research_escalated');
 assert.equal(startResearchCalls, 1);
 assert.equal(lastResearchSynchronous, true, 'stagnation escalation should be synchronous (serial wait)');
 assert.match(escalated.state.researchAgent.direction, /C500/);
+// 关键回归：已有 baseline 的优化默认走建议型研究，绝不回落到 acquire 重新找仓库。
+assert.equal(lastResearchRunPhase, 'advisory', 'stagnation escalation must start the advisory phase, never the default acquire phase');
+assert.equal(lastResearchBudgetMs, RESEARCH_ADVISORY_BUDGET_MS, 'the loop passes the policy budget through explicitly');
+assert.equal(lastResearchTrigger, RESEARCH_TRIGGERS.STAGNATION);
+assert.ok(escalated.state.runtimeEvents.some((event) => event.type === 'research.requested' && event.payload?.phase === 'advisory'));
 
 // 同步研究采集阶段无资料/无笔记：计为一次研究尝试，清空停滞计数，下一 tick 应继续主候选循环
 resetCounters();
@@ -667,6 +698,30 @@ const visionEscalated = await advanceIteration(visionState, deps);
 assert.equal(visionEscalated.action, 'research_escalated');
 assert.equal(lastResearchSynchronous, false, 'tunnel vision escalation should be async (parallel review, main thread continues)');
 assert.match(visionEscalated.state.researchAgent.direction, /最容易获取收益/);
+assert.equal(lastResearchRunPhase, 'advisory', 'tunnel vision escalation also uses the advisory phase');
+assert.equal(lastResearchTrigger, RESEARCH_TRIGGERS.TUNNEL_VISION);
+
+// 关闭自动研究：同一停滞状态不得从升级分支偷偷启动采集，也不放宽任何门禁
+resetCounters();
+const researchOffState = makeState({
+  missions: [{ id: 'MIS', goal: '优化 C500 延迟', hardware: ['C500'], metric: 'latency_p50', sourcePolicy: { researchEnabled: false } }],
+  iterationStats: { consecutiveNoAdopt: 3, lastCountedRunId: 'run_1', lastResearchRunId: null, researchRounds: 0, pendingInjection: null },
+});
+const researchOff = await advanceIteration(researchOffState, deps);
+assert.equal(startResearchCalls, 0, 'researchEnabled:false must cover the stagnation escalation entry too');
+assert.notEqual(researchOff.action, 'research_escalated');
+assert.ok(researchOff.state.runtimeEvents.some((event) => event.type === 'research.skipped_disabled' && event.payload?.reasonCode === 'RESEARCH_DISABLED_BY_POLICY'));
+
+// 纯运行故障：先修上游，不触发完整领域研究
+resetCounters();
+const runtimeFaultState = makeState({
+  failureRecords: [{ id: 'f.net', title: 'runner 网络失败', failure: { code: 'ECONNREFUSED' }, decisionReason: 'network unreachable' }],
+  iterationStats: { consecutiveNoAdopt: 3, lastCountedRunId: 'run_1', lastResearchRunId: null, researchRounds: 0, pendingInjection: null },
+});
+const runtimeFault = await advanceIteration(runtimeFaultState, deps);
+assert.equal(startResearchCalls, 0, 'a pure runtime fault must not spend a full research budget');
+assert.equal(runtimeFault.action, 'none');
+assert.ok(runtimeFault.state.runtimeEvents.some((event) => event.type === 'research.skipped_runtime_fault' && event.payload?.faultClass === 'runtime_fault'));
 
 // ---- 两阶段研究员：采集终态 → 注册资料 + 启动综合阶段 ----
 // 采集完成且 sourceRoot 有资料 → 启动综合阶段（runPhase=synthesize）
@@ -674,7 +729,7 @@ resetCounters();
 const acquireDoneState = makeState({
   researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_1', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_1', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research' },
 });
-const depsWithRegister = { ...deps, registerSources: async () => ({ count: 7, references: [] }) };
+const depsWithRegister = { ...deps, acquireSources: async () => ({ sources: Array.from({ length: 7 }, (_value, index) => ({ name: 'source-' + index })), failures: [] }) };
 let syn = await advanceIteration(acquireDoneState, depsWithRegister);
 assert.equal(syn.action, 'research_synthesizing');
 assert.equal(lastResearchRunPhase, 'synthesize');
@@ -685,9 +740,35 @@ resetCounters();
 const acquireEmptyState = makeState({
   researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_1', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_1', synthesizeRunId: null, acquireHandled: false },
 });
-let empty = await advanceIteration(acquireEmptyState, { ...deps, registerSources: async () => ({ count: 0 }) });
+let empty = await advanceIteration(acquireEmptyState, { ...deps, acquireSources: async () => ({ sources: [], failures: [] }) });
 assert.equal(empty.action, 'research_no_material');
 assert.equal(startResearchCalls, 0);
+
+// 端口缺失不得被静默当成「没有材料」：显式标注理由，并退回兼容口径而不是假装 0 收获
+resetCounters();
+const portMissingState = makeState({
+  researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_port', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_port', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research' },
+});
+const noAcquirePortDeps = { ...deps };
+delete noAcquirePortDeps.acquireSources;
+noAcquirePortDeps.registerSources = async () => ({ count: 2, references: [] });
+const portMissing = await advanceIteration(portMissingState, noAcquirePortDeps);
+assert.ok(portMissing.state.runtimeEvents.some((event) => event.type === 'research.acquisition_port_missing' && event.payload?.fallback === 'legacy-registry-count'),
+  'a missing acquisition port must be reported, never silently treated as "no material"');
+assert.equal(portMissing.state.researchAgent.acquisitionStatus, 'legacy');
+assert.equal(portMissing.state.researchAgent.acquisition.reasonCode, 'RESEARCH_ACQUISITION_PORT_MISSING');
+// 兼容口径下拿到计数 → 仍然进入综合阶段，而不是被判为无材料
+assert.equal(portMissing.action, 'research_synthesizing');
+
+// 完全没有采集端口也没有兼容端口：显式标注 fallback=none，仍按无材料结束
+resetCounters();
+const noPortAtAllDeps = { ...deps };
+delete noPortAtAllDeps.acquireSources;
+const noPortAtAll = await advanceIteration(makeState({
+  researchAgent: { status: 'completed', runPhase: 'acquire', runId: 'codex_research_noport', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_noport', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research' },
+}), noPortAtAllDeps);
+assert.ok(noPortAtAll.state.runtimeEvents.some((event) => event.type === 'research.acquisition_port_missing' && event.payload?.fallback === 'none'));
+assert.equal(noPortAtAll.action, 'research_no_material');
 // 灵活来源策略：本地和远程均无资料，仍进入综合阶段生成 Mission 语义 baseline
 resetCounters();
 const flexibleMission = { id: 'MIS', goal: '优化 C500 MLA paged attention', hardware: ['C500'], metric: 'latency_p50', sourcePolicy: { strictZeroSource: true, allowSemanticFallback: true } };
@@ -695,7 +776,7 @@ const flexibleEmptyState = makeState({
   missions: [flexibleMission],
   researchAgent: { status: 'failed', runPhase: 'acquire', runId: 'codex_research_fallback', sourceRoot: '/tmp/sources', acquireRunId: 'codex_research_fallback', synthesizeRunId: null, acquireHandled: false, researchDir: '/tmp/research', error: { code: 'NETWORK_FAILED', message: 'remote unavailable' } },
 });
-const semanticSynthesis = await advanceIteration(flexibleEmptyState, { ...deps, registerSources: async () => ({ count: 0 }) });
+const semanticSynthesis = await advanceIteration(flexibleEmptyState, { ...deps, acquireSources: async () => ({ sources: [], failures: [] }) });
 assert.equal(semanticSynthesis.action, 'research_synthesizing');
 assert.equal(lastResearchRunPhase, 'synthesize');
 assert.equal(semanticSynthesis.state.researchAgent.synthesizeRunId, 'codex_research_syn');

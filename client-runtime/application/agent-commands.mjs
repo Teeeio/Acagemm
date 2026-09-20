@@ -1,5 +1,6 @@
 import { ensureRoundBudgetStarted } from '../round-budget-contract.mjs';
 import { remainingMissionBudgetMs } from '../iteration-loop.mjs';
+import { RESEARCH_TRIGGERS, resolveManualResearch } from '../research-policy.mjs';
 
 export const createAgentCommands = ({
   addAuditEvent,
@@ -94,7 +95,7 @@ export const createAgentCommands = ({
         clone.workflowRecovery = { ...(clone.workflowRecovery || {}), checkpoints: [...(clone.workflowRecovery?.checkpoints || []), checkpoint].slice(-5) };
       }
       ensureBudget();
-      const runtimeRun = await runEffect(() => agentRuntime.startRun({ state: clone, mission, goal, resumeThreadId: body?.resumeThreadId || null, workspace, experienceContext }));
+      const runtimeRun = await runEffect(() => agentRuntime.startRun({ state: clone, mission, goal, resumeThreadId: body?.resumeThreadId || null, workspace, experienceContext, advisory: body?.advisory || null }));
       if (!runtimeRun.handled) startAgentRun(clone, goal, { reset: false });
       const eventType = referenceFixture
         ? 'mission.run_started'
@@ -126,9 +127,16 @@ export const createAgentCommands = ({
       const direction = body?.direction?.trim() || selectResearchDirection(state);
       const researchDir = researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot);
       const clone = structuredClone(state);
+      // 显式手动研究：不受 sourcePolicy.researchEnabled 约束（那是自动研究的开关），
+      // 只受 researchPolicy.manualEnabled 约束；阶段默认 'acquire' 并在此显式声明。
+      const manual = resolveManualResearch({ mission, phase: body?.runPhase || 'acquire' });
+      if (!manual.allowed) throw Object.assign(new Error(manual.reason), { code: manual.reasonCode, status: 409 });
       await runEffect(() => mkdir(researchDir, { recursive: true }));
       // 操作员主动触发 → 默认异步（并行，主循环不阻塞）；可在 body 显式传 synchronous:true 改为串行等待
-      const started = await runEffect(() => agentRuntime.startResearch({ state: clone, mission, direction, workspace: researchDir, synchronous: body?.synchronous === true }));
+      const started = await runEffect(() => agentRuntime.startResearch({
+        state: clone, mission, direction, workspace: researchDir, synchronous: body?.synchronous === true,
+        runPhase: manual.phase, budgetMs: manual.budgetMs, trigger: RESEARCH_TRIGGERS.MANUAL, origin: 'manual',
+      }));
       return { payload: { direction, researchAgent: clone.researchAgent }, result: { runId: clone.researchAgent.runId } };
     },
     apply: (state, payload) => {

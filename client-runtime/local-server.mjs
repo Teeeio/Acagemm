@@ -29,7 +29,7 @@ import { runAutomaticAdoption, markCandidateAccepted, runKnowledgeMaintenance } 
 import { createDecisionReviewState } from './evidence-state.mjs';
 import { workspaceDir, missionSourceDirFor, ensureMissionWorkspace, ensureProjectLayout, workspaceDirForMission, artifactDirForMission, baselineDirForMission, rebuildMissionWorkspaceFromRepository, resetMissionWorkspace, restoreWorkspaceCheckpoint, workspaceFiles, researchDirForMission } from './state-workspace.mjs';
 import { isMaximizeMission } from './mission-objective.mjs';
-import { agentRuntime, isResearchAgentActive } from './agent-runtime.mjs';
+import { acquireSelectedSources, agentRuntime, isResearchAgentActive } from './agent-runtime.mjs';
 import { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
 import { appendRuntimeEvent } from './runtime-events.mjs';
 import { advanceIteration, selectResearchDirection, settleGenerationAttemptBeforeStart } from './iteration-loop.mjs';
@@ -86,6 +86,8 @@ import { createMissionControlService } from './application/mission-control-servi
 import { createKnowledgeRoutes } from './server/knowledge-routes.mjs';
 import { createKnowledgeService } from './application/knowledge-service.mjs';
 import { createSourceService } from './application/source-service.mjs';
+import { createSourceAcquisitionService } from './application/source-acquisition-service.mjs';
+import { loadSourceMirrorPolicy } from './source-mirror-policy.mjs';
 import { createIterationResearchService } from './application/iteration-research-service.mjs';
 import { createRoundRecoveryService } from './application/round-recovery-service.mjs';
 import { createAgentRoundService } from './application/agent-round-service.mjs';
@@ -460,6 +462,12 @@ const knowledgeRoutes = createKnowledgeRoutes({ json, readJson, knowledge: knowl
 const experienceApiService = createExperienceApiService({ loadState: () => loadRuntimeState(), experiences: experienceService });
 const experienceRoutes = createExperienceRoutes({ json, readJson, experiences: experienceApiService });
 const sourceService = createSourceService({ readdir, stat, path, workspaceManager });
+// 来源获取端口：clone/fetch 只在迭代推进路径执行，不在状态投影里执行。
+// 具体获取实现由组合根注入，application 层不直接依赖 agent-runtime。
+const sourceAcquisitionService = createSourceAcquisitionService({
+  agentRuntime, readdir, acquireSelectedSources,
+  sourceMirrorPolicy: () => loadSourceMirrorPolicy({ configPath: process.env.OPERATOR_SOURCE_MIRROR_CONFIG }),
+});
 const iterationResearchService = createIterationResearchService({ mkdir, agentRuntime, isManagedWorkspaceRuntimeMode });
 const roundRecoveryService = createRoundRecoveryService({ isManagedWorkspaceRuntimeMode, restoreWorkspaceCheckpoint, captureDiff: (...args) => workspaceManager.captureDiff(...args) });
 const agentRoundService = createAgentRoundService({ resetMissionRunState, resetMissionWorkspace, createWorkspaceCheckpoint, startAgentRun, appendRuntimeEvent, isManagedWorkspaceRuntimeMode, agentRuntime, roundExperience: roundExperienceService, nowMs: () => Date.now() });
@@ -479,6 +487,8 @@ const iterationPorts = {
   cancelResearch: iterationResearchService.cancelResearch,
   registerSources: sourceService.registerSources,
   countSources: sourceService.countSources,
+  countRunSources: sourceService.countRunSources,
+  acquireSources: sourceAcquisitionService.acquireSources,
   startMainRound: mainRoundOrchestrationService.start,
   startBaseline: (...args) => baselineOrchestrationService.start(...args),
   researchDirForMission,

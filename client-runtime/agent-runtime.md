@@ -20,6 +20,68 @@ untrusted JSON advice; the CLI bridge carries the same frozen DTO and instructio
 Experience cannot replace Profile/Gate/oracle/retry or Workspace boundaries. The
 provider does not query the experience repository or create observations itself.
 
+## Research phases, budgets and result location
+
+`startResearch` requires an explicit `runPhase` from `RESEARCH_PHASES`
+(`advisory` / `experience` / `acquire` / `synthesize`). A missing or unknown phase is rejected
+(`RESEARCH_PHASE_REQUIRED` / `RESEARCH_PHASE_UNKNOWN`) — there is no default phase. It also refuses to
+start (`RESEARCH_DISABLED_BY_POLICY`) unless the caller states `origin: 'manual'` or the Mission has
+automatic research enabled, so no future call site can bypass `sourcePolicy.researchEnabled`.
+
+One research session has one deadline. `sessionDeadlineAt` is opened on the first phase and carried
+into later phases; a later phase gets `min(phaseBudget, remaining session)` and is rejected outright
+(`RESEARCH_BUDGET_EXHAUSTED`) once the session deadline has passed. `advisory` research additionally
+terminates on event stagnation, event budget or its short wall clock.
+
+The researcher result is located by `extractResearchResult` in `agent-result.mjs`: only
+`agent_message` role events are candidates, and a candidate must satisfy the schema declared for the
+current phase. Bare JSON, fenced JSON and JSON embedded in prose are all supported; unrelated tool JSON
+after the real result never replaces it; conflicting candidates return `RESEARCH_RESULT_AMBIGUOUS`.
+Extraction and validation are separate: `acquireSelectedSources` still enforces the source policy and
+still reports `RESEARCH_SOURCE_SELECTION_INVALID` as its coarse code, with the fine-grained cause in
+`error.reasonCode` (`RESEARCH_RESULT_NOT_FOUND`, `RESEARCH_JSON_EXTRACT_FAILED`,
+`RESEARCH_SCHEMA_MISMATCH`, `RESEARCH_RESULT_AMBIGUOUS`, `RESEARCH_RUN_MISMATCH`,
+`RESEARCH_SOURCE_POLICY_REJECTED`, `RESEARCH_SOURCE_FETCH_FAILED`, `RESEARCH_BUDGET_EXHAUSTED`).
+
+Research notes carry their Mission, phase, run identity, derived scope, protocol outcome and an
+`advisory` action card (`problem` / `scope` / `evidence` / `hypothesis` / `nextChange` / `verification` /
+`stopCondition`). Machine research is never `verified` and never presented as human experience.
+
+## Source Registry visibility
+
+In the `acquire` phase the platform — not the researcher — supplies the Source Registry inventory:
+`readSourceRegistryInventory` lists child directory names (bounded at
+`SOURCE_REGISTRY_INVENTORY_LIMIT`) and the prompt states that a local selection must use one of those
+exact names. An unreadable registry degrades to an explicit "inventory could not be read" line so the
+researcher prefers a remote source or the semantic fallback instead of guessing.
+
+The sandbox boundary and the prompt now agree. `prepareAgentBoundary` renders the roots it actually
+grants: with only `workspace` the instruction is unchanged, and when `sourceRoot` is granted it is
+listed by name as a READ-ONLY reference root with the workspace named as the only writable root.
+The previous unconditional "the only filesystem root is your workspace" contradicted the
+`--add-dir <sourceRoot>` grant, so a researcher could neither read the registry legitimately nor tell
+whether it was allowed to.
+
+## Prompt statements must match the enforced policy
+
+Both the sandbox boundary and the acquisition prompt are derived from what the platform actually
+enforces, never from a fixed sentence. `prepareAgentBoundary` lists the roots it really grants, and the
+`acquire` prompt states the hosts that are really allowed for this Mission via
+`describeAllowedSourceHosts({ allowDiscoveredSources })` — `github.com, gitlab.com` only, unless the
+Mission sets `sourcePolicy.allowDiscoveredSources`. The previous fixed wording advertised Gitee and
+"other credential-free HTTPS Git hosts" while `validateCanonicalRepository` accepts only GitHub/GitLab,
+which steered the researcher into a selection the source policy always refuses and wasted the whole
+acquisition. Telling the researcher about a host the policy refuses is a prompt bug, not a research bug.
+
+## Source acquisition is not a projection concern
+
+State projection observes and displays state; it must not perform long-retrying clone/fetch. When an
+`acquire` run terminates successfully, projection only records `acquisitionStatus: 'pending'` and emits
+`research.acquire_candidate_ready`. The iteration-advance path then runs the injected
+`deps.acquireSources` port (`application/source-acquisition-service.mjs`), which reads the run events,
+locates the acquisition result by schema, verifies and fetches sources, and reports this run's own
+harvest — never the Source Registry directory count.
+
 ## Archived round facts input
 
 `startRun` may receive an explicit `roundId`; the effective round identity is

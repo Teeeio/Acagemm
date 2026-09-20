@@ -6,7 +6,7 @@ export const createAgentRoundService = ({ resetMissionRunState, resetMissionWork
   if (!resetMissionRunState || !resetMissionWorkspace || !createWorkspaceCheckpoint || !startAgentRun || !appendRuntimeEvent || typeof isManagedWorkspaceRuntimeMode !== 'function' || !agentRuntime) throw new TypeError('Agent round service dependencies are required.');
   if (typeof roundExperience?.prepare !== 'function' || typeof roundExperience?.collect !== 'function') throw new TypeError('roundExperience.prepare and collect are required.');
   if (typeof nowMs !== 'function') throw new TypeError('nowMs must be an injected millisecond clock.');
-  const startRound = async ({ state, mission, goal, workspace, runtimeMode }) => {
+  const startRound = async ({ state, mission, goal, workspace, runtimeMode, advisory = null }) => {
     const ensureBudget = () => {
       const budget = ensureRoundBudgetStarted(state, { nowMs: nowMs() }).roundBudget;
       const remaining = remainingMissionBudgetMs(state, { nowMs: nowMs() });
@@ -33,7 +33,11 @@ export const createAgentRoundService = ({ resetMissionRunState, resetMissionWork
       state.workflowRecovery = { ...(state.workflowRecovery || {}), checkpoints: [...(state.workflowRecovery?.checkpoints || []), checkpoint].slice(-5) };
     }
     ensureBudget();
-    const runtimeRun = await agentRuntime.startRun({ state, mission, goal, resumeThreadId: null, workspace, roundId: roundBudget.roundId, experienceContext });
+    const runtimeRun = await agentRuntime.startRun({
+      state, mission, goal, resumeThreadId: null, workspace, roundId: roundBudget.roundId, experienceContext,
+      // 研究建议经既有不可信上下文边界进入本轮 prompt；身份校验失败会抛错并中止本次启动。
+      advisory,
+    });
     if (!runtimeRun.handled) {
       startAgentRun(state, goal, { reset: false });
       appendRuntimeEvent(state, 'mission.run_started', { runId: state.agent.runId, goal }, { kind: 'adapter', mode: 'reference-fixture' });

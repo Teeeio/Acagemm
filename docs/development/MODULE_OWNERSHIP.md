@@ -71,6 +71,7 @@ TUI / GUI
 | 服务合同 | 功能 | 输入 | 输出 |
 |---|---|---|---|
 | `source-service.md` | 注册 Git Source、统计来源 | source root、Mission state | source reference/count |
+| `source-acquisition-service.md` | 在迭代推进路径执行受控来源获取 | Source Registry、researchRun 事件 | 来源清单/失败原因 |
 | `research-service.md` | 显式启动或取消 Research | Mission ID、research command | command result、saved state |
 | `iteration-research-service.md` | 迭代中的 Research Agent 协调 | round research input | updated state |
 | `baseline-service.md` | Baseline 材料化入口 | source、matrix command | materializer run ID、state |
@@ -154,6 +155,7 @@ TUI / GUI
 |---|---|---|---|
 | `workflow-kernel.mjs` | Domain / Workflow | outcome、不变量、恢复 effect 和一致性投影 | Provider、硬件、HTTP 调用 |
 | `iteration-loop.mjs` | Domain / Iteration | 有界轮次和下一步决策 | 持久化、UI、文件操作 |
+| `research-policy.md` | 研究策略单一裁决点：自动入口、阶段、预算、故障分类 | Mission source/research policy | 研究裁决与说明 |
 | `fixed-operator-profiles.mjs` | Domain / Profile | 固定算子语义和测试矩阵唯一来源 | 运行硬件、动态弱化 Profile |
 | `semantic-snapshot.mjs` | Domain / Evidence | 将 Mission/Profile/Test 绑定为不可变摘要 | 修改 Workspace 或提交任务 |
 | `test-spec.mjs` | Domain / Test Contract | 测试规格默认值和规范化 | 执行 Correctness/Benchmark |

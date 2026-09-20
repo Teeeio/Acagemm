@@ -90,6 +90,8 @@
     "test:three-layer": "node tests/three-layer-model-test.mjs",
     "test:intent": "node tests/mission-intent-test.mjs",
     "test:research": "node tests/research-test.mjs",
+    "test:research-policy": "node tests/research-policy-test.mjs",
+    "test:research-delivery": "node tests/research-delivery-test.mjs",
     "test:baseline-materializer-agent": "node tests/baseline-materializer-agent-test.mjs",
     "test:baseline-materializer": "node tests/baseline-materializer-test.mjs",
     "test:baseline-resolver": "node tests/baseline-resolver-test.mjs",

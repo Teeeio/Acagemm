@@ -73,3 +73,18 @@ validate 的 expected 可提供 projectId/missionId/roundId/scope/allowedProject
 ## Change Checklist / Known Limitations
 
 API/schema 变更同步此契约、`experience-selection.md`、应用契约、测试及调用者。受控条件 `experienceCondition` 的枚举与过滤位置属于冻结接口：新增/改序必须同时更新此契约与 [轮次集成](application/round-experience-service.md)，且不得改变省略模式下的默认 D 选择、排序、配额与字节预算。最多 2048 条历史、8 MiB store、32 KiB 单记录（含可选 `selectionMetadata`）、8000 字符正文、64 KiB context；shape 深度 4、256 节点。达到上限明确失败，不自动删除历史。`selectionMetadata` 只描述出处与相关性，不提升证据等级、不改变 scope 语义、不授予访问或发布权。无向量检索、授权推断、签名验证或自动冲突合并；冻结 context 的每轮持有/复用由调用者负责，同一轮重试/恢复复用既有冻结选择，全新逻辑轮才重新选择。
+
+## Untrusted research advisory envelope
+
+`formatUntrustedAdvisory(envelope, { missionId, roundId })` renders machine research advice with the same
+isolation contract as frozen experience: explicit identity (`advisoryId`, `noteId`, `researchRunId`,
+`missionId`, `roundId`), a canonical SHA-256 `digest`, the UNTRUSTED DATA boundary, and the explicit
+statement that it cannot override the Mission goal, allowed edit scope, fixed test matrix, baseline,
+oracle, or tool permissions. `validateAdvisoryEnvelope` rejects a missing identity, a foreign Mission, or
+a non-`machine-research` provenance.
+
+Provenance is fixed and honest: the schema version is `operator-studio.research-advisory/v1`,
+`provenance` is always `machine-research`, and `verified` is always `false`. Research advice is never
+represented as human guidance and never as an observed execution record, so no second bypass that pastes
+research text into the goal is needed. `advisoryDigest(envelope)` uses the same stable serialization as
+`researchNoteDigest`, so delivery stage, prompt audit and Agent run can all be checked against one identity.

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createCodexClient } from '../client-runtime/codex-client.mjs';
@@ -69,12 +69,24 @@ try {
   // ---- startResearch：沙箱参数、方向注入、runId、目录、串行 guard ----
   const idleState = { activeMissionId: 'MIS_RES', runtimeEvents: [], stage: 'diagnosis', patchApplied: false, candidateEvaluations: [{ id: 'stale' }], agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
   const mission = { id: 'MIS_RES', title: 'Research mission', repository: root, sourceRoot, hardware: ['C500'], metric: 'latency_p50', currentBest: { value: '47.0 μs' } };
-  const started = await runtime.startResearch({ state: idleState, mission, direction: '调研 paged_attention 最新 kernel 优化', workspace: researchDir });
+  // 阶段必须显式：缺失或未知都必须拒绝启动，不再回落到 acquire 默认值。
+  await assert.rejects(
+    runtime.startResearch({ state: structuredClone(idleState), mission, direction: 'x', workspace: researchDir }),
+    (error) => error.code === 'RESEARCH_PHASE_REQUIRED',
+  );
+  await assert.rejects(
+    runtime.startResearch({ state: structuredClone(idleState), mission, direction: 'x', workspace: researchDir, runPhase: 'guess' }),
+    (error) => error.code === 'RESEARCH_PHASE_UNKNOWN',
+  );
+  // Source Registry 目录先建好，用于验证平台提供的只读清单。
+  await mkdir(path.join(sourceRoot, 'flashinfer'), { recursive: true });
+  const started = await runtime.startResearch({ state: idleState, mission, direction: '调研 paged_attention 最新 kernel 优化', workspace: researchDir, runPhase: 'acquire' });
   assert.equal(started.state.researchAgent.status, 'running');
   assert.match(started.state.researchAgent.runId, /^codex_research_[A-Z0-9]+_[A-Z0-9]+$/);
   assert.equal(started.state.researchAgent.direction, '调研 paged_attention 最新 kernel 优化');
   assert.equal(started.state.researchAgent.researchDir, researchDir);
-  assert.equal(started.state.researchAgent.budgetMs, 30 * 60 * 1000, 'acquire phase uses generous budget');
+  assert.equal(started.state.researchAgent.budgetMs, 10 * 60 * 1000, 'acquire phase uses the configured acquisition budget');
+  assert.ok(started.state.researchAgent.sessionDeadlineAt, 'acquire phase opens a session deadline shared with synthesis');
   assert.equal(started.state.researchAgent.runPhase, 'acquire');
   assert.equal(started.state.researchAgent.synchronous, false, 'manual research defaults to asynchronous (parallel)');
   // 采集阶段暴露隔离 research 目录和本地 Source Registry；固定工作流仍负责远程 clone 和快照记录。
@@ -87,14 +99,39 @@ try {
   assert.match(spawnCalls[0].stdin, /ACQUISITION phase/);
   assert.match(spawnCalls[0].stdin, /Source Registry/);
   assert.match(spawnCalls[0].stdin, /First inspect the local Source Registry/i);
-  assert.match(spawnCalls[0].stdin, /Gitee, GitHub, GitLab/i);
+  // prompt 必须如实说明本 Mission 真正允许的来源主机：说「Gitee 也可以」而策略只接受
+  // GitHub/GitLab，会把研究员引向平台必然拒绝的选择，整次采集白跑。
+  assert.match(spawnCalls[0].stdin, /Allowed hosts for THIS Mission: github.com, gitlab.com（仅 canonical；本 Mission 不接受其它主机）/);
+  assert.doesNotMatch(spawnCalls[0].stdin, /Gitee[^。]*allowed/i, 'the prompt must not advertise hosts the source policy rejects');
+  // allowDiscoveredSources=true 时如实放开其它免凭据主机
+  const discoveredState = { activeMissionId: 'MIS_DISC', runtimeEvents: [], stage: 'diagnosis', agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
+  await runtime.startResearch({
+    state: discoveredState,
+    mission: { ...mission, id: 'MIS_DISC', sourcePolicy: { allowDiscoveredSources: true } },
+    direction: 'x', workspace: researchDir, runPhase: 'acquire',
+  });
+  assert.match(spawnCalls.at(-1).stdin, /以及其它免凭据的 HTTPS Git 主机（discovered）/);
   assert.match(spawnCalls[0].stdin, /semanticFallback/);
   assert.doesNotMatch(spawnCalls[0].stdin, /research-notes\/v1/, 'acquire phase must not ask for the note JSON');
   assert.doesNotMatch(spawnCalls[0].stdin, /do not produce a "candidates" field/i, 'acquire phase must not require the note schema');
+  // 平台提供只读清单：研究员不必猜注册表里有什么，也不必触碰 sandbox 之外的目录。
+  assert.ok(spawnCalls[0].stdin.includes('Local Source Registry inventory (READ-ONLY, platform-provided; 1 entries): flashinfer'));
+  assert.ok(spawnCalls[0].stdin.includes('A local selection must use one of these exact directory names'));
+  // 注册表不可读时给出明确的降级说明，而不是让研究员猜。
+  const missingRegistryState = { activeMissionId: 'MIS_NOREG', runtimeEvents: [], stage: 'diagnosis', agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
+  await runtime.startResearch({
+    state: missingRegistryState,
+    mission: { ...mission, id: 'MIS_NOREG', sourceRoot: path.join(root, 'missing-sources') },
+    direction: 'x', workspace: researchDir, runPhase: 'acquire',
+  });
+  assert.ok(spawnCalls.at(-1).stdin.includes('inventory could not be read'));
+  // prompt 与 sandbox 边界必须一致：授予了 sourceRoot 就要如实说明，不能同时宣称「只有 workspace」。
+  assert.match(spawnCalls[0].stdin, /READ-ONLY reference root/);
+  assert.doesNotMatch(spawnCalls[0].stdin, /The only filesystem root assigned to this Agent/);
   // 无 sourceRoot 的 mission → 单阶段（检索 + 产笔记），不含 ACQUISITION 指令
   const noSourceMission = { id: 'MIS_NOSRC', title: 'No source', repository: root, sourceRoot: null, hardware: ['C500'], metric: 'latency_p50' };
   const noSourceState = { activeMissionId: 'MIS_NOSRC', runtimeEvents: [], stage: 'diagnosis', agent: { status: 'idle' }, researchAgent: null, researchNotes: [] };
-  await runtime.startResearch({ state: noSourceState, mission: noSourceMission, direction: '纯检索', workspace: researchDir });
+  await runtime.startResearch({ state: noSourceState, mission: noSourceMission, direction: '纯检索', workspace: researchDir, runPhase: 'acquire' });
   assert.match(spawnCalls.at(-1).stdin, /read-only research turn/, 'no-sourceRoot mission stays single-phase research');
   assert.doesNotMatch(spawnCalls.at(-1).stdin, /ACQUISITION phase/);
   assert.match(spawnCalls.at(-1).stdin, /research-notes\/v1/, 'single-phase research asks for the note JSON');
@@ -108,16 +145,16 @@ try {
   // ---- 同步/异步调度：主线程运行中 → 同步研究 409，异步研究放行 ----
   const busyState = { activeMissionId: 'MIS_BUSY', runtimeEvents: [], agent: { status: 'running', runId: 'codex_MAIN' }, researchAgent: null, researchNotes: [] };
   await assert.rejects(
-    runtime.startResearch({ state: structuredClone(busyState), mission, direction: 'x', workspace: researchDir, synchronous: true }),
+    runtime.startResearch({ state: structuredClone(busyState), mission, direction: 'x', workspace: researchDir, synchronous: true, runPhase: 'acquire' }),
     (error) => error.code === 'RESEARCH_SERIAL_BUSY',
   );
   assert.equal(isMainAgentActive({ status: 'completed', runId: 'codex_DONE' }), false);
   const completedMainState = { activeMissionId: 'MIS_DONE_MAIN', runtimeEvents: [], agent: { status: 'completed', runId: 'codex_DONE' }, researchAgent: null, researchNotes: [] };
-  const syncAfterCompleted = await runtime.startResearch({ state: completedMainState, mission, direction: '停滞后调研', workspace: researchDir, synchronous: true });
+  const syncAfterCompleted = await runtime.startResearch({ state: completedMainState, mission, direction: '停滞后调研', workspace: researchDir, synchronous: true, runPhase: 'acquire' });
   assert.equal(syncAfterCompleted.state.researchAgent.status, 'running');
   assert.equal(syncAfterCompleted.state.researchAgent.synchronous, true);
   // 异步研究（操作员触发）在主线程运行时允许并行启动
-  const asyncStarted = await runtime.startResearch({ state: structuredClone(busyState), mission, direction: '并行调研', workspace: researchDir });
+  const asyncStarted = await runtime.startResearch({ state: structuredClone(busyState), mission, direction: '并行调研', workspace: researchDir, runPhase: 'acquire' });
   assert.equal(asyncStarted.state.researchAgent.status, 'running');
   assert.equal(asyncStarted.state.researchAgent.synchronous, false);
   // 主线程 startRun 在异步研究员运行时允许并行（放行串行守卫）
@@ -137,7 +174,7 @@ try {
   // 非 codex-cli 模式 → 503
   const fixtureRuntime = createAgentRuntime({ mode: 'reference-fixture' });
   await assert.rejects(
-    fixtureRuntime.startResearch({ state: idleState, mission, direction: 'x', workspace: researchDir }),
+    fixtureRuntime.startResearch({ state: idleState, mission, direction: 'x', workspace: researchDir, runPhase: 'acquire' }),
     (error) => error.code === 'RESEARCH_RUNTIME_UNSUPPORTED',
   );
 

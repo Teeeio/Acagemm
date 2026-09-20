@@ -53,3 +53,12 @@ correctness-passed evidence settlement and research-injected continuation. They
 are not proof that the fixed manual API passes through ordinary runs.plan.
 
 The service does not parse URLs, emit HTTP, or duplicate workflow policy.
+
+## Research material delivery
+
+When a run is started without an explicit goal and pending research material exists, the material's
+advisory envelope is passed to the Agent runtime and the goal only carries its verifiable identity
+(`noteId` + `digest`). Raw research text is no longer concatenated into the goal. The material is
+cleared only after the started run binds the same digest; otherwise it stays pending with an explicit
+`uncertain` stage and reason, so a failed start never loses it. Legacy material without an advisory
+envelope keeps the previous text path.

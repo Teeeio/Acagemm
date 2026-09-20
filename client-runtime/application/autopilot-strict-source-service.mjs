@@ -1,3 +1,5 @@
+import { RESEARCH_TRIGGERS, resolveAutomaticResearch } from '../research-policy.mjs';
+
 export const createAutopilotStrictSourceService = ({ isStrictZeroSourceMission, isResearchAgentActive, selectResearchBaselineSource, buildSemanticBaselineSource, startResearch, startBaseline, startMainRound, researchDirForMission }) => {
   const advance = async ({ state, mission, candidate }) => {
     if (!isStrictZeroSourceMission(mission)) return null;
@@ -8,8 +10,25 @@ export const createAutopilotStrictSourceService = ({ isStrictZeroSourceMission, 
       || (mission.sourcePolicy?.allowSemanticFallback === true && terminal && (research.runPhase === 'synthesize' || research.acquireHandled === true) ? buildSemanticBaselineSource(mission, research) : null);
     if (state.baseline?.status !== 'complete' && !source) {
       if (!research.runId) {
-        const direction = `从零研究 ${mission.title || mission.goal}：在官方上游仓库中固定可验证的 MLA paged attention baseline source，记录 repository、commit、path 和 operator；不得生成候选代码。`;
-        return { state: await startResearch({ state, mission, direction, workspace: researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot), synchronous: true }), action: 'baseline_research_started' };
+        // 必要来源解析不是可选研究：它由来源门禁驱动，阶段的显式选择放在这里。
+        // 但自动研究被关闭时，必须返回显式状态而不是悄悄启动采集，也不放宽门禁。
+        const resolution = resolveAutomaticResearch({ mission, trigger: RESEARCH_TRIGGERS.BASELINE_SOURCE });
+        if (!resolution.allowed) {
+          state.iterationStats = { ...(state.iterationStats || {}), loopStatus: 'needs_human', loopStatusReason: 'research_disabled_source_unresolved' };
+          return { state, action: 'needs_human' };
+        }
+        const direction = `从零研究 ${mission.title || mission.goal}：在官方上游仓库中固定可验证的 ${mission.operator || mission.title || '目标算子'} baseline source，记录 repository、commit、path 和 operator；不得生成候选代码。`;
+        return {
+          state: await startResearch({
+            state, mission, direction,
+            workspace: researchDirForMission(state.activeMissionId, mission.repository, mission.projectRoot),
+            synchronous: true,
+            runPhase: resolution.phase,
+            budgetMs: resolution.budgetMs,
+            trigger: RESEARCH_TRIGGERS.BASELINE_SOURCE,
+          }),
+          action: 'baseline_research_started',
+        };
       }
       if (terminal) {
         if (research.runPhase === 'acquire' && research.acquireHandled !== true) return { state, action: 'none' };

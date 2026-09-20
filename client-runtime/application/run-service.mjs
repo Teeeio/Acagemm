@@ -45,9 +45,22 @@ export const createRunService = ({ loadState, persistState, executeCommand, jour
       });
     }
     let goal = body.goal?.trim() || mission.goal;
+    let advisory = null;
     if (!body.goal && state.iterationStats?.pendingInjection) {
-      goal = `${goal}\n【调研注入】${state.iterationStats.pendingInjection.briefing}`;
-      state.iterationStats = { ...state.iterationStats, pendingInjection: null };
+      const pending = state.iterationStats.pendingInjection;
+      // 研究建议经不可信上下文边界进入 prompt；goal 只带可核验身份，不拼裸文本。
+      // 材料只有在真正提交成功后才会被清除，否则保持待交付，避免「显示已注入但没交付」。
+      advisory = pending.advisory || null;
+      if (advisory) {
+        goal = [goal, `【研究建议】${pending.noteId} · ${pending.digest}`].filter(Boolean).join('\n');
+        state.iterationStats = {
+          ...state.iterationStats,
+          pendingInjection: { ...pending, stage: 'selected', selectedAt: pending.selectedAt || new Date().toISOString() },
+        };
+      } else {
+        // 旧格式（无 advisory 封装）保持既有文本注入行为，但同样在提交成功前不清除材料。
+        goal = `${goal}\n【调研注入】${pending.briefing || ''}`;
+      }
     }
     if (state.iterationStats) state.iterationStats = { ...state.iterationStats, loopStatus: 'running', loopStatusReason: null };
     const fixedOperator = isFixedOperatorMission(mission);
@@ -83,7 +96,21 @@ export const createRunService = ({ loadState, persistState, executeCommand, jour
     const resumeThreadId = body.resume === true
       ? state.agent?.threadId || state.runHistory?.find((run) => run.runtimeKind === runtimeDescriptor.mode && run.threadId)?.threadId || null
       : null;
-    const result = await executeCommand({ journal, saveState: persistState, registry, state, type: 'runs', body: { ...body, goal, resumeThreadId, workspace: preflight.workspace }, expectedVersion: state.stateVersion });
+    const result = await executeCommand({ journal, saveState: persistState, registry, state, type: 'runs', body: { ...body, goal, advisory, resumeThreadId, workspace: preflight.workspace }, expectedVersion: state.stateVersion });
+    // 提交核对：只有执行端真实 run 绑定到该 material digest 才算已交付；
+    // 否则材料保留为待交付状态，操作员可以重试，不需要重新做一次研究。
+    if (advisory && state.iterationStats?.pendingInjection) {
+      const bound = state.agent?.researchAdvisory;
+      if (state.agent?.runId && bound && bound.digest === advisory.digest) {
+        state.iterationStats = {
+          ...state.iterationStats,
+          pendingInjection: null,
+          researchInjection: { noteId: state.iterationStats.pendingInjection.noteId, digest: advisory.digest, missionId: state.iterationStats.pendingInjection.missionId, researchRunId: state.iterationStats.pendingInjection.researchRunId, roundId: state.agent.roundId || null, runId: state.agent.runId, status: 'submitted', evidence: 'agent-run-binding', submittedAt: new Date().toISOString() },
+        };
+      } else {
+        state.iterationStats = { ...state.iterationStats, pendingInjection: { ...state.iterationStats.pendingInjection, stage: 'uncertain', delivery: { reason: 'run_not_bound', at: new Date().toISOString() } } };
+      }
+    }
     return { kind: 'run', statusCode: 202, result };
   };
   return Object.freeze({ start });

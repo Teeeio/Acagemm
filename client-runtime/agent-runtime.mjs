@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { isExecutionReleased, assertResourcesReleased, reconcileResourceRelease } from './cancellation-contract.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -6,12 +6,13 @@ import { fileURLToPath } from 'node:url';
 import { opencodeClient as defaultOpenCodeClient, parseOpenCodeModel } from './opencode-client.mjs';
 import { classifyCodexFailure, codexClient as defaultCodexClient } from './codex-client.mjs';
 import { classifyClaudeFailure, claudeClient as defaultClaudeClient } from './claude-client.mjs';
-import { parseAgentResult, parseBaselineMaterializerResult, parseResearchResult } from './agent-result.mjs';
+import { extractResearchResult, parseAgentResult, parseBaselineMaterializerResult, parseResearchResult, redactExcerpt } from './agent-result.mjs';
+import { RESEARCH_PHASES, phaseForTrigger, remainingSessionBudgetMs, resolveResearchConfig } from './research-policy.mjs';
 import { runtimeDir } from './storage-paths.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
 import { materializeBaselineSource } from './baseline-materializer.mjs';
 import { prepareAgentBoundary } from './agent-boundary.mjs';
-import { loadSourceMirrorPolicy, normalizeRepositoryIdentity, resolveSourceTransport, verifySourceTransportSnapshot } from './source-mirror-policy.mjs';
+import { describeAllowedSourceHosts, loadSourceMirrorPolicy, normalizeRepositoryIdentity, resolveSourceTransport, verifySourceTransportSnapshot } from './source-mirror-policy.mjs';
 import { buildCandidateGenerationPrompt } from './candidate-generation/prompt.mjs';
 import { candidateWorkspaceRequirements, finalizeCandidateAdmission, inspectCandidateDiff } from './candidate-generation/admission.mjs';
 import {
@@ -22,7 +23,7 @@ import {
   editToolSignal,
 } from './candidate-generation/classification.mjs';
 import { testSpecAgentInstruction } from './test-spec.mjs';
-import { formatExperienceContext } from './experience-contract.mjs';
+import { formatExperienceContext, formatUntrustedAdvisory } from './experience-contract.mjs';
 import { fixedOperatorPrompt } from './fixed-operator-profiles.mjs';
 import { recordRunTokenUsage } from './token-usage.mjs';
 import { runtimeRegistry } from './agent-runtime/registry.mjs';
@@ -124,7 +125,7 @@ const promptAuditSelection = (state, { missionId, projectId, roundId, experience
       && item.version === experienceContext.items[index].version && item.source === experienceContext.items[index].source)) return null;
   return structuredClone(selection);
 };
-const writePromptAudit = async ({ bridgeDir, runId, prompt, missionId, projectId, roundId, runtimeMode, roundFacts, selection }) => {
+const writePromptAudit = async ({ bridgeDir, runId, prompt, missionId, projectId, roundId, runtimeMode, roundFacts, selection, advisory = null }) => {
   if (!safeAuditRunId(runId)) throw auditFailure(`Prompt audit runId is not a safe file name: ${runId}`, 'PROMPT_AUDIT_RUN_ID_INVALID');
   try {
     const auditsDir = path.join(bridgeDir, 'prompt-audits');
@@ -143,6 +144,8 @@ const writePromptAudit = async ({ bridgeDir, runId, prompt, missionId, projectId
       createdAt: new Date().toISOString(),
       roundFacts: roundFacts ?? null,
       selection: selection ?? null,
+      // 研究建议材料的身份与 digest：成功路径可从审计件核对 prompt 里注入的是哪一份材料。
+      advisory: advisory ?? null,
     };
     await mkdir(auditsDir, { recursive: true });
     const temporary = `${auditPath}.${randomUUID()}.tmp`;
@@ -186,12 +189,90 @@ const summarizeAcquiredSources = (sources = []) => sources.map((source) => ({
   evidenceCount: (source.evidence || []).length,
 }));
 
-const finalAgentJson = (events = []) => {
-  const texts = events.map((event) => event?.item?.text || event?.text || '').filter(Boolean).reverse();
-  for (const text of texts) {
-    try { return JSON.parse(text); } catch { /* try the next assistant message */ }
+// 研究员结果定位统一走 agent-result 的按角色 + 按阶段 schema 提取（§4.1）。
+// 这里不再保留「取最后一条能 JSON.parse 的事件」的旧实现：它会把工具事件输出当成研究员结论，
+// 也会在正式结果之后出现无关 JSON 时被覆盖。旧代码的失败模式已由 tests/research-extraction-test.mjs 固化。
+const RESEARCH_SUB_REASON_CODES = Object.freeze({
+  NOT_FOUND: 'RESEARCH_RESULT_NOT_FOUND',
+  JSON_EXTRACT_FAILED: 'RESEARCH_JSON_EXTRACT_FAILED',
+  SCHEMA_MISMATCH: 'RESEARCH_SCHEMA_MISMATCH',
+  AMBIGUOUS: 'RESEARCH_RESULT_AMBIGUOUS',
+  RUN_MISMATCH: 'RESEARCH_RUN_MISMATCH',
+  SOURCE_POLICY_REJECTED: 'RESEARCH_SOURCE_POLICY_REJECTED',
+  SOURCE_FETCH_FAILED: 'RESEARCH_SOURCE_FETCH_FAILED',
+  BUDGET_EXHAUSTED: 'RESEARCH_BUDGET_EXHAUSTED',
+});
+
+const researchExtractionFailure = (extraction, { phase, runId }) => {
+  const error = new Error(`${extraction.reason}（阶段 ${phase}${runId ? ` · run ${runId}` : ''}）`);
+  // 兼容既有消费者：来源选择相关失败仍以 RESEARCH_SOURCE_SELECTION_INVALID 作为粗粒度码，
+  // 细分原因放在 reasonCode/details，不再把所有问题都归为无法诊断的单一错误。
+  error.code = 'RESEARCH_SOURCE_SELECTION_INVALID';
+  error.reasonCode = extraction.reasonCode || RESEARCH_SUB_REASON_CODES.NOT_FOUND;
+  error.details = {
+    phase,
+    runId: runId ?? null,
+    reasonCode: error.reasonCode,
+    rejected: (extraction.diagnostics?.rejected || []).slice(0, 8),
+    messageCount: extraction.diagnostics?.messageCount ?? 0,
+    candidateCount: extraction.diagnostics?.candidateCount ?? 0,
+  };
+  error.status = 422;
+  return error;
+};
+
+// 研究材料的适用范围：全部从当前冻结任务契约派生，绝不写死 C550 等历史目标。
+const scopeValues = (value) => (Array.isArray(value) ? value : value == null ? [] : [value])
+  .map((item) => String(item ?? '').trim().toLowerCase())
+  .filter(Boolean)
+  .slice(0, 16);
+export const researchScopeForMission = (mission = {}) => {
+  const profile = mission?.operatorProfile || {};
+  const matrix = mission?.testScenario?.matrix || mission?.matrix || {};
+  const shapeSource = matrix.shape || matrix.shapes || mission?.testScenario?.shape || [];
+  const shape = (Array.isArray(shapeSource) ? shapeSource : [shapeSource])
+    .map((item) => (item && typeof item === 'object' ? JSON.stringify(item) : String(item ?? '')))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  return {
+    hardware: scopeValues(mission?.hardware),
+    dtype: scopeValues(profile.dtype || mission?.dtype),
+    shape,
+    operator: String(profile.operator || mission?.operator || '').trim().toLowerCase() || null,
+  };
+};
+
+// 材料摘要：只覆盖身份与内容字段，供交付阶段核对「注入的是不是这一份材料」。
+const stableNoteValue = (value) => JSON.stringify(value, (_key, item) => (
+  item && typeof item === 'object' && !Array.isArray(item)
+    ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]]))
+    : item
+));
+export const researchNoteDigest = (note = {}) => 'sha256:' + createHash('sha256').update(stableNoteValue({
+  missionId: note.missionId || null,
+  researchRunId: note.researchRunId || note.runId || null,
+  direction: note.direction || null,
+  summary: note.summary || null,
+  findings: note.findings || [],
+  suggestedDirections: note.suggestedDirections || [],
+  advisory: note.advisory || null,
+})).digest('hex');
+// Source Registry 的只读清单：只列目录名（供应商中立、不做 git 调用），上限 40 条。
+// 研究员据此选择本地来源，不需要（也不被允许）读取 sandbox 之外的目录。读取失败不影响启动。
+export const SOURCE_REGISTRY_INVENTORY_LIMIT = 40;
+export const readSourceRegistryInventory = async (sourceRoot) => {
+  if (!sourceRoot) return null;
+  try {
+    const entries = await readdir(sourceRoot, { withFileTypes: true });
+    const names = entries
+      .filter((entry) => entry.isDirectory() && entry.name !== '.git' && !entry.name.startsWith('.'))
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right));
+    return { root: sourceRoot, names: names.slice(0, SOURCE_REGISTRY_INVENTORY_LIMIT), truncated: names.length > SOURCE_REGISTRY_INVENTORY_LIMIT, total: names.length };
+  } catch {
+    return null;
   }
-  return null;
 };
 
 const collectSourceEvidence = async (sourceDirectory, requestedPaths = []) => {
@@ -241,14 +322,74 @@ const collectSourceEvidence = async (sourceDirectory, requestedPaths = []) => {
   return evidence;
 };
 
-export const acquireSelectedSources = async ({ events, sourceRoot, researchDir, mirrorPolicy, allowDiscoveredSources = false, allowSemanticFallback = false }) => {
-  const result = finalAgentJson(events);
-  const repositories = result?.sourceAcquisition?.repositories;
-  if (!Array.isArray(repositories) || repositories.length > 3 || (!repositories.length && !allowSemanticFallback)) {
-    const error = new Error(allowSemanticFallback
-      ? 'Research Agent 必须返回 repositories 数组（允许为空并进入语义 fallback）。'
-      : 'Research Agent 必须选择 1-3 个可验证的上游 Git 仓库。');
+// 来源获取的有限重试策略：单次尝试超时与尝试次数都是常量，总耗时受研究 session deadline 约束。
+export const SOURCE_CLONE_TIMEOUT_MS = 180_000;
+export const SOURCE_CLONE_MAX_ATTEMPTS = 3;
+// 研究阶段的中文标签：状态投影与消息文案共用一份，避免各处再写一遍三元表达式。
+export const RESEARCH_PHASE_LABELS = Object.freeze({
+  acquire: '联网采集外部资料',
+  synthesize: '只读整理研究笔记',
+  experience: '参考经验（不阻塞）',
+  advisory: '检索针对性建议（不 clone 仓库）',
+});
+export const RESEARCH_PHASE_TITLES = Object.freeze({
+  acquire: '研究员采集',
+  synthesize: '研究员综合',
+  experience: '经验调研',
+  advisory: '研究员建议检索',
+});
+const TRANSIENT_SOURCE_PATTERNS = [
+  /could not resolve host|failed to connect|connection (?:timed out|reset|refused)|network is unreachable|temporary failure|operation timed out/iu,
+  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|EPIPE/iu,
+];
+// 认证/权限/schema/来源策略类失败是永久性的：机械重试只是浪费预算与墙钟时间。
+const PERMANENT_SOURCE_PATTERNS = [
+  /authentication failed|could not read (?:username|password)|permission denied|access denied|repository not found|403|401|407/iu,
+];
+export const isTransientSourceError = (error) => {
+  const text = [error?.code, error?.message, error?.stderr].filter(Boolean).join(' ');
+  if (PERMANENT_SOURCE_PATTERNS.some((pattern) => pattern.test(text))) return false;
+  return TRANSIENT_SOURCE_PATTERNS.some((pattern) => pattern.test(text));
+};
+
+// session 剩余预算：null 表示上一阶段没有留下 deadline（新 session），调用方据此使用阶段预算。
+export const previousSessionDeadlineMs = (sessionDeadlineAt, nowMs) => {
+  const deadlineMs = Date.parse(sessionDeadlineAt || '');
+  return Number.isFinite(deadlineMs) ? Math.max(0, deadlineMs - nowMs) : null;
+};
+
+export const acquireSelectedSources = async ({ events, sourceRoot, researchDir, runId = null, mirrorPolicy, allowDiscoveredSources = false, allowSemanticFallback = false }) => {
+  // 输入自校验：缺目录时给出明确原因码，而不是把 undefined 透传给 path/mkdir
+  // 变成不可诊断的 ERR_INVALID_ARG_TYPE。
+  for (const [name, value] of [['sourceRoot', sourceRoot], ['researchDir', researchDir]]) {
+    if (typeof value !== 'string' || !value.trim()) {
+      const error = new Error(`来源获取缺少 ${name}：无法定位 Source Registry 或调研目录。`);
+      error.code = 'RESEARCH_SOURCE_ACQUISITION_INPUT_INVALID';
+      error.reasonCode = 'RESEARCH_ACQUISITION_INPUT_MISSING';
+      error.details = { missing: name };
+      error.status = 500;
+      throw error;
+    }
+  }
+  // 提取与验证分离：先按 acquire 阶段 schema 定位正式结果，再做来源策略验证。
+  // 提取失败与来源策略拒绝是两类不同的失败，各自给出可定位的原因。
+  const extraction = extractResearchResult(events, { phase: 'acquire', runId });
+  if (!extraction.result) throw researchExtractionFailure(extraction, { phase: 'acquire', runId });
+  const repositories = extraction.result.sourceAcquisition?.repositories;
+  if (!Array.isArray(repositories) || repositories.length > 3) {
+    const error = new Error('Research Agent 必须返回 1-3 个可验证的上游 Git 仓库（sourceAcquisition.repositories）。');
     error.code = 'RESEARCH_SOURCE_SELECTION_INVALID';
+    error.reasonCode = RESEARCH_SUB_REASON_CODES.SCHEMA_MISMATCH;
+    error.status = 422;
+    throw error;
+  }
+  if (!repositories.length && !allowSemanticFallback) {
+    // 空仓库数组只有在契约显式允许 semantic fallback 时才合法；这里绝不放宽门禁。
+    const error = new Error('Research Agent 必须选择 1-3 个可验证的上游 Git 仓库；当前 Mission 契约不允许空数组或语义 fallback。');
+    error.code = 'RESEARCH_SOURCE_SELECTION_INVALID';
+    error.reasonCode = RESEARCH_SUB_REASON_CODES.SOURCE_POLICY_REJECTED;
+    error.details = { phase: 'acquire', runId: runId ?? null, allowSemanticFallback, repositoryCount: 0 };
+    error.status = 422;
     throw error;
   }
   await mkdir(sourceRoot, { recursive: true });
@@ -300,19 +441,23 @@ export const acquireSelectedSources = async ({ events, sourceRoot, researchDir, 
         }
         temporaryDirectory = `${destination}.acquiring-${randomUUID()}`;
         let cloneError = null;
-        for (let attempt = 1; attempt <= 3; attempt += 1) {
+        // §7.2：区分永久性错误与暂时性错误。权限/认证/schema/来源策略类失败不机械重试；
+        // 只有临时网络问题才在剩余预算内做有限退避。退避不引入新预算，只是同一 session deadline 内的重试。
+        for (let attempt = 1; attempt <= SOURCE_CLONE_MAX_ATTEMPTS; attempt += 1) {
           try {
-            await workspaceManager.git(['-c', 'core.longpaths=true', 'clone', '--depth=1', '--filter=blob:none', transport.transport, temporaryDirectory], sourceRoot, { timeout: 180_000 });
+            await workspaceManager.git(['-c', 'core.longpaths=true', 'clone', '--depth=1', '--filter=blob:none', transport.transport, temporaryDirectory], sourceRoot, { timeout: SOURCE_CLONE_TIMEOUT_MS });
             cloneError = null;
             break;
           } catch (error) {
             cloneError = error;
             await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {});
-            if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+            if (attempt >= SOURCE_CLONE_MAX_ATTEMPTS || !isTransientSourceError(error)) break;
+            await new Promise((resolve) => setTimeout(resolve, attempt * 750));
           }
         }
         if (cloneError) {
           cloneError.code = cloneError.code || 'RESEARCH_SOURCE_CLONE_FAILED';
+          cloneError.reasonCode = RESEARCH_SUB_REASON_CODES.SOURCE_FETCH_FAILED;
           throw cloneError;
         }
         sourceDirectory = temporaryDirectory;
@@ -368,8 +513,8 @@ export const acquireSelectedSources = async ({ events, sourceRoot, researchDir, 
   }
   const semanticFallback = acquired.length ? null : {
     allowed: allowSemanticFallback,
-    requested: result?.sourceAcquisition?.semanticFallback === true || repositories.length === 0 || failures.length > 0,
-    reason: String(result?.sourceAcquisition?.fallbackReason || failures[0]?.detail || 'No usable local or remote source was acquired.').slice(0, 1_000),
+    requested: extraction.result?.sourceAcquisition?.semanticFallback === true || repositories.length === 0 || failures.length > 0,
+    reason: String(extraction.result?.sourceAcquisition?.fallbackReason || failures[0]?.detail || 'No usable local or remote source was acquired.').slice(0, 1_000),
   };
   const manifestPath = path.join(researchDir, 'acquisition-result.json');
   await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 2, strategy: 'local-first-agent-discovery', acquired, failures, semanticFallback }, null, 2)}\n`, 'utf8');
@@ -749,7 +894,7 @@ export function createAgentRuntime(options = {}) {
     return { ready: true, code: 'AGENT_RUNTIME_READY', runtime: descriptor, workspace };
   };
 
-  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null, roundId = null }) => {
+  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null, advisory = null, roundId = null }) => {
     assertResourcesReleased(state);
     const activeStartAt = activeStartMissions.get(mission.id);
     if (activeStartAt && Date.now() - activeStartAt < 120_000) {
@@ -770,6 +915,15 @@ export function createAgentRuntime(options = {}) {
     const experienceInstruction = experienceContext ? formatExperienceContext(experienceContext, {
       projectId: mission.projectId, missionId: mission.id, roundId: state.iterationStats?.roundBudget?.roundId,
     }) : '';
+    // 研究建议材料经既有不可信上下文边界进入 prompt：显式身份 + digest + UNTRUSTED 边界，
+    // 不再是「把研究文本直接拼进 goal」的旁路。身份校验失败即拒绝发送，不回退成裸文本。
+    const advisoryInstruction = advisory ? formatUntrustedAdvisory(advisory, {
+      missionId: mission.id, roundId: activeRoundId,
+    }) : '';
+    const advisoryIdentity = advisory ? {
+      advisoryId: advisory.advisoryId, noteId: advisory.noteId, researchRunId: advisory.researchRunId,
+      missionId: advisory.missionId, roundId: activeRoundId, digest: advisory.digest, value: advisory.value,
+    } : null;
     if (mode === 'opencode-server') {
       if (!runtimeEngine.supports(mode, 'planning')) {
         const error = new Error(`Agent Runtime ${mode} does not support planning runs.`);
@@ -792,6 +946,7 @@ export function createAgentRuntime(options = {}) {
         `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
         `Metric: ${mission.metric || 'not specified'}`,
         experienceInstruction,
+        advisoryInstruction,
         'Inspect the current OpenCode project in planning mode. Do not edit files in this pass.',
         'Return a concrete diagnosis, tool evidence, candidate options, risks, and the recommended next action.',
       ].join('\n');
@@ -799,7 +954,7 @@ export function createAgentRuntime(options = {}) {
       const promptAudit = await writePromptAudit({
         bridgeDir, runId: session.id, prompt,
         missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
-        runtimeMode: 'opencode-server', roundFacts: null,
+        runtimeMode: 'opencode-server', roundFacts: null, advisory: advisoryIdentity,
         selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
       });
       try {
@@ -895,6 +1050,7 @@ export function createAgentRuntime(options = {}) {
         testMatrix: mission.testMatrix || state.testMatrix || {},
         workspaceInventory,
         experienceInstruction,
+        advisoryInstruction,
         boundaryInstruction: boundary.toolInstruction,
       });
       // Claude/Codex 共用同一发送前 helper：先落盘审计件（此时尚未调用 provider），
@@ -902,7 +1058,7 @@ export function createAgentRuntime(options = {}) {
       const promptAudit = await writePromptAudit({
         bridgeDir, runId, prompt,
         missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
-        runtimeMode: mode, roundFacts: roundFacts ?? null,
+        runtimeMode: mode, roundFacts: roundFacts ?? null, advisory: advisoryIdentity,
         selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
       });
       const run = await runtimeEngine.invoke(mode, 'start', { runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
@@ -920,6 +1076,7 @@ export function createAgentRuntime(options = {}) {
         profileId: 'profile.operator-orchestrator',
         goal,
         promptAudit,
+        researchAdvisory: advisoryIdentity,
         startedAt: run.startedAt,
         budgetMs: mainAgentBudgetMs,
         eventCount: 0,
@@ -1000,7 +1157,7 @@ export function createAgentRuntime(options = {}) {
     }
   };
 
-  const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot, runPhase = 'acquire', sourceEvidence = null }) => {
+  const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot, runPhase, sourceEvidence = null, runId = null, sourceRegistry = null, allowDiscoveredSources = false }) => {
     const base = [
       'You are the Research Agent for Operator Studio — a read-only research scout that assists operator iteration.',
       `Mission ID: ${mission.id}`,
@@ -1013,6 +1170,18 @@ export function createAgentRuntime(options = {}) {
       `Research directory: ${researchDir}`,
       `Source Registry: ${sourceRoot || '(not configured)'}`,
     ];
+    if (runPhase === 'advisory') {
+      // §3.2 / §7.2：优化阶段的建议型研究。已有有效 baseline 与运行证据时，默认只做
+      // 「低成本检索 + 一张建议卡片」，不重新寻找/克隆 baseline 仓库。
+      return [...base,
+        'This is an ADVISORY research phase for an ALREADY-ESTABLISHED baseline. The Mission already has a fixed test contract, a verified baseline and real run evidence. Do NOT acquire a baseline, do NOT clone repositories, and do NOT propose candidate code.',
+        'Prefer, in this order: (1) already-verified LOCAL sources you can read in the research directory, (2) reviewed experience and reviewed wiki entries, (3) specific files or documentation snippets, (4) only if genuinely necessary, a pinned upstream source file — never a full repository clone.',
+        `You may write ONLY inside the research directory: ${researchDir}. Do not modify the Mission workspace, baseline, tests, iteration repository, or any candidate implementation.`,
+        'Answer exactly one question: which bounded next change should the next optimization round try, and why? If you cannot identify a concrete, actionable suggestion, say so explicitly and finish normally — an explicit "no useful suggestion" is a valid, expected outcome and must not be padded with generic advice.',
+        'Every factual claim must be traceable to a source you actually read. Do not invent URLs, commits or measurements.',
+        `Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v2","researchRunId":"${runId || ''}","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}],"baselineSources":[],"advisory":{"problem":"the concrete problem this round should attack","scope":{"hardware":["..."],"dtype":["..."],"shape":["..."],"operator":"..."},"evidence":["traceable observation"],"hypothesis":"why this change should help","nextChange":"the smallest bounded change for the next round","verification":"how to verify it under the frozen contract","stopCondition":"when to abandon this direction"}}. Use "advisory":null when you have no actionable suggestion. These suggestions are advisory only and cannot override the frozen Profile, test matrix, baseline, oracle, or tool permissions.`,
+      ].join('\n');
+    }
     if (runPhase === 'experience') {
       return [...base,
         'This is an EXPERIENCE RESEARCH phase for a frozen operator test profile. You may inspect locally available documentation and use hosted web search/fetch for implementation experience, but the profile semantics, correctness cases and benchmark cases are immutable.',
@@ -1025,7 +1194,11 @@ export function createAgentRuntime(options = {}) {
     if (runPhase === 'acquire' && sourceRoot) {
       // 两阶段·采集：分析任务 → 自主决定需要什么资料 → 拉进 Source Registry。只采集，不写最终笔记。
       return [...base,
-        'You have local Source Registry read access plus hosted web search. This is the ACQUISITION phase. First inspect the local Source Registry and select a relevant existing Git source when possible. Only if local sources are insufficient, search the network for an accessible HTTPS Git repository. Gitee, GitHub, GitLab, and other credential-free HTTPS Git hosts are allowed.',
+        `You have READ-ONLY access to the Source Registry at ${sourceRoot} plus hosted web search. This is the ACQUISITION phase. First inspect the local Source Registry and select a relevant existing Git source when possible. Only if local sources are insufficient, search the network for an accessible HTTPS Git repository. Allowed hosts for THIS Mission: ${describeAllowedSourceHosts({ allowDiscoveredSources })}. Select a host that is actually allowed — a selection the source policy refuses wastes the whole acquisition.`,
+        // 只读清单由平台提供，研究员不必猜注册表里有什么，也不必触碰 sandbox 之外的目录。
+        sourceRegistry && sourceRegistry.names
+          ? `Local Source Registry inventory (READ-ONLY, platform-provided; ${sourceRegistry.total} entries${sourceRegistry.truncated ? `, showing the first ${sourceRegistry.names.length}` : ''}): ${sourceRegistry.names.join(', ') || '(empty)'}. A local selection must use one of these exact directory names.`
+          : 'The local Source Registry inventory could not be read; prefer a remote HTTPS Git source or the semantic fallback.',
         `You may write ONLY inside the research directory: ${researchDir}. Treat the Source Registry as read-only. You MUST NOT modify the Mission workspace, Iteration Repository, existing Source files, or create any candidate patch. The fixed workflow reuses local selections or clones remote selections and records the resulting commit/tree snapshot.`,
         'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.source-acquisition/v2","summary":"...","sourceAcquisition":{"repositories":[{"name":"flashinfer","location":"local|remote","url":"https://accessible-host/owner/repo.git","reason":"why it matches this Mission","evidencePaths":["repo/relative/operator_file.py","repo/relative/kernel_file.cuh"]}],"semanticFallback":false,"fallbackReason":""}}. For a local selection, name must match a Source Registry child directory and url may be omitted. For a remote selection, provide a safe HTTPS Git URL. Select at most 3 repositories. If neither local nor remote source is usable, return repositories:[], semanticFallback:true, and a concise semantic specification in fallbackReason so the Materializer can implement a baseline from the Mission.',
       ].join('\n');
@@ -1178,8 +1351,24 @@ export function createAgentRuntime(options = {}) {
     return { handled: true, state };
   };
 
-  const startResearch = async ({ state, mission, direction, workspace, synchronous = false, runPhase = 'acquire' }) => {
+  const startResearch = async ({ state, mission, direction, workspace, synchronous = false, runPhase, origin = 'automatic', budgetMs: requestedBudgetMs = null, trigger = null }) => {
     assertResourcesReleased(state);
+    // §3.1：不再依赖容易混淆的默认阶段。所有入口必须显式选择阶段，未知/缺失即拒绝启动。
+    if (!RESEARCH_PHASES.includes(runPhase)) {
+      const error = new Error(`Research Agent 需要显式的研究阶段（收到：${String(runPhase)}）；允许值：${RESEARCH_PHASES.join(', ')}。`);
+      error.status = 400;
+      error.code = runPhase == null ? 'RESEARCH_PHASE_REQUIRED' : 'RESEARCH_PHASE_UNKNOWN';
+      throw error;
+    }
+    // 自动研究统一策略的兜底闸门：origin 默认 'automatic'，所以任何新增调用点都不可能
+    // 绕过 researchEnabled:false 从一个分支悄悄启动采集或综合。显式手动研究必须自带
+    // origin:'manual'，由调用方在 HTTP 入口处按 manualEnabled 裁决。
+    if (origin !== 'manual' && !resolveResearchConfig(mission).automaticEnabled) {
+      const error = new Error('Mission 已关闭自动在线研究（sourcePolicy.researchEnabled=false）。');
+      error.status = 409;
+      error.code = 'RESEARCH_DISABLED_BY_POLICY';
+      throw error;
+    }
     if (!managedCliMode || !runtimeEngine.supports(mode, 'research')) {
       const error = new Error(`Research Agent requires a managed workspace CLI runtime (current: ${mode}).`);
       error.status = 503;
@@ -1215,9 +1404,34 @@ export function createAgentRuntime(options = {}) {
       throw error;
     }
     if (runPhase === 'acquire' && mission.sourceRoot) await sourceMirrorPolicy();
+    const prevResearch = state.researchAgent || {};
+    // §7.1：一份研究 session 只有一个总预算。采集与综合共享同一 deadline，子阶段不再
+    // 各拿一份完整预算；仍在运行的上一阶段 deadline 继续约束本阶段。
+    const researchConfig = resolveResearchConfig(mission);
+    const nowMs = Date.now();
+    const previousSessionDeadlineAt = typeof prevResearch.sessionDeadlineAt === 'string' ? prevResearch.sessionDeadlineAt : null;
+    const remainingPreviousSession = previousSessionDeadlineMs(previousSessionDeadlineAt, nowMs);
+    if (remainingPreviousSession !== null && remainingPreviousSession <= 0) {
+      const error = new Error(`研究 session 总预算已耗尽（截止 ${previousSessionDeadlineAt}），不再启动阶段 ${runPhase}。`);
+      error.status = 409;
+      error.code = 'RESEARCH_BUDGET_EXHAUSTED';
+      error.reasonCode = RESEARCH_SUB_REASON_CODES.BUDGET_EXHAUSTED;
+      error.details = { phase: runPhase, sessionDeadlineAt: previousSessionDeadlineAt };
+      throw error;
+    }
+    // 阶段预算不是「每个子阶段各拿一份完整预算」：
+    //  - acquire：独立采集策略；
+    //  - synthesize：用 session 剩余预算（采集已经用掉的那部分不再补回来），它要真正写出笔记；
+    //  - advisory / experience：短的建议型预算。
+    const phaseBudgetMs = Number.isFinite(requestedBudgetMs) && requestedBudgetMs > 0
+      ? Math.floor(requestedBudgetMs)
+      : runPhase === 'acquire' ? researchConfig.acquisitionBudgetMs
+        : runPhase === 'synthesize' ? (remainingPreviousSession ?? researchConfig.synthesizeBudgetMs)
+          : researchConfig.advisoryBudgetMs;
+    const budgetMs = remainingPreviousSession === null ? phaseBudgetMs : Math.min(phaseBudgetMs, remainingPreviousSession);
+    const sessionDeadlineAt = previousSessionDeadlineAt || new Date(nowMs + researchConfig.sessionBudgetMs).toISOString();
     await mkdir(path.join(workspace, 'notes'), { recursive: true });
     await mkdir(path.join(workspace, 'clones'), { recursive: true });
-    const prevResearch = state.researchAgent || {};
     const sourceEvidence = runPhase === 'synthesize'
       ? await readFile(path.join(workspace, 'acquisition-result.json'), 'utf8')
         .then((content) => JSON.parse(content))
@@ -1229,12 +1443,16 @@ export function createAgentRuntime(options = {}) {
           semanticFallback: { allowed: mission.sourcePolicy?.allowSemanticFallback === true, requested: true, reason: prevResearch.error?.message || error.message },
         }))
       : null;
+    // 平台提供 Source Registry 的只读清单：研究员不必猜注册表里有什么，也不必触碰 sandbox 之外的目录。
+    const sourceRegistry = runPhase === 'acquire' && mission.sourceRoot
+      ? await readSourceRegistryInventory(mission.sourceRoot)
+      : null;
     const boundary = await prepareAgentBoundary({
       workspace,
       role: `research-${runPhase}`,
       roots: { workspace, ...(runPhase === 'acquire' && mission.sourceRoot ? { sourceRoot: mission.sourceRoot } : {}) },
     });
-    const prompt = `${buildResearchPrompt({ mission, direction, researchDir: workspace, sourceRoot: mission.sourceRoot, runPhase, sourceEvidence })}\n${boundary.toolInstruction}`;
+    const prompt = `${buildResearchPrompt({ mission, direction, researchDir: workspace, sourceRoot: mission.sourceRoot, runPhase, sourceEvidence, runId, sourceRegistry, allowDiscoveredSources: mission.sourcePolicy?.allowDiscoveredSources === true })}\n${boundary.toolInstruction}`;
     const run = await runtimeEngine.invoke(mode, 'start', {
       runId,
       missionId: mission.id,
@@ -1258,19 +1476,23 @@ export function createAgentRuntime(options = {}) {
       sourceRoot: mission.sourceRoot || prevResearch.sourceRoot || null,
       startedAt: run.startedAt,
       completedAt: null,
-      // 采集阶段预算宽松（主要靠停滞/事件终止），综合阶段短预算（无网络，本地读）
-      budgetMs: runPhase === 'acquire' ? 30 * 60 * 1000 : runPhase === 'experience' ? 6 * 60 * 1000 : 10 * 60 * 1000,
+      // 阶段预算上限 + session 总 deadline 双重约束：sessionBudgetMs 覆盖模型执行、格式修复、
+      // 来源读取、重试与综合，任何子阶段都不能重置它。来源获取由固定工作流执行，不占研究员进程。
+      budgetMs,
+      sessionDeadlineAt,
+      origin: origin === 'manual' ? 'manual' : 'automatic',
+      trigger,
       acquireRunId: runPhase === 'acquire' ? runId : prevResearch.acquireRunId || null,
       synthesizeRunId: runPhase === 'synthesize' ? runId : null,
       lastEventAt: Date.now(),
       eventCount: 0,
       notes: [],
-      messages: [{ id: `research-start-${runId}`, phase: 'research', status: 'running', title: runPhase === 'acquire' ? '研究员采集资料中' : runPhase === 'experience' ? '研究员搜寻优化经验中' : '研究员整理笔记中', detail: `Run ${runId} · ${runPhase === 'acquire' ? '联网采集外部资料' : runPhase === 'experience' ? '参考经验（不阻塞）' : '只读整理研究笔记'} · ${direction}`, time: '刚刚' }],
-      artifacts: [{ id: `research-run-${runId}`, kind: 'Research Run', title: runPhase === 'acquire' ? '研究员采集' : runPhase === 'experience' ? '经验调研' : '研究员综合', status: 'running', meta: `${descriptor.transport} · ${runPhase}` }],
+      messages: [{ id: `research-start-${runId}`, phase: 'research', status: 'running', title: runPhase === 'acquire' ? '研究员采集资料中' : runPhase === 'experience' ? '研究员搜寻优化经验中' : runPhase === 'advisory' ? '研究员检索建议中' : '研究员整理笔记中', detail: `Run ${runId} · ${RESEARCH_PHASE_LABELS[runPhase]} · 预算 ${Math.round(budgetMs / 1000)}s · ${direction}`, time: '刚刚' }],
+      artifacts: [{ id: `research-run-${runId}`, kind: 'Research Run', title: RESEARCH_PHASE_TITLES[runPhase], status: 'running', meta: `${descriptor.transport} · ${runPhase}` }],
       injected: false,
       synchronous: Boolean(synchronous),
     };
-    appendRuntimeEvent(state, 'research.run_started', { runId, runPhase, direction, researchDir: workspace, synchronous: Boolean(synchronous) }, { kind: 'research', mode });
+    appendRuntimeEvent(state, 'research.run_started', { runId, runPhase, direction, researchDir: workspace, synchronous: Boolean(synchronous), origin, trigger, budgetMs, sessionDeadlineAt, sourceRegistryEntries: sourceRegistry?.total ?? null }, { kind: 'research', mode });
     return { handled: true, state };
   };
 
@@ -1738,13 +1960,18 @@ export function createAgentRuntime(options = {}) {
           eventCount,
           error: failed ? structuredClone(run.error || { code: 'CODEX_RESEARCH_FAILED', message: 'Research Agent failed.' }) : null,
         };
-        // 产出笔记：综合阶段，或单阶段（无 sourceRoot 的采集=一次检索产笔记）
+        // 产出笔记：综合阶段、经验阶段、建议阶段，或单阶段（无 sourceRoot 的采集=一次检索产笔记）。
         const singlePhaseAcquire = prev.runPhase === 'acquire' && !prev.sourceRoot;
-        if (terminal && !prev.notes?.length && (prev.runPhase === 'synthesize' || prev.runPhase === 'experience' || singlePhaseAcquire)) {
-          const parsed = parseResearchResult(events);
+        if (terminal && !prev.notes?.length && (prev.runPhase === 'synthesize' || prev.runPhase === 'experience' || prev.runPhase === 'advisory' || singlePhaseAcquire)) {
+          const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
+          const parsed = parseResearchResult(events, { phase: prev.runPhase, runId: prev.runId });
           const note = {
             id: `note_${prev.runId}`,
             runId: prev.runId,
+            researchRunId: prev.runId,
+            // 材料身份：Mission 绑定是「异步研究不得污染其他 Mission」的第一道闸。
+            missionId: prev.missionId || activeMission.id || null,
+            runPhase: prev.runPhase,
             direction: prev.direction,
             content: parsed.rawText,
             summary: parsed.summary,
@@ -1752,34 +1979,46 @@ export function createAgentRuntime(options = {}) {
             suggestedDirections: parsed.suggestedDirections,
             sources: parsed.sources,
             baselineSources: parsed.baselineSources || [],
-            researchDir: prev.researchDir,
-            startedAt: prev.startedAt,
-            completedAt: new Date().toISOString(),
+            advisory: parsed.advisory || null,
+            // 结果协议状态与「有没有材料」分开记录：解析失败是诊断信息，不是可注入成果。
+            outcome: parsed.outcome,
+            resultReasonCode: parsed.reasonCode || null,
+            resultReason: parsed.reason || null,
+            extraction: parsed.extraction || null,
+            failureOnly: parsed.failureOnly === true,
+            // 当前冻结任务契约派生的适用范围（硬件/后端/dtype/shape），不写死历史目标。
+            scope: researchScopeForMission(activeMission),
+            // 机器研究永远不是已验证执行经验，也不伪装成 human 来源。
+            provenance: 'machine-research',
+            verified: false,
             value: null,
           };
+          note.digest = researchNoteDigest(note);
           state.researchNotes = [note, ...(state.researchNotes || []).filter((n) => n.runId !== note.runId)].slice(0, 50);
           nextResearchAgent.notes = [note];
           nextResearchAgent.completedAt = note.completedAt;
-          appendRuntimeEvent(state, failed ? 'research.failed' : nextStatus === 'timed_out' ? 'research.timed_out' : 'research.completed', { runId: prev.runId, direction: prev.direction, summary: parsed.summary }, { kind: 'research', mode });
+          appendRuntimeEvent(state, failed ? 'research.failed' : nextStatus === 'timed_out' ? 'research.timed_out' : 'research.completed', {
+            runId: prev.runId,
+            phase: prev.runPhase,
+            direction: prev.direction,
+            summary: parsed.summary,
+            outcome: parsed.outcome,
+            reasonCode: parsed.reasonCode || null,
+            // 触发原因、阶段、实际耗时、结束原因与可用材料数量（§9 观测），复用既有事件通道。
+            elapsedMs: elapsedSince(prev.startedAt),
+            advisoryMaterial: parsed.advisory ? 1 : 0,
+          }, { kind: 'research', mode });
         } else if (terminal && !prev.notes?.length && prev.runPhase === 'acquire') {
           if (!failed && nextStatus === 'completed' && prev.sourceRoot) {
-            const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
-            const acquiredSources = await acquireSelectedSources({
-              events,
-              sourceRoot: prev.sourceRoot,
-              researchDir: prev.researchDir,
-              mirrorPolicy: await sourceMirrorPolicy(),
-              allowDiscoveredSources: activeMission.sourcePolicy?.allowDiscoveredSources === true,
-              allowSemanticFallback: activeMission.sourcePolicy?.allowSemanticFallback === true,
-            });
-            const acquiredSourceSummary = summarizeAcquiredSources(acquiredSources);
-            nextResearchAgent.acquiredSources = acquiredSourceSummary;
-            nextResearchAgent.phase = '采集完成，待整理笔记';
-            nextResearchAgent.completedAt = new Date().toISOString();
-            appendRuntimeEvent(state, 'research.acquire_completed', {
+            // §7.3：状态投影只观察状态，不执行可能长时间重试的 clone/fetch。
+            // 来源获取由迭代推进路径的 deps.acquireSources 端口执行（见 iteration-loop）。
+            nextResearchAgent.acquisitionStatus = 'pending';
+            nextResearchAgent.acquisitionRunId = prev.runId;
+            nextResearchAgent.phase = '采集完成，待执行来源获取';
+            appendRuntimeEvent(state, 'research.acquire_candidate_ready', {
               runId: prev.runId,
               phase: 'acquire',
-              acquiredSources: acquiredSourceSummary,
+              elapsedMs: elapsedSince(prev.startedAt),
             }, { kind: 'research', mode });
           } else {
             appendRuntimeEvent(state, 'research.failed', {
@@ -2210,7 +2449,13 @@ export function createAgentRuntime(options = {}) {
     const release = reconcileResourceRelease(projected.state);
     return { ...projected, state: release.state, changed: projected.changed || release.changed };
   };
-  return { mode, describe, preflight, startRun, cancelRun, startResearch, startBaselineMaterialization, projectState: projectWithResourceRelease, codexClient: codex, claudeClient: claude };
+  return {
+    mode, describe, preflight, startRun, cancelRun, startResearch, startBaselineMaterialization,
+    projectState: projectWithResourceRelease, codexClient: codex, claudeClient: claude,
+    // 只读端口：来源获取端口需要读取某个 run 的事件来定位研究员结果，
+    // 但不需要（也不应该）拿到整个运行时的写能力。
+    readRunEvents: (runId) => runtimeEngine.invoke(mode, 'readEvents', runId),
+  };
 }
 
 export const agentRuntime = createAgentRuntime();

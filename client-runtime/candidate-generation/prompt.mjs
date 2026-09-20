@@ -58,7 +58,7 @@ const iterationEvidenceInstruction = ({ mission, baseline }) => {
 // Rendering only. Inputs have already been admitted by the round application service.
 export function buildCandidateGenerationPrompt({
   mission, goal, workspace, baseline = {}, testMatrix = {}, workspaceInventory = [],
-  experienceInstruction = '', boundaryInstruction = '',
+  experienceInstruction = '', advisoryInstruction = '', boundaryInstruction = '',
 }) {
   const baselineRunPy = baseline.oracleRunPy || baseline.materializer?.result?.runPy || '';
   const implementationInstruction = operatorLanguageInstruction(mission.implementation, mission.operatorProfile?.candidateContract);
@@ -93,6 +93,7 @@ export function buildCandidateGenerationPrompt({
     mission.operatorProfile?.deliveryFiles?.length ? `Create and maintain these human-facing deliverables: ${mission.operatorProfile.deliveryFiles.join(', ')}. Update report.md with correctness, fixed benchmark measurements, the threshold chosen from the first correct Triton version, and each round's KEEP/DISCARD decision. run.py is an additional internal bridge and is not a substitute for any deliverable.` : '',
     executableTestInstruction,
     experienceInstruction,
+    advisoryInstruction,
     iterationEvidenceInstruction({ mission, baseline }),
     'Use the Mission baseline and iteration evidence embedded in this prompt. Create one bounded candidate patch inside the isolated Mission workspace. Do not call a remote benchmark service in this turn; Operator Studio owns the serialized test queue.',
     'Prefer a single bounded edit call using the embedded baseline; do not spend the turn inspecting unrelated files, waiting for approval, or describing a possible patch. If an edit tool is unavailable, return the complete unified Patch in the final JSON immediately so the runtime can apply it.',

@@ -4,6 +4,15 @@ import path from 'node:path';
 const canonicalHosts = new Set(['github.com', 'gitlab.com']);
 const fullObjectIdPattern = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i;
 
+// 研究 prompt 必须如实说明当前 Mission 真正允许的来源主机：说「Gitee 也可以」而策略层
+// 只接受 GitHub/GitLab，会把研究员引向平台必然拒绝的选择，整次采集白跑。
+export const canonicalSourceHosts = () => [...canonicalHosts].sort();
+export const describeAllowedSourceHosts = ({ allowDiscoveredSources = false } = {}) => (
+  allowDiscoveredSources
+    ? `${canonicalSourceHosts().join(', ')}（canonical），以及其它免凭据的 HTTPS Git 主机（discovered）`
+    : `${canonicalSourceHosts().join(', ')}（仅 canonical；本 Mission 不接受其它主机）`
+);
+
 const policyError = (message, code, details = null) => {
   const error = new Error(message);
   error.code = code;

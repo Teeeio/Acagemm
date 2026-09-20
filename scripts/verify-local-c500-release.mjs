@@ -118,6 +118,8 @@ const checks = [
   'test:operator-test-resilience',
   'test:intent',
   'test:research',
+  'test:research-policy',
+  'test:research-delivery',
   'test:baseline-materializer-agent',
   'test:agent-runtime-registry',
   'test:agent-runtime-timeout-recovery',

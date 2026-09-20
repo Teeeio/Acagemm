@@ -178,6 +178,109 @@ benchmark profiles，不能用 Candidate 自己提供的 `reference()` 或输入
    开发证据是真实的本地 correctness/benchmark 测量，可用于本机开发判定。三者都不能升级或
    冒充为可发布的真机 `liveHardware` 经验——真实来源不自动带来发布权。
 
+## 在线研究（Research）
+
+研究是**只读侦察**：它产出的永远是不可信的建议或参考资料，不能修改固定契约（Profile、测试矩阵、
+baseline、oracle、工具权限）。研究与候选验证路径完全隔离——研究产物结构里不存在 `candidates`。
+
+### 谁触发什么
+
+| 触发 | 自动化 | 阶段 | 默认预算 |
+|---|---|---|---|
+| 连续停滞 / 方向审视（隧道视野） | 自动 | `advisory`（建议型：只找一张可行动建议卡片） | 90 s（60–120 s 量级，可配置） |
+| 固定 Profile 经验调研 | 自动，非阻塞 | `experience` | 90 s |
+| 必要 baseline 来源解析（严格零来源 / 候选 baseline） | 自动，来源门禁驱动 | `acquire` → `synthesize` | 采集 10 min；综合用 session 剩余预算；session 总预算 12 min |
+| materializer 拒绝来源后的改选 | 自动 | `acquire` | 同上 |
+| 操作员显式调研 `POST /api/missions/:id/research` | 手动 | 默认 `acquire`（可用 body `runPhase` 覆盖） | 同上 |
+
+已有有效 baseline、固定测试契约和运行证据时，停滞升级**默认只做建议型研究**，不会再默认进入
+`acquire` 去重新寻找/克隆 baseline 仓库。每个入口都必须显式声明阶段；缺失阶段会被拒绝
+（`RESEARCH_PHASE_REQUIRED`），不再回落到任何默认值。
+
+### 关闭在线研究
+
+```json
+{ "sourcePolicy": { "researchEnabled": false } }
+}
+```
+
+- `researchEnabled: false` 关闭**全部自动在线研究入口**：建议型研究、经验调研、来源采集与综合。
+  固定 Profile、通用停滞升级、严格来源路径、候选 baseline、materializer 恢复分支都受同一开关约束，
+  不会从别的分支悄悄启动采集或综合。
+- 它**不影响**本地经验与已审查 KernelWiki 的检索（那条路径属于 `round-experience-service`，与本开关无关）。
+- 它**不放宽来源门禁**。关闭研究后如果仍需可验证来源，系统返回显式状态
+  （`needs_human` + `loopStatusReason = research_disabled_source_unresolved`），
+  既不隐式开启研究，也不会启用 semantic fallback。
+- **显式手动调研不受 `researchEnabled` 约束**（那是操作员的主动指令），由 `researchPolicy.manualEnabled`
+  （默认 `true`）单独控制，并遵守同一总预算。
+
+### 预算、重试、取消与 fallback
+
+- 一份研究 session 只有一个总 deadline：采集与综合共享它，子阶段不会各拿一份完整预算。
+  可配置项：`sourcePolicy.researchBudgetMs`（建议型，默认 90 s）、`sourcePolicy.acquisitionBudgetMs`
+  （采集，默认 10 min）、`sourcePolicy.researchSessionBudgetMs`（session 总预算，默认 12 min）、
+  `sourcePolicy.synthesizeBudgetMs`（无 session deadline 时的综合兜底，默认 5 min）。
+  综合阶段是真正写笔记的一步：它拿 session 剩余预算，不会被压成建议型研究的 90 s 短预算。
+- 阶段预算与 session deadline 双重约束；任一命中即终止该阶段并请求取消。
+- 来源获取（clone/fetch）**只在迭代推进路径执行，不在状态投影路径执行**，状态查询与正常迭代
+  不会被获取流程拖住。单次尝试有超时上限，只有临时网络错误才会在剩余预算内有限退避；
+  认证/权限/schema/来源策略错误不机械重试。
+- 超时或取消会终止相关子进程并释放资源，不只是标记结束。
+- 研究员判定「没有有效建议」是正常结束，不是协议失败，也不会通过重试去修。
+
+### 材料交付状态
+
+「通过价值筛选」不等于「已注入」。交付阶段可核验：
+
+| 状态 | 含义 |
+|---|---|
+| `available` | 材料可用（已通过价值筛选），尚未被任何轮次选择 |
+| `selected` | 已被某个轮次选择，等待提交 |
+| `prepared` | 已进入该轮次冻结后的 prompt（审计件记录材料 identity + digest） |
+| `submitted` | 执行端真实 run 已绑定该 material digest |
+| `uncertain` | 提交结果不确定：先核对既有运行记录，不盲目再启动一轮 |
+| `discarded` | 过期或不适用，保留原因，不静默丢失 |
+
+preflight 阻止启动、资源门禁未通过或启动抛错时，**材料不会被提前永久消费**：它以 `uncertain`
+状态保留，可再次提交。研究材料经不可信上下文边界（UNTRUSTED DATA + identity + digest）进入目标轮次
+的 prompt，`goal` 只带可核验身份，不再拼裸文本；prompt 审计件与之一致。
+
+### 「无有效建议」与「协议失败」的区别
+
+- **无有效建议**（`no_material` / `transport_failure_only`）：研究正常结束，没有可注入材料。
+  循环继续主候选路径，不重试研究。
+- **协议失败**（`RESEARCH_RESULT_NOT_FOUND` / `RESEARCH_SCHEMA_MISMATCH` / `RESEARCH_RESULT_AMBIGUOUS` /
+  `RESEARCH_RUN_MISMATCH`）：结果定位或分期 schema 校验失败。`RESEARCH_SOURCE_SELECTION_INVALID`
+  作为粗粒度码保留兼容，细分原因在 `error.reasonCode` 与 `error.details` 中。
+
+### 来源可见性
+
+采集 prompt 里写明的**允许主机就是策略真正接受的主机**（默认仅 `github.com` / `gitlab.com`；
+Mission 显式开启 `sourcePolicy.allowDiscoveredSources` 时才接受其它免凭据 HTTPS 主机）。
+告诉研究员一个策略必然拒绝的主机，等于浪费整次采集。
+
+采集阶段由**平台**提供 Source Registry 的只读清单（目录名，上限 40 条），研究员不必猜注册表里有什么，
+也不必触碰 sandbox 之外的目录。sandbox 边界与 prompt 必须一致：授予了 Source Registry 就如实说明它是
+只读参考根，未授予时保持"只有 workspace"的原文。放开整个文件系统不是解决可见性的方式。
+
+### 结果定位规则
+
+研究员正式结果只来自 `agent_message` 角色事件，且必须满足当前阶段声明的 schema：
+裸 JSON、Markdown 围栏 JSON、带少量说明文字的 JSON 都能定位；正确结果之后出现的无关工具 JSON
+不会覆盖它；存在多个互相冲突的候选时返回明确诊断而不是随意猜一个。
+绝不从任意工具输出里捞取相似 JSON 冒充正式结果，也不取「最后一条能 parse 的事件」。
+唯一允许的一次「仅修格式」是确定性的本地修复（剥围栏、剥说明文字），不重试搜索、不补造证据。
+
+### 后续收益评估方法（尚未执行）
+
+本次改造没有做同预算对照实验，也**不宣称在线研究已经提升优化效果**。后续建议在相同墙钟预算下比较：
+
+- A：本地经验 + 已审查 Wiki，关闭在线 research；
+- B：相同基础能力 + 按知识缺口触发的短预算 research。
+
+比较指标用「最佳可靠结果、首个正确候选耗时、研究成本、无材料比例」，**不把笔记数量或注入数量
+当作性能收益**。
+
 ## 快速启动
 
 ### 兼容 TUI（`tester:c500`，固定 C500 后端）

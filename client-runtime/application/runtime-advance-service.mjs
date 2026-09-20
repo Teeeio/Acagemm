@@ -2,7 +2,7 @@ import { detectLoopGuard } from '../iteration-loop.mjs';
 import { isResourceReleaseQuarantined, pendingMissionResources, resourceReleaseBarrier } from '../cancellation-contract.mjs';
 
 export const createRuntimeAdvanceService = ({ autopilot, advanceIteration, iteration, reconcileWorkflowState, detectGuard = detectLoopGuard, releaseResources }) => {
-  const changingActions = new Set(['research_timeout', 'research_injected', 'research_noted', 'round_counted', 'correctness_attempt_counted', 'generation_attempt_counted', 'resumed_agent', 'research_escalated', 'baseline_started', 'resumed_after_baseline', 'failed_candidate_recorded']);
+  const changingActions = new Set(['research_timeout', 'research_injected', 'research_noted', 'research_available', 'research_submitted', 'research_delivery_deferred', 'research_delivery_failed', 'research_delivery_uncertain', 'round_counted', 'correctness_attempt_counted', 'generation_attempt_counted', 'resumed_agent', 'research_escalated', 'baseline_started', 'resumed_after_baseline', 'failed_candidate_recorded']);
   const canStartNewWork = (state) => !state.missionPaused && !resourceReleaseBarrier(state) && !detectGuard(state);
   const advance = async ({ state }) => {
     const releaseBarrier = resourceReleaseBarrier(state);

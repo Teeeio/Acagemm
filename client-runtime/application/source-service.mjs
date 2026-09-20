@@ -23,6 +23,7 @@ export const createSourceService = ({ readdir, stat, path, workspaceManager }) =
       return { count: 0, errors: [error.message] };
     }
   };
+  // 整个 Source Registry 的目录数：只描述注册表规模，绝不作为「本次研究收获」。
   const countSources = async ({ mission }) => {
     if (!mission?.sourceRoot) return { count: 0 };
     try {
@@ -30,5 +31,15 @@ export const createSourceService = ({ readdir, stat, path, workspaceManager }) =
       return { count: entries.filter((item) => item !== '.git').length };
     } catch { return { count: 0 }; }
   };
-  return Object.freeze({ registerSources, countSources });
+  // 本次 researchRun 的实际来源统计：来自该 run 的获取与验证结果，
+  // 不混入 Source Registry 的历史目录。来源数量与有效材料数量分开报告。
+  const countRunSources = async ({ state }) => {
+    const acquisition = state?.researchAgent?.acquisition;
+    return {
+      count: Number.isFinite(acquisition?.sourceCount) ? acquisition.sourceCount : 0,
+      failures: Number.isFinite(acquisition?.failureCount) ? acquisition.failureCount : 0,
+      runId: acquisition?.runId || null,
+    };
+  };
+  return Object.freeze({ registerSources, countSources, countRunSources });
 };

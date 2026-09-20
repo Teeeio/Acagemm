@@ -63,6 +63,36 @@ the existing resume + retest of the same candidate; budget and resource-release
 rules are unchanged. Locally optional diagnostics never trigger this wait — only a
 required, blocking decision does.
 
+## Research strategy and delivery
+
+`advanceIteration` never decides research policy by itself. Every automatic research entry calls
+`resolveAutomaticResearch` (`research-policy.mjs`) and passes the resulting phase and budget
+explicitly. Stagnation and tunnel-vision escalation therefore start an `advisory` phase run — a
+suggestion-only phase that must not acquire or clone a baseline source — instead of falling back to
+`acquire`. When `sourcePolicy.researchEnabled === false` no entry starts a run; the loop emits
+`research.skipped_disabled` and returns without weakening any source gate. Pure runtime faults
+(`classifyResearchFaults`) emit `research.skipped_runtime_fault` instead of triggering full domain
+research.
+
+Research material moves through explicit delivery stages (`available` → `selected` → `submitted`),
+persisted on `iterationStats.pendingInjection`. Passing the value gate does not set
+`researchAgent.injected`: only an executor run bound to the material `digest` counts as submitted
+(`resolveInjectionDelivery`). A blocked preflight or a throwing round start leaves the material in
+`uncertain` state with its failure reason — it is never consumed early, re-submitted into a round
+that already started, or silently dropped. Bounded re-submission is capped by
+`MAX_INJECTION_ATTEMPTS`. Material is bound to Mission, Round, `researchRunId`/`noteId` and digest;
+another Mission's note never becomes this Mission's material (`noteBelongsToMission`).
+
+`evaluateResearchValue` decides in a fixed order: is there material at all, is its declared scope
+compatible with the frozen task contract, and only then is it compared against existing knowledge.
+Only verified `publishedAssets` can suppress new material, and only when the new material adds no
+new constraint, evidence or experiment path. Unverified drafts and unrelated referenced assets never
+block it. Transport/auth-only output is reported as `transport_failure_only`, not as a finding.
+
+Source acquisition runs on `deps.acquireSources` (the iteration-advance path), never inside state
+projection. Per-run source accounting uses `deps.countRunSources`, so Source Registry history is not
+reported as this run's harvest.
+
 ## Verification
 
 `npm run test:loop`, `npm run test:workflow-kernel`,
@@ -75,3 +105,13 @@ used by detectLoopGuard and bounded startup preflight. It keeps the existing
 state-level budget, then active Mission budget, then TOTAL_BUDGET_MS precedence,
 using missionBudgetStartedAt or loopStartedAt. It neither allocates nor renews
 any clock. Startup consumers reject nonfinite or exhausted remaining time.
+
+### Missing acquisition port is reported, never silently "no material"
+
+The acquire path settles its harvest through `deps.acquireSources`. A composition root that has not wired
+that port yet must not be silently indistinguishable from "this run genuinely found nothing", so the loop
+emits `research.acquisition_port_missing` with the fallback it chose, and — when only the legacy
+`deps.registerSources` port exists — records `researchAgent.acquisitionStatus = 'legacy'` with
+`reasonCode = RESEARCH_ACQUISITION_PORT_MISSING` before continuing with the legacy registry count.
+With neither port the loop still reports `fallback: 'none'` before ending as `research_no_material`.
+Regression: `tests/loop-test.mjs` asserts all three shapes.
