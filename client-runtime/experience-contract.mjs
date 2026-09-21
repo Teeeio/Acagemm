@@ -622,6 +622,8 @@ const ADVISORY_KEYS_ALLOWED = ['schemaVersion', 'advisoryId', 'noteId', 'researc
 // 截断一个 researchRunId 会凭空造出另一次运行的身份。它们的拒绝对运行时是安全的，
 // 因为调用方已把封装失败降级为「本轮无材料」而不是让迭代循环停摆。
 export const ADVISORY_PROSE_SOFT_LIMIT = 2_000;
+// 与 EXPERIENCE_LIMITS.content 数值相同，但那是另一条规则、方向相反（记录超界硬拒，这里截断）。
+// 不要在「统一常量」式的重构里把它们合并：合并等于让已审核的陈述和已记录的证据走进截断路径。
 export const ADVISORY_PROSE_HARD_LIMIT = 8_000;
 
 const proseString = (value, label, hard = ADVISORY_PROSE_HARD_LIMIT) => {

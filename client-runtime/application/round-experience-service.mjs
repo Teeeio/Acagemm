@@ -55,6 +55,16 @@ const rejectBackend = (values, where) => {
   const backend = values.find((item) => isBackendTargetName(item));
   if (backend) throw fail('ROUND_EXPERIENCE_TARGET_INVALID', `Execution backend "${backend}" cannot be used as ${where}; it must not be retrieved as hardware`);
 };
+// 读键来自哪里必须能被看见。resolvedTarget 是「实际执行观测到的目标」；没有绑定目标时回退用的
+// mission.hardware 是「声明值」，而本项目里它声明的通常是 backend 而不是硬件目标。
+// 两者的零命中含义完全不同：观测目标的零命中是「确实没有可复用经验」，声明值的零命中可能只是
+// 「键对不上」——记录一律以观测硬件写入，声明值只有在恰好等于观测值时才能命中。
+// 所以这里如实标注来源，不改变查询内容，也不把回退路径变成错误：在观测到目标之前，声明值是
+// 唯一可用的近似，直接拒绝会让首轮永远拿不到任何经验。
+const targetBasisFor = (state, mission) => {
+  const target = state?.iterationStats?.resolvedTarget;
+  return target && typeof target === 'object' && !Array.isArray(target) && target.missionId === mission.id ? 'observed' : 'declared';
+};
 // 默认/显式 scope 都不得绕过 Mission 已绑定的执行目标：无解析目标才回退 Mission 明确 hardware
 // （backend 名必须显式报错，不能悄悄退化成正常零命中）；显式 scope 与绑定目标冲突同样拒绝。
 const queryScope = (state, mission, scope) => {
@@ -520,6 +530,9 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
     if (!safeId(roundId)) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'An explicit admitted roundId is required');
     if (state.iterationStats?.roundBudget && state.iterationStats.roundBudget.roundId !== roundId) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'Experience roundId must match the admitted round budget');
     const resolvedScope = queryScope(state, mission, scope);
+    // 与 resolvedScope 同一时刻判定：冻结的 scope 与标注的来源必须描述同一次读取。
+    const targetBasis = targetBasisFor(state, mission);
+    const targetAttribution = { targetBasis, ...(targetBasis === 'declared' ? { reasonCode: 'ROUND_EXPERIENCE_TARGET_UNRESOLVED' } : {}) };
     const expected = { ...access, missionId: mission.id, roundId, scope: resolvedScope };
     const identity = { projectId: access.projectId, missionId: mission.id, roundId };
     const existing = state.iterationStats?.roundExperience;
@@ -548,7 +561,7 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
       if (inflight.condition !== condition) throw fail('ROUND_EXPERIENCE_CONTEXT_CONFLICT', 'A concurrent retrieval of this round uses a different experience condition');
       return validateExperienceContext(await inflight.promise, expected);
     }
-    state.iterationStats = { ...(state.iterationStats || {}), roundExperienceStatus: { status: 'preparing', projectId: access.projectId, missionId: mission.id, roundId } };
+    state.iterationStats = { ...(state.iterationStats || {}), roundExperienceStatus: { status: 'preparing', projectId: access.projectId, missionId: mission.id, roundId, ...targetAttribution } };
     const claim = { roundId, condition, promise: null };
     const operation = (async () => {
       try {
@@ -581,7 +594,7 @@ export const createRoundExperienceService = ({ experienceService, resolveAccess,
           ...state.iterationStats,
           roundExperience: context,
           roundExperienceSelection: selection,
-          roundExperienceStatus: { status: 'ready', projectId: access.projectId, missionId: mission.id, roundId, contextId: context.contextId, repositoryRevision: context.repositoryRevision },
+          roundExperienceStatus: { status: 'ready', projectId: access.projectId, missionId: mission.id, roundId, contextId: context.contextId, repositoryRevision: context.repositoryRevision, ...targetAttribution },
         };
         return context;
       } catch (error) {

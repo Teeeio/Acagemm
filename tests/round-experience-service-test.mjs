@@ -156,6 +156,26 @@ await test('only matching verified complete evidence is written, idempotently an
   await rejected(mismatch.record({ state, mission, observation }), 'ROUND_EXPERIENCE_EVIDENCE_CONFLICT');
   await rejected(service.record({ state, mission, observation: { evidence: evidence({ missionId: 'foreign' }) } }), 'ROUND_EXPERIENCE_EVIDENCE_CONFLICT');
 });
+// 生产里 Mission 声明的常常是 backend/设备标签，而不是观测到的硬件目标（冷启动场景声明的就是 C550）。
+// 此时读键只能来自声明值，而记录一律以观测硬件写入，于是零命中的含义与「观测目标的零命中」完全不同：
+// 后者是确实没有可复用经验，前者可能只是键对不上。这条钉住这种零命中必须带出来源。
+await test('a read keyed on a declared target is labelled, so its zero result cannot pass as "no experience"', async () => {
+  const { service } = setup();
+  const declaredMission = { ...mission, hardware: ['C550'] };
+  const state = { ...stateFor(), activeMissionId: declaredMission.id };
+  const written = await service.record({ state, mission: declaredMission, observation: { evidence: evidence({ hardware: 'nvidia-gpu', executionMode: 'gpu' }), evidenceRefs: ['result.json'] } });
+  assert.equal(written.status, 'recorded', 'the observed record must really be in the store before the miss is asserted');
+  const missed = await service.prepare({ state, mission: declaredMission, roundId: 'mission-a:round:1' });
+  assert.deepEqual(missed.items, [], 'a declared C550 key cannot match a record written from observed hardware');
+  assert.equal(state.iterationStats.roundExperienceStatus.targetBasis, 'declared');
+  assert.equal(state.iterationStats.roundExperienceStatus.reasonCode, 'ROUND_EXPERIENCE_TARGET_UNRESOLVED');
+  // 观测到真实执行目标后，同一条记录就能命中，且不再被标注为声明来源。
+  const observedState = { ...stateFor(), iterationStats: { resolvedTarget: { missionId: declaredMission.id, hardware: ['nvidia-gpu'] } } };
+  const hit = await service.prepare({ state: observedState, mission: declaredMission, roundId: 'mission-a:round:1' });
+  assert.equal(hit.items.length, 1);
+  assert.equal(observedState.iterationStats.roundExperienceStatus.targetBasis, 'observed');
+  assert.equal(observedState.iterationStats.roundExperienceStatus.reasonCode, undefined);
+});
 await test('observation collection is bounded and storage uncertainty is not silently ignored', async () => {
   const { service, ports } = setup(); const state = stateFor();
   state.benchmark = { status: 'complete', result: { experienceEvidence: evidence() } };
