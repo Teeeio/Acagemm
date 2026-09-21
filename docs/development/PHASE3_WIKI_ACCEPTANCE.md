@@ -24,6 +24,10 @@ Phase 3 的**软件批次**已完成：KernelWiki 固定源导入、确定性选
 > small，越低越好）：facts-only −17.9% / −9.7%，local-only −28.4% / −22.5%，
 > local-and-wiki −31.4% / −35.6%，两个 profile 上排序一致。该批次**不要重跑**；运行入口、注意事项
 > 与全套数字见 [`../../scripts/run-experience-condition-study.md`](../../scripts/run-experience-condition-study.md)。
+> ⚠️ **这组数字不能用来判断「本地经验 vs Wiki 哪个更好」**：契约固定每个 slot 是全新隔离的
+> project/store/mission 且不跨调用传递经验，**本地经验库每次都从零开始**（研究测的是冷启动区间）；
+> Wiki 侧是他人整理、从未针对这些任务做过查询优化的索引，且 54 条里只有 2 条已审查单元够得着。
+> 两侧都弱，且弱的方向不同。
 
 旧实机结论（严格 N20 20/20 等）**只对冻结源 `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`
 及其固定矩阵有效**，不能被读作新生产版本的证据，也不能因为工作树 git clean 或无生产变更

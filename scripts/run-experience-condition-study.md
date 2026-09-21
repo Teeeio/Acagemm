@@ -37,6 +37,25 @@ one that hit `OPERATOR_CORRECTNESS_MISMATCH` and recovered inside the original
 budget, so that column carries one repair round and cannot be read as a pure
 knowledge effect.
 
+**These numbers cannot rank the two knowledge sources.** Neither channel is at
+strength in this design, so the ordering above must not be read as "wiki beats
+local experience":
+
+- the contract fixes `each fresh isolated project/store/mission` and `no
+  experience is transferred across invocations`, so every slot starts with an
+  empty local experience library and can accumulate at most the single round
+  that precedes round 2. The study measures the **cold-start** regime; it says
+  nothing about a local library after long accumulation.
+- the wiki side is a third-party curated index that has never been
+  query-optimized for these missions, and of its 54 units only 2
+  (`applicability.mode: reviewed-transfer`, `architectures: ['sm86']`) are
+  eligible at all — the other 52 are `unreviewed` and by design never
+  auto-injected.
+
+Both channels are weak in opposite ways. A 3-per-condition exploratory
+comparison on top of that cannot separate their contributions; it answers "do
+the three conditions differ at all", not "which knowledge source is better".
+
 Re-running spends live GPU and paid-model budget to re-derive a number that is
 already recorded. The selector did change after the study source (`634b92c`
 removed the `guidance-fallback` bucket and tightened the wiki quota), but the
