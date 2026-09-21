@@ -425,27 +425,60 @@ const proseState = makeState({
 const prose = await advanceIteration(proseState, deps);
 assert.equal(prose.action, 'research_available', '常态长度的研究 findings 不得被拒');
 assert.equal(prose.state.iterationStats.pendingInjection.advisory.items[0].evidence[0].length, 247);
+const proseEvent = [...prose.state.runtimeEvents].reverse().find((event) => event.type === 'research.value_gated');
+assert.equal(proseEvent.payload.proseOversize, 0, '软线以内不得被记账为偏长');
+assert.equal(proseEvent.payload.proseTruncated, 0);
 
-// 封装被拒时绝不能让整个迭代循环停摆：降级为「本轮无材料」，且必须记下 lastResearchRunId，
-// 否则同一条笔记每个 tick 重新抛一次，运行时被永久卡死（这是 2026-09-20 E2E 真实故障）。
+// 两档口径：软线以上仍原样通过（只是记账），只有超过硬线才截断。
+// 2001 字符落在软线之外、硬线之内，必须一字不动地送达——它此前正是被硬拒的那一档。
 resetCounters();
-const oversizedState = makeState({
-  researchAgent: { status: 'completed', runId: 'codex_research_oversized', runtimeKind: 'codex-cli' },
-  researchNotes: [{ id: 'note_oversized', runId: 'codex_research_oversized', direction: '调研 async dispatch', summary: 'async dispatch 导致 correctness boundary mismatch', findings: ['y'.repeat(2_001)], suggestedDirections: ['尝试 async cache'], sources: [] }],
+const softState = makeState({
+  researchAgent: { status: 'completed', runId: 'codex_research_soft', runtimeKind: 'codex-cli' },
+  researchNotes: [{ id: 'note_soft', runId: 'codex_research_soft', direction: '调研 async dispatch', summary: 'async dispatch 导致 correctness boundary mismatch', findings: ['y'.repeat(2_001)], suggestedDirections: ['尝试 async cache'], sources: [] }],
   failureRecords: [{ id: 'fail.1', title: 'async dispatch', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: '数值偏差' }],
 });
-const oversized = await advanceIteration(oversizedState, deps);
-assert.equal(oversized.action, 'research_noted', '封装被拒时不得声称材料可用');
-assert.equal(oversized.state.iterationStats.pendingInjection, null);
-assert.equal(oversized.state.iterationStats.lastResearchRunId, 'codex_research_oversized', '被拒的笔记也必须记账，否则每个 tick 重抛');
-assert.equal(oversized.state.researchAgent.injection.status, 'discarded');
-const gatedEvent = [...oversized.state.runtimeEvents].reverse().find((event) => event.type === 'research.value_gated');
-assert.equal(gatedEvent.payload.advisoryRejected, 'EXPERIENCE_INVALID');
+const soft = await advanceIteration(softState, deps);
+assert.equal(soft.action, 'research_available', '软线以外、硬线以内的散文不得被拒也不得被截');
+assert.equal(soft.state.iterationStats.pendingInjection.advisory.items[0].evidence[0].length, 2_001, '硬线以内必须原样送达');
+const softEvent = [...soft.state.runtimeEvents].reverse().find((event) => event.type === 'research.value_gated');
+assert.equal(softEvent.payload.proseOversize, 1, '越过软线要记账');
+assert.equal(softEvent.payload.proseTruncated, 0, '未越硬线就不得声称截断');
+
+// 超过硬线才截断：截到硬线，且必须留下「截了几条、原本多长」的痕迹。
+resetCounters();
+const hardState = makeState({
+  researchAgent: { status: 'completed', runId: 'codex_research_hard', runtimeKind: 'codex-cli' },
+  researchNotes: [{ id: 'note_hard', runId: 'codex_research_hard', direction: '调研 async dispatch', summary: 'async dispatch 导致 correctness boundary mismatch', findings: ['z'.repeat(9_001)], suggestedDirections: ['尝试 async cache'], sources: [] }],
+  failureRecords: [{ id: 'fail.1', title: 'async dispatch', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: '数值偏差' }],
+});
+const hard = await advanceIteration(hardState, deps);
+assert.equal(hard.action, 'research_available', '超过硬线只能截断，不得退回成「无材料」');
+assert.equal(hard.state.iterationStats.pendingInjection.advisory.items[0].evidence[0].length, 8_000, '截断到硬线');
+const hardEvent = [...hard.state.runtimeEvents].reverse().find((event) => event.type === 'research.value_gated');
+assert.equal(hardEvent.payload.proseMaxLength, 9_001, '记账必须记原始长度，不能只记截断后的');
+assert.equal(hardEvent.payload.proseTruncated, 1);
+
+// 但封装失败本身仍绝不能让迭代循环停摆：降级为「本轮无材料」，且必须记下 lastResearchRunId，
+// 否则同一条笔记每个 tick 重新抛一次，运行时被永久卡死（这是 2026-09-20 E2E 真实故障）。
+// 驱动它的是一个承载身份的字段——noteId 超长会被 identifier 硬拒，这条路径永远不走截断。
+resetCounters();
+const rejectedState = makeState({
+  researchAgent: { status: 'completed', runId: 'codex_research_rejected', runtimeKind: 'codex-cli' },
+  researchNotes: [{ id: 'note_'.padEnd(200, 'q'), runId: 'codex_research_rejected', direction: '调研 async dispatch', summary: 'async dispatch 导致 correctness boundary mismatch', findings: ['正常长度的finding'], suggestedDirections: ['尝试 async cache'], sources: [] }],
+  failureRecords: [{ id: 'fail.1', title: 'async dispatch', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: '数值偏差' }],
+});
+const rejected = await advanceIteration(rejectedState, deps);
+assert.equal(rejected.action, 'research_noted', '封装被拒时不得声称材料可用');
+assert.equal(rejected.state.iterationStats.pendingInjection, null);
+assert.equal(rejected.state.iterationStats.lastResearchRunId, 'codex_research_rejected', '被拒的笔记也必须记账，否则每个 tick 重抛');
+assert.equal(rejected.state.researchAgent.injection.status, 'discarded');
+const rejectedEvent = [...rejected.state.runtimeEvents].reverse().find((event) => event.type === 'research.value_gated');
+assert.equal(rejectedEvent.payload.advisoryRejected, 'EXPERIENCE_INVALID');
 // 幂等：被拒的笔记已记账，下一次 tick 不再重新过一遍价值闸。
 // 判据是价值闸事件的条数不再增长——只看返回值不够，重抛会在这里再追加一条。
 const valueGateCount = (s) => s.runtimeEvents.filter((event) => event.type === 'research.value_gated').length;
-const before = valueGateCount(oversized.state);
-const afterRejection = await advanceIteration(oversized.state, deps);
+const before = valueGateCount(rejected.state);
+const afterRejection = await advanceIteration(rejected.state, deps);
 assert.notEqual(afterRejection.action, 'research_noted', '同一条笔记不得被反复处理');
 assert.equal(valueGateCount(afterRejection.state), before, '被拒的笔记不得在每个 tick 上重新入闸');
 

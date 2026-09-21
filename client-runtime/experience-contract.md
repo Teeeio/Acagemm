@@ -83,6 +83,18 @@ statement that it cannot override the Mission goal, allowed edit scope, fixed te
 oracle, or tool permissions. `validateAdvisoryEnvelope` rejects a missing identity, a foreign Mission, or
 a non-`machine-research` provenance.
 
+Prose fields carry Chinese or English model-written sentences, so their length is bounded in two tiers
+rather than rejected: at or below `ADVISORY_PROSE_SOFT_LIMIT` (2000) a value passes untouched; between the
+soft and hard limit it still passes untouched and the producer records it as oversized; above
+`ADVISORY_PROSE_HARD_LIMIT` (8000) it is truncated to the hard limit and the truncation is recorded. A
+truncation never splits a surrogate pair. This is the opposite of `kernel-wiki-import`, which refuses
+oversized content instead of truncating it: that content is a reviewed claim, and half a reviewed claim is
+a different, unreviewed statement. An advisory item is declared untrusted and unverified, so shortening it
+cannot manufacture a false statement. Identity-bearing fields (`identifier`, `choice`, scope values,
+`phase`) are still rejected when out of bounds and are never truncated — a shortened `researchRunId` would
+invent the identity of a different run. Rejection is survivable because the caller degrades a failed
+envelope to "no material this round" instead of stopping the iteration loop.
+
 Provenance is fixed and honest: the schema version is `operator-studio.research-advisory/v1`,
 `provenance` is always `machine-research`, and `verified` is always `false`. Research advice is never
 represented as human guidance and never as an observed execution record, so no second bypass that pastes

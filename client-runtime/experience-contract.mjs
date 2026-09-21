@@ -611,9 +611,46 @@ export const ADVISORY_PROMPT_LINES = Object.freeze([
 ]);
 const ADVISORY_KEYS_ALLOWED = ['schemaVersion', 'advisoryId', 'noteId', 'researchRunId', 'missionId', 'roundId', 'trigger', 'phase', 'value', 'reasonCode', 'digest', 'provenance', 'verified', 'items'];
 
+// 建议材料在契约里被反复声明是「未验证的假设」，不是审核过的陈述。这与 kernel-wiki-import
+// 的取向正好相反：那边的注入内容宁可显式失败也绝不截断，因为截断一条已审核的 claim 会造出
+// 另一句没人审过的话。假设没有这个负担——截断它不制造假陈述。
+// 所以散文长度走两档，而不是硬拒：
+//   软线以内      正常，原样通过
+//   软线 ~ 硬线   原样通过，只留痕（生产者按同一组常量记账）
+//   超过硬线      截断到硬线，并留痕
+// 承载身份与权威的字段（identifier / choice / scope 取值 / phase）不走这条路径，仍然硬拒：
+// 截断一个 researchRunId 会凭空造出另一次运行的身份。它们的拒绝对运行时是安全的，
+// 因为调用方已把封装失败降级为「本轮无材料」而不是让迭代循环停摆。
+export const ADVISORY_PROSE_SOFT_LIMIT = 2_000;
+export const ADVISORY_PROSE_HARD_LIMIT = 8_000;
+
+const proseString = (value, label, hard = ADVISORY_PROSE_HARD_LIMIT) => {
+  if (typeof value !== 'string' || !value.trim() || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value)) invalid(`${label} must be a bounded nonempty string`);
+  const text = value.trim();
+  if (text.length <= hard) return text;
+  // 不切断代理对：半个代理项会变成一个无法还原的字符混进 prompt。
+  const last = text.charCodeAt(hard - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? hard - 1 : hard);
+};
+// 生产者与校验者必须用同一组常量判断「偏长」与「已截断」，否则记账与实做会各说各话。
+export const measureAdvisoryProse = (values) => {
+  const lengths = (Array.isArray(values) ? values : [])
+    .filter((value) => typeof value === 'string').map((value) => value.trim().length);
+  return Object.freeze({
+    softLimit: ADVISORY_PROSE_SOFT_LIMIT,
+    hardLimit: ADVISORY_PROSE_HARD_LIMIT,
+    maxLength: lengths.length ? Math.max(...lengths) : 0,
+    oversize: lengths.filter((length) => length > ADVISORY_PROSE_SOFT_LIMIT).length,
+    truncated: lengths.filter((length) => length > ADVISORY_PROSE_HARD_LIMIT).length,
+  });
+};
+
 const advisoryString = (value, label, max = 200) => string(value, label, max);
 const advisoryOptional = (value, label, max = 2_000) => (
   value === undefined || value === null || value === '' ? null : string(value, label, max)
+);
+const advisoryProse = (value, label) => (
+  value === undefined || value === null || value === '' ? null : proseString(value, label)
 );
 const advisoryScope = (value) => {
   if (value === undefined || value === null) return null;
@@ -629,16 +666,15 @@ const advisoryScope = (value) => {
 const advisoryItem = (value, index) => {
   plain(value, ['problem', 'scope', 'evidence', 'hypothesis', 'nextChange', 'verification', 'stopCondition'], `advisory item ${index}`);
   return Object.freeze({
-    problem: advisoryOptional(value.problem, 'advisory item problem'),
+    problem: advisoryProse(value.problem, 'advisory item problem'),
     scope: advisoryScope(value.scope),
     // 证据条目是与 problem/hypothesis/nextChange 同类的散文，研究者写出的 findings 通常
-    // 远超 string() 的 160 字符默认上限。这里必须与上面同级的 advisoryOptional(…, 2_000)
-    // 取同一个界，否则一份正常长度的研究笔记就足以让整个建议封装被拒。
-    evidence: list(value.evidence ?? [], 'advisory evidence', 16, (entry) => string(entry, 'advisory evidence', 2_000)),
-    hypothesis: advisoryOptional(value.hypothesis, 'advisory hypothesis'),
-    nextChange: advisoryOptional(value.nextChange, 'advisory nextChange'),
-    verification: advisoryOptional(value.verification, 'advisory verification'),
-    stopCondition: advisoryOptional(value.stopCondition, 'advisory stopCondition'),
+    // 远超 string() 的 160 字符默认上限，所以走同一套两档口径而不是各自的硬界。
+    evidence: list(value.evidence ?? [], 'advisory evidence', 16, (entry) => proseString(entry, 'advisory evidence')),
+    hypothesis: advisoryProse(value.hypothesis, 'advisory hypothesis'),
+    nextChange: advisoryProse(value.nextChange, 'advisory nextChange'),
+    verification: advisoryProse(value.verification, 'advisory verification'),
+    stopCondition: advisoryProse(value.stopCondition, 'advisory stopCondition'),
   });
 };
 

@@ -5,7 +5,7 @@ import { addAuditEvent, appendRuntimeEvent } from './runtime-events.mjs';
 import { isInfrastructureTestFailure } from './operator-test-evidence.mjs';
 import { isMaximizeMission } from './mission-objective.mjs';
 import { isTransportFailureText } from './agent-result.mjs';
-import { ADVISORY_SCHEMA_VERSION, normalizeAdvisoryEnvelope, withAdvisoryDigest } from './experience-contract.mjs';
+import { ADVISORY_SCHEMA_VERSION, normalizeAdvisoryEnvelope, withAdvisoryDigest, measureAdvisoryProse } from './experience-contract.mjs';
 import { RESEARCH_TRIGGERS, classifyResearchFaults, describeResearchRequest, resolveAutomaticResearch } from './research-policy.mjs';
 
 // 研究员子 Agent 的循环策略：停滞检测、价值闸、调研简报、单轮预算、自动流转。
@@ -1074,6 +1074,12 @@ export async function advanceIteration(state, deps = {}) {
           advisoryRejection = { code: error.code || 'ADVISORY_ENVELOPE_FAILED', message: error.message };
         }
       }
+      // 散文长度由契约按同一组常量截断，这里只负责把「偏长」与「真被截了」记下来。
+      // 不记账的话，研究者越写越长会一直安静地通过，直到某天撞上别的硬界才暴露。
+      const prose = measureAdvisoryProse([
+        ...(Array.isArray(latestNote.findings) ? latestNote.findings : []),
+        latestNote.summary, latestNote.direction,
+      ]);
       const pendingInjection = advisory ? {
         // 材料身份：Mission、Round、researchRunId/noteId 与 digest 一起绑定，
         // 供后续选择、冻结 prompt、提交三个阶段核对是不是同一份材料。
@@ -1110,8 +1116,11 @@ export async function advanceIteration(state, deps = {}) {
           reasonCode: evaluation.reasonCode,
         },
       };
+      if (pendingInjection && prose.truncated) addAuditEvent(state, '调研材料超过硬线，已截断', `最长 ${prose.maxLength} 字符，截断 ${prose.truncated} 条（硬线 ${prose.hardLimit}） · ${latestNote.id}`, 'warning', 'Search');
+      else if (pendingInjection && prose.oversize) addAuditEvent(state, '调研材料偏长（仍在硬线内）', `最长 ${prose.maxLength} 字符（软线 ${prose.softLimit}） · ${latestNote.id}`, 'warning', 'Search');
       if (pendingInjection) addAuditEvent(state, '调研材料可用（尚未注入）', `${latestNote.direction || ''} · ${evaluation.value} · ${evaluation.reasonCode}`, 'blue', 'Search');
-      else if (advisoryRejection) addAuditEvent(state, '调研材料封装被拒，本轮不注入', `${advisoryRejection.code} · ${latestNote.id}`, 'warning', 'Search');
+      // 错误码只说明「拒了」，契约的 message 里才写着是哪个字段——不带上就要重新翻日志才能定位。
+      else if (advisoryRejection) addAuditEvent(state, '调研材料封装被拒，本轮不注入', `${advisoryRejection.code} · ${advisoryRejection.message} · ${latestNote.id}`, 'warning', 'Search');
       else if (evaluation.value === 'none') addAuditEvent(state, '本次研究未产出有效建议', evaluation.reason, 'warning', 'Search');
       appendRuntimeEvent(state, 'research.value_gated', {
         noteId: latestNote.id,
@@ -1121,6 +1130,9 @@ export async function advanceIteration(state, deps = {}) {
         reason: evaluation.reason,
         availableMaterial: pendingInjection ? 1 : 0,
         advisoryRejected: advisoryRejection?.code || null,
+        proseMaxLength: prose.maxLength,
+        proseOversize: prose.oversize,
+        proseTruncated: prose.truncated,
       }, { kind: 'research', mode: 'policy' });
       // 封装被拒时 inject 虽为 true，但本轮确实没有可用材料，所以只能是 research_noted。
       return { state, action: evaluation.inject && !advisoryRejection ? 'research_available' : 'research_noted' };
