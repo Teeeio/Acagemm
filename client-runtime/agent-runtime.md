@@ -53,7 +53,17 @@ In the `acquire` phase the platform — not the researcher — supplies the Sour
 `readSourceRegistryInventory` lists child directory names (bounded at
 `SOURCE_REGISTRY_INVENTORY_LIMIT`) and the prompt states that a local selection must use one of those
 exact names. An unreadable registry degrades to an explicit "inventory could not be read" line so the
-researcher prefers a remote source or the semantic fallback instead of guessing.
+researcher prefers a remote source or the semantic fallback instead of guessing. In-flight or leftover
+temporary clone directories (`isAcquiringSourceDirectory`) are never listed: they are not registered
+sources, and offering one would invite a selection that cannot be verified.
+
+A clone failure must name a real cause. `execFile` kills the child on timeout and reports
+`{ code: null, killed: true, stderr: '' }`, so an unannotated throw leaves the failure record with no
+reason at all. `annotateCloneFailure` turns that into `RESEARCH_SOURCE_CLONE_TIMEOUT` plus the attempt
+number and the configured bound; other failures keep `RESEARCH_SOURCE_CLONE_FAILED` and their real
+stderr. A timeout is deliberately **not** transient: `SOURCE_CLONE_TIMEOUT_MS` is 180s per attempt, so
+retrying would spend three times the wall clock inside the acquisition budget. Enabling that retry is a
+cost decision, not a diagnostic one.
 
 The sandbox boundary and the prompt now agree. `prepareAgentBoundary` renders the roots it actually
 grants: with only `workspace` the instruction is unchanged, and when `sourceRoot` is granted it is

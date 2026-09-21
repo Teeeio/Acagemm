@@ -15,11 +15,17 @@
 | 导出 | 说明 |
 |---|---|
 | `classifySourceRegistryIntegrity({ inspection })` | `{ verdict, modified, unverifiable, ignored, ignoredCodes, reasonCode }` |
+| `isAcquiringSourceDirectory(name)` | 是否为获取期间的临时克隆目录（`<name>.acquiring-<uuid>`） |
 | `SOURCE_MODIFIED_CODES` | `['SOURCE_REPOSITORY_DIRTY', 'SOURCE_REPOSITORY_TREE_MISMATCH']` |
-| `SOURCE_UNVERIFIABLE_CODES` | `['SOURCE_REPOSITORY_INVALID', 'SOURCE_ROOT_ENTRY_INVALID', 'SOURCE_PATH_OUTSIDE_REGISTRY']` |
+| `SOURCE_UNVERIFIABLE_CODES` | `['SOURCE_REPOSITORY_INVALID', 'SOURCE_ROOT_ENTRY_INVALID', 'SOURCE_PATH_OUTSIDE_REGISTRY', 'SOURCE_REPOSITORY_CHECKOUT_INCOMPLETE']` |
 
 `verdict` ∈ `clean` / `modified` / `unverifiable`；`reasonCode` 为 `null` /
 `source_root_modified` / `source_root_unverifiable`。
+
+`isAcquiringSourceDirectory` 也在这里，因为「什么才算一个登记来源」是身份规则而不是某个调用方的
+局部习惯：凡是枚举 Source Registry 的地方（`inspectSources`、获取提示里的注册表清单、
+注册与计数、本次收获统计、`hasSourceContent`）都必须跳过它，否则一次中断的获取会被当成
+第三方来源或本次收获。命名规则固定为 `<name>.acquiring-<uuid>`。
 
 ## Invariants
 
@@ -32,6 +38,10 @@
   2026-09-20 起仓库级引用成为一等 scope，该噪声已消失，但本约束不依赖它——理由如上，与注册端写法无关。）
 - **modified 优先于 unverifiable。** 两者同时存在时 `verdict = 'modified'`：被改过是可证结论，
   读不出来只是不可知。两者都会停自动流转，但理由码不同，消费者不得把后者说成前者。
+- **本地获取失败不得说成上游被改。** `SOURCE_REPOSITORY_CHECKOUT_INCOMPLETE`（HEAD 存在但
+  `.git/index` 为空，`git status` 把每个文件读成删除）是**检出中断**留下的状态，几千条
+  `D` 不是改动证据，因此归 `unverifiable` 而不是 `modified`。同理，获取期间的临时克隆目录
+  由 `isAcquiringSourceDirectory` 在巡检入口排除，根本不产生错误码。
 - `inspection` 缺失 / `errors` 非数组 ⇒ `clean`。判定不臆造证据：没有错误码就没有结论。
 - 纯函数、全定义：不抛错，不做 I/O。
 - 不改写 `inspection`，也不补齐缺失字段。

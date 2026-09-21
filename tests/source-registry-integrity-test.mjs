@@ -120,6 +120,43 @@ try {
   assert.equal(structural.errors.length, 1, JSON.stringify(structural.errors));
   assert.equal(classifySourceRegistryIntegrity({ inspection: structural }).verdict, 'unverifiable');
 
+  // 残骸一：获取中断留下的临时克隆目录（`<name>.acquiring-<uuid>`）。它不是登记来源，必须完全
+  // 不出现在巡检结果里——把它当第三方来源核验，就会把本地网络失败报成「上游有未提交变更」。
+  const leftover = path.join(sourceRoot, 'flashinfer.acquiring-a0d2f568-fb82-44da-b29e-8dd5608efd62');
+  await mkdir(leftover, { recursive: true });
+  await writeFile(path.join(leftover, 'reference.cu'), '// half-fetched\n', 'utf8');
+  await execFileAsync('git', ['init'], { cwd: leftover });
+  const withLeftover = await manager.inspectSources(sourceRoot, []);
+  assert.ok(!withLeftover.sources.some((source) => source.id.includes('.acquiring-')),
+    JSON.stringify(withLeftover.sources.map((source) => source.id)));
+  assert.ok(!withLeftover.errors.some((error) => String(error.source || '').includes('.acquiring-')),
+    JSON.stringify(withLeftover.errors));
+
+  // 残骸二：检出中断——HEAD 存在但 index 从未写入，git status 把每个文件读成删除。它看起来像
+  // 几千条未提交变更，实际不是上游改动证据：必须报 CHECKOUT_INCOMPLETE 且只算「核验不了」。
+  const aborted = path.join(sourceRoot, 'aborted-checkout');
+  await mkdir(aborted, { recursive: true });
+  await writeFile(path.join(aborted, 'kernel.cu'), '// upstream kernel\n', 'utf8');
+  await execFileAsync('git', ['init'], { cwd: aborted });
+  await execFileAsync('git', ['config', 'user.name', 'Source Integrity Test'], { cwd: aborted });
+  await execFileAsync('git', ['config', 'user.email', 'source-integrity@local.invalid'], { cwd: aborted });
+  await execFileAsync('git', ['add', '-A'], { cwd: aborted });
+  await execFileAsync('git', ['commit', '-m', 'upstream baseline'], { cwd: aborted });
+  await rm(path.join(aborted, '.git', 'index'), { force: true });
+  const abortedInspection = await manager.inspectSources(sourceRoot, []);
+  const abortedError = abortedInspection.errors.find((error) => error.source === 'aborted-checkout');
+  assert.equal(abortedError?.code, 'SOURCE_REPOSITORY_CHECKOUT_INCOMPLETE', JSON.stringify(abortedInspection.errors));
+  assert.ok(!abortedInspection.errors.some((error) => error.source === 'aborted-checkout' && error.code === 'SOURCE_REPOSITORY_DIRTY'),
+    'an aborted checkout must not be reported as a source modification');
+  const abortedSource = abortedInspection.sources.find((source) => source.id === 'aborted-checkout');
+  assert.equal(abortedSource?.checkoutIncomplete, true);
+  assert.deepEqual(abortedSource?.changedFiles, [],
+    'an aborted checkout must not publish a change list the UI would render as N uncommitted changes');
+  const abortedVerdict = classifySourceRegistryIntegrity({ inspection: abortedInspection });
+  assert.equal(abortedVerdict.verdict, 'unverifiable');
+  assert.equal(abortedVerdict.reasonCode, 'source_root_unverifiable');
+  assert.equal(abortedVerdict.modified.length, 0, 'a local fetch failure must never be classified as a source modification');
+
   // ---- 应用服务：升级成 needs_human 并留持久事件 ----
   const events = [];
   const service = createSourceRegistryIntegrityService({

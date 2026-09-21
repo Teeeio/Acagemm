@@ -11,6 +11,7 @@ import { RESEARCH_PHASES, phaseForTrigger, remainingSessionBudgetMs, resolveRese
 import { runtimeDir } from './storage-paths.mjs';
 import { workspaceManager } from './workspace-manager.mjs';
 import { materializeBaselineSource } from './baseline-materializer.mjs';
+import { isAcquiringSourceDirectory } from './source-registry-integrity.mjs';
 import { prepareAgentBoundary } from './agent-boundary.mjs';
 import { describeAllowedSourceHosts, loadSourceMirrorPolicy, normalizeRepositoryIdentity, resolveSourceTransport, verifySourceTransportSnapshot } from './source-mirror-policy.mjs';
 import { buildCandidateGenerationPrompt } from './candidate-generation/prompt.mjs';
@@ -266,7 +267,7 @@ export const readSourceRegistryInventory = async (sourceRoot) => {
   try {
     const entries = await readdir(sourceRoot, { withFileTypes: true });
     const names = entries
-      .filter((entry) => entry.isDirectory() && entry.name !== '.git' && !entry.name.startsWith('.'))
+      .filter((entry) => entry.isDirectory() && entry.name !== '.git' && !entry.name.startsWith('.') && !isAcquiringSourceDirectory(entry.name))
       .map((entry) => entry.name)
       .sort((left, right) => left.localeCompare(right));
     return { root: sourceRoot, names: names.slice(0, SOURCE_REGISTRY_INVENTORY_LIMIT), truncated: names.length > SOURCE_REGISTRY_INVENTORY_LIMIT, total: names.length };
@@ -350,6 +351,20 @@ export const isTransientSourceError = (error) => {
   const text = [error?.code, error?.message, error?.stderr].filter(Boolean).join(' ');
   if (PERMANENT_SOURCE_PATTERNS.some((pattern) => pattern.test(text))) return false;
   return TRANSIENT_SOURCE_PATTERNS.some((pattern) => pattern.test(text));
+};
+
+// 克隆失败的原因必须落到错误上：超时时 execFile 杀掉子进程（error.code 为 null、stderr 为空），
+// 原样抛出的话失败记录里没有任何原因，人只能看到「clone 失败」，分不清「网络慢/被代理卡住」
+// 与「认证失败」「仓库不存在」。这里只写可判定的事实，不做超出证据的推断。
+// 注意：超时**不**触发重试（标注发生在重试判定之后，且标注后的文本仍不匹配临时错误模式）——
+// 单次上限 180s，放开重试就是三倍墙钟与预算，那是有成本的决定，不在这里悄悄做。
+export const annotateCloneFailure = (error, { attempt = 1, timeoutMs = SOURCE_CLONE_TIMEOUT_MS } = {}) => {
+  if (error?.killed === true && !String(error.stderr || '').trim()) {
+    error.code = 'RESEARCH_SOURCE_CLONE_TIMEOUT';
+    error.message = `来源克隆在第 ${attempt} 次尝试的 ${Math.round(timeoutMs / 1000)}s 上限内未完成，进程被终止；git 未输出 stderr，因此没有更具体的原因。`;
+  }
+  error.code = error.code || 'RESEARCH_SOURCE_CLONE_FAILED';
+  return error;
 };
 
 // session 剩余预算：null 表示上一阶段没有留下 deadline（新 session），调用方据此使用阶段预算。
@@ -441,9 +456,11 @@ export const acquireSelectedSources = async ({ events, sourceRoot, researchDir, 
         }
         temporaryDirectory = `${destination}.acquiring-${randomUUID()}`;
         let cloneError = null;
+        let cloneAttempts = 0;
         // §7.2：区分永久性错误与暂时性错误。权限/认证/schema/来源策略类失败不机械重试；
         // 只有临时网络问题才在剩余预算内做有限退避。退避不引入新预算，只是同一 session deadline 内的重试。
         for (let attempt = 1; attempt <= SOURCE_CLONE_MAX_ATTEMPTS; attempt += 1) {
+          cloneAttempts = attempt;
           try {
             await workspaceManager.git(['-c', 'core.longpaths=true', 'clone', '--depth=1', '--filter=blob:none', transport.transport, temporaryDirectory], sourceRoot, { timeout: SOURCE_CLONE_TIMEOUT_MS });
             cloneError = null;
@@ -456,7 +473,7 @@ export const acquireSelectedSources = async ({ events, sourceRoot, researchDir, 
           }
         }
         if (cloneError) {
-          cloneError.code = cloneError.code || 'RESEARCH_SOURCE_CLONE_FAILED';
+          annotateCloneFailure(cloneError, { attempt: cloneAttempts });
           cloneError.reasonCode = RESEARCH_SUB_REASON_CODES.SOURCE_FETCH_FAILED;
           throw cloneError;
         }

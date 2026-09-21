@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { cp, lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createScopedGitEnvironment } from './git-environment.mjs';
+import { isAcquiringSourceDirectory } from './source-registry-integrity.mjs';
 
 const defaultGitTimeoutMs = 20_000;
 
@@ -328,6 +329,7 @@ export function createWorkspaceManager(options = {}) {
     const sources = [];
     const errors = [];
     for (const entry of entries) {
+      if (isAcquiringSourceDirectory(entry.name)) continue;
       if (!entry.isDirectory()) {
         errors.push({ code: 'SOURCE_ROOT_ENTRY_INVALID', source: entry.name, detail: 'Source Registry 根目录只允许包含独立 Git 仓库目录。' });
         continue;
@@ -363,6 +365,12 @@ export function createWorkspaceManager(options = {}) {
           mismatch.tree = tree;
           throw mismatch;
         }
+        const changedFiles = status.map((line) => line.slice(3).trim());
+        // `git status` 非空不等于「被改过」：克隆/检出中断时 index 从未写入（`.git/index` 不存在），
+        // HEAD tree 里的每个文件都会被读成删除——几千条 `D`。这证明不了上游改过任何东西，
+        // 只能说明这个目录读不出可信内容。两者必须分开报，否则就是拿本地网络故障去指控上游来源被篡改。
+        const checkoutIncomplete = status.length > 0
+          && (await git(['ls-files'], sourcePath)).stdout.split(/\r?\n/).filter(Boolean).length === 0;
         const transportMode = normalizeRepositoryIdentity(canonicalRepository) === normalizeRepositoryIdentity(transportRepository) ? 'canonical' : 'mirror';
         sources.push({
           id: entry.name,
@@ -375,9 +383,15 @@ export function createWorkspaceManager(options = {}) {
           commit: head,
           tree,
           clean: status.length === 0,
-          changedFiles: status.map((line) => line.slice(3).trim()),
+          // 检出未完成时不上报 changedFiles：那不是变更清单，UI 照它渲染会显示「N 个未提交变更」。
+          checkoutIncomplete,
+          changedFiles: checkoutIncomplete ? [] : changedFiles,
         });
-        if (status.length) errors.push({ code: 'SOURCE_REPOSITORY_DIRTY', source: entry.name, detail: `第三方来源包含 ${status.length} 个未提交变更，不能作为固定引用。`, changedFiles: status.map((line) => line.slice(3).trim()) });
+        if (checkoutIncomplete) {
+          errors.push({ code: 'SOURCE_REPOSITORY_CHECKOUT_INCOMPLETE', source: entry.name, detail: `来源目录的 Git index 为空（检出未完成），无法作为固定引用核验；这不表示来源内容被改过。` });
+        } else if (status.length) {
+          errors.push({ code: 'SOURCE_REPOSITORY_DIRTY', source: entry.name, detail: `第三方来源包含 ${status.length} 个未提交变更，不能作为固定引用。`, changedFiles });
+        }
       } catch (cause) {
         const mismatch = cause.code === 'SOURCE_REPOSITORY_TREE_MISMATCH';
         errors.push({

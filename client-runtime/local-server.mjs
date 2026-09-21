@@ -112,6 +112,7 @@ import { createBaselineMaterializerCommandService } from './application/baseline
 import { createBaselineSourceInspectionService } from './application/baseline-source-inspection-service.mjs';
 import { createBaselineMaterializerRecoveryService } from './application/baseline-materializer-recovery-service.mjs';
 import { createSourceRegistryIntegrityService } from './application/source-registry-integrity-service.mjs';
+import { isAcquiringSourceDirectory } from './source-registry-integrity.mjs';
 import { createIterationService } from './application/iteration-service.mjs';
 import { createRuntimeProjectionService } from './application/runtime-projection-service.mjs';
 import { createRuntimeAdvanceService } from './application/runtime-advance-service.mjs';
@@ -317,7 +318,8 @@ const hasSourceContent = async (sourceRoot) => {
   if (!sourceRoot) return false;
   try {
     const entries = await readdir(sourceRoot).catch(() => []);
-    return entries.filter((name) => name !== '.git').length > 0;
+    // 残留在注册表里的临时克隆目录不算内容：否则一次失败获取会让空注册表看起来已经就绪。
+    return entries.filter((name) => name !== '.git' && !isAcquiringSourceDirectory(name)).length > 0;
   } catch { return false; }
 };
 

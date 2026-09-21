@@ -23,7 +23,7 @@ import {
   parseResearchResult,
   repairResearchFormatting,
 } from '../client-runtime/agent-result.mjs';
-import { acquireSelectedSources, researchScopeForMission } from '../client-runtime/agent-runtime.mjs';
+import { acquireSelectedSources, annotateCloneFailure, isTransientSourceError, researchScopeForMission } from '../client-runtime/agent-runtime.mjs';
 import { createAutopilotFixedProfileService } from '../client-runtime/application/autopilot-fixed-profile-service.mjs';
 import { createAutopilotStrictSourceService } from '../client-runtime/application/autopilot-strict-source-service.mjs';
 import { createBaselineMaterializerRecoveryService } from '../client-runtime/application/baseline-materializer-recovery-service.mjs';
@@ -278,6 +278,23 @@ try {
 } finally {
   await rm(sourceRoot, { recursive: true, force: true });
 }
+
+// ---- C. 克隆失败要说出原因，且不偷偷变成重试 ----
+// execFile 超时杀进程时给的是 {code: null, killed: true, stderr: ''}：原样抛出等于没有原因。
+const timeoutFailure = Object.assign(new Error('Command failed: git clone'), { code: null, killed: true, signal: 'SIGTERM' });
+annotateCloneFailure(timeoutFailure, { attempt: 2 });
+assert.equal(timeoutFailure.code, 'RESEARCH_SOURCE_CLONE_TIMEOUT');
+assert.match(timeoutFailure.message, /第 2 次尝试/);
+assert.match(timeoutFailure.message, /stderr/);
+// 超时不是临时错误：单次上限 180s，把它当临时错误就是在 10 分钟采集预算里跑三倍墙钟。
+assert.equal(isTransientSourceError(timeoutFailure), false);
+assert.equal(isTransientSourceError(Object.assign(new Error('Command failed: git'), { code: null, killed: true, stderr: '' })), false);
+// 有 stderr 的真实网络错误仍然是临时错误，重试预算照旧生效。
+assert.equal(isTransientSourceError(Object.assign(new Error('git clone failed'), { stderr: 'fatal: unable to access: Could not resolve host: github.com' })), true);
+// 非超时失败保持原有码，不冒充超时。
+const otherFailure = annotateCloneFailure(Object.assign(new Error('git clone failed'), { code: null, stderr: 'fatal: repository not found' }));
+assert.equal(otherFailure.code, 'RESEARCH_SOURCE_CLONE_FAILED');
+assert.equal(isTransientSourceError(otherFailure), false, 'permanent errors must not be retried');
 
 // 适用范围从当前冻结任务契约派生，不写死历史目标。
 const scope = researchScopeForMission({

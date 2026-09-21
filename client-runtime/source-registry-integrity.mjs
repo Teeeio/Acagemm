@@ -7,7 +7,7 @@
 //    与当前 HEAD tree 不一致（SOURCE_REPOSITORY_TREE_MISMATCH）——后者覆盖「已经别处提交过、
 //    工作区反而是干净的」这种看不见的改动。
 //  - **unverifiable（读不出来，不能断言任何事）**：不是独立 Git 根、来源根里有非目录条目、
-//    路径越界。它同样要停自动流转，但理由不同，不能冒充「被改过」。
+//    路径越界、检出未完成。它同样要停自动流转，但理由不同，不能冒充「被改过」。
 //
 // 关键约束：判定**只认来源级错误码**，不认引用级错误码（SOURCE_REFERENCE_*）。
 // 引用级错误讲的是「某个 mission 声称用了什么」——候选自报来源可能指向未登记的仓库、
@@ -16,17 +16,27 @@
 // 把这些当依据，巡检就会因 mission 级声明问题报「来源被改」，把真信号淹成噪声。
 // 本闸门只回答「来源根现在还能不能当固定引用」，因此引用级一律不参与判定。
 
+// 来源获取期间的临时克隆目录（`<name>.acquiring-<uuid>`，由 agent-runtime 在 sourceRoot 内创建，
+// 成功后才 rename 成正式来源，中断后会残留）。它既不是登记来源，也从未打算成为来源。
+// 所有枚举 Source Registry 的地方都必须跳过它：把它当来源，就会把「本地网络失败」报成
+// 「上游来源有未提交变更」，还会把它算进注册表规模和「本次研究收获」。判定放在这里，
+// 因为这是「什么才算一个登记来源」的身份规则，不是某个调用方的局部习惯。
+const ACQUIRING_SOURCE_DIRECTORY_PATTERN = /\.acquiring-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isAcquiringSourceDirectory = (name) => ACQUIRING_SOURCE_DIRECTORY_PATTERN.test(String(name || ''));
+
 // 有证据证明来源内容被改动过。
 export const SOURCE_MODIFIED_CODES = Object.freeze([
   'SOURCE_REPOSITORY_DIRTY',
   'SOURCE_REPOSITORY_TREE_MISMATCH',
 ]);
-
 // 无法核验来源（结构性故障或读取失败），但**不能**据此声称内容被改过。
 export const SOURCE_UNVERIFIABLE_CODES = Object.freeze([
   'SOURCE_REPOSITORY_INVALID',
   'SOURCE_ROOT_ENTRY_INVALID',
   'SOURCE_PATH_OUTSIDE_REGISTRY',
+  // 检出/克隆中断：index 从未写入，HEAD tree 里每个文件都被读成删除。看起来像几千条未提交变更，
+  // 但那是本地获取失败留下的残骸，不是上游改动证据——归到这里，理由才与事实一致。
+  'SOURCE_REPOSITORY_CHECKOUT_INCOMPLETE',
 ]);
 
 const MODIFIED = new Set(SOURCE_MODIFIED_CODES);

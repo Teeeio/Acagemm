@@ -1,3 +1,5 @@
+import { isAcquiringSourceDirectory } from '../source-registry-integrity.mjs';
+
 export const createSourceService = ({ readdir, stat, path, workspaceManager }) => {
   if (typeof readdir !== 'function' || typeof stat !== 'function' || !path || !workspaceManager) {
     throw new TypeError('Source service requires filesystem and workspace dependencies.');
@@ -9,7 +11,7 @@ export const createSourceService = ({ readdir, stat, path, workspaceManager }) =
     try {
       const entries = await readdir(mission.sourceRoot).catch(() => []);
       const references = [];
-      for (const name of entries.filter((item) => item !== '.git')) {
+      for (const name of entries.filter((item) => item !== '.git' && !isAcquiringSourceDirectory(item))) {
         const repoPath = path.join(mission.sourceRoot, name);
         const isRepo = await stat(path.join(repoPath, '.git')).then(() => true).catch(() => false);
         if (!isRepo) continue;
@@ -30,7 +32,7 @@ export const createSourceService = ({ readdir, stat, path, workspaceManager }) =
     if (!mission?.sourceRoot) return { count: 0 };
     try {
       const entries = await readdir(mission.sourceRoot).catch(() => []);
-      return { count: entries.filter((item) => item !== '.git').length };
+      return { count: entries.filter((item) => item !== '.git' && !isAcquiringSourceDirectory(item)).length };
     } catch { return { count: 0 }; }
   };
   // 本次 researchRun 的实际来源统计：来自该 run 的获取与验证结果，

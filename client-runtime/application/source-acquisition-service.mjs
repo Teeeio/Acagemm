@@ -1,3 +1,5 @@
+import { isAcquiringSourceDirectory } from '../source-registry-integrity.mjs';
+
 // 来源获取端口（§7.3）：把可能长时间重试的 clone/fetch 从状态投影路径中移出，
 // 放进迭代推进路径（advanceIteration）执行。状态查询与正常迭代决策因此不再被获取流程拖住。
 //
@@ -19,7 +21,8 @@ export const createSourceAcquisitionService = ({ agentRuntime, acquireSelectedSo
     if (!readdir || !sourceRoot) return null;
     const entries = await readdir(sourceRoot).catch(() => []);
     if (!Array.isArray(entries)) return null;
-    return entries.filter((name) => name !== '.git' && !baseline.has(name)).length;
+    // 中断的临时克隆目录会残留：它不是收获，算进去会把失败的那次获取报成成功。
+    return entries.filter((name) => name !== '.git' && !isAcquiringSourceDirectory(name) && !baseline.has(name)).length;
   };
   // 端口必须自己把输入解析齐：调用方（迭代循环）只提供 state / mission / runId，
   // 采集目录与 Source Registry 由 Mission 与本次 researchAgent 推导。缺输入时给出明确
