@@ -101,8 +101,19 @@ const auditAgentIsolation = async ({ runRoot: activeRunRoot, workspaceRoot }) =>
     assert.equal(record.boundary.enforcement, 'workspace-sandbox-and-workflow-diff', `${record.runId} boundary enforcement label drifted from codex-client`);
     assert.equal(record.boundary.roots.workspace, record.workspace, `${record.runId} boundary cwd mismatch`);
     const events = await readFile(record.eventPath, 'utf8');
-    const eventRecords = events.split(/\r?\n/).filter(Boolean).map(JSON.parse);
-    assert.equal(eventRecords.some((event) => event.item?.type === 'command_execution'), false, `${record.runId} exposed local command execution`);
+    // 这里刻意不断言「事件流里没有本地命令」。shell 是产品自行保留的，不是被关掉的：
+    // codex-client.mjs 写明删掉 edit/apply 工具会 strand 真实运行，禁用是 opt-in
+    // （OPERATOR_CODEX_DISABLE_SHELL_TOOL，默认关闭）；8e6d711 也把边界标签改成了诚实的
+    // workspace-sandbox-and-workflow-diff。保留这段注释是因为「agent 居然执行了命令」
+    // 看起来仍然像个缺口，很容易被下一个人当成回归再加回来。
+    //
+    // 真正的边界是沙箱，不是「没有 shell」：真实运行里 materializer 会执行 python 校验它
+    // 自己生成的文件，research-acquire 会列举它被授予的只读 sources 根——都在各自根内。
+    //
+    // 诚实缺口：本块断言的是「边界被正确声明」（沙箱模式、可写/只读根、add-dir、边界 cwd、
+    // 角色专属根），不是「边界被实际执行」。执行由 Codex 沙箱负责，事件流里看不出来。
+    // 要补它得用一个已知越界的探针去实测沙箱是否拦得住，那是独立的一件事——不要以为
+    // 这里已经行为性地验证过隔离。
     const referencedRuns = [...events.matchAll(/cold-start-\d{4}-\d{2}-\d{2}T[\d-]+Z/g)].map((match) => match[0]);
     assert.ok(referencedRuns.every((name) => name === path.basename(activeRunRoot)), `${record.runId} accessed another cold-start run`);
   }
