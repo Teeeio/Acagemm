@@ -83,6 +83,21 @@ that already started, or silently dropped. Bounded re-submission is capped by
 `MAX_INJECTION_ATTEMPTS`. Material is bound to Mission, Round, `researchRunId`/`noteId` and digest;
 another Mission's note never becomes this Mission's material (`noteBelongsToMission`).
 
+Building the advisory envelope is optional context, not a gate: a rejected envelope degrades to
+`research_noted` ("no material this round") and the note is still bookkept, so one rejection can never
+stop the loop. Prose length does not reject at all — the contract bounds it in two tiers, passing values
+untouched up to the hard limit and truncating only beyond it. What still rejects is an identity-bearing
+field, which is never truncated. Those two rules compose: the fields that can reject are exactly the ones
+where a shortened value would be a false identity, and rejection is survivable.
+
+Repeated rejection is different from a single one. `iterationStats.consecutiveAdvisoryRejected` counts
+only rounds that actually attempted a build and were refused — a round that needed no material neither
+increments nor resets it, while a successful build resets it to zero. At `MAX_ADVISORY_REJECTIONS` the
+loop stops reporting "no material" and returns `action: 'needs_human'` with
+`loopStatusReason = 'advisory_contract_mismatch'`: consecutive rejection means the contract and its
+producer disagree, and a mismatch that keeps degrading silently would be audited as "research produced
+nothing", which is the wrong cause.
+
 `evaluateResearchValue` decides in a fixed order: is there material at all, is its declared scope
 compatible with the frozen task contract, and only then is it compared against existing knowledge.
 Only verified `publishedAssets` can suppress new material, and only when the new material adds no

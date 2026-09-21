@@ -482,6 +482,37 @@ const afterRejection = await advanceIteration(rejected.state, deps);
 assert.notEqual(afterRejection.action, 'research_noted', '同一条笔记不得被反复处理');
 assert.equal(valueGateCount(afterRejection.state), before, '被拒的笔记不得在每个 tick 上重新入闸');
 
+// 连续被拒转人工：单轮降级是对的，连续被拒就不是「本轮无材料」而是契约与生产者不匹配。
+// 继续静默降级会让它在审计里显示成「研究没产出」，归因整个错掉。
+const rejectingNote = (runId) => ({ id: `note_${runId}`.padEnd(200, 'q'), runId, direction: '调研 async dispatch', summary: 'async dispatch 导致 correctness boundary mismatch', findings: ['正常长度的finding'], suggestedDirections: ['尝试 async cache'], sources: [] });
+// latestNote 取的是第一条属于该 Mission 的笔记，所以新笔记要放在最前。
+const nextResearchState = (state, runId) => ({ ...state, researchAgent: { ...state.researchAgent, status: 'completed', runId }, researchNotes: [rejectingNote(runId), ...(state.researchNotes || [])] });
+resetCounters();
+let rejectionRun = await advanceIteration(makeState({ researchAgent: { status: 'completed', runId: 'codex_reject_1', runtimeKind: 'codex-cli' }, researchNotes: [rejectingNote('codex_reject_1')], failureRecords: [{ id: 'fail.1', title: 'async dispatch', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: '数值偏差' }] }), deps);
+assert.equal(rejectionRun.action, 'research_noted', '第一次被拒只降级，不转人工');
+assert.equal(rejectionRun.state.iterationStats.consecutiveAdvisoryRejected, 1);
+rejectionRun = await advanceIteration(nextResearchState(rejectionRun.state, 'codex_reject_2'), deps);
+assert.equal(rejectionRun.action, 'research_noted', '第二次被拒仍只降级');
+assert.equal(rejectionRun.state.iterationStats.consecutiveAdvisoryRejected, 2);
+rejectionRun = await advanceIteration(nextResearchState(rejectionRun.state, 'codex_reject_3'), deps);
+assert.equal(rejectionRun.action, 'needs_human', '连续被拒达到上限必须转人工，而不是继续静默降级');
+assert.equal(rejectionRun.state.iterationStats.loopStatus, 'needs_human');
+assert.equal(rejectionRun.state.iterationStats.loopStatusReason, 'advisory_contract_mismatch');
+assert.equal(rejectionRun.state.iterationStats.consecutiveAdvisoryRejected, 3);
+assert.equal(rejectionRun.state.researchAgent.injection.status, 'discarded');
+// 转人工的笔记同样已记账：恢复后不得重放这一条。
+assert.equal(rejectionRun.state.iterationStats.lastResearchRunId, 'codex_reject_3');
+
+// 中间成功一次就把连续计数清零：偶发被拒不该累积成人工介入。
+resetCounters();
+let recovered = await advanceIteration(makeState({ researchAgent: { status: 'completed', runId: 'codex_reject_a', runtimeKind: 'codex-cli' }, researchNotes: [rejectingNote('codex_reject_a')], failureRecords: [{ id: 'fail.1', title: 'async dispatch', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: '数值偏差' }] }), deps);
+recovered = await advanceIteration(nextResearchState(recovered.state, 'codex_reject_b'), deps);
+assert.equal(recovered.state.iterationStats.consecutiveAdvisoryRejected, 2);
+const goodState = { ...recovered.state, researchAgent: { ...recovered.state.researchAgent, status: 'completed', runId: 'codex_reject_ok' }, researchNotes: [{ id: 'note_reject_ok', runId: 'codex_reject_ok', direction: '调研 async dispatch', summary: 'async dispatch 导致 correctness boundary mismatch', findings: ['正常长度的finding'], suggestedDirections: ['尝试 async cache'], sources: [] }, ...recovered.state.researchNotes] };
+const good = await advanceIteration(goodState, deps);
+assert.equal(good.action, 'research_available', '封装成功的一轮不得被判为被拒');
+assert.equal(good.state.iterationStats.consecutiveAdvisoryRejected, 0, '一旦封装成功，连续被拒计数必须清零');
+
 // pendingInjection → 自动续跑（startMainRound 一次，交付材料）
 resetCounters();
 const resumeState = makeState({

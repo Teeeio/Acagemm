@@ -22,6 +22,10 @@ export const RESEARCH_MATERIAL_STALL_MS = 120_000; // 采集阶段：sources/ �
 export const MAX_ROUNDS = 20;                          // 最大轮数
 export const TOTAL_BUDGET_MS = 2 * 60 * 60 * 1000;     // 累计时长预算（自首轮起算 wall-clock）
 export const MAX_RESEARCH_ESCALATIONS = 3;             // 研究员升级次数上限
+// 连续几轮研究材料都被契约拒收，就不再当作「本轮无材料」而是当作契约与生产者不匹配的缺陷。
+// 单轮被拒是偶发（降级即止），连续被拒意味着系统性的不匹配：此时研究的产出不是没用，
+// 而是我们收不下——继续静默降级会让它在审计里显示成「研究没产出」，归因整个错掉。
+export const MAX_ADVISORY_REJECTIONS = 3;
 export const PLATEAU_NO_IMPROVE_ROUNDS = 5;            // maximize：研究耗尽后连续 N 轮无 current best 提升 → 平台期
 
 const AGENT_ACTIVE_STATUS = ['running', 'executing', 'awaiting_action', 'cancel_requested', 'awaiting_approval'];
@@ -1105,6 +1109,11 @@ export async function advanceIteration(state, deps = {}) {
         researchExhausted: ((stats.researchRounds || 0) + 1) >= MAX_RESEARCH_ESCALATIONS,
         pendingInjection,
         consecutiveNoAdopt: 0, // 研究视为一次重新起步尝试，避免研究被连续触发
+        // 只数「试过封装又被拒」的次数：没试过（本轮不需要注入）既不算成功也不算失败，
+        // 保持原值，否则一次不相关的跳过就会把累积的连续被拒清零。
+        consecutiveAdvisoryRejected: advisoryRejection
+          ? (stats.consecutiveAdvisoryRejected || 0) + 1
+          : advisory ? 0 : (stats.consecutiveAdvisoryRejected || 0),
       };
       state.researchAgent = {
         ...researchAgent,
@@ -1134,6 +1143,18 @@ export async function advanceIteration(state, deps = {}) {
         proseOversize: prose.oversize,
         proseTruncated: prose.truncated,
       }, { kind: 'research', mode: 'policy' });
+      // 连续被拒到这里就不再降级，转人工：单轮被拒是偶发，连续被拒是契约与生产者不匹配。
+      // 记账（lastResearchRunId）已在上面落盘，所以即使在这里停下，恢复后也不会重放这条笔记。
+      if (state.iterationStats.consecutiveAdvisoryRejected >= MAX_ADVISORY_REJECTIONS) {
+        const reason = 'advisory_contract_mismatch';
+        state.iterationStats = { ...state.iterationStats, loopStatus: 'needs_human', loopStatusReason: reason };
+        if (mission.status !== 'stopped') mission.status = 'needs_human';
+        if (!state.runtimeEvents?.some((event) => event.type === 'loop.needs_human' && event.payload?.reason === reason)) {
+          addAuditEvent(state, '循环需要人工介入', `连续 ${state.iterationStats.consecutiveAdvisoryRejected} 轮研究材料被契约拒收，最近一次：${advisoryRejection.code} · ${advisoryRejection.message}`, 'warning', 'UserRound');
+          appendRuntimeEvent(state, 'loop.needs_human', { reason, rejections: state.iterationStats.consecutiveAdvisoryRejected, code: advisoryRejection.code }, { kind: 'policy', mode: 'client' });
+        }
+        return { state, action: 'needs_human' };
+      }
       // 封装被拒时 inject 虽为 true，但本轮确实没有可用材料，所以只能是 research_noted。
       return { state, action: evaluation.inject && !advisoryRejection ? 'research_available' : 'research_noted' };
     }
