@@ -86,6 +86,13 @@ node scripts/import-kernel-wiki.mjs --source PATH --commit HEX --out NEWFILE [--
 
 ### 4.2 HTTP：经生产 API 导入（唯一写入口）
 
+> **运维前提（默认行为，容易漏）**：Runtime 不设 `OPERATOR_EXPERIENCE_CONDITION` 时走的就是
+> 未改动的 D 选择（本地 + Wiki），所以**通道默认是开的**；但 Wiki 单元只能靠下面这次显式导入
+> 进入某个项目的经验库——**服务启动不会自动导入**，真实运行的默认库是空的。库为空时选择器每轮
+> 选中 0 条 Wiki 记录，注入内容与「仅本地」无异，而 selection sidecar **仍会如实记为
+> `local-and-wiki`**。也就是说「装了没用」和「根本没装」在留存证据上长得一样：准备开始真实使用
+> 之前先把这个快照导入到该项目，否则收集到的数据回答不了 Wiki 到底该保留还是移除。
+
 CLI 生成的文件由操作者导入到隔离 Runtime 的生产 API：
 
 ```http
@@ -141,11 +148,16 @@ POST /api/projects/:projectId/experiences/import-kernel-wiki
   [`run-diagnostics-20260914/acceptance.json`](evidence/run-diagnostics-20260914/acceptance.json)、
   [`closeout-20260915/closeout.json`](evidence/closeout-20260915/closeout.json)
 
-## 7. 后续方向：三条件开发验收（上游未启动）
+## 7. 三条件开发验收（**2026-09-16 已完成**，结果见 §1 日期补充）
 
-下一步是**受控的三条件开发验收**，用于回答「审查过的 Wiki 是否带来可测收益」：
-无经验（no experience）/ 仅本地经验（local experience）/ 本地经验 + 已审查 Wiki
-（local plus reviewed Wiki）。
+受控三条件是：无经验（facts-only）/ 仅本地经验（local-only）/ 本地经验 + 已审查 Wiki
+（local-and-wiki）。**该批次已在 2026-09-16 跑完九个 slot**，权威记录、描述性数字与
+「不能据此判断两个知识源优劣」的原因见 §1 的日期补充与
+[`../../scripts/run-experience-condition-study.md`](../../scripts/run-experience-condition-study.md)。
+九个 slot 是探索性比较（每条件 3 个），**不是 N20，也不作显著性或因果结论**，因此 Phase 3
+的正式表述仍停在「软件已验收、收益**未验证**」。
+
+若将来要重做或扩展这类比较，下列约束继续有效：
 
 - 三个条件必须使用**相同的工作负载、相同的任务预算与相同的 Profile/矩阵**；
   样本量、批次划分与是否启动由上游决定，本文件与实现者**不自行选定样本量，也不启动实验**。
@@ -153,4 +165,8 @@ POST /api/projects/:projectId/experiences/import-kernel-wiki
   什么，不证明外部服务收到或遵守）。
 - 结果按既有 `REAL_GPU_REGRESSION.md` 规则记录：同一完整配置指纹才可合并成 N，
   失败/unknown 保留在分母，`unknown` 模型绝不回填，旧 N20 不重新入池。
-- 三条件未完成前，Phase 3 只按「软件已验收、收益待验证」表述。
+
+**真实使用中的采样计划（用户 2026-09-21 决定）**：Wiki 通道**暂时保留**——不删、也不投入针对性
+优化；等系统做到真实可用、在日常真实算子优化中收集到量化数据后，再决定保留 / 针对优化 / 去除。
+在此之前按「无决定性证据即假设其有用」处理。该计划成立的前提是上一条运维前提：**库里真的装了
+快照**，否则采到的数据在证据上无法区分「没用」与「没装」。
