@@ -1061,9 +1061,19 @@ export async function advanceIteration(state, deps = {}) {
       const evaluation = evaluateResearchValue({ research: latestNote, knowledge: knowledgeFromState(state), mission });
       latestNote.value = evaluation.value;
       const briefing = buildResearchBriefing({ mission, researchNotes: [latestNote], failureRecords: state.failureRecords, currentBest: state.currentBest, knowledgeReferences: state.knowledgeReferences });
-      const advisory = evaluation.inject
-        ? buildAdvisoryEnvelope({ note: latestNote, mission, roundId: null, trigger: researchAgent.trigger || null, value: evaluation.value, reasonCode: evaluation.reasonCode })
-        : null;
+      // 建议封装是可选的上下文，不是门禁：它失败只能降级为「本轮无材料可用」。
+      // 抛出去还有第二个后果——lastResearchRunId 在下面才落盘，一旦在这里抛出，
+      // 同一条笔记会在每个 tick 上被重新处理并再次抛出，整个迭代循环永远停在这一行。
+      // 一次封装越界就能把运行时彻底卡死，所以这里必须接住。
+      let advisory = null;
+      let advisoryRejection = null;
+      if (evaluation.inject) {
+        try {
+          advisory = buildAdvisoryEnvelope({ note: latestNote, mission, roundId: null, trigger: researchAgent.trigger || null, value: evaluation.value, reasonCode: evaluation.reasonCode });
+        } catch (error) {
+          advisoryRejection = { code: error.code || 'ADVISORY_ENVELOPE_FAILED', message: error.message };
+        }
+      }
       const pendingInjection = advisory ? {
         // 材料身份：Mission、Round、researchRunId/noteId 与 digest 一起绑定，
         // 供后续选择、冻结 prompt、提交三个阶段核对是不是同一份材料。
@@ -1101,6 +1111,7 @@ export async function advanceIteration(state, deps = {}) {
         },
       };
       if (pendingInjection) addAuditEvent(state, '调研材料可用（尚未注入）', `${latestNote.direction || ''} · ${evaluation.value} · ${evaluation.reasonCode}`, 'blue', 'Search');
+      else if (advisoryRejection) addAuditEvent(state, '调研材料封装被拒，本轮不注入', `${advisoryRejection.code} · ${latestNote.id}`, 'warning', 'Search');
       else if (evaluation.value === 'none') addAuditEvent(state, '本次研究未产出有效建议', evaluation.reason, 'warning', 'Search');
       appendRuntimeEvent(state, 'research.value_gated', {
         noteId: latestNote.id,
@@ -1109,8 +1120,10 @@ export async function advanceIteration(state, deps = {}) {
         reasonCode: evaluation.reasonCode,
         reason: evaluation.reason,
         availableMaterial: pendingInjection ? 1 : 0,
+        advisoryRejected: advisoryRejection?.code || null,
       }, { kind: 'research', mode: 'policy' });
-      return { state, action: evaluation.inject ? 'research_available' : 'research_noted' };
+      // 封装被拒时 inject 虽为 true，但本轮确实没有可用材料，所以只能是 research_noted。
+      return { state, action: evaluation.inject && !advisoryRejection ? 'research_available' : 'research_noted' };
     }
     return { state, action: 'wait_research' };
   }

@@ -631,7 +631,10 @@ const advisoryItem = (value, index) => {
   return Object.freeze({
     problem: advisoryOptional(value.problem, 'advisory item problem'),
     scope: advisoryScope(value.scope),
-    evidence: list(value.evidence ?? [], 'advisory evidence', 16),
+    // 证据条目是与 problem/hypothesis/nextChange 同类的散文，研究者写出的 findings 通常
+    // 远超 string() 的 160 字符默认上限。这里必须与上面同级的 advisoryOptional(…, 2_000)
+    // 取同一个界，否则一份正常长度的研究笔记就足以让整个建议封装被拒。
+    evidence: list(value.evidence ?? [], 'advisory evidence', 16, (entry) => string(entry, 'advisory evidence', 2_000)),
     hypothesis: advisoryOptional(value.hypothesis, 'advisory hypothesis'),
     nextChange: advisoryOptional(value.nextChange, 'advisory nextChange'),
     verification: advisoryOptional(value.verification, 'advisory verification'),

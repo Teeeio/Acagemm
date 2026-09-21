@@ -412,6 +412,43 @@ assert.equal(gated.state.researchAgent.injection.status, 'available');
 gated = await advanceIteration(gated.state, deps);
 assert.equal(gated.state.iterationStats.pendingInjection === null || gated.action !== 'research_injected', true);
 
+// 研究者写出的 findings 是散文，长度远超 string() 的 160 字符默认上限。
+// 证据条目必须与同级的 problem/hypothesis 共用 2000 的界：247 字符的 finding 是常态，
+// 不是越界（2026-09-20 cold-start E2E 的笔记正是 162/247 字符）。
+resetCounters();
+const longFinding = 'x'.repeat(247);
+const proseState = makeState({
+  researchAgent: { status: 'completed', runId: 'codex_research_prose', runtimeKind: 'codex-cli' },
+  researchNotes: [{ id: 'note_prose', runId: 'codex_research_prose', direction: '调研 async dispatch', summary: 'async dispatch 导致 correctness boundary mismatch', findings: [longFinding], suggestedDirections: ['尝试 async cache'], sources: [] }],
+  failureRecords: [{ id: 'fail.1', title: 'async dispatch', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: '数值偏差' }],
+});
+const prose = await advanceIteration(proseState, deps);
+assert.equal(prose.action, 'research_available', '常态长度的研究 findings 不得被拒');
+assert.equal(prose.state.iterationStats.pendingInjection.advisory.items[0].evidence[0].length, 247);
+
+// 封装被拒时绝不能让整个迭代循环停摆：降级为「本轮无材料」，且必须记下 lastResearchRunId，
+// 否则同一条笔记每个 tick 重新抛一次，运行时被永久卡死（这是 2026-09-20 E2E 真实故障）。
+resetCounters();
+const oversizedState = makeState({
+  researchAgent: { status: 'completed', runId: 'codex_research_oversized', runtimeKind: 'codex-cli' },
+  researchNotes: [{ id: 'note_oversized', runId: 'codex_research_oversized', direction: '调研 async dispatch', summary: 'async dispatch 导致 correctness boundary mismatch', findings: ['y'.repeat(2_001)], suggestedDirections: ['尝试 async cache'], sources: [] }],
+  failureRecords: [{ id: 'fail.1', title: 'async dispatch', failure: { code: 'CORRECTNESS_BOUNDARY_MISMATCH' }, decisionReason: '数值偏差' }],
+});
+const oversized = await advanceIteration(oversizedState, deps);
+assert.equal(oversized.action, 'research_noted', '封装被拒时不得声称材料可用');
+assert.equal(oversized.state.iterationStats.pendingInjection, null);
+assert.equal(oversized.state.iterationStats.lastResearchRunId, 'codex_research_oversized', '被拒的笔记也必须记账，否则每个 tick 重抛');
+assert.equal(oversized.state.researchAgent.injection.status, 'discarded');
+const gatedEvent = [...oversized.state.runtimeEvents].reverse().find((event) => event.type === 'research.value_gated');
+assert.equal(gatedEvent.payload.advisoryRejected, 'EXPERIENCE_INVALID');
+// 幂等：被拒的笔记已记账，下一次 tick 不再重新过一遍价值闸。
+// 判据是价值闸事件的条数不再增长——只看返回值不够，重抛会在这里再追加一条。
+const valueGateCount = (s) => s.runtimeEvents.filter((event) => event.type === 'research.value_gated').length;
+const before = valueGateCount(oversized.state);
+const afterRejection = await advanceIteration(oversized.state, deps);
+assert.notEqual(afterRejection.action, 'research_noted', '同一条笔记不得被反复处理');
+assert.equal(valueGateCount(afterRejection.state), before, '被拒的笔记不得在每个 tick 上重新入闸');
+
 // pendingInjection → 自动续跑（startMainRound 一次，交付材料）
 resetCounters();
 const resumeState = makeState({
