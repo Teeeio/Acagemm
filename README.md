@@ -12,6 +12,11 @@ Operator Studio 是面向异构算子优化的本地 Agent 工作台。当前生
 > `renderedBytes` 为 6 383 UTF-8 字节（**不是**完整 prompt 长度），
 > `publishable=false`。**本批无新的实机模型/GPU 运行**：新生产版本没有新增实机 E2E 或 N20，
 > 三条件（无经验 / 仅本地经验 / 本地+已审查 Wiki）收益**仍待验证**，本批不宣称性能或发布能力。
+> **2026-09-16 后续**：九个 slot 的受控实机研究已完成（九 slot 全部 `full_success` 且可比、
+> 19/19 模型观测、独立产物核验通过、`strictN20Passed=false`），三条件的**描述性** latency 排序
+> 已记录——**尚未验证的是收益的显著性，不是「跑过没有」**，该批次不要重跑。见
+> [experience-study-20260915/status.json](docs/development/evidence/experience-study-20260915/status.json)
+> 与 [study runner 说明](scripts/run-experience-condition-study.md)。
 > 读者说明与必要 CLI/HTTP 用法见
 > [Phase 3 验收说明](docs/development/PHASE3_WIKI_ACCEPTANCE.md)；
 > 单一事实源、全部计数与失败细节见

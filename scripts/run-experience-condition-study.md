@@ -4,6 +4,47 @@ Status: thin nine-slot orchestration for the controlled experience-condition
 study. Authority: `docs/development/EXPERIENCE_STUDY_CONTRACT.md` §B,
 `scripts/experience-condition-study.md` and `scripts/run-shared-gpu-regression-batch.md`.
 
+## Live batch status (already run on 2026-09-16 — do not re-run)
+
+The nine predeclared slots were executed and completed on **2026-09-16** against
+source commit `69747e12fb9cd604670f94c5a0b931f39772ee1e`. Authoritative record:
+`docs/development/evidence/experience-study-20260915/status.json`, key
+`r8DirectAcceptance` (`status: completed_independently_verified_not_n20`; all nine
+slots `full_success` and `comparable`; 19/19 required model observations, all
+`deepseek-v4-flash`; retained artifacts independently verified;
+`strictN20Passed: false`). Archive: `direct-study-r8-69747e1-20260916.zip`.
+Earlier live attempts against previous source freezes are recorded in the same
+file under `liveAttempts`; they stopped after 0, 0, 0, 1 and 3 completed slots
+respectively (the last on a `budgetTerminal`, source `13f2014`). Those partial
+attempts count toward neither the denominator nor the nine slots, and the frozen
+contract allows no replacement and no tenth sample.
+
+The result is **descriptive only**. The frozen contract forbids a significance,
+causality or N20 claim and none is made here. Candidate `latency p50` means,
+lower being better, n=3 per condition:
+
+| condition | primary | small |
+| --- | --- | --- |
+| facts-only | 14.976 → 12.288 (−17.9%) | 14.720 → 13.291 (−9.7%) |
+| local-only | 15.019 → 10.752 (−28.4%) | 15.360 → 11.904 (−22.5%) |
+| local-and-wiki | 14.677 → 10.069 (−31.4%) | 15.360 → 9.899 (−35.6%) |
+
+Both profiles order the conditions the same way. Two caveats must travel with
+these numbers: `facts-only` and `local-only` each contain one ~20.48 us
+regression outlier in the `small` profile while `local-and-wiki` has none
+(smallest spread); and `local-and-wiki`'s extra model request is slot 03, the
+one that hit `OPERATOR_CORRECTNESS_MISMATCH` and recovered inside the original
+budget, so that column carries one repair round and cannot be read as a pure
+knowledge effect.
+
+Re-running spends live GPU and paid-model budget to re-derive a number that is
+already recorded. The selector did change after the study source (`634b92c`
+removed the `guidance-fallback` bucket and tightened the wiki quota), but the
+outcome is unaffected for this configuration: both `reviewed-transfer` snapshot
+units are selected by positive topical match, which is the only remaining path.
+The zero-GPU, zero-model offline replay showing this is
+`.operator-studio-local/probe/wiki-channel-replay.mjs`.
+
 ## Scope
 
 This runner implements **no second driver, scheduler, provider, Gate, matrix or

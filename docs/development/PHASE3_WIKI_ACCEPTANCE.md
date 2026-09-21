@@ -15,6 +15,16 @@ Phase 3 的**软件批次**已完成：KernelWiki 固定源导入、确定性选
 「无经验 / 仅本地经验 / 本地+已审查 Wiki」三条件的**策略收益仍待验证**，因此本批
 **不宣称性能收益，也不宣称发布能力**（`publishable=false`）。
 
+> **2026-09-16 后续补充（原软件批次结论不变）**：三条件的**策略收益仍不构成已验证的性能结论**
+> （n=3，契约明文禁止显著性/因果/N20 声明），但九个 slot 的受控实机研究**已经跑完**，不再是
+> 「待运行」状态。权威记录见
+> [`evidence/experience-study-20260915/status.json`](evidence/experience-study-20260915/status.json)
+> 的 `r8DirectAcceptance`（源 `69747e12`，九 slot 全部 `full_success` 且可比，19/19 模型观测，
+> 独立产物核验通过，`strictN20Passed=false`）。描述性排序（候选 `latency p50` 均值，primary /
+> small，越低越好）：facts-only −17.9% / −9.7%，local-only −28.4% / −22.5%，
+> local-and-wiki −31.4% / −35.6%，两个 profile 上排序一致。该批次**不要重跑**；运行入口、注意事项
+> 与全套数字见 [`../../scripts/run-experience-condition-study.md`](../../scripts/run-experience-condition-study.md)。
+
 旧实机结论（严格 N20 20/20 等）**只对冻结源 `21c6d7868bd3c5aa74dfcc098f87e3ad4236f948`
 及其固定矩阵有效**，不能被读作新生产版本的证据，也不能因为工作树 git clean 或无生产变更
 就当成新 HEAD 的实机结论。
