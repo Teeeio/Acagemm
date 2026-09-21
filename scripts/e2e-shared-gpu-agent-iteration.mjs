@@ -548,6 +548,17 @@ const findRetainedAudit = async ({ auditDir, missionId, roundId, sourceRunId }) 
         changed: imported?.changed ?? null,
       };
     }
+    // 99.9999% 是刻意不可达的，不是占位符。它的作用是让每一轮都判成
+    // `reference`/`reject` 而不是 `adopt`，从而稳定驱动「首轮结束后启动下一轮」
+    // 的控制流——CPU driver 用的是同一手法，
+    // docs/development/CODEX_AGENT_DIAGNOSTIC_HANDOFF.md §0.5 明说了这一点
+    // （"目标刻意设置为几乎不可能达到的 ... 而不是评测优化算法"）。
+    // 把它"修好"成可达值之前，先看这条字符串的两个冻结消费者：goal 是受控经验研究
+    // 设计身份的一部分（docs/development/EXPERIENCE_STUDY_CONTRACT.md），而该研究
+    // 每次调用的停止判据 `full_success` 要求至少一次干净回滚，首个候选一旦被采纳就
+    // 不再保证有回滚。已核实的结果：真实硬件上从未出现过 `eligible`/`adopt`，采纳路径
+    // 只被仿真冷启动（targetRelativeImprovement 0.2）走到过，那里 publication 依约
+    // 仍被阻塞（publication.execution_not_live）。
     const goal = studyGoal(`优化 ${family} GPU 算子 run.py 的 run(inputs)，FP32，shape=32x256，latency p50 相对 baseline 提升至少 99.9999%，通过 4/4 Correctness 和 Full Benchmark。只修改 run.py 中的实现，不改 reference/get_test_cases/get_benchmark_inputs，不改测试矩阵；禁止本地跑测试、安装依赖、使用网络、修改工作区外文件。候选必须是有界真实 Diff，立即完成一个小优化（例如消除冗余 copy），由系统统一 GPU 队列验证。后续轮次根据真实反馈尝试另一个不同 Diff，不能只给分析。`);
     const created = await request('/api/missions', { projectId: project.id, title: `${family} generic GPU iteration`, operator: `generic_${family}`, goal,
       hardware: ['local-shared-gpu'], implementation: 'pytorch-python', metric: 'latency p50', testMatrix: matrix, missionBudgetMs: limit,
