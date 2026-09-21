@@ -1,4 +1,5 @@
 import { RESEARCH_TRIGGERS, resolveAutomaticResearch } from '../research-policy.mjs';
+import { missionDeclaresBaselineSource } from '../baseline-resolver.mjs';
 
 export const createAutopilotStrictSourceService = ({ isStrictZeroSourceMission, isResearchAgentActive, selectResearchBaselineSource, buildSemanticBaselineSource, startResearch, startBaseline, startMainRound, researchDirForMission }) => {
   const advance = async ({ state, mission, candidate }) => {
@@ -6,8 +7,11 @@ export const createAutopilotStrictSourceService = ({ isStrictZeroSourceMission, 
     const research = state.researchAgent || {};
     if (state.baseline?.status !== 'complete' && isResearchAgentActive(research)) return { state, action: 'wait_research' };
     const terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(research.status);
+    // 规定了来源的 Mission 不能用语义来源顶替：不产出语义来源，下面就会落到
+    // `baseline_source_unresolved` 的 needs_human 分支，而不是继续跑一个自造的正确性判据。
+    const semanticAllowed = mission.sourcePolicy?.allowSemanticFallback === true && !missionDeclaresBaselineSource(mission);
     const source = selectResearchBaselineSource(state.researchNotes, mission, { operator: mission.operator || mission.title, excludedSources: state.baseline?.rejectedSources })
-      || (mission.sourcePolicy?.allowSemanticFallback === true && terminal && (research.runPhase === 'synthesize' || research.acquireHandled === true) ? buildSemanticBaselineSource(mission, research) : null);
+      || (semanticAllowed && terminal && (research.runPhase === 'synthesize' || research.acquireHandled === true) ? buildSemanticBaselineSource(mission, research) : null);
     if (state.baseline?.status !== 'complete' && !source) {
       if (!research.runId) {
         // 必要来源解析不是可选研究：它由来源门禁驱动，阶段的显式选择放在这里。

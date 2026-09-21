@@ -66,6 +66,18 @@ Agent 运行的失败原因与资源生命周期是两条独立契约：`agent.p
 携带 `candidate.sourceRunId`，Queue 请求与 `benchmark.candidate.sourceRunId`
 沿用该来源，不能用 Round 的首次 attempt ID 代替。
 
+Baseline 来源的权威要求只对**零来源** Mission 可跳过：Mission 自身预先声明了来源
+（`mission.baseline.source` / `mission.upstream.baselineSource` / `mission.upstream.reference`）
+时，语义来源（`authority:'agent-semantic'`、`semanticFallback:true`）一律被拒，选源服务与
+autopilot 都不产出它，最终落回 `needs_human(baseline_source_unresolved)`，错误码
+`BASELINE_MANDATED_SOURCE_NO_SUBSTITUTE`（409）。判定只看 Mission 的声明，不看运行时
+`state.baseline.source`——后者可能正是解析出来的语义来源，用它做判据会自我印证。
+零来源 Mission 允许跳过，但 `resolution` 必须如实标成
+`strategy:'semantic_fallback'`、`attemptedAuthority:false`、`skippedAuthority:true` 并带非空
+`skippedAuthorityReason`；这些字段在 `createBaselineResolutionState` 的白名单内，缺失即被静默
+丢弃，会导致语义 baseline 在 UI 与证据里又长得像权威来源。语义 baseline 不含上游权威，
+不能作为上游算子的证据。
+
 每个新 Claude run 在既有 run JSON 中附带一个有界的 `diagnostics`
 （`operator-studio.agent-run-diagnostics/v1`），键集合固定为
 `schemaVersion/provider/runId/missionId/stdout/stderr/events/firstModelObservedAt/cancellation/close`，
@@ -183,7 +195,7 @@ All external outcomes must be normalized before changing Mission state.
 | `application/baseline-benchmark-service.mjs` | baseline benchmark command submission | baseline context | updated state |
 | `application/baseline-materializer-command-service.mjs` | baseline materializer command submission | baseline context | updated state |
 | `application/baseline-source-inspection-service.mjs` | strict baseline source verification | baseline context | validation/state |
-| `application/source-registry-integrity-service.mjs` | source root integrity gate: a modified or unverifiable registry stops auto-advance | source root, Mission/state | `needs_human` escalation + durable event |
+| `application/source-registry-integrity-service.mjs` | source root integrity gate: a modified or unverifiable registry stops auto-advance (a local fetch failure is never reported as an upstream modification) | source root, Mission/state | `needs_human` escalation + durable event |
 | `application/baseline-materializer-recovery-service.mjs` | materializer failure recovery and research redirect | materializer state | state/action |
 | `application/iteration-service.mjs` | formal iteration dependency boundary | iteration ports | immutable iteration API |
 | `application/runtime-projection-service.mjs` | workflow and Agent state projection | state/runtime | projected state |
@@ -219,7 +231,7 @@ All external outcomes must be normalized before changing Mission state.
 | `cli-command.mjs` | Resolve direct Agent executables behind Windows npm shims | provider and configured command | executable plus fixed argument prefix |
 | `operator-test-queue.mjs` | serialized test lifecycle | test payload | persisted task snapshot |
 | `local-c500-service-client.mjs` | C550 production execution and isolated CPU E2E command execution | queue task payload | correctness/benchmark artifacts |
-| `workspace-manager.mjs` | Git workspace isolation | Mission/repository/candidate | Diff/checkpoint/restore result |
+| `workspace-manager.mjs` | Git workspace isolation; Source Registry inspection counts only registered sources (temporary `.acquiring-*` clone directories are never inspected) | Mission/repository/candidate | Diff/checkpoint/restore result |
 | `candidate-generation/README.md`, `CONSTRAINTS.md` | 03 候选生成契约与确定性边界 | frozen round context and Workspace facts | Agent proposal/admission contract; no Queue/Gate/iteration decisions |
 | `fixed-operator-profiles.mjs` | immutable operator contracts | Profile ID | frozen Profile/test matrix |
 | `semantic-snapshot.mjs` | bind semantics to evidence | Mission/Profile/test task | immutable semantic digest |

@@ -270,6 +270,23 @@ Mission 显式开启 `sourcePolicy.allowDiscoveredSources` 时才接受其它免
 也不必触碰 sandbox 之外的目录。sandbox 边界与 prompt 必须一致：授予了 Source Registry 就如实说明它是
 只读参考根，未授予时保持"只有 workspace"的原文。放开整个文件系统不是解决可见性的方式。
 
+### 规定了来源 vs 零来源
+
+来源约束按 Mission 是否**预先声明了来源**分两种，不是按运行时解析出了什么：
+
+- **规定了来源**（`mission.baseline.source` / `mission.upstream.baselineSource` /
+  `mission.upstream.reference`）：不允许用语义来源顶替。拿不到可核验来源时系统停下并请求人工
+  （`needs_human` + `loopStatusReason = baseline_source_unresolved`），不改成"以 Mission 描述为
+  正确性判据"。选源与自动流转两条入口都会拒绝语义来源，直接调用也返回
+  `BASELINE_MANDATED_SOURCE_NO_SUBSTITUTE`。
+- **零来源**：允许在拿不到可核验来源时跳过权威要求，baseline 由 Mission 语义与材料化 Agent 生成。
+  跳过必须可见：`resolution` 记为 `strategy: semantic_fallback`、`skippedAuthority: true` 并带原因，
+  TUI 用独立的「已跳过权威来源（语义 baseline）」标记展示，与 `needs_human` 告警区分开。
+
+语义 baseline 不含上游权威，**不能作为上游算子的证据**：它上面的正确性与性能结论只说明
+"这版实现满足 Mission 描述"，不能当作上游算子的对照结果。判定只读 Mission 自身的声明，
+不读运行时 `state.baseline.source`——后者可能正是解析出来的语义来源，用它做判据会自我印证。
+
 ### 结果定位规则
 
 研究员正式结果只来自 `agent_message` 角色事件，且必须满足当前阶段声明的 schema：

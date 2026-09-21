@@ -39,6 +39,7 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  ShieldOff,
   SlidersHorizontal,
   TerminalSquare,
   TestTube2,
@@ -845,14 +846,31 @@ function CapabilitiesView({ agentProfiles = [], capabilityRegistry = { skills: [
   );
 }
 
-function ResearcherPanel({ researchAgent = {}, researchNotes = [], iterationStats = null, onStartResearch, onCancelResearch }) {
+function ResearcherPanel({ researchAgent = {}, researchNotes = [], iterationStats = null, baseline = null, onStartResearch, onCancelResearch }) {
   const [direction, setDirection] = useState('');
   const status = researchAgent.status || 'idle';
   const isResearching = status === 'running' || status === 'cancel_requested';
   const statusLabel = { running: '调研中', completed: '调研完成', failed: '调研失败', timed_out: '预算耗尽', cancelled: '已取消', cancel_requested: '正在取消' }[status] || (status === 'idle' ? '待调研' : status);
   const syncLabel = researchAgent.synchronous ? '串行等待' : '并行不阻塞';
   const loopStatus = iterationStats?.loopStatus;
-  const loopReasonText = { max_rounds: '已迭代到最大轮数上限，仍未完成采纳，请人工介入', total_budget: '累计迭代时长超出预算上限，请人工介入', max_research: '研究员已多次升级仍未产生被采纳候选，请人工介入' }[iterationStats?.loopStatusReason] || iterationStats?.loopStatusReason;
+  // 理由码一律要有中文说明：只翻译少数几个码时，操作员看到的是一行英文码，分不出「被改 / 没来源 / 该修网络」。
+  const loopReasonText = {
+    max_rounds: '已迭代到最大轮数上限，仍未完成采纳，请人工介入',
+    total_budget: '累计迭代时长超出预算上限，请人工介入',
+    max_research: '研究员已多次升级仍未产生被采纳候选，请人工介入',
+    baseline_source_unresolved: '没有拿到可核验的上游来源，而该 Mission 规定了来源，不能用语义来源顶替：请人工提供来源或调整 Mission 配置',
+    baseline_source_unverified: 'baseline 来源未通过核验，请人工确认来源内容',
+    baseline_materializer_failed: 'baseline 材料化失败且恢复预算已用尽，请人工处理',
+    baseline_test_failed: 'baseline 算子测试失败，请人工处理',
+    research_disabled_source_unresolved: '自动研究已关闭且来源未解析，请人工提供来源',
+    source_root_modified: '第三方来源根存在未提交变更或与登记的 tree 不一致，不能作为固定引用，请人工确认来源内容',
+    source_root_unverifiable: '第三方来源根无法核验，请人工检查来源目录',
+    patch_policy_rejected: '候选补丁被策略拒绝，请人工决策',
+  }[iterationStats?.loopStatusReason] || iterationStats?.loopStatusReason;
+  // 零来源 Mission 允许跳过权威来源，但跳过必须看得见：这类 baseline 由 Mission 语义生成，
+  // 不含上游权威，其上的正确性/性能结论不能当作上游算子的证据。
+  const skippedAuthority = baseline?.resolution?.skippedAuthority === true || baseline?.source?.semanticFallback === true || baseline?.source?.authority === 'agent-semantic';
+  const skippedReason = baseline?.resolution?.skippedAuthorityReason || baseline?.source?.reason || '';
   return (
     <section className="research-panel panel-surface">
       <div className="workbench-panel-head">
@@ -861,6 +879,8 @@ function ResearcherPanel({ researchAgent = {}, researchNotes = [], iterationStat
       </div>
 
       {loopStatus === 'needs_human' && <div className="research-loop-status blocked"><TriangleAlert size={16} /><div><strong>循环需要人工介入</strong><span>{loopReasonText || '已触发自动流转上限，请人工决策后继续。'}</span></div></div>}
+
+      {skippedAuthority && <div className="research-loop-status skipped"><ShieldOff size={16} /><div><strong>已跳过权威来源（语义 baseline）</strong><span>{skippedReason || '本次 baseline 由 Mission 语义与材料化 Agent 生成，不含上游权威；其上的正确性与性能结论不能作为上游算子的证据。'}</span></div></div>}
 
       <div className="research-loop-meta"><span>第 {iterationStats?.round || 0} 轮</span><span>连续 {iterationStats?.consecutiveNoAdopt || 0} 轮无采纳</span><span>研究员升级 {iterationStats?.researchRounds || 0} 次</span></div>
 
@@ -1139,7 +1159,7 @@ function AgentWorkbenchView({ stage, activeMission, agentState, agentProfiles = 
         <button onClick={() => setView('knowledge')}><BookOpen size={17} /><div><span>KNOWLEDGE</span><strong>{knowledgeCount ? `${knowledgeCount} 条任务知识` : '等待提取'}</strong><small>成功经验与失败记录均保留证据引用</small></div><ArrowRight size={15} /></button>
       </section>
 
-      <ResearcherPanel researchAgent={researchAgent} researchNotes={researchNotes} iterationStats={iterationStats} onStartResearch={onStartResearch} onCancelResearch={onCancelResearch} />
+      <ResearcherPanel researchAgent={researchAgent} researchNotes={researchNotes} iterationStats={iterationStats} baseline={activeMission?.baseline || null} onStartResearch={onStartResearch} onCancelResearch={onCancelResearch} />
     </main>
   );
 }
@@ -2144,7 +2164,7 @@ function ProjectRepositoryDialog({ projects = [], activeProjectId, activeMission
         </div>
         <button className="primary-action" disabled={busy || !draft.root.trim()} type="submit">{busy ? '正在初始化项目' : '创建项目'}</button>
       </form>}
-      <div className="project-registry-list">{projects.map((project) => { const current = project.id === activeProjectId; const strict = project.layout === 'three-layer' && project.root && project.sourceRoot && project.runtimeRoot; const inspected = layerInspect[project.id]; const layers = inspected?.layers || {}; const sources = inspected?.inspection?.sources || []; const sourceReady = inspected?.inspection?.ready; const repositoryInspection = inspected?.repositoryInspection; const baselineEmpty = repositoryInspection?.ready && repositoryInspection.baselineEmpty; const bootstrapDraft = bootstrapDrafts[project.id] || { gitUrl: '', gitRef: project.defaultBranch || 'HEAD' }; return <article key={project.id} className={current ? 'current' : ''}><button type="button" className="project-registry-select" disabled={busy || current} onClick={() => onSelectProject(project)}><span className="project-registry-mark"><FolderGit2 size={17} /></span><span className="project-registry-copy"><strong>{project.name}</strong><code>{project.repository}</code><small>{current ? `当前项目${activeMission?.projectId === project.id ? ` · Mission ${activeMission.id}` : ''}` : `${project.missionCount || 0} 个 Mission`} · {strict ? '三层结构' : '需要重新初始化'}{project.repositoryBootstrap?.head ? ` · ${project.repositoryBootstrap.head}` : ''}</small></span><span className="project-registry-switch">{current ? <><Check size={14} />当前</> : <>切换<ChevronRight size={14} /></>}</span></button><div className="project-registry-actions">{strict ? <button className="ghost-action" disabled={layerBusy === project.id} onClick={() => inspectLayers(project)}><Layers3 size={14} />{layerBusy === project.id ? '检查中' : inspected ? '收起结构' : '查看三层结构'}</button> : <button className="ghost-action reinitialize" disabled={busy} onClick={() => onReinitialize(project)}><Layers3 size={14} />重新初始化</button>}{current && project.missionCount > 0 && <button className="ghost-action" onClick={onOpenMission}>进入 Mission</button>}{project.status === 'active' && <button className="icon-action" title="归档项目" onClick={() => onArchive(project)}><Archive size={15} /></button>}{!project.missionCount && <button className="icon-action danger" title="删除项目" onClick={() => onDelete(project)}><Trash2 size={15} /></button>}</div>{inspected && <div className="project-layer-inspector">{inspected.error ? <p className="project-layer-error">结构检查失败：{inspected.error}</p> : <><div className="project-layer-grid"><div><span>项目根目录</span><code>{layers.root}</code></div><div><span>Iteration Repository</span><code>{layers.repository}</code></div><div><span>Repository 基线</span><code>{repositoryInspection?.ready ? `${repositoryInspection.trackedFiles || 0} files · ${repositoryInspection.head || 'HEAD'}` : (repositoryInspection?.detail || '未检查')}</code></div><div><span>Source Registry</span><code>{layers.sources}</code></div><div><span>Mission Snapshot</span><code>{layers.activeSnapshot || '尚未创建'}</code></div><div><span>Artifacts</span><code>{layers.artifacts}</code></div></div>{baselineEmpty && <div className="repository-bootstrap-panel compact"><div><GitPullRequestArrow size={15} /><span><strong>当前基线为空，需要补齐真实代码</strong><small>请输入权威 Git URL 和分支或提交，系统会拉取到空的 Iteration Repository 并重建 Mission Snapshot。</small></span></div><label><span>Git URL</span><input value={bootstrapDraft.gitUrl} onChange={(event) => setBootstrapDrafts((state) => ({ ...state, [project.id]: { ...bootstrapDraft, gitUrl: event.target.value } }))} placeholder="https://example.com/team/repo.git" /></label><label><span>Branch / Commit</span><input value={bootstrapDraft.gitRef} onChange={(event) => setBootstrapDrafts((state) => ({ ...state, [project.id]: { ...bootstrapDraft, gitRef: event.target.value } }))} placeholder="main 或具体 commit" /></label><button className="primary-action" disabled={busy || !bootstrapDraft.gitUrl.trim()} onClick={() => submitBootstrap(project)}><GitPullRequestArrow size={14} />补齐基线</button></div>}<div className="project-source-status"><strong>第三方来源 {sources.length} 个</strong><em className={sourceReady ? 'clean' : 'dirty'}>{sourceReady ? '可作为固定引用' : '存在问题，阻止候选'}</em>{sources.length ? sources.map((source) => <span key={`${source.id}-${source.commit}`}><b>{source.id}</b><code>{source.commit?.slice(0, 12) || '无 Commit'}</code><small>{source.clean ? 'clean' : `${source.changedFiles?.length || 0} 个未提交变更`}</small></span>) : <small>Codex 尚未登记第三方仓库</small>}</div></>}</div>}</article>; })}</div>
+      <div className="project-registry-list">{projects.map((project) => { const current = project.id === activeProjectId; const strict = project.layout === 'three-layer' && project.root && project.sourceRoot && project.runtimeRoot; const inspected = layerInspect[project.id]; const layers = inspected?.layers || {}; const sources = inspected?.inspection?.sources || []; const sourceReady = inspected?.inspection?.ready; const repositoryInspection = inspected?.repositoryInspection; const baselineEmpty = repositoryInspection?.ready && repositoryInspection.baselineEmpty; const bootstrapDraft = bootstrapDrafts[project.id] || { gitUrl: '', gitRef: project.defaultBranch || 'HEAD' }; return <article key={project.id} className={current ? 'current' : ''}><button type="button" className="project-registry-select" disabled={busy || current} onClick={() => onSelectProject(project)}><span className="project-registry-mark"><FolderGit2 size={17} /></span><span className="project-registry-copy"><strong>{project.name}</strong><code>{project.repository}</code><small>{current ? `当前项目${activeMission?.projectId === project.id ? ` · Mission ${activeMission.id}` : ''}` : `${project.missionCount || 0} 个 Mission`} · {strict ? '三层结构' : '需要重新初始化'}{project.repositoryBootstrap?.head ? ` · ${project.repositoryBootstrap.head}` : ''}</small></span><span className="project-registry-switch">{current ? <><Check size={14} />当前</> : <>切换<ChevronRight size={14} /></>}</span></button><div className="project-registry-actions">{strict ? <button className="ghost-action" disabled={layerBusy === project.id} onClick={() => inspectLayers(project)}><Layers3 size={14} />{layerBusy === project.id ? '检查中' : inspected ? '收起结构' : '查看三层结构'}</button> : <button className="ghost-action reinitialize" disabled={busy} onClick={() => onReinitialize(project)}><Layers3 size={14} />重新初始化</button>}{current && project.missionCount > 0 && <button className="ghost-action" onClick={onOpenMission}>进入 Mission</button>}{project.status === 'active' && <button className="icon-action" title="归档项目" onClick={() => onArchive(project)}><Archive size={15} /></button>}{!project.missionCount && <button className="icon-action danger" title="删除项目" onClick={() => onDelete(project)}><Trash2 size={15} /></button>}</div>{inspected && <div className="project-layer-inspector">{inspected.error ? <p className="project-layer-error">结构检查失败：{inspected.error}</p> : <><div className="project-layer-grid"><div><span>项目根目录</span><code>{layers.root}</code></div><div><span>Iteration Repository</span><code>{layers.repository}</code></div><div><span>Repository 基线</span><code>{repositoryInspection?.ready ? `${repositoryInspection.trackedFiles || 0} files · ${repositoryInspection.head || 'HEAD'}` : (repositoryInspection?.detail || '未检查')}</code></div><div><span>Source Registry</span><code>{layers.sources}</code></div><div><span>Mission Snapshot</span><code>{layers.activeSnapshot || '尚未创建'}</code></div><div><span>Artifacts</span><code>{layers.artifacts}</code></div></div>{baselineEmpty && <div className="repository-bootstrap-panel compact"><div><GitPullRequestArrow size={15} /><span><strong>当前基线为空，需要补齐真实代码</strong><small>请输入权威 Git URL 和分支或提交，系统会拉取到空的 Iteration Repository 并重建 Mission Snapshot。</small></span></div><label><span>Git URL</span><input value={bootstrapDraft.gitUrl} onChange={(event) => setBootstrapDrafts((state) => ({ ...state, [project.id]: { ...bootstrapDraft, gitUrl: event.target.value } }))} placeholder="https://example.com/team/repo.git" /></label><label><span>Branch / Commit</span><input value={bootstrapDraft.gitRef} onChange={(event) => setBootstrapDrafts((state) => ({ ...state, [project.id]: { ...bootstrapDraft, gitRef: event.target.value } }))} placeholder="main 或具体 commit" /></label><button className="primary-action" disabled={busy || !bootstrapDraft.gitUrl.trim()} onClick={() => submitBootstrap(project)}><GitPullRequestArrow size={14} />补齐基线</button></div>}<div className="project-source-status"><strong>第三方来源 {sources.length} 个</strong><em className={sourceReady ? 'clean' : 'dirty'}>{sourceReady ? '可作为固定引用' : '存在问题，阻止候选'}</em>{sources.length ? sources.map((source) => <span key={`${source.id}-${source.commit}`}><b>{source.id}</b><code>{source.commit?.slice(0, 12) || '无 Commit'}</code><small>{source.clean ? 'clean' : source.checkoutIncomplete ? '检出未完成，无法核验' : `${source.changedFiles?.length || 0} 个未提交变更`}</small></span>) : <small>Codex 尚未登记第三方仓库</small>}</div></>}</div>}</article>; })}</div>
       <div className="project-registry-note"><ShieldCheck size={14} /><span>有运行中或历史 Mission 的项目不能删除，只能归档，保证 Patch、Run 和审计记录可追溯。</span></div>
     </div>
   </Dialog>;

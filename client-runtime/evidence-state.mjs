@@ -36,6 +36,10 @@ export const createBaselineResolutionState = (overrides = {}, kind = 'pytorch_re
     strategy: overrides.strategy || 'authoritative_first',
     kind: normalizeBaselineKind(overrides.kind || baselineKind),
     attemptedAuthority: overrides.attemptedAuthority === true,
+    // 跳过权威来源必须显式留痕：这是白名单字段，不在这里声明就会被静默丢掉，
+    // 于是 baseline 在 UI 与证据里又长得跟权威来源一样。
+    skippedAuthority: overrides.skippedAuthority === true,
+    skippedAuthorityReason: overrides.skippedAuthorityReason || null,
     reused: overrides.reused === true,
     reason: overrides.reason || (baselineKind === 'naive_v0' ? '权威算子库 baseline 不可用，使用基于 v0 的 naive baseline。' : '等待解析权威算子库 baseline。'),
     resolvedAt: overrides.resolvedAt || null,

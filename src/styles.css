@@ -1821,6 +1821,11 @@ button { cursor: pointer; }
 .research-loop-status > div { display: grid; gap: 3px; }
 .research-loop-status strong { color: #7a4a08; font-size: 10px; }
 .research-loop-status span { color: #9b640e; font-size: 8px; }
+/* 跳过权威来源不是警告而是一种「降级事实」，用明显区别于告警的紫罗兰色，避免和 needs_human 混淆。 */
+.research-loop-status.skipped { background: #efe9ff; border-color: #c3b2f0; }
+.research-loop-status.skipped svg { color: #6b46c1; }
+.research-loop-status.skipped strong { color: #4c2f96; }
+.research-loop-status.skipped span { color: #5f4a9c; }
 .research-loop-meta { display: flex; gap: 16px; margin-top: 13px; }
 .research-loop-meta span { color: var(--text-2); font-size: 8px; }
 .research-current { margin-top: 14px; padding: 13px 14px; background: #f3f8ff; border: 1px solid #d5e4f7; border-radius: 5px; }

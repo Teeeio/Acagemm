@@ -16,6 +16,16 @@ export const isStrictZeroSourceMission = (mission = {}, body = {}) => (
   || mission.sourcePolicy?.strictZeroSource === true
 );
 
+// Mission 是否**预先规定了** baseline 来源（不是运行时才解析出来的、也不是研究找回来的）。
+// 规定了就必须用它：这类任务不允许拿语义来源顶替（零来源任务没有这一层声明，才允许在
+// 拿不到来源时跳过权威要求）。判定只看 Mission 自身的声明，不看 state.baseline.source——
+// 后者可能正是运行时解析出来的语义来源，用它做判据会自我印证。
+export const missionDeclaresBaselineSource = (mission = {}) => Boolean(
+  mission.baseline?.source
+  || mission.upstream?.baselineSource
+  || mission.upstream?.reference,
+);
+
 const stableShapeValue = (value) => {
   if (Array.isArray(value)) return value.map(stableShapeValue);
   if (value && typeof value === 'object') {
@@ -197,6 +207,15 @@ export const requireTrustedBaselineSource = (body = {}, mission = {}) => {
       error.code = 'BASELINE_SEMANTIC_FALLBACK_FORBIDDEN';
       throw error;
     }
+    // 规定了来源就不能跳过：允许语义顶替等于把任务换成「以 Mission 描述为正确性判据」，
+    // 而产物仍叫 pytorch_reference。这里挡住的是最后一道入口（研究选源、自动流转都各自
+    // 挡一次），所以从任何路径交进来的语义来源都会被拒。
+    if (missionDeclaresBaselineSource(mission)) {
+      const error = new Error('Mission 已规定 baseline 来源，不能用语义来源顶替；应停止并请求人工处理。');
+      error.status = 409;
+      error.code = 'BASELINE_MANDATED_SOURCE_NO_SUBSTITUTE';
+      throw error;
+    }
     return source;
   }
   if (baselineKind === 'naive_v0') {
@@ -352,6 +371,9 @@ export async function resolveBaselineRunPlan({ state = {}, mission = {}, body = 
     throw error;
   }
 
+  // 「这个 baseline 是怎么来的」必须如实记录：语义来源没有上游权威，strategy 不能写成
+  // authoritative_first，否则 UI 与证据都读不到真话（零来源任务允许跳过，但跳过要看得见）。
+  const semanticBaseline = isSemanticBaselineSource(baselineSource);
   return {
     baselineKind,
     baselineSource,
@@ -362,11 +384,17 @@ export async function resolveBaselineRunPlan({ state = {}, mission = {}, body = 
     materializationReport,
     resolution: {
       status: 'running',
-      strategy: baselineKind === 'naive_v0' ? 'fallback_naive_v0' : 'authoritative_first',
+      strategy: baselineKind === 'naive_v0' ? 'fallback_naive_v0' : semanticBaseline ? 'semantic_fallback' : 'authoritative_first',
       kind: baselineKind,
-      attemptedAuthority: baselineKind !== 'naive_v0',
+      attemptedAuthority: baselineKind !== 'naive_v0' && !semanticBaseline,
+      skippedAuthority: semanticBaseline,
+      skippedAuthorityReason: semanticBaseline
+        ? '零来源 Mission 未找到可核验的上游来源，baseline 由 Mission 语义与材料化 Agent 生成；正确性判据不含上游权威。'
+        : null,
       reused: false,
-      reason: baselineKind === 'naive_v0' ? '权威 baseline 不可用，使用 v0 fallback。' : '正在执行权威 baseline。',
+      reason: baselineKind === 'naive_v0'
+        ? '权威 baseline 不可用，使用 v0 fallback。'
+        : semanticBaseline ? '已跳过权威来源，使用语义 baseline。' : '正在执行权威 baseline。',
       resolvedAt: null,
       previousEvidenceRunId: null,
     },

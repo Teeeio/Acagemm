@@ -51,7 +51,7 @@
 | `agent-round-service.mjs` | Agent round reset, checkpoint, and launch | round input | updated state |
 | `round-preflight-service.mjs` | generation settlement and runtime preflight composition | round input | round context |
 | `round-artifact-guard.mjs` | strict baseline artifact admission | mission/state | pass or stable error |
-| `baseline-source-service.mjs` | baseline source policy selection | mission/state | source selection |
+| `baseline-source-service.mjs` | baseline source policy selection; a Mission that declares its own source never receives a semantic source | mission/state | source selection |
 | `materializer-policy-service.mjs` | baseline materializer state policy | materializer state | policy action |
 | `baseline-failure-projection.mjs` | idempotent baseline failure projection | benchmark state | changed flag |
 | `benchmark-projection-service.mjs` | Operator Test queue snapshot and artifact projection | benchmark state | changed state |
@@ -63,7 +63,7 @@
 | `autopilot-validation-service.mjs` | candidate benchmark start | candidate state | updated state |
 | `autopilot-service.mjs` | automatic iteration progression boundary | runtime state | state/action result |
 | `autopilot-fixed-profile-service.mjs` | fixed Profile post-baseline progression | Mission state | state/action result |
-| `autopilot-strict-source-service.mjs` | strict source autopilot progression | Mission state | state/action result |
+| `autopilot-strict-source-service.mjs` | strict source autopilot progression; returns `needs_human(baseline_source_unresolved)` instead of a semantic source when the Mission mandates its source | Mission state | state/action result |
 | `autopilot-candidate-baseline-service.mjs` | ordinary candidate baseline progression | Mission state | state/action result |
 | `baseline-benchmark-service.mjs` | baseline benchmark command submission | baseline context | updated state |
 | `baseline-materializer-command-service.mjs` | baseline materializer command submission | baseline context | updated state |
