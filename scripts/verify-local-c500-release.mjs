@@ -99,6 +99,7 @@ const checks = [
   'test:autopilot-candidate-action-service',
   'test:autopilot-validation-service',
   'test:autopilot-service',
+  'test:autopilot-dispatch',
   'test:autopilot-fixed-profile-service',
   'test:autopilot-strict-source-service',
   'test:autopilot-candidate-baseline-service',
