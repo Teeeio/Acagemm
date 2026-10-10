@@ -1,0 +1,69 @@
+# Agent Round Service Contract
+
+Automatic experience-read failures retain the bound status and emit
+`generation.experience_read_failed` before propagating. Runtime Advance returns
+that diagnosed failure for persistence and pauses further automatic work.
+
+Automatic start freezes `generationOrigin` at the pre-generation checkpoint and
+retains it plus preparation timestamps on the returned Agent, including when the
+Provider returns another state object. Parent binding requires a same-Mission
+checkpoint whose digest matches current best; otherwise ancestry remains unknown.
+See [generation-origin.md](../generation-origin.md).
+
+## Purpose / Responsibilities
+
+Starts one iteration Agent round after preflight/recovery. It records the shared round budget before effects, collects prior verified observations, freezes experience, resets run state, restores fixture workspaces or records managed checkpoints, then delegates to the existing Agent runtime. No second workflow, HTTP, persistence or hardware execution.
+
+## Public API / Inputs
+
+`createAgentRoundService({...existingPorts,roundExperience,nowMs})` returns `{startRound}`. Existing reset/workspace/checkpoint/Agent/event/capability ports remain required. New required ports are `roundExperience.prepare/collect` and `nowMs:()=>number` in epoch milliseconds; no default effect implementation.
+
+`startRound({state,mission,goal,workspace,runtimeMode})` returns the resulting state. mission must identify its project and active Mission. The canonical `ensureRoundBudgetStarted` owns roundId/start/deadline; this service never derives a second identity or renews same-round retry time.
+
+## Outputs / Invariants
+
+Order: ensure budget → collect old Benchmark → prepare context → verify budget/context → reset → fixture workspace or managed checkpoint → verify budget → Agent start. Experience calls are capped at 3000 ms and remaining round time. A retrieval/verification/storage failure or expired budget prevents subsequent Agent dispatch; it is not an empty-context fallback.
+
+`agentRuntime.startRun` receives existing parameters plus `{roundId,experienceContext}`. The same validated object is stored in `state.iterationStats.roundExperience`; the returned state's iterationStats retains it and the admitted roundBudget. Runtime prompt formatting uses the public experience-contract formatter, owned outside this service.
+
+Managed checkpoint history remains capped at five. Reference-fixture `handled:false` still uses startAgentRun and the existing mission.run_started event; it receives the same persisted context through state. This service does not promote fixture/CPU observations or change Gate/Profile semantics.
+
+The reset step also produces the versioned archived-round facts snapshot in
+`state.iterationStats.roundFacts` (see
+[mission-project-state](../mission-project-state.md)). No new port or parameter is
+involved: this service passes `state`/`mission` and preserves a deep copy of the
+facts on the returned state's iterationStats; the Agent
+Runtime projects the snapshot into `iterationContext` only when it is bound to the
+active Mission and admitted Round. Facts are therefore available to the automatic
+round exactly like the manual command path, and a Mission switch or newer Round
+cannot deliver stale facts.
+
+The same round `roundExperience.prepare` produces the selection-audit sidecar in
+`state.iterationStats.roundExperienceSelection` (see
+[round-experience-service](round-experience-service.md)). This service
+deep-copies it immediately after prepare and returns it in the result
+`iterationStats` alongside `roundBudget`, `roundExperience` and `roundFacts`, so a
+runtime that returns a different state object cannot drop the sidecar. The
+returned object and the caller's state never share a mutable selection reference;
+the automatic path adds no second retrieval and no selection policy of its own.
+
+## Dependencies / Side Effects
+
+Only pure `round-budget-contract` and `experience-contract` imports. Workspace, Agent, runtime events and experience effects are injected. Persistence and initial HTTP-run command replay remain composition-root/command-journal responsibilities.
+
+## Error Contract
+
+Missing ports are TypeError. Budget, context, experience, workspace and Agent errors propagate without silently retrying. An already-started external operation's uncertainty is handled by its owning port, not inferred as released here.
+
+## Verification / Change Checklist / Limitations
+
+Run `node tests/agent-round-service-test.mjs` and `node tests/round-experience-service-test.mjs`; all Agent/workspace effects are fakes. Update this contract, constructor callers and tests when ports/order change. The service does not persist a failed attempt itself, authorize projects, verify evidence receipts, or format provider prompts. Initial HTTP commands use the same budget/context through their existing journal path.
+
+## Environment preflight ordering (2026-09-16)
+
+When supplied, `roundExperience.preflightCollection` runs after the persisted
+budget starts and before collect. It owns the bounded environment query. Both
+round and Mission time are rechecked after preflight and before subsequent Agent
+or workspace effects; collection/retrieval caps include remaining Mission time.
+The optional port preserves legacy injected callers. Failure prevents collect,
+reset, checkpoint and Agent launch. No same-round retry renews a clock.

@@ -1,0 +1,12 @@
+{
+  "syntaxFeatureVersion": "3.11",
+  "interpreterExecuted": "parser only; runner not imported",
+  "files": [
+    "tools\\local-c500-runner.py",
+    "tools\\local-cpu-runner.py",
+    "tools\\local-shared-gpu-runner.py",
+    "tools\\ascend910b\\runner.py",
+    "tools\\ascend910b\\test_runner.py",
+    "tools\\metax-c500\\runner.py"
+  ]
+}

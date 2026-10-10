@@ -1,0 +1,2629 @@
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { isExecutionReleased, assertResourcesReleased, reconcileResourceRelease, executionRetirementFor, assertMissionExecutionNotRetired } from './cancellation-contract.mjs';
+import { createHash, randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { opencodeClient as defaultOpenCodeClient, parseOpenCodeModel } from './opencode-client.mjs';
+import { classifyCodexFailure, codexClient as defaultCodexClient } from './codex-client.mjs';
+import { classifyClaudeFailure, claudeClient as defaultClaudeClient } from './claude-client.mjs';
+import { extractResearchResult, parseAgentResult, parseBaselineMaterializerResult, parseResearchResult, redactExcerpt } from './agent-result.mjs';
+import { RESEARCH_PHASES, phaseForTrigger, remainingSessionBudgetMs, resolveResearchConfig } from './research-policy.mjs';
+import { runtimeDir } from './storage-paths.mjs';
+import { workspaceManager } from './workspace-manager.mjs';
+import { materializeBaselineSource } from './baseline-materializer.mjs';
+import { isAcquiringSourceDirectory } from './source-registry-integrity.mjs';
+import { prepareAgentBoundary } from './agent-boundary.mjs';
+import { describeAllowedSourceHosts, loadSourceMirrorPolicy, normalizeRepositoryIdentity, resolveSourceTransport, verifySourceTransportSnapshot } from './source-mirror-policy.mjs';
+import { buildCandidateGenerationPrompt } from './candidate-generation/prompt.mjs';
+import { candidateWorkspaceRequirements, finalizeCandidateAdmission, inspectCandidateDiff } from './candidate-generation/admission.mjs';
+import {
+  CANDIDATE_GENERATION_PATH,
+  CANDIDATE_OUTCOME,
+  classifyEmptyCandidateOutcome,
+  describeGenerationPath,
+  editToolSignal,
+} from './candidate-generation/classification.mjs';
+import { testSpecAgentInstruction } from './test-spec.mjs';
+import { formatExperienceContext, formatUntrustedAdvisory } from './experience-contract.mjs';
+import { fixedOperatorPrompt } from './fixed-operator-profiles.mjs';
+import { recordRunTokenUsage } from './token-usage.mjs';
+import { runtimeRegistry } from './agent-runtime/registry.mjs';
+import { createAgentRuntimeEngine } from './agent-runtime/engine.mjs';
+import { isManagedWorkspaceRuntimeMode, normalizeAgentRuntimeMode } from './agent-runtime/capabilities.mjs';
+import { appendRuntimeEvent } from './runtime-events.mjs';
+import { selectRoundFactsForPrompt } from './mission-project-state.mjs';
+import { bindModelObservation } from './model-observation.mjs';
+import { assertMissionExperiment, buildExperimentMemoryUse } from './experiment-memory.mjs';
+
+export { isManagedWorkspaceRuntimeMode } from './agent-runtime/capabilities.mjs';
+export { appendRuntimeEvent } from './runtime-events.mjs';
+
+const serverDir = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(serverDir, '..');
+const defaultBridgeDir = path.join(runtimeDir, 'agent-bridge');
+
+const fileExists = async (target) => {
+  try { return (await stat(target)).isFile(); } catch { return false; }
+};
+
+// §14.4：provider 中立的发送前 prompt 审计。runId 必须是安全文件名；写入失败以明确
+// 错误阻止发送，不假称 provider 已收到。审计件是唯一权威来源，之后不得从 state 重建。
+const PROMPT_AUDIT_SCHEMA_VERSION = 'operator-studio.prompt-audit/v1';
+const AUDIT_REPLACE_RETRY_CODES = ['EPERM', 'EBUSY', 'EACCES'];
+const safeAuditRunId = (runId) => typeof runId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(runId) && !runId.includes('..');
+const auditFailure = (message, code, cause) => Object.assign(new Error(message), { code, status: 500, ...(cause ? { cause } : {}) });
+const missionProjectIdFor = (state, mission) => mission?.projectId || state?.missions?.find((item) => item.id === mission?.id)?.projectId || state?.activeProjectId || null;
+const isNonBlankString = (value) => typeof value === 'string' && value.trim().length > 0;
+
+// §D3：取消诊断 context 的字节冻结形状。Runtime 只提供已经存在的标量事实；未知一律
+// null，绝不猜测为 0。此对象只用于 provider 诊断端口，不进入任何状态机或持久化 Mission。
+const CANCELLATION_CONTEXT_SCHEMA_VERSION = 'operator-studio.cancellation-context/v1';
+const finiteNonNegativeOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);
+const finitePositiveOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null);
+const elapsedSince = (startedAt) => {
+  const startedAtMs = Date.parse(startedAt || '');
+  return Number.isFinite(startedAtMs) ? Math.max(0, Date.now() - startedAtMs) : null;
+};
+// Factory：triggeredAt 必须在真正发起新的 provider cancel 调用时才生成。工厂只闭包
+// 不可变标量，不持有任何可变 state 引用，也不产生持久化副本。
+const cancellationContextFactory = ({ runId, role, missionId = null, trigger, budgetMs = null, elapsedMs = null, stallTimeoutMs = null, idleMs = null }) => () => ({
+  schemaVersion: CANCELLATION_CONTEXT_SCHEMA_VERSION,
+  runId,
+  missionId: isNonBlankString(missionId) ? missionId : null,
+  role,
+  trigger,
+  triggeredAt: new Date().toISOString(),
+  budgetMs: finiteNonNegativeOrNull(budgetMs),
+  elapsedMs: finiteNonNegativeOrNull(elapsedMs),
+  stallTimeoutMs: finitePositiveOrNull(stallTimeoutMs),
+  idleMs: finiteNonNegativeOrNull(idleMs),
+});
+// 触发分支只读取既有 boolean 与既有状态条件，不重算优先级或阈值：
+// 过期用调用方给出的既有触发；未过期按 logical_completion → prior_cancel_requested
+// → terminal_unreleased → release_pending 的既有条件顺序选择。
+const cancellationTriggerFor = ({ expired, logicalDone, previous, run, cancellation }) => {
+  if (expired) return cancellation?.expiryTrigger || 'budget_exceeded';
+  if (logicalDone) return 'logical_completion';
+  if (previous?.status === 'cancel_requested') return 'prior_cancel_requested';
+  if (['completed', 'failed', 'cancelled'].includes(run?.status)) return 'terminal_unreleased';
+  return 'release_pending';
+};
+const roleMissionIdFor = (role, state) => (isNonBlankString(role?.missionId)
+  ? role.missionId
+  : isNonBlankString(state?.activeMissionId) ? state.activeMissionId : null);
+// §model-observation: project only an exact current provider/run/mission/session
+// bound DTO, deep detached by the shared validation authority. Missing, foreign,
+// malformed or stale evidence clears the projected value; the observation is
+// diagnostic metadata and never a control gate for candidates or release.
+//
+// The expected identity comes from the current agent + active Mission, never from
+// the run record: a record claiming another run/mission/provider is foreign and is
+// rejected instead of being re-labelled onto the current identity.
+//
+// The expected session is an independent identity owned by the run record: its
+// actual `sessionId`, or the compatible `threadId` when no session was recorded.
+// When both are present they must be byte-equal. The DTO's own `sessionId` is
+// never an authority — accepting it would let an observation bind itself,
+// including in cancellation settlement, so there is no such fallback.
+const projectRunModelObservation = ({ provider, run, runId, missionId }) => {
+  if (!run || typeof run !== 'object' || run.runId !== runId) return null;
+  if (run.missionId != null && run.missionId !== missionId) return null;
+  if (run.provider != null && run.provider !== provider) return null;
+  const recordedSession = isNonBlankString(run.sessionId) ? run.sessionId : null;
+  const recordedThread = isNonBlankString(run.threadId) ? run.threadId : null;
+  if (recordedSession && recordedThread && recordedSession !== recordedThread) return null;
+  const expectedSession = recordedSession || recordedThread;
+  if (!expectedSession) return null;
+  return bindModelObservation(run.modelObservation, { provider, runId, missionId, sessionId: expectedSession });
+};
+// 只投递绑定当前 Mission 与当前 Round 的选择清单，不泄漏别轮/别 Mission 的审计元数据。
+const promptAuditSelection = (state, { missionId, projectId, roundId, experienceContext }) => {
+  const selection = state?.iterationStats?.roundExperienceSelection;
+  if (!selection || !experienceContext || !roundId || selection.roundId !== roundId
+    || selection.missionId !== missionId || selection.projectId !== projectId
+    || selection.contextId !== experienceContext.contextId
+    || !Array.isArray(selection.selected) || selection.selected.length !== experienceContext.items.length
+    || !selection.selected.every((item, index) => item.id === experienceContext.items[index].id
+      && item.version === experienceContext.items[index].version && item.source === experienceContext.items[index].source)) return null;
+  return structuredClone(selection);
+};
+const writePromptAudit = async ({ bridgeDir, runId, prompt, missionId, projectId, roundId, runtimeMode, roundFacts, selection, advisory = null,
+  memoryMission = null, experienceContext = null, priorRoundRequired = false }) => {
+  if (!safeAuditRunId(runId)) throw auditFailure(`Prompt audit runId is not a safe file name: ${runId}`, 'PROMPT_AUDIT_RUN_ID_INVALID');
+  const memoryUse = memoryMission ? buildExperimentMemoryUse({ mission: memoryMission, roundId, context: experienceContext,
+    selection, prompt, roundFacts, priorRoundRequired }) : null;
+  try {
+    const auditsDir = path.join(bridgeDir, 'prompt-audits');
+    const auditPath = path.join(auditsDir, `${runId}.json`);
+    const audit = {
+      schemaVersion: PROMPT_AUDIT_SCHEMA_VERSION,
+      deliveryStage: 'prepared-before-send',
+      prompt,
+      promptDigest: 'sha256:' + createHash('sha256').update(prompt, 'utf8').digest('hex'),
+      promptBytes: Buffer.byteLength(prompt, 'utf8'),
+      missionId: missionId ?? null,
+      projectId: projectId ?? null,
+      roundId: roundId ?? null,
+      runId,
+      runtimeMode,
+      createdAt: new Date().toISOString(),
+      roundFacts: roundFacts ?? null,
+      selection: selection ?? null,
+      ...(memoryUse ? { memoryUse } : {}),
+      // 研究建议材料的身份与 digest：成功路径可从审计件核对 prompt 里注入的是哪一份材料。
+      advisory: advisory ?? null,
+    };
+    await mkdir(auditsDir, { recursive: true });
+    const temporary = `${auditPath}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, `${JSON.stringify(audit, null, 2)}\n`, 'utf8');
+      // Windows 上短暂持有的句柄会让 rename 报 EPERM/EBUSY；沿用既有有界替换重试，
+      // 只有全部重试耗尽才算写入失败。
+      for (let attempt = 0; ; attempt += 1) {
+        try { await rename(temporary, auditPath); break; }
+        catch (error) {
+          if (!AUDIT_REPLACE_RETRY_CODES.includes(error.code) || attempt === 11) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+        }
+      }
+    } finally { await rm(temporary, { force: true }).catch(() => {}); }
+    return { schemaVersion: PROMPT_AUDIT_SCHEMA_VERSION, path: auditPath, digest: audit.promptDigest, bytes: audit.promptBytes,
+      ...(memoryUse ? { memoryUse } : {}) };
+  } catch (error) {
+    if (error?.code === 'PROMPT_AUDIT_RUN_ID_INVALID') throw error;
+    throw auditFailure(`Prompt audit write failed before provider send: ${error.message}`, 'PROMPT_AUDIT_WRITE_FAILED', error);
+  }
+};
+
+const directoryExists = async (target) => {
+  try { return (await stat(target)).isDirectory(); } catch { return false; }
+};
+
+const readJson = async (target) => JSON.parse(await readFile(target, 'utf8'));
+
+const summarizeAcquiredSources = (sources = []) => sources.map((source) => ({
+  name: source.name,
+  selectionMode: source.selectionMode,
+  repository: source.repository,
+  canonicalRepository: source.canonicalRepository,
+  transportRepository: source.transportRepository,
+  transportMode: source.transportMode,
+  mirrorVerified: source.mirrorVerified,
+  pin: source.pin,
+  commit: source.commit,
+  tree: source.tree,
+  evidencePaths: (source.evidence || []).map((entry) => entry.path),
+  evidenceCount: (source.evidence || []).length,
+}));
+
+// 研究员结果定位统一走 agent-result 的按角色 + 按阶段 schema 提取（§4.1）。
+// 这里不再保留「取最后一条能 JSON.parse 的事件」的旧实现：它会把工具事件输出当成研究员结论，
+// 也会在正式结果之后出现无关 JSON 时被覆盖。旧代码的失败模式已由 tests/research-extraction-test.mjs 固化。
+const RESEARCH_SUB_REASON_CODES = Object.freeze({
+  NOT_FOUND: 'RESEARCH_RESULT_NOT_FOUND',
+  JSON_EXTRACT_FAILED: 'RESEARCH_JSON_EXTRACT_FAILED',
+  SCHEMA_MISMATCH: 'RESEARCH_SCHEMA_MISMATCH',
+  AMBIGUOUS: 'RESEARCH_RESULT_AMBIGUOUS',
+  RUN_MISMATCH: 'RESEARCH_RUN_MISMATCH',
+  SOURCE_POLICY_REJECTED: 'RESEARCH_SOURCE_POLICY_REJECTED',
+  SOURCE_FETCH_FAILED: 'RESEARCH_SOURCE_FETCH_FAILED',
+  BUDGET_EXHAUSTED: 'RESEARCH_BUDGET_EXHAUSTED',
+});
+
+const researchExtractionFailure = (extraction, { phase, runId }) => {
+  const error = new Error(`${extraction.reason}（阶段 ${phase}${runId ? ` · run ${runId}` : ''}）`);
+  // 兼容既有消费者：来源选择相关失败仍以 RESEARCH_SOURCE_SELECTION_INVALID 作为粗粒度码，
+  // 细分原因放在 reasonCode/details，不再把所有问题都归为无法诊断的单一错误。
+  error.code = 'RESEARCH_SOURCE_SELECTION_INVALID';
+  error.reasonCode = extraction.reasonCode || RESEARCH_SUB_REASON_CODES.NOT_FOUND;
+  error.details = {
+    phase,
+    runId: runId ?? null,
+    reasonCode: error.reasonCode,
+    rejected: (extraction.diagnostics?.rejected || []).slice(0, 8),
+    messageCount: extraction.diagnostics?.messageCount ?? 0,
+    candidateCount: extraction.diagnostics?.candidateCount ?? 0,
+  };
+  error.status = 422;
+  return error;
+};
+
+// 研究材料的适用范围：全部从当前冻结任务契约派生，绝不写死 C550 等历史目标。
+const scopeValues = (value) => (Array.isArray(value) ? value : value == null ? [] : [value])
+  .map((item) => String(item ?? '').trim().toLowerCase())
+  .filter(Boolean)
+  .slice(0, 16);
+export const researchScopeForMission = (mission = {}) => {
+  const profile = mission?.operatorProfile || {};
+  const matrix = mission?.testScenario?.matrix || mission?.matrix || {};
+  const shapeSource = matrix.shape || matrix.shapes || mission?.testScenario?.shape || [];
+  const shape = (Array.isArray(shapeSource) ? shapeSource : [shapeSource])
+    .map((item) => (item && typeof item === 'object' ? JSON.stringify(item) : String(item ?? '')))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  return {
+    hardware: scopeValues(mission?.hardware),
+    dtype: scopeValues(profile.dtype || mission?.dtype),
+    shape,
+    operator: String(profile.operator || mission?.operator || '').trim().toLowerCase() || null,
+  };
+};
+
+// 材料摘要：只覆盖身份与内容字段，供交付阶段核对「注入的是不是这一份材料」。
+const stableNoteValue = (value) => JSON.stringify(value, (_key, item) => (
+  item && typeof item === 'object' && !Array.isArray(item)
+    ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, item[key]]))
+    : item
+));
+export const researchNoteDigest = (note = {}) => 'sha256:' + createHash('sha256').update(stableNoteValue({
+  missionId: note.missionId || null,
+  researchRunId: note.researchRunId || note.runId || null,
+  direction: note.direction || null,
+  summary: note.summary || null,
+  findings: note.findings || [],
+  suggestedDirections: note.suggestedDirections || [],
+  advisory: note.advisory || null,
+})).digest('hex');
+// Source Registry 的只读清单：只列目录名（供应商中立、不做 git 调用），上限 40 条。
+// 研究员据此选择本地来源，不需要（也不被允许）读取 sandbox 之外的目录。读取失败不影响启动。
+export const SOURCE_REGISTRY_INVENTORY_LIMIT = 40;
+export const readSourceRegistryInventory = async (sourceRoot) => {
+  if (!sourceRoot) return null;
+  try {
+    const entries = await readdir(sourceRoot, { withFileTypes: true });
+    const names = entries
+      .filter((entry) => entry.isDirectory() && entry.name !== '.git' && !entry.name.startsWith('.') && !isAcquiringSourceDirectory(entry.name))
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right));
+    return { root: sourceRoot, names: names.slice(0, SOURCE_REGISTRY_INVENTORY_LIMIT), truncated: names.length > SOURCE_REGISTRY_INVENTORY_LIMIT, total: names.length };
+  } catch {
+    return null;
+  }
+};
+
+const collectSourceEvidence = async (sourceDirectory, requestedPaths = []) => {
+  const evidence = [];
+  const collect = async (paths, discovery) => {
+    for (const relativePath of paths) {
+      if (evidence.length >= 8 || evidence.reduce((total, item) => total + item.content.length, 0) >= 120_000) break;
+      if (path.isAbsolute(relativePath) || relativePath.split('/').includes('..')) continue;
+      const target = path.resolve(sourceDirectory, relativePath);
+      if (!target.startsWith(`${sourceDirectory}${path.sep}`)) continue;
+      const [info, resolvedTarget, resolvedRoot] = await Promise.all([
+        lstat(target).catch(() => null),
+        realpath(target).catch(() => null),
+        realpath(sourceDirectory),
+      ]);
+      if (!info?.isFile() || info.isSymbolicLink() || info.size > 2_000_000) continue;
+      if (!resolvedTarget || !(resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`))) continue;
+      const content = await readFile(target, 'utf8').catch(() => '');
+      if (content) evidence.push({ path: relativePath, content: content.slice(0, 40_000), truncated: content.length > 40_000, discovery });
+    }
+  };
+  await collect(requestedPaths, 'agent-selected');
+  if (!evidence.length) {
+    const trackedFiles = (await workspaceManager.git(['ls-files'], sourceDirectory)).stdout.split(/\r?\n/).filter(Boolean);
+    const candidates = trackedFiles
+      .filter((file) => /\.(?:py|cu|cuh|cc|cpp|h|hpp|md|rst)$/i.test(file))
+      .map((file) => {
+        const lower = file.toLowerCase();
+        const score = (lower.includes('mla') ? 20 : 0)
+          + (lower.includes('paged') ? 8 : 0)
+          + (lower.includes('attention') ? 4 : 0)
+          + (lower.includes('decode') ? 3 : 0)
+          + (lower.includes('test') ? 1 : 0);
+        return { file: file.replaceAll('\\', '/'), score };
+      })
+      .filter((entry) => entry.score >= 20)
+      .sort((left, right) => right.score - left.score || left.file.localeCompare(right.file))
+      .slice(0, 24);
+    const semanticallyRelevant = [];
+    for (const candidate of candidates) {
+      const content = await readFile(path.join(sourceDirectory, candidate.file), 'utf8').catch(() => '');
+      if (/mla/i.test(content) && /pag(?:e|ed|ing)|kv.?cache/i.test(content)) semanticallyRelevant.push(candidate.file);
+      if (semanticallyRelevant.length >= 8) break;
+    }
+    await collect(semanticallyRelevant, 'fixed-workflow-discovery');
+  }
+  return evidence;
+};
+
+// 来源获取的有限重试策略：单次尝试超时与尝试次数都是常量，总耗时受研究 session deadline 约束。
+export const SOURCE_CLONE_TIMEOUT_MS = 180_000;
+export const SOURCE_CLONE_MAX_ATTEMPTS = 3;
+// 研究阶段的中文标签：状态投影与消息文案共用一份，避免各处再写一遍三元表达式。
+export const RESEARCH_PHASE_LABELS = Object.freeze({
+  acquire: '联网采集外部资料',
+  synthesize: '只读整理研究笔记',
+  experience: '参考经验（不阻塞）',
+  advisory: '检索针对性建议（不 clone 仓库）',
+});
+export const RESEARCH_PHASE_TITLES = Object.freeze({
+  acquire: '研究员采集',
+  synthesize: '研究员综合',
+  experience: '经验调研',
+  advisory: '研究员建议检索',
+});
+const TRANSIENT_SOURCE_PATTERNS = [
+  /could not resolve host|failed to connect|connection (?:timed out|reset|refused)|network is unreachable|temporary failure|operation timed out/iu,
+  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|EPIPE/iu,
+];
+// 认证/权限/schema/来源策略类失败是永久性的：机械重试只是浪费预算与墙钟时间。
+const PERMANENT_SOURCE_PATTERNS = [
+  /authentication failed|could not read (?:username|password)|permission denied|access denied|repository not found|403|401|407/iu,
+];
+export const isTransientSourceError = (error) => {
+  const text = [error?.code, error?.message, error?.stderr].filter(Boolean).join(' ');
+  if (PERMANENT_SOURCE_PATTERNS.some((pattern) => pattern.test(text))) return false;
+  return TRANSIENT_SOURCE_PATTERNS.some((pattern) => pattern.test(text));
+};
+
+// 克隆失败的原因必须落到错误上：超时时 execFile 杀掉子进程（error.code 为 null、stderr 为空），
+// 原样抛出的话失败记录里没有任何原因，人只能看到「clone 失败」，分不清「网络慢/被代理卡住」
+// 与「认证失败」「仓库不存在」。这里只写可判定的事实，不做超出证据的推断。
+// 注意：超时**不**触发重试（标注发生在重试判定之后，且标注后的文本仍不匹配临时错误模式）——
+// 单次上限 180s，放开重试就是三倍墙钟与预算，那是有成本的决定，不在这里悄悄做。
+export const annotateCloneFailure = (error, { attempt = 1, timeoutMs = SOURCE_CLONE_TIMEOUT_MS } = {}) => {
+  if (error?.killed === true && !String(error.stderr || '').trim()) {
+    error.code = 'RESEARCH_SOURCE_CLONE_TIMEOUT';
+    error.message = `来源克隆在第 ${attempt} 次尝试的 ${Math.round(timeoutMs / 1000)}s 上限内未完成，进程被终止；git 未输出 stderr，因此没有更具体的原因。`;
+  }
+  error.code = error.code || 'RESEARCH_SOURCE_CLONE_FAILED';
+  return error;
+};
+
+// session 剩余预算：null 表示上一阶段没有留下 deadline（新 session），调用方据此使用阶段预算。
+export const previousSessionDeadlineMs = (sessionDeadlineAt, nowMs) => {
+  const deadlineMs = Date.parse(sessionDeadlineAt || '');
+  return Number.isFinite(deadlineMs) ? Math.max(0, deadlineMs - nowMs) : null;
+};
+
+export const acquireSelectedSources = async ({ events, sourceRoot, researchDir, runId = null, mirrorPolicy, allowDiscoveredSources = false, allowSemanticFallback = false }) => {
+  // 输入自校验：缺目录时给出明确原因码，而不是把 undefined 透传给 path/mkdir
+  // 变成不可诊断的 ERR_INVALID_ARG_TYPE。
+  for (const [name, value] of [['sourceRoot', sourceRoot], ['researchDir', researchDir]]) {
+    if (typeof value !== 'string' || !value.trim()) {
+      const error = new Error(`来源获取缺少 ${name}：无法定位 Source Registry 或调研目录。`);
+      error.code = 'RESEARCH_SOURCE_ACQUISITION_INPUT_INVALID';
+      error.reasonCode = 'RESEARCH_ACQUISITION_INPUT_MISSING';
+      error.details = { missing: name };
+      error.status = 500;
+      throw error;
+    }
+  }
+  // 提取与验证分离：先按 acquire 阶段 schema 定位正式结果，再做来源策略验证。
+  // 提取失败与来源策略拒绝是两类不同的失败，各自给出可定位的原因。
+  const extraction = extractResearchResult(events, { phase: 'acquire', runId });
+  if (!extraction.result) throw researchExtractionFailure(extraction, { phase: 'acquire', runId });
+  const repositories = extraction.result.sourceAcquisition?.repositories;
+  if (!Array.isArray(repositories) || repositories.length > 3) {
+    const error = new Error('Research Agent 必须返回 1-3 个可验证的上游 Git 仓库（sourceAcquisition.repositories）。');
+    error.code = 'RESEARCH_SOURCE_SELECTION_INVALID';
+    error.reasonCode = RESEARCH_SUB_REASON_CODES.SCHEMA_MISMATCH;
+    error.status = 422;
+    throw error;
+  }
+  if (!repositories.length && !allowSemanticFallback) {
+    // 空仓库数组只有在契约显式允许 semantic fallback 时才合法；这里绝不放宽门禁。
+    const error = new Error('Research Agent 必须选择 1-3 个可验证的上游 Git 仓库；当前 Mission 契约不允许空数组或语义 fallback。');
+    error.code = 'RESEARCH_SOURCE_SELECTION_INVALID';
+    error.reasonCode = RESEARCH_SUB_REASON_CODES.SOURCE_POLICY_REJECTED;
+    error.details = { phase: 'acquire', runId: runId ?? null, allowSemanticFallback, repositoryCount: 0 };
+    error.status = 422;
+    throw error;
+  }
+  await mkdir(sourceRoot, { recursive: true });
+  const acquired = [];
+  const failures = [];
+  for (const repository of repositories) {
+    const url = String(repository.url || '').trim();
+    const name = String(repository.name || '').trim();
+    const localSelection = repository.location === 'local' || repository.reuseLocal === true;
+    let temporaryDirectory = null;
+    try {
+      if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
+        const error = new Error(`Research Agent 返回了不受支持的来源：${url || name}`);
+        error.code = 'RESEARCH_SOURCE_SELECTION_UNSAFE';
+        throw error;
+      }
+      const destination = path.resolve(sourceRoot, name);
+      if (!destination.startsWith(`${path.resolve(sourceRoot)}${path.sep}`)) throw new Error('Research source destination escaped Source Registry.');
+      let sourceDirectory = destination;
+      let transport;
+      if (localSelection) {
+        if (!await directoryExists(path.join(destination, '.git'))) {
+          const error = new Error(`本地 Source Registry 中不存在 Git 来源：${name}`);
+          error.code = 'RESEARCH_LOCAL_SOURCE_MISSING';
+          throw error;
+        }
+        const [localOrigin, configuredCanonical] = await Promise.all([
+          workspaceManager.git(['config', '--get', 'remote.origin.url'], destination).then((entry) => entry.stdout.trim()).catch(() => ''),
+          workspaceManager.git(['config', '--get', 'operatorStudio.canonicalRepository'], destination).then((entry) => entry.stdout.trim()).catch(() => ''),
+        ]);
+        if (!localOrigin) {
+          const error = new Error(`本地来源 ${name} 缺少可审计的 HTTPS origin；调查员可改选远程来源或进入语义 fallback。`);
+          error.code = 'RESEARCH_LOCAL_SOURCE_IDENTITY_MISSING';
+          throw error;
+        }
+        resolveSourceTransport(localOrigin, { configured: false, requireMirror: false, mirrors: [] }, { allowDiscoveredSources: true });
+        transport = resolveSourceTransport(configuredCanonical || localOrigin, mirrorPolicy, { allowDiscoveredSources: true });
+        if (normalizeRepositoryIdentity(transport.transport) !== normalizeRepositoryIdentity(localOrigin)) {
+          const error = new Error(`本地来源 ${name} 的 origin 与配置的来源 transport 不一致。`);
+          error.code = 'RESEARCH_LOCAL_SOURCE_TRANSPORT_MISMATCH';
+          throw error;
+        }
+      } else {
+        transport = resolveSourceTransport(url, mirrorPolicy, { allowDiscoveredSources });
+        if (await stat(destination).catch(() => null)) {
+          const error = new Error(`Source Registry 已存在同名来源：${name}`);
+          error.code = 'RESEARCH_SOURCE_DESTINATION_EXISTS';
+          throw error;
+        }
+        temporaryDirectory = `${destination}.acquiring-${randomUUID()}`;
+        let cloneError = null;
+        let cloneAttempts = 0;
+        // §7.2：区分永久性错误与暂时性错误。权限/认证/schema/来源策略类失败不机械重试；
+        // 只有临时网络问题才在剩余预算内做有限退避。退避不引入新预算，只是同一 session deadline 内的重试。
+        for (let attempt = 1; attempt <= SOURCE_CLONE_MAX_ATTEMPTS; attempt += 1) {
+          cloneAttempts = attempt;
+          try {
+            await workspaceManager.git(['-c', 'core.longpaths=true', 'clone', '--depth=1', '--filter=blob:none', transport.transport, temporaryDirectory], sourceRoot, { timeout: SOURCE_CLONE_TIMEOUT_MS });
+            cloneError = null;
+            break;
+          } catch (error) {
+            cloneError = error;
+            await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {});
+            if (attempt >= SOURCE_CLONE_MAX_ATTEMPTS || !isTransientSourceError(error)) break;
+            await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+          }
+        }
+        if (cloneError) {
+          annotateCloneFailure(cloneError, { attempt: cloneAttempts });
+          cloneError.reasonCode = RESEARCH_SUB_REASON_CODES.SOURCE_FETCH_FAILED;
+          throw cloneError;
+        }
+        sourceDirectory = temporaryDirectory;
+        const clonedHead = await workspaceManager.git(['rev-parse', 'HEAD'], sourceDirectory).then((entry) => entry.stdout.trim());
+        if (transport.requiredCommit && clonedHead.toLowerCase() !== transport.requiredCommit) {
+          try {
+            await workspaceManager.git(['fetch', '--depth=1', 'origin', transport.requiredCommit], sourceDirectory, { timeout: 180_000 });
+            await workspaceManager.git(['checkout', '--detach', transport.requiredCommit], sourceDirectory, { timeout: 60_000 });
+          } catch (error) {
+            error.code = 'SOURCE_MIRROR_COMMIT_UNAVAILABLE';
+            throw error;
+          }
+        }
+      }
+      const [head, tree, origin] = await Promise.all([
+        workspaceManager.git(['rev-parse', 'HEAD'], sourceDirectory).then((entry) => entry.stdout.trim()),
+        workspaceManager.git(['rev-parse', 'HEAD^{tree}'], sourceDirectory).then((entry) => entry.stdout.trim()),
+        workspaceManager.git(['config', '--get', 'remote.origin.url'], sourceDirectory).then((entry) => entry.stdout.trim()).catch(() => transport.transport),
+      ]);
+      const snapshot = verifySourceTransportSnapshot({ resolution: transport, commit: head, tree });
+      await workspaceManager.git(['config', 'operatorStudio.canonicalRepository', snapshot.canonicalRepository], sourceDirectory);
+      await workspaceManager.git(['config', 'operatorStudio.transportRepository', origin || transport.transport], sourceDirectory);
+      await workspaceManager.git(['config', 'operatorStudio.sourceTree', snapshot.tree], sourceDirectory);
+      const requestedPaths = [...new Set((repository.evidencePaths || []).map((value) => String(value || '').replaceAll('\\', '/').replace(/^\.\//, '')).filter(Boolean))].slice(0, 8);
+      const evidence = await collectSourceEvidence(sourceDirectory, requestedPaths);
+      if (!evidence.length) {
+        const error = new Error(`Research Agent 没有为 ${name} 提供可读取的源码证据路径。`);
+        error.code = 'RESEARCH_SOURCE_EVIDENCE_MISSING';
+        throw error;
+      }
+      if (!localSelection) await rename(sourceDirectory, destination);
+      temporaryDirectory = null;
+      acquired.push({
+        name,
+        selectionMode: localSelection ? 'local' : 'remote',
+        repository: snapshot.canonicalRepository,
+        canonicalRepository: snapshot.canonicalRepository,
+        transportRepository: snapshot.transportRepository,
+        transportMode: snapshot.mode,
+        mirrorVerified: snapshot.mirrorVerified,
+        pin: snapshot.pin,
+        commit: snapshot.commit,
+        tree: snapshot.tree,
+        reason: String(repository.reason || ''),
+        requestedEvidencePaths: requestedPaths,
+        evidence,
+      });
+    } catch (error) {
+      if (temporaryDirectory) await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {});
+      if (!allowSemanticFallback) throw error;
+      failures.push({ name: name || null, repository: url || null, code: error.code || 'RESEARCH_SOURCE_ACQUISITION_FAILED', detail: String(error.message || error).slice(0, 800) });
+    }
+  }
+  const semanticFallback = acquired.length ? null : {
+    allowed: allowSemanticFallback,
+    requested: extraction.result?.sourceAcquisition?.semanticFallback === true || repositories.length === 0 || failures.length > 0,
+    reason: String(extraction.result?.sourceAcquisition?.fallbackReason || failures[0]?.detail || 'No usable local or remote source was acquired.').slice(0, 1_000),
+  };
+  const manifestPath = path.join(researchDir, 'acquisition-result.json');
+  await writeFile(manifestPath, `${JSON.stringify({ schemaVersion: 2, strategy: 'local-first-agent-discovery', acquired, failures, semanticFallback }, null, 2)}\n`, 'utf8');
+  return acquired;
+};
+
+const loadMaterializerSourceEvidence = async ({ sourceRoot, source }) => {
+  const inspection = await workspaceManager.inspectSources(sourceRoot, [source]);
+  const reference = inspection.references?.[0];
+  if (!inspection.ready || !reference?.verified) {
+    const error = new Error(reference?.detail || inspection.errors?.[0]?.detail || 'Baseline source reference is not verified.');
+    error.code = reference?.code || inspection.errors?.[0]?.code || 'BASELINE_SOURCE_NOT_VERIFIED';
+    throw error;
+  }
+  const registered = inspection.sources.find((entry) => entry.id === reference.sourceId);
+  const relativePath = String(source.path || '').replaceAll('\\', '/').replace(/^\.\//, '');
+  const target = path.resolve(registered.path, relativePath);
+  const [info, resolvedTarget, resolvedRoot] = await Promise.all([
+    lstat(target).catch(() => null),
+    realpath(target).catch(() => null),
+    realpath(registered.path).catch(() => null),
+  ]);
+  const contained = resolvedTarget && resolvedRoot && (resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`));
+  if (!info?.isFile() || info.isSymbolicLink() || !contained || info.size > 4_000_000) {
+    const error = new Error('Authoritative baseline reference must resolve to a bounded source file.');
+    error.code = 'BASELINE_SOURCE_FILE_INVALID';
+    throw error;
+  }
+  const content = await readFile(target, 'utf8');
+  return {
+    repository: registered.repository,
+    canonicalRepository: registered.canonicalRepository,
+    transportRepository: registered.transportRepository,
+    transportMode: registered.transportMode,
+    mirrorVerified: registered.mirrorVerified,
+    commit: registered.commit,
+    tree: registered.tree,
+    path: relativePath,
+    content: content.slice(0, 96_000),
+    truncated: content.length > 96_000,
+  };
+};
+
+const readMaterializerWorkspaceResult = async (materializer = {}, events = []) => {
+  const directory = path.resolve(String(materializer.materializationDir || ''));
+  if (!materializer.materializationDir) return null;
+  const runPyPath = path.join(directory, 'run.py');
+  const runPyInfo = await lstat(runPyPath).catch(() => null);
+  if (!runPyInfo?.isFile() || runPyInfo.isSymbolicLink() || runPyInfo.size === 0 || runPyInfo.size > 1_000_000) return null;
+  const runPy = await readFile(runPyPath, 'utf8');
+  if (!runPy.trim()) return null;
+
+  const reportPath = path.join(directory, 'materializer-report.json');
+  const reportInfo = await lstat(reportPath).catch(() => null);
+  let report = null;
+  if (reportInfo?.isFile() && !reportInfo.isSymbolicLink() && reportInfo.size > 0 && reportInfo.size <= 128_000) {
+    report = JSON.parse(await readFile(reportPath, 'utf8'));
+  }
+  const finalResult = parseBaselineMaterializerResult(events);
+  return {
+    schemaVersion: 'operator-studio.baseline-materializer-result/v2',
+    format: 'workspace-artifact',
+    summary: report?.summary || finalResult.summary || 'Baseline materializer 已写入单文件。',
+    runPy,
+    report: report || finalResult.report || {},
+    rawText: finalResult.rawText,
+  };
+};
+
+const hasValidStatusDocument = async (target) => {
+  if (!await fileExists(target)) return false;
+  try {
+    const document = await readJson(target);
+    const status = document.status || document.state || document.task?.status;
+    return Boolean(status && runtimeStatusMap[status]);
+  } catch { return false; }
+};
+
+const hasValidQueue = async (target) => {
+  if (!await fileExists(target)) return false;
+  try {
+    const lines = (await readFile(target, 'utf8')).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    return lines.every((line) => {
+      const task = JSON.parse(line);
+      return task && typeof task === 'object';
+    });
+  } catch { return false; }
+};
+
+const hasValidCanonicalRecords = async (target) => {
+  if (!await fileExists(target)) return false;
+  try {
+    const records = await readJson(target);
+    return Array.isArray(records) ? records.length > 0 : Boolean(records && typeof records === 'object' && Object.keys(records).length > 0);
+  } catch { return false; }
+};
+
+const runtimeStatusMap = {
+  created: 'idle',
+  planning: 'running',
+  running: 'running',
+  paused: 'paused',
+  blocked: 'blocked',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  failed: 'failed',
+  awaiting_approval: 'awaiting_approval',
+};
+
+const ACTIVE_MAIN_AGENT_STATUSES = new Set(['running', 'executing', 'awaiting_action', 'cancel_requested', 'awaiting_approval']);
+const ACTIVE_RESEARCH_AGENT_STATUSES = new Set(['running', 'cancel_requested']);
+const ACTIVE_BASELINE_MATERIALIZER_STATUSES = new Set(['running', 'cancel_requested']);
+const MAX_CANCELLATION_RETRIES = 3;
+const MAIN_AGENT_BUDGET_MS = 10 * 60 * 1000;
+const NON_RECOVERABLE_MANAGED_FAILURE_CODES = new Set([
+  'CLAUDE_AUTH_FAILED',
+  'CLAUDE_ACCESS_DENIED',
+  'CLAUDE_RATE_LIMITED',
+  'CLAUDE_BILLING_UNAVAILABLE',
+  'CLAUDE_NETWORK_FAILED',
+  'CLAUDE_SPAWN_FAILED',
+  'CODEX_AUTH_FAILED',
+  'CODEX_ACCESS_DENIED',
+  'CODEX_RATE_LIMITED',
+  'CODEX_BILLING_UNAVAILABLE',
+  'CODEX_NETWORK_FAILED',
+  'CODEX_SPAWN_FAILED',
+  'CODEX_TLS_TRUST_FAILED',
+  'CODEX_RUNTIME_PERMISSION_DENIED',
+  'CODEX_USER_CONTEXT_UNAVAILABLE',
+  'CODEX_WINDOWS_SANDBOX_SETUP_FAILED',
+]);
+const DEFAULT_MAIN_AGENT_STALL_MS = 2 * 60 * 1000;
+
+export const isMainAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_MAIN_AGENT_STATUSES.has(agent?.status));
+export const isResearchAgentActive = (agent = {}) => Boolean(agent?.runId && ACTIVE_RESEARCH_AGENT_STATUSES.has(agent?.status));
+export function createAgentRuntime(options = {}) {
+  // Claude Code is the production tester default. Codex remains available as
+  // an explicit compatibility override via OPERATOR_RUNTIME_MODE=codex-cli.
+  const mode = normalizeAgentRuntimeMode(options.mode || process.env.OPERATOR_RUNTIME_MODE || 'claude-code');
+  const cliRoot = options.cliRoot || process.env.OPERATOR_CLI_ROOT || '';
+  const bridgeDir = options.bridgeDir || process.env.OPERATOR_BRIDGE_DIR || defaultBridgeDir;
+  const statusPath = cliRoot ? path.join(cliRoot, process.env.OPERATOR_CLI_STATUS_FILE || 'results/agent_status_cli_integration.json') : '';
+  const queuePath = cliRoot ? path.join(cliRoot, process.env.OPERATOR_CLI_QUEUE_FILE || 'results/test_queue.jsonl') : '';
+  const recordsPath = cliRoot ? path.join(cliRoot, process.env.OPERATOR_CLI_RECORDS_FILE || 'docs/optimization_records.json') : '';
+  const openCodeClient = options.opencodeClient || defaultOpenCodeClient;
+  const openCodeAgent = options.openCodeAgent || process.env.OPENCODE_AGENT || 'plan';
+  const openCodeModel = options.openCodeModel || process.env.OPENCODE_MODEL || '';
+  const codex = options.codexClient || defaultCodexClient;
+  const claude = options.claudeClient || defaultClaudeClient;
+  const codexWorkspace = options.codexWorkspace || process.env.OPERATOR_CODEX_WORKSPACE || rootDir;
+  const runtimeDefinition = runtimeRegistry.get(mode);
+  const runtimeClients = { codex, claude, opencode: openCodeClient };
+  const runtimeEngine = createAgentRuntimeEngine({ registry: runtimeRegistry, clients: runtimeClients });
+  const activeStartMissions = new Map();
+  const managedCliMode = runtimeDefinition?.managedWorkspace === true;
+  const managedMeta = managedCliMode
+    ? { name: runtimeDefinition.name, slug: runtimeDefinition.slug, unavailableCode: runtimeDefinition.unavailableCode }
+    : null;
+  const defaultMainAgentStallMs = runtimeDefinition?.defaultStallMs || DEFAULT_MAIN_AGENT_STALL_MS;
+  const configuredMainAgentStallMs = Number(options.mainAgentStallMs ?? process.env.OPERATOR_MAIN_AGENT_STALL_MS ?? defaultMainAgentStallMs);
+  const mainAgentStallMs = Number.isFinite(configuredMainAgentStallMs) && configuredMainAgentStallMs > 0
+    ? configuredMainAgentStallMs
+    : defaultMainAgentStallMs;
+  const configuredMainAgentBudgetMs = Number(options.mainAgentBudgetMs ?? process.env.OPERATOR_MAIN_AGENT_BUDGET_MS ?? MAIN_AGENT_BUDGET_MS);
+  const mainAgentBudgetMs = Number.isFinite(configuredMainAgentBudgetMs) && configuredMainAgentBudgetMs > 0
+    ? configuredMainAgentBudgetMs
+    : MAIN_AGENT_BUDGET_MS;
+  let sourceMirrorPolicyPromise = null;
+  const sourceMirrorPolicy = async () => {
+    if (options.sourceMirrorPolicy) return options.sourceMirrorPolicy;
+    sourceMirrorPolicyPromise ||= loadSourceMirrorPolicy({ configPath: options.sourceMirrorConfigPath ?? process.env.OPERATOR_SOURCE_MIRROR_CONFIG });
+    return sourceMirrorPolicyPromise;
+  };
+  const codexDescriptorTtlMs = Number(options.codexDescriptorTtlMs ?? 60_000);
+  let codexDescriptorCache = null;
+  let codexDescriptorCachedAt = 0;
+  let claudeDescriptorCache = null;
+  let claudeDescriptorCachedAt = 0;
+  const openCodeDescriptorTtlMs = Number(options.openCodeDescriptorTtlMs ?? 5_000);
+  let openCodeDescriptorCache = null;
+  let openCodeDescriptorCachedAt = 0;
+  const lastManagedActivityAt = (run, previous, eventAdvanced) => {
+    if (eventAdvanced) return Date.now();
+    const heartbeat = Date.parse(run?.lastActivityAt || '');
+    return Math.max(Number(previous || 0), Number.isFinite(heartbeat) ? heartbeat : 0) || Date.now();
+  };
+
+  const describeOpenCode = async () => {
+    if (openCodeDescriptorCache && Date.now() - openCodeDescriptorCachedAt < openCodeDescriptorTtlMs) return openCodeDescriptorCache;
+    try {
+      const [health, providers] = await Promise.all([
+        runtimeEngine.invoke('opencode-server', 'health'),
+        runtimeEngine.invoke('opencode-server', 'providers'),
+      ]);
+      const model = parseOpenCodeModel(openCodeModel);
+      const configuredProviders = Array.isArray(providers?.connected) ? providers.connected : [];
+      openCodeDescriptorCache = {
+        mode: 'opencode-server',
+        label: 'OpenCode Agent Runtime',
+        status: health?.healthy ? 'connected' : 'degraded',
+        connected: Boolean(health?.healthy),
+        liveHardware: false,
+        authority: 'opencode',
+        transport: 'OpenCode HTTP API',
+        actionBridge: 'mission-and-observation',
+        projection: 'session-messages-tools-diff',
+        version: health?.version || null,
+        endpoint: openCodeClient.baseUrl,
+        agent: openCodeAgent,
+        model: openCodeModel || null,
+        providerConfigured: model ? configuredProviders.includes(model.providerID) : configuredProviders.length > 0,
+        capabilities: ['mission.run', 'session.status', 'message.read', 'tool.read', 'diff.read'],
+        roleCapabilities: structuredClone(runtimeRegistry.require('opencode-server').capabilities),
+        hint: model
+          ? `OpenCode Server 已连接；使用 ${model.providerID}/${model.modelID}。Patch 与 Decision 回传尚未启用。`
+          : 'OpenCode Server 已连接；请设置 OPENCODE_MODEL=provider/model。Patch 与 Decision 回传尚未启用。',
+      };
+    } catch (error) {
+      openCodeDescriptorCache = {
+        mode: 'opencode-server',
+        label: 'OpenCode Agent Runtime',
+        status: 'unavailable',
+        connected: false,
+        liveHardware: false,
+        authority: 'opencode',
+        transport: 'OpenCode HTTP API',
+        actionBridge: 'none',
+        projection: 'none',
+        endpoint: openCodeClient.baseUrl,
+        capabilities: [],
+        roleCapabilities: structuredClone(runtimeRegistry.require('opencode-server').capabilities),
+        error: error.message,
+        hint: `请先启动 opencode serve，并确认 ${openCodeClient.baseUrl}/global/health 可访问。`,
+      };
+    }
+    openCodeDescriptorCachedAt = Date.now();
+    return openCodeDescriptorCache;
+  };
+
+  const describeCodex = async () => {
+    if (codexDescriptorCache && Date.now() - codexDescriptorCachedAt < codexDescriptorTtlMs) return codexDescriptorCache;
+    const probe = await runtimeEngine.invoke('codex-cli', 'describe');
+    const restrictedUserContext = Boolean(probe.userContext?.restricted);
+    const connected = Boolean(probe.installed) && !restrictedUserContext;
+    const hint = restrictedUserContext
+      ? '当前服务运行在受限自动化账户下，无法读取你的本机 Codex 配置。请从正常 Windows 用户终端启动 Operator Studio；无需向项目注入密钥。'
+      : connected
+        ? 'Codex CLI 已就绪；Provider、模型与认证完全沿用本机 Codex 配置。'
+        : '未发现 Codex CLI，请安装并确保 codex 命令在 PATH 中。';
+    codexDescriptorCache = {
+      mode: 'codex-cli',
+      label: 'Codex Agent Runtime',
+      status: connected ? 'connected' : 'unavailable',
+      connected,
+      liveHardware: false,
+      authority: 'codex-cli',
+      transport: 'Codex stdio JSONL',
+      actionBridge: 'mission-and-client-workflow',
+      projection: 'thread-events-tools-artifacts',
+      version: probe.version || null,
+      workspace: codexWorkspace,
+      stallTimeoutMs: mainAgentStallMs,
+      capabilities: connected ? ['mission.run', 'mission.resume', 'event.read', 'tool.read', 'candidate.observe', 'workflow.decide', 'workflow.intervene', 'workflow.rollback'] : [],
+      roleCapabilities: structuredClone(runtimeRegistry.require('codex-cli').capabilities),
+      hint,
+      configurationAuthority: 'local-codex',
+      authProbe: restrictedUserContext ? 'restricted-user-context' : probe.loggedIn ? 'official-login-detected' : 'delegated-to-local-codex',
+      probe: { installed: Boolean(probe.installed), officialLoginDetected: Boolean(probe.loggedIn), restrictedUserContext },
+    };
+    codexDescriptorCachedAt = Date.now();
+    return codexDescriptorCache;
+  };
+
+  const describeClaude = async () => {
+    if (claudeDescriptorCache && Date.now() - claudeDescriptorCachedAt < codexDescriptorTtlMs) return claudeDescriptorCache;
+    const probe = await runtimeEngine.invoke('claude-code', 'describe');
+    const connected = Boolean(probe.installed) && probe.loggedIn !== false;
+    claudeDescriptorCache = {
+      mode: 'claude-code',
+      label: 'Claude Code Agent Runtime',
+      status: connected ? 'connected' : 'unavailable',
+      connected,
+      liveHardware: false,
+      authority: 'claude-code',
+      transport: 'Claude Code stdio stream-json',
+      actionBridge: 'mission-and-client-workflow',
+      projection: 'session-events-tools-artifacts',
+      version: probe.version || null,
+      workspace: codexWorkspace,
+      stallTimeoutMs: mainAgentStallMs,
+      capabilities: connected ? ['mission.run', 'mission.resume', 'research.run', 'materializer.run', 'event.read', 'tool.read', 'candidate.observe', 'workflow.decide', 'workflow.intervene', 'workflow.rollback'] : [],
+      roleCapabilities: structuredClone(runtimeRegistry.require('claude-code').capabilities),
+      hint: connected
+        ? 'Claude Code CLI 已就绪；模型、网关与认证沿用测试机的 Claude Code 配置。'
+        : '未发现 Claude Code CLI，请安装并确保 claude 命令在 PATH 中。',
+      configurationAuthority: 'local-claude-code',
+      authProbe: probe.loggedIn ? 'official-login-detected' : 'authentication-unavailable',
+      probe: { installed: Boolean(probe.installed), officialLoginDetected: Boolean(probe.loggedIn) },
+    };
+    claudeDescriptorCachedAt = Date.now();
+    return claudeDescriptorCache;
+  };
+
+  const managedDescribers = { claude: describeClaude, codex: describeCodex };
+  const failureClassifiers = { claude: classifyClaudeFailure, codex: classifyCodexFailure };
+  const describeManagedRuntime = () => managedDescribers[runtimeDefinition.clientKey]();
+  const classifyManagedFailure = (run, events) => failureClassifiers[runtimeDefinition.failureClassifier](run, events);
+
+  const describe = async () => {
+    if (mode === 'reference-fixture') {
+      return {
+        mode: 'reference-fixture',
+        label: '本地参考 Runtime',
+        status: 'ready',
+        connected: true,
+        liveHardware: false,
+        authority: 'test-fixture-only',
+        transport: 'in-process events',
+        actionBridge: 'reference-only',
+        projection: 'reference-state',
+        capabilities: ['mission.run', 'event.sequence', 'artifact.mock', 'patch.mock', 'benchmark.mock', 'decision.mock'],
+      };
+    }
+
+    if (mode === 'opencode-server') return describeOpenCode();
+    if (managedCliMode) return describeManagedRuntime();
+
+    if (mode !== 'cli-file') {
+      return {
+        mode: 'unavailable',
+        label: 'Agent not connected',
+        status: 'unavailable',
+        connected: false,
+        liveHardware: false,
+        authority: 'none',
+        transport: 'none',
+        actionBridge: 'none',
+        projection: 'none',
+        capabilities: [],
+        hint: 'Set OPERATOR_RUNTIME_MODE=cli-file and OPERATOR_CLI_ROOT to connect the validated CLI Agent.',
+      };
+    }
+
+    const rootReady = Boolean(cliRoot) && await directoryExists(cliRoot);
+    const probes = {
+      agentStatus: Boolean(statusPath) && await hasValidStatusDocument(statusPath),
+      testQueue: Boolean(queuePath) && await hasValidQueue(queuePath),
+      canonicalRecords: Boolean(recordsPath) && await hasValidCanonicalRecords(recordsPath),
+    };
+    const connected = rootReady && probes.agentStatus && probes.testQueue && probes.canonicalRecords;
+    return {
+      mode: 'cli-file',
+      label: 'CLI Agent Runtime',
+      status: connected ? 'connected' : rootReady ? 'degraded' : 'unavailable',
+      connected,
+      liveHardware: false,
+      authority: 'flashinfer-cli',
+      transport: 'file projection',
+      actionBridge: 'mission-request-only',
+      projection: 'agent-status-only',
+      probes,
+      capabilities: ['mission.request', 'agent.status', 'queue.probe', 'canonical.probe'],
+      hint: connected ? '已连接 CLI 文件投影；Patch、Benchmark、Decision 动作桥尚未启用。' : '请设置 OPERATOR_CLI_ROOT，并确认 status、queue 与 canonical records 文件存在。',
+    };
+  };
+
+  const preflight = async ({ workspace, environment = {} }) => {
+    const providerCheck = managedCliMode ? await runtimeEngine.invoke(mode, 'preflight', { workspace, environment }) : null;
+    if (providerCheck && /^(APPCONTAINER_|PROCESS_BOUNDARY_)/.test(providerCheck.code || '')) return providerCheck;
+    const descriptor = await describe();
+    if (!descriptor.connected) {
+      return { ready: false, code: 'AGENT_RUNTIME_UNAVAILABLE', detail: descriptor.hint || 'Agent Runtime 不可用。', runtime: descriptor, workspace };
+    }
+    if (managedCliMode) {
+      return { ...providerCheck, runtime: descriptor };
+    }
+    return { ready: true, code: 'AGENT_RUNTIME_READY', runtime: descriptor, workspace };
+  };
+
+  const startRun = async ({ state, mission, goal, resumeThreadId = null, workspace: requestedWorkspace = null, experienceContext = null, advisory = null, roundId = null }) => {
+    assertMissionExecutionNotRetired(state, mission.id);
+    assertMissionExperiment({ mission, isolation: options.experimentIsolation });
+    assertResourcesReleased(state);
+    const activeStartAt = activeStartMissions.get(mission.id);
+    if (activeStartAt && Date.now() - activeStartAt < 120_000) {
+      const error = new Error('该 Mission 已有 Agent 启动请求在处理中。');
+      error.status = 409;
+      error.code = 'AGENT_RUN_START_ALREADY_IN_FLIGHT';
+      throw error;
+    }
+    const startGuardToken = Date.now();
+    activeStartMissions.set(mission.id, startGuardToken);
+    const startGuardTimer = setTimeout(() => { if (activeStartMissions.get(mission.id) === startGuardToken) activeStartMissions.delete(mission.id); }, 120_000);
+    startGuardTimer.unref?.();
+    try {
+    if (mode === 'reference-fixture') { activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer); return { handled: false }; }
+    // 新 run 显式绑定它启动时所属的 Round。归档上一轮时以 agent.roundId 还原原 round
+    // 身份，而不是读取可能已经前移的 roundBudget。
+    const activeRoundId = roundId || state.iterationStats?.roundBudget?.roundId || null;
+    const experienceInstruction = experienceContext ? formatExperienceContext(experienceContext, {
+      projectId: mission.projectId, missionId: mission.id, roundId: state.iterationStats?.roundBudget?.roundId,
+    }) : '';
+    // 研究建议材料经既有不可信上下文边界进入 prompt：显式身份 + digest + UNTRUSTED 边界，
+    // 不再是「把研究文本直接拼进 goal」的旁路。身份校验失败即拒绝发送，不回退成裸文本。
+    const advisoryInstruction = advisory ? formatUntrustedAdvisory(advisory, {
+      missionId: mission.id, roundId: activeRoundId,
+    }) : '';
+    const advisoryIdentity = advisory ? {
+      advisoryId: advisory.advisoryId, noteId: advisory.noteId, researchRunId: advisory.researchRunId,
+      missionId: advisory.missionId, roundId: activeRoundId, digest: advisory.digest, value: advisory.value,
+    } : null;
+    if (mode === 'opencode-server') {
+      if (!runtimeEngine.supports(mode, 'planning')) {
+        const error = new Error(`Agent Runtime ${mode} does not support planning runs.`);
+        error.status = 409;
+        error.code = 'AGENT_RUNTIME_CAPABILITY_UNSUPPORTED';
+        throw error;
+      }
+      const descriptor = await describeOpenCode();
+      if (!descriptor.connected) {
+        const error = new Error(descriptor.hint);
+        error.status = 503;
+        error.code = 'OPENCODE_RUNTIME_UNAVAILABLE';
+        throw error;
+      }
+      const session = await runtimeEngine.invoke(mode, 'createSession', `Operator Studio · ${mission.id} · ${mission.title}`);
+      const prompt = [
+        'You are connected to Operator Studio as its local optimization Agent.',
+        `Mission ID: ${mission.id}`,
+        `Goal: ${goal}`,
+        `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
+        `Metric: ${mission.metric || 'not specified'}`,
+        experienceInstruction,
+        advisoryInstruction,
+        'Inspect the current OpenCode project in planning mode. Do not edit files in this pass.',
+        'Return a concrete diagnosis, tool evidence, candidate options, risks, and the recommended next action.',
+      ].join('\n');
+      // 审计的是真正交给 provider 的 text；OpenCode 分支的 prompt 内容不含轮次事实。
+      const promptAudit = await writePromptAudit({
+        bridgeDir, runId: session.id, prompt,
+        missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+        runtimeMode: 'opencode-server', roundFacts: null, advisory: advisoryIdentity,
+        selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
+      });
+      try {
+        await runtimeEngine.invoke(mode, 'prompt', session.id, { text: prompt, agent: openCodeAgent, model: openCodeModel });
+      } catch (error) {
+        error.status = error.status || 502;
+        error.code = error.code || 'OPENCODE_PROMPT_FAILED';
+        throw error;
+      }
+      state.stage = 'diagnosis';
+      state.patchApplied = false;
+      state.agent = {
+        status: 'running',
+        phase: 'OpenCode 正在分析',
+        progress: 5,
+        missionId: mission.id,
+        runId: session.id,
+        roundId: activeRoundId,
+        runtimeKind: 'opencode',
+        profileId: 'profile.operator-orchestrator',
+        goal,
+        promptAudit,
+        startedAt: new Date().toISOString(),
+        currentAction: null,
+        toolCalls: [],
+        messages: [{ id: `opencode-start-${session.id}`, phase: 'Mission', status: 'running', title: 'OpenCode Session 已启动', detail: `${session.id} · ${descriptor.agent}${descriptor.model ? ` · ${descriptor.model}` : ''}`, time: '刚刚' }],
+        artifacts: [{ id: `opencode-session-${session.id}`, kind: 'OpenCode Session', title: session.title || mission.title, status: 'ready', meta: `OpenCode ${descriptor.version || ''} · HTTP API` }],
+      };
+      appendRuntimeEvent(state, 'opencode.session_started', { sessionId: session.id, agent: descriptor.agent, model: descriptor.model }, { kind: 'agent', mode: 'opencode-server' });
+      activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer);
+      return { handled: true, state };
+    }
+    if (managedCliMode) {
+      if (!runtimeEngine.supports(mode, 'iteration')) {
+        const error = new Error(`Agent Runtime ${mode} does not support iteration runs.`);
+        error.status = 409;
+        error.code = 'AGENT_RUNTIME_CAPABILITY_UNSUPPORTED';
+        throw error;
+      }
+      const descriptor = await describeManagedRuntime();
+      if (!descriptor.connected) {
+        const error = new Error(descriptor.hint);
+        error.status = 503;
+        error.code = managedMeta.unavailableCode;
+        throw error;
+      }
+      // 同步研究员（停滞升级）在跑时主线程必须等待；异步研究员（操作员触发）可与主线程并行。
+      if (isResearchAgentActive(state.researchAgent) && state.researchAgent?.synchronous) {
+        const error = new Error('同步研究员正在运行，主线程需等待研究员完成。');
+        error.status = 409;
+        error.code = 'RESEARCH_SERIAL_BUSY';
+        throw error;
+      }
+      // A persisted active run owns the Mission Workspace until it reaches a
+      // terminal, release-confirmed state. Never start a second provider run
+      // for the same Mission while the first one is still observable.
+      if (isMainAgentActive(state.agent)) {
+        const error = new Error('An Agent run is already active for this Mission.');
+        error.status = 409;
+        error.code = 'AGENT_RUN_ALREADY_ACTIVE';
+        throw error;
+      }
+      const runId = `${managedMeta.slug}_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
+      if (!requestedWorkspace || !await directoryExists(requestedWorkspace)) {
+        const error = new Error(`${managedMeta.name} 只能在 Operator Studio 创建的 Mission 工作区中运行。`);
+        error.status = 409;
+        error.code = 'AGENT_MANAGED_WORKSPACE_REQUIRED';
+        throw error;
+      }
+      const workspace = requestedWorkspace;
+      const sourceRoot = mission.sourceRoot || null;
+      const baseline = state.baseline || mission.baseline || {};
+      if (sourceRoot) await mkdir(sourceRoot, { recursive: true });
+      const boundary = await prepareAgentBoundary({
+        workspace,
+        role: 'iteration',
+        roots: { workspace },
+      });
+      const workspaceInventory = await workspaceManager.git(
+        ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
+        workspace,
+      ).then((result) => result.stdout.split('\0').map((file) => file.replaceAll('\\', '/')).filter(Boolean).sort());
+      // 已归档轮次的必需事实经既有 iterationContext 通道进入 prompt：深拷贝投影到
+      // 局部 mission 副本，用户 Mission 定义不被修改；绑定不匹配（Mission 切换、Round
+      // 已前移、旧版本快照）时 selectRoundFactsForPrompt 返回 null，不泄漏事实。
+      const roundFacts = selectRoundFactsForPrompt(state, mission);
+      const promptMission = roundFacts ? { ...mission, iterationContext: roundFacts } : mission;
+      // Both managed start paths append this checkpoint after restoring the
+      // stable candidate. Only the latest, same-Mission start checkpoint can
+      // describe inherited edits; never borrow an older/foreign file list.
+      const startCheckpoint = state.workflowRecovery?.checkpoints?.at(-1);
+      const workspaceChangedFiles = startCheckpoint?.missionId === mission.id
+        && startCheckpoint.stage === 'agent-run-baseline'
+        && Array.isArray(startCheckpoint.stableChangedFiles)
+        ? startCheckpoint.stableChangedFiles : null;
+      const prompt = buildCandidateGenerationPrompt({
+        mission: promptMission,
+        goal,
+        workspace,
+        baseline,
+        testMatrix: mission.testMatrix || state.testMatrix || {},
+        workspaceInventory,
+        workspaceChangedFiles,
+        experienceInstruction,
+        advisoryInstruction,
+        boundaryInstruction: boundary.toolInstruction,
+      });
+      // Claude/Codex 共用同一发送前 helper：先落盘审计件（此时尚未调用 provider），
+      // 写入失败直接抛出，provider start 不会发生。审计 prompt 就是 start.goal 原文。
+      const promptAudit = await writePromptAudit({
+        bridgeDir, runId, prompt,
+        missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+        runtimeMode: mode, roundFacts: roundFacts ?? null, advisory: advisoryIdentity,
+        memoryMission: mission, experienceContext, priorRoundRequired: (state.runHistory?.length || 0) > 0,
+        selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
+      });
+      const run = await runtimeEngine.invoke(mode, 'start', { runId, missionId: mission.id, goal: prompt, workspace, additionalDirectories: [], sandboxMode: 'workspace-write', resumeThreadId, environment: boundary.environment });
+      state.stage = 'diagnosis';
+      state.patchApplied = false;
+      state.agent = {
+        status: 'running',
+        phase: `${managedMeta.name} 正在分析`,
+        progress: 5,
+        missionId: mission.id,
+        runId,
+        roundId: activeRoundId,
+        runtimeKind: mode,
+        threadId: run.threadId || resumeThreadId || null,
+        profileId: 'profile.operator-orchestrator',
+        goal,
+        promptAudit,
+        researchAdvisory: advisoryIdentity,
+        startedAt: run.startedAt,
+        budgetMs: mainAgentBudgetMs,
+        eventCount: 0,
+        lastEventAt: Date.now(),
+        currentAction: null,
+        toolCalls: [],
+        messages: [{ id: `${managedMeta.slug}-start-${runId}`, phase: 'Mission', status: 'running', title: resumeThreadId ? `${managedMeta.name} Mission 已恢复` : `${managedMeta.name} Mission 已启动`, detail: `Run ${runId} · ${descriptor.version || managedMeta.name}${resumeThreadId ? ` · session ${resumeThreadId}` : ''}`, time: '刚刚' }],
+        artifacts: [{ id: `${managedMeta.slug}-run-${runId}`, kind: `${managedMeta.name} Run`, title: mission.title, status: 'running', meta: `${descriptor.transport} · 本地事件投影` }],
+      };
+      appendRuntimeEvent(state, resumeThreadId ? `${managedMeta.slug}.run_resumed` : `${managedMeta.slug}.run_started`, { runId, threadId: run.threadId || resumeThreadId || null, workspace: run.workspace }, { kind: 'agent', mode });
+      activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer);
+      return { handled: true, state };
+    }
+
+    if (mode !== 'cli-file') {
+      const error = new Error('Agent Runtime is not connected. Configure the validated CLI Agent before starting a Mission.');
+      error.status = 503;
+      error.code = 'AGENT_RUNTIME_UNAVAILABLE';
+      throw error;
+    }
+    const descriptor = await describe();
+    if (!descriptor.connected) {
+      const error = new Error(descriptor.hint || 'CLI Runtime 尚未连接。');
+      error.status = 503;
+      throw error;
+    }
+    const runId = `cli_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
+    const request = {
+      schemaVersion: 1,
+      requestId: runId,
+      missionId: mission.id,
+      repository: mission.repository,
+      goal,
+      ...(experienceContext ? { experienceContext: structuredClone(experienceContext), experienceInstruction } : {}),
+      targetHardware: mission.hardware,
+      metric: mission.metric,
+      status: 'requested',
+      createdAt: new Date().toISOString(),
+    };
+    // cli-file 实际交付给 CLI Agent 的是 request.goal；审计先于 Bridge 请求落盘，
+    // 失败即阻止请求写出。不把只存在于内存的字符串谎称为已发送。
+    const promptAudit = await writePromptAudit({
+      bridgeDir, runId, prompt: goal,
+      missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId,
+      runtimeMode: 'cli-file', roundFacts: null,
+      selection: promptAuditSelection(state, { missionId: mission.id, projectId: missionProjectIdFor(state, mission), roundId: activeRoundId, experienceContext }),
+    });
+    const requestsDir = path.join(bridgeDir, 'requests');
+    await mkdir(requestsDir, { recursive: true });
+    const requestPath = path.join(requestsDir, `${runId}.json`);
+    const temporaryRequestPath = `${requestPath}.${randomUUID()}.tmp`;
+    await writeFile(temporaryRequestPath, `${JSON.stringify(request, null, 2)}\n`, 'utf8');
+    await rename(temporaryRequestPath, requestPath);
+    state.stage = 'diagnosis';
+    state.patchApplied = false;
+    state.agent = {
+      status: 'running',
+      phase: '等待 CLI 接管',
+      progress: 0,
+      missionId: mission.id,
+      runId,
+      roundId: activeRoundId,
+      profileId: 'profile.operator-orchestrator',
+      goal,
+      promptAudit,
+      startedAt: request.createdAt,
+      currentAction: null,
+      toolCalls: [{ id: `adapter-${runId}`, toolId: 'adapter.cli-file', name: 'CLI File Adapter', version: 'v0.1.0', skillId: 'skill.context-snapshot', status: 'running', summary: 'Mission 请求已写入 Bridge，等待 CLI 状态文件更新', permission: 'bridge:write' }],
+      messages: [{ id: `agent-start-${runId}`, phase: 'Mission', status: 'running', title: 'Mission 已提交到 CLI Runtime', detail: `Run ${runId} 正在等待执行端接管。`, time: '刚刚' }],
+      artifacts: [{ id: 'artifact-runtime-request', kind: 'Runtime Request', title: `${mission.title} / ${runId}`, status: 'ready', meta: 'adapter · persisted · awaiting runtime' }],
+    };
+    appendRuntimeEvent(state, 'mission.run_requested', { runId, goal, bridge: `requests/${runId}.json` }, { kind: 'adapter', mode: 'cli-file' });
+    activeStartMissions.delete(mission.id); clearTimeout(startGuardTimer);
+    return { handled: true, state };
+    } finally {
+      activeStartMissions.delete(mission.id);
+      clearTimeout(startGuardTimer);
+    }
+  };
+
+  // acquire 阶段对 Source Registry 只读：claude 侧把写工具从工具面摘掉，codex 侧沙箱只允许
+  // 写研究目录。这句话因此只陈述两种适配器都成立的不变量——既不说「你可以写」，也不说
+  // 「你没有写工具」，因为任何一种能力断言都会在另一侧变成假话。
+  const acquireWriteBoundary = (researchDir) => `The Source Registry is strictly READ-ONLY in this stage: never create, modify, rename or delete anything inside it. Do not write anywhere outside the research directory (${researchDir}), do not modify the Mission workspace, Iteration Repository or existing Source files, and do not create any candidate patch.`;
+
+  const buildResearchPrompt = ({ mission, direction, researchDir, sourceRoot, runPhase, sourceEvidence = null, runId = null, sourceRegistry = null, allowDiscoveredSources = false }) => {
+    const base = [
+      'You are the Research Agent for Operator Studio — a read-only research scout that assists operator iteration.',
+      `Mission ID: ${mission.id}`,
+      `Mission title: ${mission.title || '(not specified)'}`,
+      `Mission goal: ${mission.goal || '(not specified)'}`,
+      `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
+      `Metric: ${mission.metric || 'not specified'}`,
+      `Current best: ${mission.currentBest?.value || 'not established'}`,
+      `Research direction: ${direction}`,
+      `Research directory: ${researchDir}`,
+      `Source Registry: ${sourceRoot || '(not configured)'}`,
+    ];
+    if (runPhase === 'advisory') {
+      // §3.2 / §7.2：优化阶段的建议型研究。已有有效 baseline 与运行证据时，默认只做
+      // 「低成本检索 + 一张建议卡片」，不重新寻找/克隆 baseline 仓库。
+      return [...base,
+        'This is an ADVISORY research phase for an ALREADY-ESTABLISHED baseline. The Mission already has a fixed test contract, a verified baseline and real run evidence. Do NOT acquire a baseline, do NOT clone repositories, and do NOT propose candidate code.',
+        'Prefer, in this order: (1) already-verified LOCAL sources you can read in the research directory, (2) reviewed experience and reviewed wiki entries, (3) specific files or documentation snippets, (4) only if genuinely necessary, a pinned upstream source file — never a full repository clone.',
+        `You may write ONLY inside the research directory: ${researchDir}. Do not modify the Mission workspace, baseline, tests, iteration repository, or any candidate implementation.`,
+        'Answer exactly one question: which bounded next change should the next optimization round try, and why? If you cannot identify a concrete, actionable suggestion, say so explicitly and finish normally — an explicit "no useful suggestion" is a valid, expected outcome and must not be padded with generic advice.',
+        'Every factual claim must be traceable to a source you actually read. Do not invent URLs, commits or measurements.',
+        `Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v2","researchRunId":"${runId || ''}","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}],"baselineSources":[],"advisory":{"problem":"the concrete problem this round should attack","scope":{"hardware":["..."],"dtype":["..."],"shape":["..."],"operator":"..."},"evidence":["traceable observation"],"hypothesis":"why this change should help","nextChange":"the smallest bounded change for the next round","verification":"how to verify it under the frozen contract","stopCondition":"when to abandon this direction"}}. Use "advisory":null when you have no actionable suggestion. These suggestions are advisory only and cannot override the frozen Profile, test matrix, baseline, oracle, or tool permissions.`,
+      ].join('\n');
+    }
+    if (runPhase === 'experience') {
+      return [...base,
+        'This is an EXPERIENCE RESEARCH phase for a frozen operator test profile. You may inspect locally available documentation and use hosted web search/fetch for implementation experience, but the profile semantics, correctness cases and benchmark cases are immutable.',
+        `Frozen operator contract: ${fixedOperatorPrompt(mission.operatorProfile || {})}`,
+        `You may write ONLY inside the research directory: ${researchDir}. Do not modify the Mission workspace, baseline, tests, iteration repository, or any candidate implementation.`,
+        'Do NOT acquire a baseline source, clone a source tree, create candidate code, submit tests, or assert that an external source is required.',
+        'Return one JSON object and no Markdown fences with this shape: {\"schemaVersion\":\"operator-studio.research-notes/v2\",\"summary\":\"...\",\"findings\":[\"...\"],\"suggestedDirections\":[\"...\"],\"sources\":[{\"title\":\"...\",\"url\":\"...\",\"type\":\"paper|repo|docs\"}],\"baselineSources\":[]}. Suggestions are advisory only and must preserve the frozen contract.',
+      ].join('\n');
+    }
+    if (runPhase === 'acquire' && sourceRoot) {
+      // 两阶段·采集：分析任务 → 自主决定需要什么资料 → 拉进 Source Registry。只采集，不写最终笔记。
+      return [...base,
+        `You have READ-ONLY access to the Source Registry at ${sourceRoot} plus hosted web search. This is the ACQUISITION phase. First inspect the local Source Registry and select a relevant existing Git source when possible. Only if local sources are insufficient, search the network for an accessible HTTPS Git repository. Allowed hosts for THIS Mission: ${describeAllowedSourceHosts({ allowDiscoveredSources })}. Select a host that is actually allowed — a selection the source policy refuses wastes the whole acquisition.`,
+        // 只读清单由平台提供，研究员不必猜注册表里有什么，也不必触碰 sandbox 之外的目录。
+        sourceRegistry && sourceRegistry.names
+          ? `Local Source Registry inventory (READ-ONLY, platform-provided; ${sourceRegistry.total} entries${sourceRegistry.truncated ? `, showing the first ${sourceRegistry.names.length}` : ''}): ${sourceRegistry.names.join(', ') || '(empty)'}. A local selection must use one of these exact directory names.`
+          : 'The local Source Registry inventory could not be read; prefer a remote HTTPS Git source or the semantic fallback.',
+        `${acquireWriteBoundary(researchDir)} The fixed workflow reuses local selections or clones remote selections and records the resulting commit/tree snapshot.`,
+        'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.source-acquisition/v2","summary":"...","sourceAcquisition":{"repositories":[{"name":"flashinfer","location":"local|remote","url":"https://accessible-host/owner/repo.git","reason":"why it matches this Mission","evidencePaths":["repo/relative/operator_file.py","repo/relative/kernel_file.cuh"]}],"semanticFallback":false,"fallbackReason":""}}. For a local selection, name must match a Source Registry child directory and url may be omitted. For a remote selection, provide a safe HTTPS Git URL. Select at most 3 repositories. If neither local nor remote source is usable, return repositories:[], semanticFallback:true, and a concise semantic specification in fallbackReason so the Materializer can implement a baseline from the Mission.',
+      ].join('\n');
+    }
+    if (runPhase === 'synthesize') {
+      // 两阶段·综合：只读已拉取的资料，写研究笔记。无网络、短、必然完成。
+      return [...base,
+        'This is the SYNTHESIS phase. The fixed workflow reused local sources or cloned selected repositories and copied bounded evidence below. If evidence exists, select the source path that best matches the Mission. If acquisition failed or produced no evidence, derive a semantic baseline specification from the Mission instead of stopping.',
+        `Source Evidence and Acquisition Result JSON: ${JSON.stringify(sourceEvidence || {})}`,
+        'Do NOT propose candidates, do not produce a "candidates" field, and do not call any benchmark or test service.',
+        'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v2","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}],"baselineSources":[{"authority":"upstream","repository":"https://...","commit":"full cloned commit","path":"...","operator":"...","expandedSingleFile":false,"confidence":"high|medium|low","reason":"..."}],"semanticBaseline":{"operator":"...","reason":"...","inputSemantics":["..."],"outputSemantics":["..."],"correctnessInvariants":["..."]}}. Use baselineSources when evidence exists. Otherwise leave baselineSources empty and provide semanticBaseline.',
+      ].join('\n');
+    }
+    // 单阶段（无 sourceRoot）：检索 + 产笔记（旧行为），一个 run 完成
+    return [...base,
+      // 不得声称「你可以 git clone」：claude 侧本阶段没有 shell/写工具，codex 侧克隆也由
+      // 固定工作流负责。声称一个研究员做不到的能力，会换来确定失效的合规。
+      'You have network access. Research the latest operator implementations, papers and open-source libraries relevant to the direction above. Use hosted web search and fetch to read upstream sources and documentation; repository cloning is performed by the fixed workflow, not by you.',
+      `${acquireWriteBoundary(researchDir)} This is a read-only research turn.`,
+      'Do NOT propose candidates, do not produce a "candidates" field, and do not call any benchmark or test service.',
+      'Return one JSON object and no Markdown fences with this shape: {"schemaVersion":"operator-studio.research-notes/v1","summary":"...","findings":["..."],"suggestedDirections":["..."],"sources":[{"title":"...","url":"...","type":"paper|repo|docs"}],"baselineSources":[{"authority":"upstream","repository":"https://...","commit":"...","path":"...","operator":"...","expandedSingleFile":false,"confidence":"high|medium|low","reason":"why this is an authoritative reference candidate"}]}. baselineSources are read-only source candidates only; do not decide adoption or submit tests. If no authoritative baseline source exists, return "baselineSources":[] and explain why in findings.',
+    ].join('\n');
+  };
+
+  const buildBaselineMaterializerPrompt = ({ mission, source, matrix, materializationDir, sourceEvidence }) => [
+    'You are the Baseline Materializer for Operator Studio.',
+    `Task: materialize one ${source?.semanticFallback ? 'Mission-semantic' : 'upstream'} baseline into a single-file run.py for the current Mission.`,
+    `Mission ID: ${mission.id}`,
+    `Mission title: ${mission.title || mission.goal || '(not specified)'}`,
+    `Operator: ${mission.operator || source?.operator || '(not specified)'}`,
+    `Target hardware: ${(mission.hardware || []).join(', ') || 'not specified'}`,
+    `Metric: ${mission.metric || 'not specified'}`,
+    `Test matrix JSON: ${JSON.stringify(matrix || {})}`,
+    `Selected source or semantic fallback JSON: ${JSON.stringify(source || {})}`,
+    source?.semanticFallback
+      ? 'No usable source code was available. Implement the baseline from the Mission and semantic specification below; explicitly record assumptions and unsupported semantics.'
+      : 'Source Registry is not exposed to this Agent. The fixed workflow captured the selected reference and embedded its bounded contents below.',
+    `Source Evidence JSON: ${JSON.stringify(sourceEvidence || {})}`,
+    `Materialization directory: ${materializationDir}`,
+    '',
+    'Hard constraints:',
+    source?.semanticFallback ? '- Use the Mission and semantic specification as the baseline authority for this test run.' : '- Use only the captured source evidence embedded in this prompt.',
+    '- Write only inside the Materialization directory.',
+    '- Do NOT modify the Mission workspace, Iteration Repository, candidate files, project source, or Source Registry.',
+    '- Do NOT submit tests, upload packages, call runner APIs, or create optimized candidates.',
+    '- The output must be baseline semantics only, not an optimized candidate.',
+    '- The run.py must define get_inputs(), get_test_cases(), get_benchmark_inputs(), run(inputs), and reference(inputs).',
+    '- The run.py must be single-file Python and must not import flashinfer or candidate implementation modules.',
+    '- Prefer PyTorch eager operations for the reference implementation.',
+    '- FIRST write the complete implementation to run.py in the Materialization directory. Do not wait until the final response to persist it.',
+    '- Then write materializer-report.json with summary, sourceFiles, testSpec, assumptions, and unsupported fields.',
+    '- If the baseline cannot be represented faithfully, write only materializer-report.json and explain the blocker; do not create an invalid run.py.',
+    testSpecAgentInstruction(matrix),
+    '',
+    'After both files are persisted, return one small JSON object and no Markdown fences. Do not embed run.py source in the response:',
+    '{"schemaVersion":"operator-studio.baseline-materializer-result/v2","summary":"...","runPyPath":"run.py","reportPath":"materializer-report.json"}',
+  ].join('\n');
+
+  const startBaselineMaterialization = async ({ state, mission, source, matrix = {}, workspace }) => {
+    assertResourcesReleased(state);
+    if (!managedCliMode || !runtimeEngine.supports(mode, 'materializer')) {
+      const error = new Error(`Baseline materializer requires a managed workspace CLI runtime (current: ${mode}).`);
+      error.status = 503;
+      error.code = 'BASELINE_MATERIALIZER_RUNTIME_UNSUPPORTED';
+      throw error;
+    }
+    const descriptor = await describeManagedRuntime();
+    if (!descriptor.connected) {
+      const error = new Error(descriptor.hint);
+      error.status = 503;
+      error.code = managedMeta.unavailableCode;
+      throw error;
+    }
+    const active = state.baseline?.materializer;
+    if (active?.runId && ACTIVE_BASELINE_MATERIALIZER_STATUSES.has(active.status)) {
+      const error = new Error('Baseline materializer 已在运行。');
+      error.status = 409;
+      error.code = 'BASELINE_MATERIALIZER_ACTIVE';
+      throw error;
+    }
+    if (!workspace) {
+      const error = new Error('Baseline materializer 需要一个隔离 materialization 目录。');
+      error.status = 409;
+      error.code = 'BASELINE_MATERIALIZER_WORKSPACE_REQUIRED';
+      throw error;
+    }
+    await mkdir(workspace, { recursive: true });
+    const semanticFallback = source?.semanticFallback === true || source?.authority === 'agent-semantic';
+    const sourceEvidence = semanticFallback
+      ? {
+        mode: 'semantic-fallback',
+        mission: { id: mission.id, title: mission.title, goal: mission.goal, operator: mission.operator, hardware: mission.hardware, metric: mission.metric },
+        specification: source.semanticSpec || null,
+        reason: source.reason || 'No usable local or remote source was available.',
+        verified: false,
+      }
+      : await loadMaterializerSourceEvidence({ sourceRoot: mission.sourceRoot, source });
+    const verifiedSource = {
+      ...source,
+      repository: sourceEvidence.canonicalRepository || sourceEvidence.repository || source.repository,
+      canonicalRepository: sourceEvidence.canonicalRepository || sourceEvidence.repository || source.canonicalRepository || source.repository,
+      transportRepository: sourceEvidence.transportRepository || null,
+      transportMode: sourceEvidence.transportMode || (semanticFallback ? 'semantic-fallback' : 'canonical'),
+      mirrorVerified: sourceEvidence.mirrorVerified === true,
+      commit: sourceEvidence.commit || source.commit,
+      tree: sourceEvidence.tree || source.tree || null,
+      semanticFallback,
+    };
+    const runId = `${managedMeta.slug}_materializer_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
+    const boundary = await prepareAgentBoundary({
+      workspace,
+      role: 'materializer',
+      roots: { workspace },
+    });
+    const prompt = `${buildBaselineMaterializerPrompt({ mission, source: verifiedSource, matrix, materializationDir: workspace, sourceEvidence })}\n${boundary.toolInstruction}`;
+    const run = await runtimeEngine.invoke(mode, 'start', {
+      runId,
+      missionId: mission.id,
+      goal: prompt,
+      workspace,
+      additionalDirectories: [],
+      sandboxMode: 'workspace-write',
+      environment: boundary.environment,
+    });
+    state.baseline = {
+      ...(state.baseline || { required: true, status: 'missing' }),
+      kind: 'pytorch_reference',
+      source: verifiedSource,
+      materializer: {
+        status: 'running',
+        phase: 'Baseline 单文件展开中',
+        progress: 5,
+        runtimeKind: mode,
+        missionId: mission.id,
+        runId,
+        threadId: run.threadId || null,
+        source: verifiedSource,
+        matrix: structuredClone(matrix || {}),
+        materializationDir: workspace,
+        startedAt: run.startedAt,
+        completedAt: null,
+        budgetMs: 8 * 60 * 1000,
+        eventCount: 0,
+        lastEventAt: Date.now(),
+        messages: [{ id: `baseline-materializer-start-${runId}`, phase: 'baseline', status: 'running', title: 'Baseline materializer 已启动', detail: `Run ${runId} · 只生成单文件 run.py`, time: '刚刚' }],
+        artifacts: [{ id: `baseline-materializer-run-${runId}`, kind: 'Baseline Materializer Run', title: '单文件 baseline 展开', status: 'running', meta: `${descriptor.transport} · materializer` }],
+        result: null,
+        error: null,
+      },
+    };
+    appendRuntimeEvent(state, 'baseline.materializer_started', { runId, source: verifiedSource, materializationDir: workspace }, { kind: 'baseline-materializer', mode });
+    return { handled: true, state };
+  };
+
+  const startResearch = async ({ state, mission, direction, workspace, synchronous = false, runPhase, origin = 'automatic', budgetMs: requestedBudgetMs = null, trigger = null }) => {
+    assertResourcesReleased(state);
+    // §3.1：不再依赖容易混淆的默认阶段。所有入口必须显式选择阶段，未知/缺失即拒绝启动。
+    if (!RESEARCH_PHASES.includes(runPhase)) {
+      const error = new Error(`Research Agent 需要显式的研究阶段（收到：${String(runPhase)}）；允许值：${RESEARCH_PHASES.join(', ')}。`);
+      error.status = 400;
+      error.code = runPhase == null ? 'RESEARCH_PHASE_REQUIRED' : 'RESEARCH_PHASE_UNKNOWN';
+      throw error;
+    }
+    // 自动研究统一策略的兜底闸门：origin 默认 'automatic'，而 webResearchEnabled 默认关闭，
+    // 所以任何新增调用点都不可能绕过它、从一个分支悄悄启动采集或综合。显式手动研究必须自带
+    // origin:'manual'，由调用方在 HTTP 入口处按 manualEnabled 裁决。
+    if (origin !== 'manual' && !resolveResearchConfig(mission).automaticEnabled) {
+      const error = new Error('Mission 未开启自动联网研究（需显式 sourcePolicy.webResearchEnabled=true；默认关闭）。');
+      error.status = 409;
+      error.code = 'RESEARCH_DISABLED_BY_POLICY';
+      throw error;
+    }
+    if (!managedCliMode || !runtimeEngine.supports(mode, 'research')) {
+      const error = new Error(`Research Agent requires a managed workspace CLI runtime (current: ${mode}).`);
+      error.status = 503;
+      error.code = 'RESEARCH_RUNTIME_UNSUPPORTED';
+      throw error;
+    }
+    const descriptor = await describeManagedRuntime();
+    if (!descriptor.connected) {
+      const error = new Error(descriptor.hint);
+      error.status = 503;
+      error.code = managedMeta.unavailableCode;
+      throw error;
+    }
+    // 同步研究（停滞升级）需要主线程空闲才能启动；异步研究（操作员触发）可与主线程并行。
+    if (isMainAgentActive(state.agent) && synchronous) {
+      const error = new Error('主线程 Agent 正在运行，同步研究员需等待主线程空闲。');
+      error.status = 409;
+      error.code = 'RESEARCH_SERIAL_BUSY';
+      throw error;
+    }
+    // 仅当当前研究员仍处于运行中才拦截；终态（采集完成）允许启动综合阶段。
+    if (state.researchAgent?.runId && ['running', 'cancel_requested'].includes(state.researchAgent.status)) {
+      const error = new Error('研究员已在运行。');
+      error.status = 409;
+      error.code = 'RESEARCH_RUN_ACTIVE';
+      throw error;
+    }
+    const runId = `${managedMeta.slug}_research_${Date.now().toString(36).toUpperCase()}_${randomUUID().slice(0, 8).toUpperCase()}`;
+    if (!workspace) {
+      const error = new Error('研究员需要一个隔离调研目录。');
+      error.status = 409;
+      error.code = 'RESEARCH_WORKSPACE_REQUIRED';
+      throw error;
+    }
+    if (runPhase === 'acquire' && mission.sourceRoot) await sourceMirrorPolicy();
+    const prevResearch = state.researchAgent || {};
+    // §7.1：一份研究 session 只有一个总预算。采集与综合共享同一 deadline，子阶段不再
+    // 各拿一份完整预算；仍在运行的上一阶段 deadline 继续约束本阶段。
+    const researchConfig = resolveResearchConfig(mission);
+    const nowMs = Date.now();
+    const previousSessionDeadlineAt = typeof prevResearch.sessionDeadlineAt === 'string' ? prevResearch.sessionDeadlineAt : null;
+    const remainingPreviousSession = previousSessionDeadlineMs(previousSessionDeadlineAt, nowMs);
+    if (remainingPreviousSession !== null && remainingPreviousSession <= 0) {
+      const error = new Error(`研究 session 总预算已耗尽（截止 ${previousSessionDeadlineAt}），不再启动阶段 ${runPhase}。`);
+      error.status = 409;
+      error.code = 'RESEARCH_BUDGET_EXHAUSTED';
+      error.reasonCode = RESEARCH_SUB_REASON_CODES.BUDGET_EXHAUSTED;
+      error.details = { phase: runPhase, sessionDeadlineAt: previousSessionDeadlineAt };
+      throw error;
+    }
+    // 阶段预算不是「每个子阶段各拿一份完整预算」：
+    //  - acquire：独立采集策略；
+    //  - synthesize：用 session 剩余预算（采集已经用掉的那部分不再补回来），它要真正写出笔记；
+    //  - advisory / experience：短的建议型预算。
+    const phaseBudgetMs = Number.isFinite(requestedBudgetMs) && requestedBudgetMs > 0
+      ? Math.floor(requestedBudgetMs)
+      : runPhase === 'acquire' ? researchConfig.acquisitionBudgetMs
+        : runPhase === 'synthesize' ? (remainingPreviousSession ?? researchConfig.synthesizeBudgetMs)
+          : researchConfig.advisoryBudgetMs;
+    const budgetMs = remainingPreviousSession === null ? phaseBudgetMs : Math.min(phaseBudgetMs, remainingPreviousSession);
+    const sessionDeadlineAt = previousSessionDeadlineAt || new Date(nowMs + researchConfig.sessionBudgetMs).toISOString();
+    await mkdir(path.join(workspace, 'notes'), { recursive: true });
+    await mkdir(path.join(workspace, 'clones'), { recursive: true });
+    const sourceEvidence = runPhase === 'synthesize'
+      ? await readFile(path.join(workspace, 'acquisition-result.json'), 'utf8')
+        .then((content) => JSON.parse(content))
+        .catch((error) => ({
+          schemaVersion: 2,
+          strategy: 'semantic-fallback-after-acquisition-failure',
+          acquired: [],
+          failures: [{ code: prevResearch.error?.code || 'RESEARCH_ACQUISITION_UNAVAILABLE', detail: prevResearch.error?.message || error.message }],
+          semanticFallback: { allowed: mission.sourcePolicy?.allowSemanticFallback === true, requested: true, reason: prevResearch.error?.message || error.message },
+        }))
+      : null;
+    // 平台提供 Source Registry 的只读清单：研究员不必猜注册表里有什么，也不必触碰 sandbox 之外的目录。
+    const sourceRegistry = runPhase === 'acquire' && mission.sourceRoot
+      ? await readSourceRegistryInventory(mission.sourceRoot)
+      : null;
+    const boundary = await prepareAgentBoundary({
+      workspace,
+      role: `research-${runPhase}`,
+      roots: { workspace, ...(runPhase === 'acquire' && mission.sourceRoot ? { sourceRoot: mission.sourceRoot } : {}) },
+      // §8.2：旁路只能写自己的调研目录。同级目录里是候选工作区、基线、来源快照——都是主线
+      // 正在写的东西，研究员不得改动。这是被下发的强制面，不只是提示里的一句话。
+      protectSiblings: true,
+    });
+    const prompt = `${buildResearchPrompt({ mission, direction, researchDir: workspace, sourceRoot: mission.sourceRoot, runPhase, sourceEvidence, runId, sourceRegistry, allowDiscoveredSources: mission.sourcePolicy?.allowDiscoveredSources === true })}\n${boundary.toolInstruction}`;
+    // 研究阶段对 Source Registry 只有读需求，因此以「只读引用根」下发，而不是可写附加目录。
+    // codex 的沙箱允许全盘读、只限制写，且 --add-dir 加的就是可写根，所以该字段进不了它的 argv；
+    // claude 的 --add-dir 是唯一的读授权通道，由适配器映射为读授权并同时摘掉写工具。
+    // 这样 agent-boundary 里 READ-ONLY 的说法才是被强制的事实，而不是一句声明。
+    const readOnlyDirectories = runPhase === 'acquire' && mission.sourceRoot ? [mission.sourceRoot] : [];
+    const run = await runtimeEngine.invoke(mode, 'start', {
+      runId,
+      missionId: mission.id,
+      goal: prompt,
+      workspace,
+      additionalDirectories: [],
+      readOnlyDirectories,
+      protectedDirectories: boundary.protectedDirectories,
+      sandboxMode: 'workspace-write',
+      environment: boundary.environment,
+    });
+    state.researchAgent = {
+      status: 'running',
+      runPhase,
+      phase: runPhase === 'acquire' ? '研究员采集资料中' : '研究员整理笔记中',
+      progress: 5,
+      missionId: mission.id,
+      runId,
+      runtimeKind: mode,
+      threadId: run.threadId || null,
+      direction,
+      researchDir: workspace,
+      sourceRoot: mission.sourceRoot || prevResearch.sourceRoot || null,
+      startedAt: run.startedAt,
+      completedAt: null,
+      // 阶段预算上限 + session 总 deadline 双重约束：sessionBudgetMs 覆盖模型执行、格式修复、
+      // 来源读取、重试与综合，任何子阶段都不能重置它。来源获取由固定工作流执行，不占研究员进程。
+      budgetMs,
+      sessionDeadlineAt,
+      origin: origin === 'manual' ? 'manual' : 'automatic',
+      trigger,
+      acquireRunId: runPhase === 'acquire' ? runId : prevResearch.acquireRunId || null,
+      synthesizeRunId: runPhase === 'synthesize' ? runId : null,
+      lastEventAt: Date.now(),
+      eventCount: 0,
+      notes: [],
+      messages: [{ id: `research-start-${runId}`, phase: 'research', status: 'running', title: runPhase === 'acquire' ? '研究员采集资料中' : runPhase === 'experience' ? '研究员搜寻优化经验中' : runPhase === 'advisory' ? '研究员检索建议中' : '研究员整理笔记中', detail: `Run ${runId} · ${RESEARCH_PHASE_LABELS[runPhase]} · 预算 ${Math.round(budgetMs / 1000)}s · ${direction}`, time: '刚刚' }],
+      artifacts: [{ id: `research-run-${runId}`, kind: 'Research Run', title: RESEARCH_PHASE_TITLES[runPhase], status: 'running', meta: `${descriptor.transport} · ${runPhase}` }],
+      injected: false,
+      synchronous: Boolean(synchronous),
+    };
+    appendRuntimeEvent(state, 'research.run_started', { runId, runPhase, direction, researchDir: workspace, synchronous: Boolean(synchronous), origin, trigger, budgetMs, sessionDeadlineAt, sourceRegistryEntries: sourceRegistry?.total ?? null }, { kind: 'research', mode });
+    return { handled: true, state };
+  };
+
+  const cancellationCalls = new Map();
+  const cancellationRetries = new Map();
+  const cancellationTimeoutMs = Math.max(20, Number(options.cancellationTimeoutMs) || 5_000);
+  // D3：provider cancel 端口只在 Claude Code 上接收第二个诊断 context 参数；其余
+  // provider 保持原有的单参数调用形状（旧 provider 调用形状兼容）。
+  const invokeProviderCancel = (runId, context) => (mode === 'claude-code'
+    ? runtimeEngine.invoke(mode, 'cancel', runId, context)
+    : runtimeEngine.invoke(mode, 'cancel', runId));
+  const requestCancellation = async (runId, contextFactory = null) => {
+    let operation = cancellationCalls.get(runId);
+    if (!operation) {
+      // 单飞：只有真正新建 provider 调用时才构造 context 与 triggeredAt。已存在的
+      // operation 直接复用，不重新调用 provider，也不生成替代 context。
+      operation = Promise.resolve().then(() => invokeProviderCancel(
+        runId,
+        typeof contextFactory === 'function' ? contextFactory() : null,
+      ));
+      cancellationCalls.set(runId, operation);
+      operation.finally(() => { if (cancellationCalls.get(runId) === operation) cancellationCalls.delete(runId); }).catch(() => {});
+    }
+    // A timed-out port is quarantined, never treated as cancelled. Its eventual
+    // result has no reference to the mutable Mission snapshot.
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ status: 'cancel_requested', resourceRelease: {
+        confirmed: false, status: 'unconfirmed', code: 'AGENT_CANCEL_DEADLINE_EXCEEDED',
+        reason: 'Agent cancellation did not acknowledge before its deadline.',
+      } }), cancellationTimeoutMs);
+      operation.then(value => { clearTimeout(timer); resolve(value || { status: 'cancel_requested' }); },
+        error => { clearTimeout(timer); resolve({ status: 'cancel_requested', resourceRelease: {
+          confirmed: false, status: 'unconfirmed', code: error.code || 'AGENT_CANCEL_FAILED', reason: error.message,
+        } }); });
+    });
+  };
+  const cancellationProjection = (previous, resourceRelease = {}, { timedOut = previous.timedOut, reason = 'Agent cancellation awaits process exit.', primaryFailure = previous.primaryFailure || previous.resourceRelease?.primaryFailure || null } = {}) => ({
+    ...previous, status: 'cancel_requested', currentAction: null, completedAt: null,
+    primaryFailure: primaryFailure || previous.primaryFailure || null,
+    phase: previous.phase?.startsWith('正在取消') ? previous.phase : '正在取消 Agent，等待执行资源释放',
+    timedOut: timedOut || undefined,
+    resourceRelease: { ...(previous.resourceRelease || {}), confirmed: false, status: 'pending', reason,
+      requestedAt: previous.resourceRelease?.requestedAt || new Date().toISOString(),
+      deadline: previous.resourceRelease?.deadline || new Date(Date.now() + cancellationTimeoutMs).toISOString(),
+      nextAction: 'Inspect cancellation status; no workspace mutation or new run is permitted until release is confirmed.',
+      ...resourceRelease, primaryFailure: resourceRelease.primaryFailure || primaryFailure,
+      blocked: Boolean(previous.resourceRelease?.blocked || resourceRelease.blocked),
+      quarantined: Boolean(previous.resourceRelease?.quarantined || resourceRelease.quarantined),
+      status: ['unconfirmed', 'quarantined', 'blocked'].includes(resourceRelease.status)
+        ? resourceRelease.status
+        : ['unconfirmed', 'quarantined', 'blocked'].includes(previous.resourceRelease?.status)
+          ? previous.resourceRelease.status
+          : 'pending', confirmed: false },
+  });
+  const settleCancellation = async (previous, run, expired = false, logicalDone = false, { primaryFailure = null, cancellation = null } = {}) => {
+    const previousWithFailure = primaryFailure
+      ? { ...previous, primaryFailure, resourceRelease: { ...(previous.resourceRelease || {}), primaryFailure } }
+      : previous;
+    if (isExecutionReleased(run)) { cancellationRetries.delete(previous.runId); return { run, projection: null }; }
+    // `resourceRelease.status === 'active'` is the adapter's sentinel for a run
+    // that is still executing: it is `confirmed: false` because nothing has been
+    // released yet, not because a release is under way. `resourceReleaseBarrier`
+    // in cancellation-contract.mjs already excludes that state; this predicate
+    // must exclude it too, otherwise the first projection of every fresh run
+    // reads "still running" as "releasing" and cancels it at launch.
+    const releaseInProgress = run.resourceRelease?.status === 'active'
+      ? false
+      : run.resourceRelease?.confirmed === false
+        || ['pending', 'unconfirmed', 'quarantined', 'blocked'].includes(run.resourceRelease?.status);
+    const cancelling = expired || logicalDone || previousWithFailure.status === 'cancel_requested' || ['completed', 'failed', 'cancelled'].includes(run.status)
+      || releaseInProgress;
+    if (!cancelling) return { run, projection: null };
+    let outcome = run;
+    const releasePending = expired || logicalDone || previousWithFailure.status === 'cancel_requested'
+      || releaseInProgress;
+    const retryCount = cancellationRetries.get(previousWithFailure.runId) || 0;
+    const shouldRequest = (previousWithFailure.status !== 'cancel_requested' && run.resourceRelease?.status !== 'unconfirmed') || releasePending;
+    if (shouldRequest && retryCount < MAX_CANCELLATION_RETRIES) {
+      cancellationRetries.set(previousWithFailure.runId, retryCount + 1);
+      const trigger = cancellationTriggerFor({ expired, logicalDone, previous: previousWithFailure, run, cancellation });
+      outcome = await requestCancellation(previousWithFailure.runId, cancellation ? cancellationContextFactory({
+        runId: previousWithFailure.runId,
+        role: cancellation.role,
+        missionId: cancellation.missionId,
+        trigger,
+        budgetMs: cancellation.budgetMs,
+        elapsedMs: cancellation.elapsedMs,
+        stallTimeoutMs: cancellation.stallTimeoutMs,
+        idleMs: cancellation.idleMs,
+      }) : null);
+      if (isExecutionReleased(outcome)) return { run: { ...run, ...outcome }, projection: null };
+    }
+    const exhausted = releasePending && (cancellationRetries.get(previousWithFailure.runId) || 0) >= MAX_CANCELLATION_RETRIES;
+    const projection = cancellationProjection(previousWithFailure, outcome.resourceRelease, { timedOut: expired || previousWithFailure.timedOut, primaryFailure });
+    if (exhausted) {
+      projection.status = 'needs_human';
+      projection.phase = '取消释放需要人工确认';
+      projection.resourceRelease = {
+        ...projection.resourceRelease,
+        // Preserve the legacy `status=unconfirmed` contract while exposing an
+        // explicit finite blocked/quarantined state for orchestration and UI.
+        blocked: true,
+        quarantined: true,
+        blockedAt: new Date().toISOString(),
+        nextAction: '人工确认 Agent 进程树已释放后，清理该 Mission 执行占用；在确认前禁止恢复、重试或工作区写入。',
+      };
+    }
+    return { run: outcome, projection };
+  };
+
+  const cancellationRelease = (previous, result) => isExecutionReleased(result)
+    ? { ...result.resourceRelease, confirmed: true, status: 'confirmed', reason: 'Agent process release is confirmed.', nextAction: 'No action required.' }
+    : cancellationProjection(previous, result.resourceRelease).resourceRelease;
+
+  const appendVerifiedProcessRecovery = (state, run) => {
+    const recovery = run?.processRecovery;
+    if (recovery?.kind !== 'verified_job_receipt' || run.resourceRelease?.confirmed !== true || !recovery.receiptDigest) return;
+    if ((state.runtimeEvents || []).some(event => event.type === 'agent.process_recovered'
+      && event.payload?.runId === run.runId && event.payload?.receiptDigest === recovery.receiptDigest)) return;
+    appendRuntimeEvent(state, 'agent.process_recovered', { runId: run.runId, missionId: run.missionId,
+      jobName: recovery.jobName, pid: recovery.pid, processCreatedAt: recovery.processCreatedAt,
+      exitedAt: recovery.exitedAt, exitCode: recovery.exitCode, ownerLost: recovery.ownerLost,
+      receiptDigest: recovery.receiptDigest, proof: run.resourceRelease.proof }, { kind: 'agent', mode });
+  };
+
+  const cancelRun = async ({ state, runId }) => {
+    if (state.baseline?.materializer?.runId && runId === state.baseline.materializer.runId) {
+      if (!managedCliMode || !runtimeEngine.supports(mode, 'cancellation')) {
+        const error = new Error(`Baseline materializer cancellation is not supported by runtime mode ${mode}.`);
+        error.status = 409;
+        error.code = 'AGENT_CANCEL_UNAVAILABLE';
+        throw error;
+      }
+      // D3：明确 cancelRun 记录 explicit_cancel；它不评估过期，时序/预算保持 null。
+      const result = await requestCancellation(runId, cancellationContextFactory({
+        runId, role: 'materializer', missionId: roleMissionIdFor(state.baseline.materializer, state), trigger: 'explicit_cancel',
+      }));
+      state.baseline = {
+        ...(state.baseline || {}),
+        materializer: { ...state.baseline.materializer, status: isExecutionReleased(result) ? result.status : 'cancel_requested', phase: 'Baseline materializer 取消已请求', resourceRelease: cancellationRelease(state.baseline.materializer, result) },
+      };
+      appendRuntimeEvent(state, 'baseline.materializer_cancel_requested', { runId }, { kind: 'baseline-materializer', mode });
+      return { state, result };
+    }
+    if (state.researchAgent?.runId && runId === state.researchAgent.runId) {
+      if (!managedCliMode || !runtimeEngine.supports(mode, 'cancellation')) {
+        const error = new Error(`Research cancellation is not supported by runtime mode ${mode}.`);
+        error.status = 409;
+        error.code = 'AGENT_CANCEL_UNAVAILABLE';
+        throw error;
+      }
+      const result = await requestCancellation(runId, cancellationContextFactory({
+        runId, role: 'research', missionId: roleMissionIdFor(state.researchAgent, state), trigger: 'explicit_cancel',
+      }));
+      state.researchAgent = { ...state.researchAgent, status: isExecutionReleased(result) ? result.status : 'cancel_requested', phase: '研究员取消已请求', resourceRelease: cancellationRelease(state.researchAgent, result) };
+      appendRuntimeEvent(state, 'research.cancel_requested', { runId }, { kind: 'research', mode });
+      return { state, result };
+    }
+    if (!runId || state.agent?.runId !== runId) {
+      const error = new Error('The requested Agent run is not active in this Mission.');
+      error.status = 409;
+      error.code = 'AGENT_RUN_MISMATCH';
+      throw error;
+    }
+    let result;
+    if (runtimeDefinition && runtimeEngine.supports(mode, 'cancellation')) result = await requestCancellation(runId, cancellationContextFactory({
+      runId, role: 'main', missionId: roleMissionIdFor(state.agent, state), trigger: 'explicit_cancel',
+    }));
+    else {
+      const error = new Error(`Agent cancellation is not supported by runtime mode ${mode}.`);
+      error.status = 409;
+      error.code = 'AGENT_CANCEL_UNAVAILABLE';
+      throw error;
+    }
+    appendVerifiedProcessRecovery(state, result);
+    state.agent = {
+      ...state.agent,
+      status: isExecutionReleased(result) ? result.status : 'cancel_requested',
+      currentAction: null,
+      resourceRelease: cancellationRelease(state.agent, result),
+      phase: 'Agent cancellation requested',
+    };
+    appendRuntimeEvent(state, 'agent.run_cancel_requested', { runId }, { kind: 'agent', mode });
+    return { state, result };
+  };
+
+  const retireExecution = async ({ state, runId, retirementContext }) => {
+    if (mode !== 'claude-code' || state.agent?.runtimeKind !== mode || state.agent?.runId !== runId
+      || state.agent?.missionId !== state.activeMissionId || (state.missionPaused !== true && !retirementContext)
+      || state.agent?.resourceRelease?.confirmed !== false) throw Object.assign(new Error('Only the paused unconfirmed active legacy Claude execution can be retired.'), { code: 'LEGACY_RETIREMENT_INELIGIBLE', status: 409 });
+    const receipt = await runtimeEngine.invoke(mode, 'retireExecution', runId, retirementContext);
+    if (receipt.runId !== runId || receipt.missionId !== state.activeMissionId) throw Object.assign(new Error('Retirement identity conflict.'), { code: 'EXECUTION_RETIREMENT_CONFLICT', status: 409 });
+    state.executionRetirements = [...(state.executionRetirements || []).filter(item => item.runId !== runId), structuredClone(receipt)];
+    if (receipt.retirementKind === 'durable-job-loss') state.missionPaused = true;
+    state.agent = { ...state.agent, executionDisposition: 'retired_unknown', executionRetirement: structuredClone(receipt),
+      currentAction: null, resourceRelease: { ...state.agent.resourceRelease, confirmed: false, originalExitUnknown: true,
+        operationalDisposition: 'retired', retirementDigest: receipt.receiptDigest } };
+    if (!(state.runtimeEvents || []).some(event => event.type === 'agent.execution_retired' && event.payload?.receiptDigest === receipt.receiptDigest))
+      appendRuntimeEvent(state, 'agent.execution_retired', { runId, missionId: state.activeMissionId, receiptDigest: receipt.receiptDigest,
+        originalTreeExitConfirmed: false, remoteModelOutcome: 'unknown', remoteModelCost: 'unknown', receipt }, { kind: 'agent', mode });
+    return { state, result: { receipt, originalExitConfirmed: false, localExecutionAvailable: true, resumed: false } };
+  };
+
+  const localHostRecovery = async ({ state, runId, action }) => {
+    if (mode !== 'claude-code' || state.agent?.runtimeKind !== mode || state.agent?.runId !== runId
+      || state.agent?.missionId !== state.activeMissionId || state.missionPaused !== true
+      || state.agent?.resourceRelease?.confirmed !== false || !['capture', 'recover'].includes(action)) {
+      throw Object.assign(new Error('Only the paused, quarantined active local Claude run can use host recovery.'), { code: 'LOCAL_HOST_RECOVERY_INELIGIBLE', status: 409 });
+    }
+    const outcome = await runtimeEngine.invoke(mode, 'localHostRecovery', runId, action);
+    const identity = outcome.anchor || outcome.proof;
+    if (identity?.runId !== runId || identity.missionId !== state.activeMissionId) throw Object.assign(new Error('Recovery identity does not match the active run.'), { code: 'LOCAL_HOST_ANCHOR_CONFLICT', status: 409 });
+    if (action === 'recover') {
+      if (outcome.releaseConfirmed !== true || outcome.run?.resourceRelease?.confirmed !== true
+        || outcome.run?.localHostRecovery?.localExecutionTerminated !== true) throw Object.assign(new Error('Local host termination is unconfirmed.'), { code: 'LOCAL_HOST_RESTART_NOT_VERIFIED', status: 409 });
+      state.agent = { ...state.agent, status: 'cancelled', currentAction: null, executionOutcome: 'unknown_interrupted',
+        localHostRecovery: structuredClone(outcome.proof), resourceRelease: structuredClone(outcome.run.resourceRelease) };
+      reconcileResourceRelease(state);
+    }
+    const type = action === 'capture' ? 'agent.local_host_checkpoint' : 'agent.local_environment_recovered';
+    if (!(state.runtimeEvents || []).some(event => event.type === type && event.payload?.runId === runId
+      && event.payload?.recordDigest === identity.recordDigest)) appendRuntimeEvent(state, type,
+      { runId, missionId: state.activeMissionId, recordDigest: identity.recordDigest, anchor: outcome.anchor || null,
+        proof: outcome.proof || null, originalProcessExitCode: null, originalProcessExitAt: null,
+        remoteModelOutcome: 'unknown', remoteModelCost: 'unknown' }, { kind: 'agent', mode });
+    return { state, result: outcome };
+  };
+
+  const projectState = async (state) => {
+    const descriptor = await describe();
+    const runtimeChanged = JSON.stringify(state.runtime) !== JSON.stringify(descriptor);
+    state.runtime = descriptor;
+    if (mode === 'opencode-server' && descriptor.connected && state.agent?.runtimeKind === 'opencode' && state.agent?.runId) {
+      const sessionId = state.agent.runId;
+      try {
+        const [statuses, messages, diff] = await Promise.all([
+          runtimeEngine.invoke(mode, 'readStatus'),
+          runtimeEngine.invoke(mode, 'readEvents', sessionId),
+          runtimeEngine.invoke(mode, 'readDiff', sessionId),
+        ]);
+        const sessionStatus = statuses?.[sessionId]?.type || statuses?.[sessionId]?.status || 'idle';
+        const messageList = Array.isArray(messages) ? messages : [];
+        const diffList = Array.isArray(diff) ? diff : [];
+        const assistantMessages = messageList.filter((message) => message?.info?.role === 'assistant');
+        const usageBefore = JSON.stringify(state.tokenUsage || null);
+        const usageEvents = assistantMessages
+          .filter((message) => message?.info?.tokens || message?.info?.usage)
+          .map((message, index) => ({
+            type: message.info?.error ? 'turn.failed' : 'turn.completed',
+            id: message.info?.id || `opencode-usage-${index}`,
+            usageId: message.info?.id || `opencode-usage-${index}`,
+            provider: 'opencode-server',
+            usage: message.info?.tokens || message.info?.usage,
+          }));
+        recordRunTokenUsage(state, { runId: sessionId, phase: 'iteration', provider: 'opencode-server', events: usageEvents });
+        const usageChanged = usageBefore !== JSON.stringify(state.tokenUsage || null);
+        const errors = assistantMessages.map((message) => message?.info?.error?.data?.message || message?.info?.error?.message).filter(Boolean);
+        const textParts = assistantMessages.flatMap((message) => (message.parts || []).filter((part) => part.type === 'text' && part.text));
+        const toolParts = messageList.flatMap((message) => (message.parts || []).filter((part) => part.type === 'tool'));
+        const projectedMessages = textParts.slice(-8).map((part, index) => ({
+          id: part.id || `opencode-text-${index}`,
+          phase: 'OpenCode',
+          status: 'completed',
+          title: 'OpenCode 分析结果',
+          detail: part.text,
+          time: part.time?.end || part.time?.start || '刚刚',
+        }));
+        const projectedTools = toolParts.slice(-20).map((part, index) => ({
+          id: part.id || `opencode-tool-${index}`,
+          toolId: part.tool || 'opencode.tool',
+          name: part.tool || 'OpenCode Tool',
+          version: descriptor.version ? `v${descriptor.version}` : 'runtime',
+          skillId: 'opencode.session',
+          status: part.state?.status === 'completed' ? 'completed' : part.state?.status === 'error' ? 'failed' : 'running',
+          summary: part.state?.title || part.state?.output || part.state?.error || 'OpenCode tool call',
+          permission: 'opencode:managed',
+        }));
+        const busy = ['busy', 'retry'].includes(sessionStatus);
+        const nextStatus = errors.length ? 'failed' : busy ? 'running' : assistantMessages.length ? (diffList.length ? 'awaiting_action' : 'completed') : 'running';
+        const artifacts = [
+          ...(state.agent.artifacts || []).filter((artifact) => artifact.kind !== 'OpenCode Diff'),
+          ...diffList.slice(0, 20).map((file, index) => ({
+            id: `opencode-diff-${index}-${file.file || file.path || 'file'}`,
+            kind: 'OpenCode Diff',
+            title: file.file || file.path || `Changed file ${index + 1}`,
+            status: 'ready',
+            meta: `${file.additions ?? 0} additions · ${file.deletions ?? 0} deletions`,
+          })),
+        ];
+        const nextAgent = {
+          ...state.agent,
+
+          status: nextStatus,
+          phase: errors.length ? 'OpenCode 执行失败' : busy ? 'OpenCode 正在执行' : diffList.length ? '候选变更待审阅' : assistantMessages.length ? 'OpenCode 分析完成' : state.agent.phase,
+          progress: busy ? Math.max(10, state.agent.progress || 0) : errors.length || assistantMessages.length ? 100 : state.agent.progress,
+          messages: errors.length
+            ? [...projectedMessages, { id: `opencode-error-${sessionId}`, phase: 'OpenCode', status: 'waiting', title: 'OpenCode Provider 调用失败', detail: errors.at(-1), time: '刚刚' }]
+            : projectedMessages.length ? projectedMessages : state.agent.messages,
+          toolCalls: projectedTools.length ? projectedTools : state.agent.toolCalls,
+          artifacts,
+          currentAction: diffList.length ? { id: `opencode-review-${sessionId}`, type: 'candidate.plan', title: '查看 OpenCode Session Diff', reason: `${diffList.length} 个文件包含候选变更。`, expectedOutput: 'Candidate Plan · OpenCode Diff', risk: 'medium', approvalRequired: false, approvalPolicy: 'client-controlled' } : null,
+          openCodeStatus: sessionStatus,
+          openCodeDiffCount: diffList.length,
+        };
+        if (diffList.length) state.stage = 'candidate';
+        const statusChanged = nextAgent.status !== state.agent.status || nextAgent.openCodeDiffCount !== state.agent.openCodeDiffCount;
+        const changed = runtimeChanged || usageChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
+        state.agent = nextAgent;
+        if (statusChanged) appendRuntimeEvent(state, errors.length ? 'opencode.session_failed' : diffList.length ? 'opencode.diff_ready' : 'opencode.session_updated', { sessionId, status: nextStatus, diffCount: diffList.length, error: errors.at(-1) || null }, { kind: 'agent', mode: 'opencode-server' });
+        return { state, changed: changed || statusChanged };
+      } catch (error) {
+        const nextAgent = { ...state.agent, resourceRelease: observedRun.resourceRelease || { confirmed: true, status: 'confirmed' }, status: 'failed', phase: 'OpenCode 状态读取失败', progress: 100, messages: [...(state.agent.messages || []), { id: `opencode-projection-error-${sessionId}`, phase: 'OpenCode', status: 'waiting', title: '无法读取 OpenCode Session', detail: error.message, time: '刚刚' }] };
+        const changed = runtimeChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
+        state.agent = nextAgent;
+        return { state, changed };
+      }
+    }
+    const materializerNeedsProjection = ['running', 'cancel_requested'].includes(state.baseline?.materializer?.status);
+    if (managedCliMode && materializerNeedsProjection && state.baseline?.materializer?.runId && state.baseline.materializer.runtimeKind === mode) {
+      let observedRun = null;
+      try {
+        const prev = state.baseline.materializer;
+        const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
+        let run = await runtimeEngine.invoke(mode, 'readRun', prev.runId);
+        observedRun = run;
+        const events = await runtimeEngine.invoke(mode, 'readEvents', prev.runId);
+        recordRunTokenUsage(state, { runId: prev.runId, phase: 'materializer', provider: mode, events });
+        const budgetExceeded = Number(prev.budgetMs) > 0
+          && prev.startedAt
+          && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
+        // D3：materializer 过期只记录 budget_exceeded；stall 值保持 null。
+        const settlement = await settleCancellation(prev, run, budgetExceeded, events.some(event => event.type === 'turn.completed'), {
+          cancellation: {
+            role: 'materializer',
+            missionId: roleMissionIdFor(prev, state),
+            budgetMs: typeof prev.budgetMs === 'number' ? prev.budgetMs : null,
+            elapsedMs: elapsedSince(prev.startedAt),
+            stallTimeoutMs: null,
+            idleMs: null,
+            expiryTrigger: budgetExceeded ? 'budget_exceeded' : null,
+          },
+        });
+        if (settlement.projection) {
+          const changed = runtimeChanged || JSON.stringify(settlement.projection) !== JSON.stringify(prev);
+          state.baseline = { ...state.baseline, materializer: settlement.projection };
+          return { state, changed };
+        }
+        run = settlement.run; observedRun = run;
+        const failed = run.status === 'failed';
+        const completed = run.status === 'completed';
+        const cancelled = run.status === 'cancelled';
+        const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? (prev.timedOut ? 'timed_out' : 'cancelled') : 'running';
+        let terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
+        const eventCount = events.length;
+        const lastEventAt = lastManagedActivityAt(run, prev.lastEventAt, eventCount > (prev.eventCount || 0));
+        let result = prev.result || null;
+        let materializerError = prev.error || null;
+        let finalStatus = nextStatus;
+        let finalPhase = failed ? 'Baseline materializer 执行失败' : completed ? 'Baseline 单文件展开完成' : cancelled ? 'Baseline materializer 已取消' : nextStatus === 'timed_out' ? 'Baseline materializer 预算耗尽' : prev.status === 'cancel_requested' ? '正在取消 baseline materializer' : 'Baseline 单文件展开中';
+        let workspaceArtifact = null;
+        if (!result && terminal) {
+          try { workspaceArtifact = await readMaterializerWorkspaceResult(prev, events); } catch { /* Agent may still be replacing its report atomically. */ }
+        }
+        if (workspaceArtifact && !result) {
+          try {
+            const materialized = materializeBaselineSource({
+              mission: activeMission,
+              source: prev.source,
+              matrix: prev.matrix || state.testMatrix || {},
+              body: { materializerResult: workspaceArtifact },
+            });
+            result = {
+              schemaVersion: workspaceArtifact.schemaVersion,
+              summary: workspaceArtifact.summary,
+              runPy: materialized.runPy,
+              runPySource: materialized.runPySource,
+              report: materialized.report,
+              source: materialized.source,
+              rawText: workspaceArtifact.rawText,
+              delivery: 'workspace-artifact',
+            };
+            finalStatus = 'completed';
+            finalPhase = 'Baseline 单文件已落盘并通过校验';
+            terminal = true;
+            materializerError = null;
+            if (!['completed', 'failed', 'cancelled'].includes(run.status)) {
+              try { await runtimeEngine.invoke(mode, 'cancel', prev.runId); } catch { /* Artifact is already authoritative. */ }
+            }
+          } catch (error) {
+            if (terminal) {
+              finalStatus = 'failed';
+              finalPhase = 'Baseline materializer 结果校验失败';
+              materializerError = { code: error.code || 'BASELINE_MATERIALIZER_RESULT_INVALID', message: error.message, details: error.details || null };
+            }
+          }
+        } else if (terminal && completed && !result) {
+          try {
+            const parsed = parseBaselineMaterializerResult(events);
+            const materialized = materializeBaselineSource({
+              mission: activeMission,
+              source: prev.source,
+              matrix: prev.matrix || state.testMatrix || {},
+              body: { materializerResult: parsed },
+            });
+            result = {
+              schemaVersion: parsed.schemaVersion,
+              summary: parsed.summary,
+              runPy: materialized.runPy,
+              runPySource: materialized.runPySource,
+              report: materialized.report,
+              source: materialized.source,
+              rawText: parsed.rawText,
+              delivery: 'final-response-v1',
+            };
+          } catch (error) {
+            finalStatus = 'failed';
+            finalPhase = 'Baseline materializer 结果校验失败';
+            materializerError = { code: error.code || 'BASELINE_MATERIALIZER_RESULT_INVALID', message: error.message, details: error.details || null };
+          }
+        }
+        const nextMaterializer = {
+          ...prev,
+          resourceRelease: run.resourceRelease || (terminal ? { confirmed: true, status: 'confirmed' } : prev.resourceRelease),
+          status: finalStatus,
+          phase: finalPhase,
+          progress: terminal ? 100 : Math.max(5, Math.min(95, 5 + events.length * 3)),
+          threadId: run.threadId || prev.threadId || null,
+          completedAt: terminal ? (run.completedAt || new Date().toISOString()) : prev.completedAt || null,
+          eventCount,
+          lastEventAt,
+          result,
+          error: materializerError,
+          messages: [
+            ...(prev.messages || []).slice(0, 8),
+            ...(materializerError ? [{ id: `baseline-materializer-error-${prev.runId}`, phase: 'baseline', status: 'waiting', title: finalPhase, detail: materializerError.message, time: '刚刚', errorCode: materializerError.code }] : []),
+          ],
+          artifacts: [{ id: `baseline-materializer-run-${prev.runId}`, kind: 'Baseline Materializer Run', title: '单文件 baseline 展开', status: finalStatus, meta: `${events.length} events · ${run.threadId || 'thread pending'}` }],
+        };
+        state.baseline = {
+          ...(state.baseline || {}),
+          kind: 'pytorch_reference',
+          source: result?.source || state.baseline?.source || prev.source || null,
+          materializer: nextMaterializer,
+          resolution: result ? {
+            ...(state.baseline?.resolution || {}),
+            status: 'materialized',
+            strategy: 'agent_assisted_materializer',
+            kind: 'pytorch_reference',
+            attemptedAuthority: true,
+            reused: false,
+            reason: '已由受控 materializer 生成权威 baseline 单文件，等待同 runner / 同 shape baseline 测试。',
+            resolvedAt: nextMaterializer.completedAt,
+            previousEvidenceRunId: null,
+          } : state.baseline?.resolution,
+        };
+        if (terminal) appendRuntimeEvent(state, finalStatus === 'completed' ? 'baseline.materializer_completed' : 'baseline.materializer_failed', { runId: prev.runId, status: finalStatus, source: state.baseline.source, error: materializerError }, { kind: 'baseline-materializer', mode });
+        return { state, changed: true };
+      } catch (error) {
+        if (!isExecutionReleased(observedRun || {})) {
+          state.baseline = { ...state.baseline, materializer: cancellationProjection(state.baseline.materializer, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message }) };
+          return { state, changed: true };
+        }
+        state.baseline = {
+          ...(state.baseline || {}),
+          materializer: { ...(state.baseline?.materializer || {}), resourceRelease: observedRun.resourceRelease || { confirmed: true, status: 'confirmed' }, status: 'failed', phase: 'Baseline materializer 状态读取失败', progress: 100, error: { code: 'BASELINE_MATERIALIZER_PROJECTION_FAILED', message: error.message } },
+        };
+        return { state, changed: true };
+      }
+    }
+
+    // 研究员子 Agent 是平行 run：只投影 state.researchAgent，绝不触碰主线程的
+    // stage / candidateEvaluations / patchApplied，避免干扰候选验证路径。
+    // 只有 synchronous 研究（baseline/source 获取）可以阻塞主线程；fixed profile 的
+    // experience 研究是旁路，即使预算耗尽或还在运行，也必须继续投影主 Agent。
+    const researchNeedsProjection = ['running', 'cancel_requested'].includes(state.researchAgent?.status)
+      || (['completed', 'failed', 'timed_out', 'cancelled'].includes(state.researchAgent?.status)
+          && ['synthesize', 'experience'].includes(state.researchAgent?.runPhase) && !(state.researchAgent?.notes || []).length);
+    if (managedCliMode && researchNeedsProjection && state.researchAgent?.runId && state.researchAgent?.runtimeKind === mode) {
+      let observedRun = null;
+      try {
+        const prev = state.researchAgent;
+        let run = await runtimeEngine.invoke(mode, 'readRun', prev.runId);
+        observedRun = run;
+        const events = await runtimeEngine.invoke(mode, 'readEvents', prev.runId);
+        const usageBefore = JSON.stringify(state.tokenUsage || null);
+        recordRunTokenUsage(state, { runId: prev.runId, phase: `research.${prev.runPhase || 'run'}`, provider: mode, events });
+        const usageChanged = usageBefore !== JSON.stringify(state.tokenUsage || null);
+        const budgetExceeded = Number(prev.budgetMs) > 0
+          && prev.startedAt
+          && Date.now() - new Date(prev.startedAt).getTime() >= Number(prev.budgetMs);
+        // D3：researcher 过期只记录 budget_exceeded；stall 值保持 null。
+        const settlement = await settleCancellation(prev, run, budgetExceeded, false, {
+          cancellation: {
+            role: 'research',
+            missionId: roleMissionIdFor(prev, state),
+            budgetMs: typeof prev.budgetMs === 'number' ? prev.budgetMs : null,
+            elapsedMs: elapsedSince(prev.startedAt),
+            stallTimeoutMs: null,
+            idleMs: null,
+            expiryTrigger: budgetExceeded ? 'budget_exceeded' : null,
+          },
+        });
+        if (settlement.projection) {
+          const changed = runtimeChanged || usageChanged || JSON.stringify(settlement.projection) !== JSON.stringify(prev);
+          state.researchAgent = settlement.projection;
+          return { state, changed };
+        }
+        run = settlement.run; observedRun = run;
+        const failed = run.status === 'failed';
+        const completed = run.status === 'completed';
+        const cancelled = run.status === 'cancelled';
+        const nextStatus = failed ? 'failed' : completed ? 'completed' : cancelled ? (prev.timedOut ? 'timed_out' : 'cancelled') : 'running';
+        const terminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(nextStatus);
+        // 事件新鲜度：供循环做停滞/事件预算终止
+        const eventCount = events.length;
+        const lastEventAt = lastManagedActivityAt(run, prev.lastEventAt, eventCount > (prev.eventCount || 0));
+        const phaseLabel = prev.runPhase === 'acquire' ? '研究员采集' : prev.runPhase === 'experience' ? '研究员经验调研' : '研究员整理笔记';
+        const nextResearchAgent = {
+          ...prev,
+          resourceRelease: run.resourceRelease || (terminal ? { confirmed: true, status: 'confirmed' } : prev.resourceRelease),
+          status: nextStatus,
+          runPhase: prev.runPhase,
+          phase: failed ? `${phaseLabel}失败` : completed ? (prev.runPhase === 'acquire' ? '采集完成，待整理笔记' : prev.runPhase === 'experience' ? '经验调研完成' : '研究员笔记完成') : cancelled ? '研究员已取消' : nextStatus === 'timed_out' ? '研究员预算耗尽' : prev.status === 'cancel_requested' ? '正在取消研究员' : (prev.runPhase === 'acquire' ? '研究员采集中' : prev.runPhase === 'experience' ? '研究员搜寻优化经验中' : '研究员整理笔记中'),
+          progress: terminal ? 100 : prev.progress,
+          messages: prev.messages,
+          lastEventAt,
+          eventCount,
+          error: failed ? structuredClone(run.error || { code: 'CODEX_RESEARCH_FAILED', message: 'Research Agent failed.' }) : null,
+        };
+        // 产出笔记：综合阶段、经验阶段、建议阶段，或单阶段（无 sourceRoot 的采集=一次检索产笔记）。
+        const singlePhaseAcquire = prev.runPhase === 'acquire' && !prev.sourceRoot;
+        if (terminal && !prev.notes?.length && (prev.runPhase === 'synthesize' || prev.runPhase === 'experience' || prev.runPhase === 'advisory' || singlePhaseAcquire)) {
+          const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
+          const parsed = parseResearchResult(events, { phase: prev.runPhase, runId: prev.runId });
+          const note = {
+            id: `note_${prev.runId}`,
+            runId: prev.runId,
+            researchRunId: prev.runId,
+            // 材料身份：Mission 绑定是「异步研究不得污染其他 Mission」的第一道闸。
+            missionId: prev.missionId || activeMission.id || null,
+            runPhase: prev.runPhase,
+            direction: prev.direction,
+            content: parsed.rawText,
+            summary: parsed.summary,
+            findings: parsed.findings,
+            suggestedDirections: parsed.suggestedDirections,
+            sources: parsed.sources,
+            baselineSources: parsed.baselineSources || [],
+            advisory: parsed.advisory || null,
+            // 结果协议状态与「有没有材料」分开记录：解析失败是诊断信息，不是可注入成果。
+            outcome: parsed.outcome,
+            resultReasonCode: parsed.reasonCode || null,
+            resultReason: parsed.reason || null,
+            extraction: parsed.extraction || null,
+            failureOnly: parsed.failureOnly === true,
+            // 当前冻结任务契约派生的适用范围（硬件/后端/dtype/shape），不写死历史目标。
+            scope: researchScopeForMission(activeMission),
+            // 机器研究永远不是已验证执行经验，也不伪装成 human 来源。
+            provenance: 'machine-research',
+            verified: false,
+            value: null,
+          };
+          note.digest = researchNoteDigest(note);
+          state.researchNotes = [note, ...(state.researchNotes || []).filter((n) => n.runId !== note.runId)].slice(0, 50);
+          nextResearchAgent.notes = [note];
+          nextResearchAgent.completedAt = note.completedAt;
+          appendRuntimeEvent(state, failed ? 'research.failed' : nextStatus === 'timed_out' ? 'research.timed_out' : 'research.completed', {
+            runId: prev.runId,
+            phase: prev.runPhase,
+            direction: prev.direction,
+            summary: parsed.summary,
+            outcome: parsed.outcome,
+            reasonCode: parsed.reasonCode || null,
+            // 触发原因、阶段、实际耗时、结束原因与可用材料数量（§9 观测），复用既有事件通道。
+            elapsedMs: elapsedSince(prev.startedAt),
+            advisoryMaterial: parsed.advisory ? 1 : 0,
+          }, { kind: 'research', mode });
+        } else if (terminal && !prev.notes?.length && prev.runPhase === 'acquire') {
+          if (!failed && nextStatus === 'completed' && prev.sourceRoot) {
+            // §7.3：状态投影只观察状态，不执行可能长时间重试的 clone/fetch。
+            // 来源获取由迭代推进路径的 deps.acquireSources 端口执行（见 iteration-loop）。
+            nextResearchAgent.acquisitionStatus = 'pending';
+            nextResearchAgent.acquisitionRunId = prev.runId;
+            nextResearchAgent.phase = '采集完成，待执行来源获取';
+            appendRuntimeEvent(state, 'research.acquire_candidate_ready', {
+              runId: prev.runId,
+              phase: 'acquire',
+              elapsedMs: elapsedSince(prev.startedAt),
+            }, { kind: 'research', mode });
+          } else {
+            appendRuntimeEvent(state, 'research.failed', {
+              runId: prev.runId,
+              phase: 'acquire',
+              errorCode: run.error?.code || (nextStatus === 'timed_out' ? 'CODEX_RESEARCH_TIMED_OUT' : 'CODEX_RESEARCH_FAILED'),
+            }, { kind: 'research', mode });
+          }
+        }
+        const changed = runtimeChanged || usageChanged || JSON.stringify(nextResearchAgent) !== JSON.stringify(prev);
+        state.researchAgent = nextResearchAgent;
+        if (prev.synchronous === true) return { state, changed };
+      } catch (error) {
+        if (!isExecutionReleased(observedRun || {})) {
+          state.researchAgent = cancellationProjection(state.researchAgent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message });
+          return { state, changed: true };
+        }
+        appendRuntimeEvent(state, 'research.acquire_failed', {
+          runId: state.researchAgent?.runId,
+          phase: state.researchAgent?.runPhase,
+          errorCode: error.code || 'RESEARCH_SOURCE_ACQUISITION_FAILED',
+          details: error.details || null,
+        }, { kind: 'research', mode });
+        state.researchAgent = { ...state.researchAgent, resourceRelease: observedRun.resourceRelease || { confirmed: true, status: 'confirmed' }, status: 'failed', phase: '研究员处理失败', progress: 100, messages: [...(state.researchAgent.messages || []), { id: `research-projection-error-${state.researchAgent.runId}`, phase: 'research', status: 'waiting', title: '研究或来源处理失败', detail: error.message, time: '刚刚' }] };
+        if (state.researchAgent?.synchronous === true) return { state, changed: true };
+      }
+    }
+    if (managedCliMode && state.agent?.runtimeKind === mode && state.agent?.runId && !executionRetirementFor(state, state.agent.runId)) {
+      let observedRun = null;
+      // Current-agent identity is fixed for this projection; the run record must
+      // match it, never define it. The expected Mission must agree with both the
+      // current agent and the active Mission: an agent still labelled with an old
+      // Mission while another is active is a foreign identity, not a hint.
+      const agentMissionId = isNonBlankString(state.agent.missionId) ? state.agent.missionId : null;
+      const activeMissionId = isNonBlankString(state.activeMissionId) ? state.activeMissionId : null;
+      const expectedMissionId = agentMissionId && activeMissionId && agentMissionId !== activeMissionId
+        ? null
+        : (activeMissionId ?? agentMissionId);
+      const observationContext = {
+        provider: mode,
+        runId: state.agent.runId,
+        missionId: expectedMissionId,
+      };
+      try {
+        let run = await runtimeEngine.invoke(mode, 'readRun', state.agent.runId);
+        if (run.executionRetirement?.missionId === expectedMissionId
+          && executionRetirementFor({ executionRetirements: [run.executionRetirement] }, state.agent.runId)) {
+          const receipt = run.executionRetirement;
+          state.executionRetirements = [...(state.executionRetirements || []).filter(item => item.runId !== receipt.runId), structuredClone(receipt)];
+          state.missionPaused = true;
+          state.agent = { ...state.agent, executionDisposition: 'retired_unknown', executionRetirement: structuredClone(receipt),
+            currentAction: null, resourceRelease: { ...state.agent.resourceRelease, confirmed: false, originalExitUnknown: true,
+              operationalDisposition: 'retired', retirementDigest: receipt.receiptDigest } };
+          return { state, changed: true };
+        }
+        appendVerifiedProcessRecovery(state, run);
+        if (run.process) state.agent = { ...state.agent, process: structuredClone(run.process),
+          ...(run.processRecovery ? { processRecovery: structuredClone(run.processRecovery) } : {}) }; 
+        observedRun = run;
+        let projectedModelObservation = mode === 'claude-code'
+          ? projectRunModelObservation({ ...observationContext, run })
+          : null;
+        const events = await runtimeEngine.invoke(mode, 'readEvents', state.agent.runId);
+        // A correlated tool permission denial is sticky adapter evidence, even
+        // if the run snapshot predates that event or cancellation returns a
+        // different terminal status. Ordinary failed tools remain recoverable.
+        const classifiedFailure = classifyManagedFailure(run, events);
+        const toolPermissionFailure = classifiedFailure.code === 'CLAUDE_TOOL_PERMISSION_DENIED' ? classifiedFailure : null;
+        if (toolPermissionFailure) {
+          const released = isExecutionReleased(run);
+          run = { ...run, status: 'failed',
+            resourceRelease: run.resourceRelease || { confirmed: released, status: released ? 'confirmed' : 'active' } };
+        }
+        const usageBefore = JSON.stringify(state.tokenUsage || null);
+        recordRunTokenUsage(state, { runId: state.agent.runId, phase: 'iteration', provider: mode, events });
+        const usageChanged = usageBefore !== JSON.stringify(state.tokenUsage || null);
+        const agentResult = parseAgentResult(events);
+        const threadEvent = events.find((event) => event.type === 'thread.started' || event.type === 'thread_start' || event.thread_id || event.threadId);
+        const assistantEvents = events.filter((event) => event.item?.type === 'agent_message' || /agent_message|message.completed/i.test(event.type || ''));
+        const toolEvents = events.filter((event) => /tool|command|function_call/i.test(`${event.type || ''} ${event.item?.type || ''}`));
+        // The run record is the terminal source of truth. A completed Codex turn may
+        // contain failed tool calls or recoverable error events without failing the run.
+        let failed = run.status === 'failed';
+        let completed = run.status === 'completed';
+        const rejection = state.agent.patchPolicyRejection;
+        const patchPolicyBlocked = state.iterationStats?.loopStatus === 'needs_human'
+          && state.iterationStats?.loopStatusReason === 'patch_policy_rejected'
+          && rejection?.missionId === state.activeMissionId
+          && rejection?.sourceRunId === state.agent.runId;
+        const workflowAdvanced = patchPolicyBlocked || state.patchApplied || ['validation', 'evidence', 'curation', 'published'].includes(state.stage);
+        // 取消后进程未必立即死透：run.status 仍为 running，不能把已请求的取消覆盖回 running
+        // （与研究分支同法：保留 cancel_requested，直到进程真正终结为 cancelled）。
+        const eventCount = events.length;
+        const lastEventAt = lastManagedActivityAt(run, state.agent.lastEventAt, eventCount > (state.agent.eventCount || 0));
+        const elapsed = state.agent.startedAt ? Date.now() - new Date(state.agent.startedAt).getTime() : 0;
+        const stalled = !completed && !failed && run.status !== 'cancelled' && lastEventAt && Date.now() - lastEventAt >= mainAgentStallMs;
+        const budgetExceeded = !completed && !failed && run.status !== 'cancelled' && elapsed >= (state.agent.budgetMs || mainAgentBudgetMs);
+        const turnCompletedObserved = events.some((event) => event?.type === 'turn.completed');
+        const providerFailureSignal = Boolean(run?.error) || events.some((event) => {
+          const type = String(event?.type || '').toLowerCase();
+          const text = String(runtimeEngine.invoke(mode, 'eventText', event) || '');
+          if (type === 'turn.failed' || type === 'response.failed') return true;
+          return type === 'error' && /provider|transport|connection|certificate|unknownissuer|capacity|rate.?limit|quota|network|dns|timeout/i.test(text);
+        });
+        // Capture the upstream cause before cancellation can replace the live
+        // run with an unconfirmed release projection. This is only diagnostic
+        // state; it never makes an unreleased run eligible for admission.
+        const expiryContext = run.diagnostics?.cancellation?.context;
+        const generationBudgetExpired = budgetExceeded || ['budget_exceeded', 'budget_and_stall'].includes(expiryContext?.trigger);
+        const timeoutFailure = !completed && !toolPermissionFailure
+          && (stalled || budgetExceeded || (run.status === 'cancelled' && state.agent.timedOut === true))
+          ? {
+            code: generationBudgetExpired ? 'AGENT_GENERATION_BUDGET_EXCEEDED'
+              : state.agent.primaryFailure?.category === 'generation_timeout' ? state.agent.primaryFailure.code
+                : 'AGENT_GENERATION_STALL_TIMEOUT',
+            category: 'generation_timeout', retryable: true,
+            title: generationBudgetExpired ? '生成预算耗尽' : '生成超时',
+            phase: '生成超时，尚未进入算子验收',
+            detail: state.agent.primaryFailure?.category === 'generation_timeout' ? state.agent.primaryFailure.detail
+              : `单次生成预算 ${Math.round((expiryContext?.budgetMs || state.agent.budgetMs || mainAgentBudgetMs) / 1000)}s，已用 ${Math.round((expiryContext?.elapsedMs ?? elapsed) / 1000)}s；观测到 ${Math.max(assistantEvents.length, Number(run.diagnostics?.events?.assistant) || 0)} 条模型输出事件和 ${toolEvents.length} 条工具事件，${run.diagnostics?.events?.thinkingTokens ?? '未知'} 条分析输出事件${events.some(event => event.type === 'provider.output_limit') ? '；模型输出 token 上限已到达' : ''}。保留本次记录，确认资源释放后检查最后事件与剩余 Mission 预算再续跑；此结果不表示算子正确性失败。`,
+          } : null;
+        const preSettlementFailure = toolPermissionFailure || (failed
+          ? classifyManagedFailure(run, events)
+          : !completed && !turnCompletedObserved && providerFailureSignal
+            ? classifyManagedFailure(run, events)
+            : timeoutFailure);
+        // D3：主线程使用本分支已有的有效预算/已用时/停滞阈值与实测空闲；两个既有
+        // boolean 同时为真时记录 budget_and_stall，否则记录真正触发的那个。
+        const mainCancellationMissionId = roleMissionIdFor(state.agent, state);
+        const measuredIdleMs = Number.isFinite(lastEventAt) && lastEventAt > 0 ? Math.max(0, Date.now() - lastEventAt) : null;
+        const settlement = await settleCancellation(state.agent, run, stalled || budgetExceeded, false, {
+          primaryFailure: preSettlementFailure,
+          cancellation: {
+            role: 'main',
+            missionId: mainCancellationMissionId,
+            budgetMs: state.agent.budgetMs || mainAgentBudgetMs,
+            elapsedMs: elapsed,
+            stallTimeoutMs: mainAgentStallMs,
+            idleMs: measuredIdleMs,
+            expiryTrigger: stalled && budgetExceeded ? 'budget_and_stall' : budgetExceeded ? 'budget_exceeded' : stalled ? 'stall_timeout' : null,
+          },
+        });
+        if (settlement.projection) {
+          // Cancellation settlement must not drop the latest exact-bound observation,
+          // and must not keep one that the current run no longer supports.
+          const projection = mode === 'claude-code'
+            ? { ...settlement.projection, modelObservation: projectedModelObservation }
+            : settlement.projection;
+          const changed = runtimeChanged || usageChanged || JSON.stringify(projection) !== JSON.stringify(state.agent);
+          state.agent = projection;
+          return { state, changed };
+        }
+        run = settlement.run; observedRun = run;
+        if (mode === 'claude-code') projectedModelObservation = projectRunModelObservation({ ...observationContext, run });
+        failed = Boolean(toolPermissionFailure) || run.status === 'failed'; completed = !toolPermissionFailure && run.status === 'completed';
+        const timedOut = !completed && !toolPermissionFailure && isExecutionReleased(run) && (stalled || budgetExceeded || (run.status === 'cancelled' && state.agent.timedOut === true));
+        const nextStatus = failed ? 'failed' : completed ? 'completed' : timedOut ? 'completed' : run.status === 'cancelled' ? 'cancelled' : state.agent.status === 'cancel_requested' ? 'cancel_requested' : 'running';
+        const failure = toolPermissionFailure || (failed ? classifyManagedFailure(run, events) : null);
+        // Do not turn a recoverable tool `error` followed by a successful
+        // `turn.completed` into a primary run failure. Conversely, retain a
+        // provider/transport cause while the owner is still being released.
+        const observedFailure = failure || (!completed && !turnCompletedObserved ? preSettlementFailure : null);
+        const projectedMessages = assistantEvents.slice(-8).map((event, index) => ({ id: event.id || `${managedMeta.slug}-event-${index}`, phase: event.type || managedMeta.name, status: failed ? 'waiting' : 'completed', title: event.type || `${managedMeta.name} 事件`, detail: runtimeEngine.invoke(mode, 'eventText', event) || `${managedMeta.name} 已产生新的运行事件`, time: event.timestamp || '刚刚' }));
+        if (observedFailure) projectedMessages.push({ id: `${managedMeta.slug}-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: observedFailure.title, detail: observedFailure.detail, time: run.completedAt || '刚刚', errorCode: observedFailure.code });
+        const terminalCompleted = completed || timedOut;
+        const terminalReached = terminalCompleted || failed;
+        const recoverableGenerationFailure = timedOut || (failed && failure
+          && failure.retryable !== false
+          && !NON_RECOVERABLE_MANAGED_FAILURE_CODES.has(failure.code));
+        let candidateValidation = null;
+        // Fail-closed：候选绝不能从原始解析结果直接进入候选池。只有 inspectCandidateDiff
+        // （以工作区 Git Diff 为准入权威）产出的候选才允许进入下面的准入判断。
+        let verifiedCandidates = [];
+        let generationPath = null;
+        let patchFallbackRejected = false;
+        let patchFallbackWithoutDiff = false;
+        // 「编辑工具失败」与「编辑工具缺失」是两件事：Agent 用普通 shell 写盘属于合法
+        // 生成路径，缺失从来不判降级。该信号只作为事实标记透传，不参与任何 passed 判定。
+        const editToolStatus = editToolSignal(events);
+        const activeMission = state.missions?.find((mission) => mission.id === state.activeMissionId) || {};
+        const candidateInspectionEligible = terminalCompleted || recoverableGenerationFailure;
+        if (candidateInspectionEligible && (agentResult.candidates.length || !workflowAdvanced)) {
+          let manifest = await workspaceManager.captureDiff(run.workspace);
+          if (!manifest.changedFiles?.length && agentResult.patch) {
+            try {
+              const applied = await workspaceManager.applyWorkspacePatch({ repository: run.workspace, patch: agentResult.patch });
+              appendRuntimeEvent(state, 'candidate.patch_applied_from_result', { runId: state.agent.runId, files: applied.files }, { kind: 'candidate', mode });
+              manifest = await workspaceManager.captureDiff(run.workspace);
+              // patch 回退不再静默成功：生成路径、编辑工具状态、patch 校验与工作区准入
+              // 结果全部落账。降级标记只描述生成路径，不放宽 correctness / oracle / Gate。
+              generationPath = describeGenerationPath({
+                path: CANDIDATE_GENERATION_PATH.PATCH_FALLBACK,
+                editToolStatus,
+                degraded: editToolStatus === 'failed',
+                degradationReason: editToolStatus === 'failed' ? 'structured_edit_failed' : null,
+              });
+              patchFallbackWithoutDiff = !manifest.changedFiles?.length;
+              appendRuntimeEvent(state, generationPath.degraded ? 'candidate.degraded_generation' : 'candidate.patch_fallback_generation', {
+                runId: state.agent.runId,
+                roundId: state.iterationStats?.roundBudget?.roundId || null,
+                ...generationPath,
+                patchValidation: patchFallbackWithoutDiff ? 'rejected' : 'passed',
+                workspaceAdmission: patchFallbackWithoutDiff ? 'failed' : 'passed',
+                detail: generationPath.degraded
+                  ? '结构化编辑工具失败，改用结果内 patch 回退生成候选 Diff；生成路径降级，准入标准不变。'
+                  : '工作区没有 Diff，改用结果内 patch 回退生成候选 Diff。',
+              }, { kind: 'candidate', mode });
+            } catch (error) {
+              patchFallbackRejected = true;
+              appendRuntimeEvent(state, 'candidate.patch_result_rejected', { runId: state.agent.runId, errorCode: error.code || 'AGENT_PATCH_REJECTED', detail: error.message }, { kind: 'policy', mode });
+            }
+          }
+          const stableDigest = state.workflowRecovery?.checkpoints?.at(-1)?.stableDigest || null;
+          // patch 存在但不合法，同样算准入失败：结果内 patch 既抛错、也没能产出 Diff。
+          const patchRejected = patchFallbackRejected || patchFallbackWithoutDiff;
+          ({ candidateValidation, verifiedCandidates } = inspectCandidateDiff({
+            agentResult,
+            manifest,
+            stableDigest,
+            provider: managedMeta,
+            runId: state.agent.runId,
+            generationPath: {
+              path: generationPath?.candidateGenerationPath || CANDIDATE_GENERATION_PATH.STRUCTURED_EDIT,
+              editToolStatus,
+              degraded: generationPath?.degraded === true,
+              degradationReason: generationPath?.degradationReason || null,
+              patchRejected,
+            },
+          }));
+        }
+        // Fail-closed 守卫：Provider 未正常终结时（不可恢复失败，例如 TLS 信任链失败或
+        // 认证失败），声明的候选从未经过工作区 Git Diff 校验，一个都不许进候选池。
+        if (terminalReached && !candidateInspectionEligible && agentResult.candidates.length && !workflowAdvanced) {
+          verifiedCandidates = [];
+          candidateValidation = {
+            passed: false,
+            code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_INSPECTION_SKIPPED`,
+            classification: CANDIDATE_OUTCOME.CANDIDATE_INSPECTION_SKIPPED,
+            detail: `${managedMeta.name} 未正常终结（${observedFailure?.code || 'unknown'}），声明的 ${agentResult.candidates.length} 个候选未经工作区 Git Diff 准入校验，已全部丢弃。`,
+            declaredCandidateCount: agentResult.candidates.length,
+            degraded: true,
+            degradationReason: 'admission_inspection_not_reached',
+            editToolStatus,
+            candidateGenerationPath: null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
+        }
+        if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
+          const { requiredWorkspaceFiles, contentFiles } = candidateWorkspaceRequirements(activeMission);
+          const workspaceFiles = (await Promise.all(requiredWorkspaceFiles.map(async (file) => await fileExists(path.join(run.workspace, file)) ? file : null))).filter(Boolean);
+          const entryContent = (await Promise.all(contentFiles.map((file) => readFile(path.join(run.workspace, file), 'utf8').catch(() => '')))).join('\\n');
+          ({ candidateValidation, verifiedCandidates } = finalizeCandidateAdmission({
+            admission: { candidateValidation, verifiedCandidates },
+            mission: activeMission,
+            workspaceFiles,
+            entryContent,
+            runHistory: state.runHistory || [],
+            round: state.iterationStats?.round || 0,
+            provider: managedMeta,
+          }));
+        }
+        const nextAgent = {
+          ...state.agent,
+          status: nextStatus,
+          // Workflow readiness may be completed/awaiting_action after salvaging
+          // a Diff. Preserve the actual execution outcome separately for history.
+          executionStatus: run.status,
+          providerRetries: (() => {
+            const retries = events.filter(event => event.type === 'provider.retry');
+            const latest = retries.at(-1);
+            return retries.length ? { count: retries.length, lastAttempt: latest.attempt ?? null, lastStatusCode: latest.statusCode ?? null } : null;
+          })(),
+          generationCompletedAt: terminalReached && isExecutionReleased(run)
+            ? run.completedAt || state.agent.generationCompletedAt || null
+            : state.agent.generationCompletedAt || null,
+          ...(toolPermissionFailure && { currentAction: null }),
+          primaryFailure: observedFailure ? { code: observedFailure.code, category: observedFailure.category || null, retryable: observedFailure.retryable ?? null, title: observedFailure.title, detail: observedFailure.detail, phase: observedFailure.phase } : state.agent.primaryFailure || null,
+          resourceRelease: run.resourceRelease || (isExecutionReleased(run) ? { confirmed: true, status: 'confirmed' } : state.agent.resourceRelease),
+          phase: observedFailure?.phase || (timedOut ? `${managedMeta.name} 单轮停滞，已收敛为无候选` : completed ? `${managedMeta.name} 分析完成` : state.agent.status === 'cancel_requested' ? `正在取消 ${managedMeta.name}` : `${managedMeta.name} 正在分析`),
+          progress: completed || failed || timedOut ? 100 : Math.max(5, Math.min(95, 5 + events.length * 3)),
+          threadId: run.threadId || threadEvent?.thread_id || threadEvent?.threadId || state.agent.threadId || null,
+          messages: projectedMessages.length ? projectedMessages : state.agent.messages,
+          toolCalls: [...toolEvents.reduce((latestById, event, index) => {
+            const eventId = event.id || event.item?.id || `${managedMeta.slug}-tool-${index}`;
+            latestById.set(eventId, event);
+            return latestById;
+          }, new Map()).entries()].slice(-20).map(([eventId, event]) => {
+            const toolFailed = event.item?.status === 'failed' || event.status === 'failed' || Boolean(event.item?.error);
+            const toolCompleted = event.type === 'item.completed' || /completed|done/i.test(event.status || event.item?.status || '');
+            return { id: eventId, toolId: event.tool || event.name || event.item?.name || `${managedMeta.slug}.${event.item?.type || 'tool'}`, name: event.name || event.tool || event.item?.name || (event.item?.type === 'command_execution' ? 'Managed Tool' : event.item?.type || `${managedMeta.name} Tool`), version: descriptor.version ? `v${descriptor.version}` : 'runtime', skillId: `${managedMeta.slug}.exec`, status: toolFailed ? 'failed' : toolCompleted ? 'completed' : completed ? 'warning' : 'running', summary: runtimeEngine.invoke(mode, 'eventText', event) || `${managedMeta.name} tool call`, permission: `${managedMeta.slug}:managed` };
+          }),
+          artifacts: [{ id: `${managedMeta.slug}-run-${state.agent.runId}`, kind: `${managedMeta.name} Run`, title: state.agent.artifacts?.[0]?.title || `${managedMeta.name} Mission`, status: nextStatus, meta: `${events.length} events · ${run.threadId || 'session pending'}` }],
+          result: agentResult,
+          candidateValidation,
+          activity: run.activity || state.agent.activity || null,
+          eventCount,
+          lastEventAt,
+          timedOut: timedOut || undefined,
+          ...(mode === 'claude-code' ? { modelObservation: projectedModelObservation } : {}),
+        };
+        if (terminalReached && verifiedCandidates.length && !workflowAdvanced) {
+          state.candidateEvaluations = verifiedCandidates;
+          state.stage = 'candidate';
+          nextAgent.status = 'awaiting_action';
+          nextAgent.phase = 'Candidate Plan 已生成';
+          nextAgent.currentAction = agentResult.nextAction || {
+            id: `action.apply-${verifiedCandidates[0].id}`,
+            type: 'candidate.plan',
+            title: `应用 ${verifiedCandidates[0].id}`,
+            reason: 'Agent 已在隔离工作区生成并通过 Diff 边界校验，进入固定测试流程。',
+            expectedOutput: 'Patch applied and ready for correctness validation',
+            risk: 'medium',
+            approvalRequired: false,
+            approvalPolicy: 'client-controlled',
+          };
+          nextAgent.artifacts = [
+            ...nextAgent.artifacts,
+            { id: `agent-result-${state.agent.runId}`, kind: 'Candidate Plan', title: `${verifiedCandidates.length} 个已验证 Agent Candidate`, status: 'awaiting_action', meta: `${agentResult.format} · Git Diff verified` },
+          ];
+        } else if (terminalReached && candidateValidation?.passed === false && !workflowAdvanced) {
+          nextAgent.status = 'failed';
+          nextAgent.phase = 'Candidate Diff 校验失败';
+          nextAgent.currentAction = null;
+          nextAgent.messages = [...nextAgent.messages, { id: `candidate-validation-${state.agent.runId}`, phase: 'Candidate', status: 'waiting', title: '候选未进入候选池', detail: candidateValidation.detail, time: '刚刚', errorCode: candidateValidation.code }];
+          appendRuntimeEvent(state, 'candidate.diff_rejected', { runId: state.agent.runId, ...candidateValidation }, { kind: 'policy', mode: 'client' });
+        } else if (terminalReached && !agentResult.candidates.length && !workflowAdvanced && (!failed || recoverableGenerationFailure)) {
+          state.stage = 'diagnosis';
+          state.candidateEvaluations = [];
+          nextAgent.status = 'completed';
+          nextAgent.phase = failed ? `${observedFailure?.phase || managedMeta.name + ' 执行失败'}，等待同轮重试` : observedFailure?.phase || `${managedMeta.name} 分析完成，未生成候选`;
+          nextAgent.currentAction = null;
+          // `candidates: []` 只是结果表现，不是根因。这里按固定优先级重放原始结果与
+          // 工作区观测，给出唯一根因码，让该事件从「无因标签」变成可判定证据。
+          const generationEvidence = agentResult.candidateGeneration || {};
+          const emptyClassification = classifyEmptyCandidateOutcome({
+            providerFinishedNormally: completed && !timedOut,
+            droppedCandidateCount: generationEvidence.droppedCandidateCount || 0,
+            structuredEditFailed: editToolStatus === 'failed',
+            patchRejected: patchFallbackRejected || patchFallbackWithoutDiff,
+            textOnly: agentResult.format === 'text-fallback' && !agentResult.patch,
+          });
+          candidateValidation = {
+            passed: null,
+            code: emptyClassification === CANDIDATE_OUTCOME.UPSTREAM_FAILURE_NO_CANDIDATE
+              ? `${managedMeta.slug.toUpperCase()}_CANDIDATE_UPSTREAM_FAILURE`
+              : `${managedMeta.slug.toUpperCase()}_CANDIDATE_NOT_PROPOSED`,
+            classification: emptyClassification,
+            detail: observedFailure?.detail || `${managedMeta.name} 正常终结但未产生可准入候选：${emptyClassification}。`,
+            declaredCandidateCount: generationEvidence.rawCandidateCount ?? 0,
+            droppedCandidateCount: generationEvidence.droppedCandidateCount ?? 0,
+            patchProvided: Boolean(agentResult.patch),
+            degraded: emptyClassification === CANDIDATE_OUTCOME.TOOL_FAILED_PATCH_PENDING,
+            degradationReason: emptyClassification === CANDIDATE_OUTCOME.TOOL_FAILED_PATCH_PENDING ? 'structured_edit_failed' : null,
+            editToolStatus,
+            candidateGenerationPath: generationPath?.candidateGenerationPath || null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
+          nextAgent.candidateValidation = candidateValidation;
+          const emptyEventType = emptyClassification === CANDIDATE_OUTCOME.UPSTREAM_FAILURE_NO_CANDIDATE
+            ? 'agent.generation_interrupted' : 'candidate.not_proposed';
+          if (!state.runtimeEvents?.some((event) => event.type === emptyEventType && event.payload?.runId === state.agent.runId)) {
+            appendRuntimeEvent(state, emptyEventType, {
+              runId: state.agent.runId,
+              summary: agentResult.summary,
+              format: agentResult.format,
+              classification: emptyClassification,
+              declaredCandidateCount: candidateValidation.declaredCandidateCount,
+              droppedCandidateCount: candidateValidation.droppedCandidateCount,
+              patchProvided: candidateValidation.patchProvided,
+              editToolStatus,
+              recoverable: recoverableGenerationFailure,
+              errorCode: observedFailure?.code || null,
+              error: observedFailure?.detail || null,
+            }, { kind: 'agent', mode });
+          }
+        } else if (terminalReached && !agentResult.candidates.length && !workflowAdvanced) {
+          // 上游失败（专家七类表的行 1）：这不是候选生成失败。既不写候选池，也不发
+          // candidate.not_proposed —— 否则上层会把它当成「生成了一轮但没有产出」。
+          candidateValidation = {
+            passed: null,
+            code: `${managedMeta.slug.toUpperCase()}_CANDIDATE_UPSTREAM_FAILURE`,
+            classification: CANDIDATE_OUTCOME.UPSTREAM_FAILURE_NO_CANDIDATE,
+            detail: `上游失败（${failure?.code || observedFailure?.code || 'unknown'}）：该结果不是候选生成失败，不写入候选池也不发 candidate.not_proposed。`,
+            declaredCandidateCount: agentResult.candidates.length,
+            degraded: false,
+            degradationReason: null,
+            editToolStatus,
+            candidateGenerationPath: null,
+            patchValidation: 'not_applicable',
+            workspaceAdmission: 'not_reached',
+          };
+          nextAgent.candidateValidation = candidateValidation;
+        }
+        if (workflowAdvanced && !toolPermissionFailure) {
+          nextAgent.status = state.agent.status;
+          nextAgent.phase = state.agent.phase;
+          nextAgent.currentAction = state.agent.currentAction;
+        }
+        if (!toolPermissionFailure && !patchPolicyBlocked && run.status === 'cancelled'
+            && state.stage === 'candidate'
+            && !state.patchApplied
+            && Array.isArray(state.candidateEvaluations)
+            && state.candidateEvaluations.length > 0) {
+          const candidateId = state.candidateEvaluations[0].id || 'candidate-01';
+          nextAgent.status = 'awaiting_action';
+          nextAgent.phase = 'Candidate Plan 已生成';
+          nextAgent.currentAction = state.agent.currentAction || {
+            id: `action.${candidateId}.retry`,
+            type: 'candidate.plan',
+            title: `提交 ${candidateId} 测试`,
+            reason: `候选已在 Mission 工作区形成；上一 ${managedMeta.name} 进程已结束，客户端可继续应用并提交测试。`,
+            expectedOutput: 'Correctness · Benchmark · Tracer · Profiler',
+            risk: 'medium',
+            approvalRequired: false,
+            approvalPolicy: 'client-controlled',
+          };
+        }
+        const previousStatus = state.agent.status;
+        const changed = runtimeChanged || usageChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
+        state.agent = nextAgent;
+        if (nextStatus === 'completed' && verifiedCandidates.length && !workflowAdvanced) state.stage = 'candidate';
+        const lifecycleEventType = `${managedMeta.slug}.run_${nextStatus}`;
+        const lifecycleEventRecorded = state.runtimeEvents?.some((event) => event.type === lifecycleEventType && event.payload?.runId === state.agent.runId);
+        if (nextStatus !== previousStatus && !lifecycleEventRecorded) appendRuntimeEvent(state, lifecycleEventType, { runId: state.agent.runId, threadId: nextAgent.threadId, eventCount: events.length, errorCode: failure?.code || null }, { kind: 'agent', mode });
+        return { state, changed };
+      } catch (error) {
+        // A failed/partial read cannot confirm that any previously projected
+        // observation still matches the current run's actual session. Rebind only
+        // when the run record itself was read; otherwise clear the stale value.
+        const survivedObservation = mode === 'claude-code' && observedRun
+          ? projectRunModelObservation({ ...observationContext, run: observedRun })
+          : null;
+        if (!isExecutionReleased(observedRun || {})) {
+          const projection = cancellationProjection(state.agent, { status: 'unconfirmed', code: error.code || 'AGENT_STATUS_UNAVAILABLE', reason: error.message }, {
+            primaryFailure: state.agent.primaryFailure || { code: error.code || 'AGENT_STATUS_UNAVAILABLE', detail: error.message, phase: 'Agent runtime status unavailable' },
+          });
+          state.agent = mode === 'claude-code' ? { ...projection, modelObservation: survivedObservation } : projection;
+          return { state, changed: true };
+        }
+        const nextAgent = { ...state.agent, status: 'failed', phase: `${managedMeta.name} 状态读取失败`, progress: 100, messages: [...(state.agent.messages || []), { id: `${managedMeta.slug}-projection-error-${state.agent.runId}`, phase: managedMeta.name, status: 'waiting', title: `无法读取 ${managedMeta.name} 运行状态`, detail: error.message, time: '刚刚' }], ...(mode === 'claude-code' ? { modelObservation: survivedObservation } : {}) };
+        state.agent = nextAgent;
+        return { state, changed: true };
+      }
+    }
+    if (mode !== 'cli-file' || !descriptor.connected || !state.agent?.runId?.startsWith('cli_')) return { state, changed: runtimeChanged };
+
+    let statusDocument;
+    try { statusDocument = await readJson(statusPath); } catch { return { state, changed: runtimeChanged }; }
+    const statusRunId = statusDocument.requestId || statusDocument.request_id || statusDocument.runId || statusDocument.run_id || statusDocument.session_id;
+    const statusMissionId = statusDocument.missionId || statusDocument.mission_id || statusDocument.task?.missionId;
+    const runMatches = statusRunId === state.agent.runId;
+    const missionMatches = !statusMissionId || statusMissionId === state.activeMissionId;
+    if (!runMatches || !missionMatches) return { state, changed: runtimeChanged };
+    const sourceStatus = statusDocument.status || statusDocument.state || statusDocument.task?.status;
+    const projectedStatus = runtimeStatusMap[sourceStatus] || state.agent.status;
+    const sourceEvents = Array.isArray(statusDocument.events) ? statusDocument.events : [];
+    const messages = sourceEvents.slice(-8).map((event, index) => ({
+      id: event.event_id || event.id || `cli-event-${index}`,
+      phase: event.type || event.kind || 'Mission',
+      status: /failure|blocked/.test(event.type || '') ? 'waiting' : 'completed',
+      title: event.summary || event.type || 'CLI Runtime 事件',
+      detail: event.reason || event.detail || event.message || '状态已由 CLI 文件投影。',
+      time: event.timestamp || '刚刚',
+    }));
+    const nextAgent = {
+      ...state.agent,
+      status: projectedStatus,
+      phase: statusDocument.phase || statusDocument.current_action?.name || state.agent.phase,
+      progress: Number(statusDocument.progress ?? state.agent.progress) || 0,
+      messages: messages.length ? messages : state.agent.messages,
+    };
+    const changed = runtimeChanged || JSON.stringify(nextAgent) !== JSON.stringify(state.agent);
+    state.agent = nextAgent;
+    return { state, changed };
+  };
+
+  const projectWithResourceRelease = async (state) => {
+    const projected = await projectState(state);
+    const release = reconcileResourceRelease(projected.state);
+    return { ...projected, state: release.state, changed: projected.changed || release.changed };
+  };
+  return {
+    mode, describe, preflight, startRun, cancelRun, localHostRecovery, retireExecution, startResearch, startBaselineMaterialization,
+    projectState: projectWithResourceRelease, codexClient: codex, claudeClient: claude,
+    // 只读端口：来源获取端口需要读取某个 run 的事件来定位研究员结果，
+    // 但不需要（也不应该）拿到整个运行时的写能力。
+    readRunEvents: (runId) => runtimeEngine.invoke(mode, 'readEvents', runId),
+  };
+}
+
+export const agentRuntime = createAgentRuntime();

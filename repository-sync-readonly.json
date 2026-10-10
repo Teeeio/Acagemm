@@ -1,0 +1,44 @@
+{
+  "recordedAt": "2026-10-10T10:25:36.998Z",
+  "localHead": "0e83216735cfc25f02c0122ab829291f58b5d72c",
+  "localBranch": "handoff/codex-job-supervisor-p1",
+  "remotes": [
+    {
+      "name": "origin",
+      "url": "https://github.com/Teeeio/Acagemm.git",
+      "pushUrl": "https://github.com/Teeeio/Acagemm.git"
+    },
+    {
+      "name": "github",
+      "url": "https://github.com/Teeeio/Acagemm.git"
+    },
+    {
+      "name": "gitee",
+      "url": "https://gitee.com/kirinn99/operator-studio-c500-tester.git"
+    }
+  ],
+  "github": {
+    "source": "connected GitHub repository metadata read",
+    "repository": "Teeeio/Acagemm",
+    "id": "1360816366",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "archived": false,
+    "currentLocalHeadAvailable": false,
+    "commitReadStatus": 422,
+    "commitReadDetail": "No commit found for SHA: 0e83216735cfc25f02c0122ab829291f58b5d72c"
+  },
+  "gitee": {
+    "visibility": null,
+    "readStatus": "web reader could not access repository; no inference of private/deleted status"
+  },
+  "dirtyAtRead": {
+    "total": 1422,
+    "tracked": 185,
+    "untracked": 1237,
+    "includesUserChangesAndLocalEvidence": true
+  },
+  "publicationDestinationAuthorized": false,
+  "branchChosenForPush": false,
+  "gitMutationsPerformed": false
+}

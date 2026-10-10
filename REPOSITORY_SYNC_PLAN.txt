@@ -1,0 +1,16 @@
+最小测试同步方案（只读核对后的建议，未执行）
+
+当前 origin/github 是 https://github.com/Teeeio/Acagemm.git；连接器元数据确认 public。gitee 是 https://gitee.com/kirinn99/operator-studio-c500-tester.git，可见性尚未确认，网页读取不可达不等于 private 或仓库不存在。
+本地 HEAD 0e83216735cfc25f02c0122ab829291f58b5d72c，分支 handoff/codex-job-supervisor-p1。GitHub 对该 SHA 返回 422 No commit found；因此不能声称 GitHub 上已有本地基线。当前只读 status 1422 项（185 tracked、1237 untracked，包含用户原改动和本地证据/备份）。本轮 v4 与新接线仍未提交，clone/pull 不会带来它们。
+
+历史 docs/development/handoffTUI.md 的 TUI + pull --ff-only 工作流属于旧 C550/x64 入口，且“origin/gitee 同址”已与当前 remote 不符。docs/development/CURRENT_TASK_HANDOFF.md 使用 GitHub handoff 分支，但当前 SHA 的在线可达性也未成立。不能照抄旧分支/安装器当成新的 Ascend910B 或 MACA C500 验收。
+
+最快当前路线：使用已准备的最小源码归档及逐文件 SHA256 清单作为此次冻结源快照，保留本地 HEAD 作为来源标识。该归档包含当前需要的 Runtime/TUI、专用 runner 和选定 CPU 检查，直接在批准容器的 /public-flash/wzp 私有新目录解包，不覆盖现有 checkout。它不带 .git，不依赖远端 HEAD 可达，不主张重建完整 release 仓库；完整回归证据留本地。先验证归档/成员哈希和平台依赖，初始只做已授权只读元数据。尚未上传，也未在远端解包或执行。
+
+若用户仍选 GitHub/Gitee 同步：先指定目标仓库、明确代码受众、审核本轮 allowlist 并选择真实分支；GitHub 当前 public，账户具有 push 权限不代表本轮公开发布授权。之后在隔离审阅副本中把已核验基线及获准的本轮改动组成一个可审阅 commit，再按批准范围推送并记录新完整 SHA R。不能 git add -A 当前脏树，不能推整份 patch/证据/历史或混入其他未提交改动。目标端 clone/fetch 必须固定已验证存在的 R，并对照此次最终源码清单，不能只依赖浮动 branch。当前不创建分支、commit/push、改 remote/可见性、repo 或分享权限。
+
+同步排除：凭据/私钥/token/.env、.git、本地 Mission/runtime/data/output、用户附件、node_modules/.gpu-venv、缓存与 SDK/二进制、大型历史日志、Windows/x64 依赖归档。无凭据字符串不等于获准公开源代码。容器不接收本地凭据配置；私有 Git 认证仅使用另行验证的安全入口，不能把 token 放 URL/命令/日志。
+
+所有 clone、解包、依赖准备、构建、缓存、日志和结果继续只在批准容器的 /public-flash/wzp。Web 已登录不等于本地工具有可复用执行器，也不证明 NPU/CANN 就绪。目标登录横幅报告根分区使用 97.2%，尚未执行 df/findmnt/DockerRootDir/image inspect；先核对既有镜像与实际存储，不能直接 pull、清理共享资源或改 Docker daemon。新目标需要 Linux arm64 Node20+、平台原生锁定依赖及真实 Python3.11/TorchNPU/CANN 配对；旧 x64 bundle 不适用。
+
+锁文件注意：主目录 package-lock.json 保留了既有 ../.. 和 self-link 项；本轮没有修改它。仅最小运输副本删除这两项并绑定 package.json 精确直接依赖，原件/运输副本 SHA 分别在 transfer manifest 中。未来如果走 Git 发布/依赖安装路线，这个差异必须进入隔离审阅，不可把主目录未修改的锁文件当作已验证的干净客户机安装配置。

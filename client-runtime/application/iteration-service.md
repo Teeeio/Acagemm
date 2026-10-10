@@ -1,0 +1,3 @@
+# Iteration Service Contract
+
+`Iteration Service` is the application boundary for iteration ports consumed by `iteration-loop` and Autopilot. It exposes research start/cancel, source registration/counting, main-round start, baseline start, and research workspace resolution. Optional ports: `acquireSources`, `countRunSources`, `inspectSourceIntegrity`; when `inspectSourceIntegrity` is absent the loop has no evidence about the source root and therefore does not stop on its account. Implementations must preserve serialized execution, state version checks, fixed-profile semantics, strict-zero-source rules, and injected side effects.

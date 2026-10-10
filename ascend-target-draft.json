@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "operator-studio.target-deployment-draft/v1",
+  "requestedImage": "harbor.baai.ac.cn/flagtree/flagtree-ascend3.5-910b-py311-cann9.0.0-ubuntu22.04-aarch64:202606-torch2.9.0-base",
+  "imageInspected": false,
+  "expectedArchitecture": "aarch64",
+  "expectedPythonMajorMinor": "3.11",
+  "expectedCannLabel": "9.0.0",
+  "actualVersions": null,
+  "remoteProjectWriteRoot": "/public-flash/wzp",
+  "requiresUserApprovedDockerContainer": true,
+  "backend": "local-ascend910b",
+  "hardware": "Ascend910B",
+  "publishable": false,
+  "initialEntry": [
+    "node",
+    "scripts/preflight-accelerator.mjs",
+    "local-ascend910b"
+  ],
+  "deviceProbeAllowedByThisDraft": false,
+  "modelRunsAllowedByThisDraft": false,
+  "automaticInstall": false,
+  "uploadPerformed": false,
+  "credentialsIncluded": false,
+  "requestedImageIsRepositoryOnly": false,
+  "selectedTag": "202606-torch2.9.0-base",
+  "verifiedDigest": null,
+  "documentationTagCandidate": "202606-torch2.9.0-base",
+  "documentationTagSelected": true,
+  "expectedFlagtreeBackendLabel": "ascend3.5 (Triton backend label, not an observed package version)",
+  "toolReusableConnectionEstablished": false,
+  "providerPrerequisites": [
+    "supported secure host trust/authentication and noninteractive exec/exit status/long sessions/file transfer",
+    "agent, home, caches, temporary files and commands confined to approved container and /public-flash/wzp",
+    "observe digest of already-selected image and confirm approved image/container storage placement",
+    "observe all target NPU nodes and exact read-only driver mounts; no privileged or host namespace template"
+  ],
+  "nativeFlagtreeJitDispatchQualified": false,
+  "requestedRepository": "harbor.baai.ac.cn/flagtree/flagtree-ascend3.5-910b-py311-cann9.0.0-ubuntu22.04-aarch64",
+  "allTargetNpusAuthorized": true,
+  "observedDeviceNodes": null,
+  "connectionState": {
+    "source": "assigned connection task report",
+    "standardSshViaFormalApproval": "network-and-kex-reachable",
+    "authenticated": false,
+    "hostTrustVerified": false,
+    "toolReusableContainerExecutorVerified": false,
+    "inspectionDidNotReadUserKnownHosts": true,
+    "webJumpServerLoggedIn": true,
+    "localProgrammableSshAuthenticated": false,
+    "userKnownHostsExactBastionMatch": false,
+    "knownHostsCheckSource": "assigned task read-only ssh-keygen lookup"
+  },
+  "storageState": {
+    "source": "parent Web login banner",
+    "rootUsedPercent": 97.2,
+    "reportedRootCapacity": "434.79 GB",
+    "filesystemInventoryPerformed": false,
+    "dockerRootDir": null,
+    "selectedImageExists": null,
+    "action": "Inspect existing DockerRootDir/mount/capacity/image before any pull; no daemon migration or shared cleanup."
+  }
+}
